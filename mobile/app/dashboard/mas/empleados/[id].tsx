@@ -609,6 +609,9 @@ export default function EmpleadoDetailRoute() {
     [employee, members, invites],
   );
   const canManageAccess = can.manageMembers(currentRole);
+  // UI-hygiene gate (RLS is the real lock): a read-only viewer never sees the
+  // edit pencil or the record-write tiles (deactivate / roster).
+  const canEditEmployee = can.editEmployee(currentRole);
 
   // Hand the whole business to this member: they become Owner (billing and
   // all), the current owner becomes Admin. Owner-only; server-guarded by
@@ -717,9 +720,11 @@ export default function EmpleadoDetailRoute() {
         <View className="flex-row items-center gap-1">
           {isView ? (
             <>
-              <Pressable onPress={enterEdit} hitSlop={8} className="p-2 rounded-lg active:bg-border-soft">
-                <Pencil size={18} color={c.faint} />
-              </Pressable>
+              {canEditEmployee ? (
+                <Pressable onPress={enterEdit} hitSlop={8} className="p-2 rounded-lg active:bg-border-soft">
+                  <Pencil size={18} color={c.faint} />
+                </Pressable>
+              ) : null}
               {canDeleteEmployee ? (
                 <Pressable onPress={deleteEmployee} disabled={accessBusy} hitSlop={8} className="p-2 rounded-lg active:bg-red-500/10 disabled:opacity-50">
                   <Trash2 size={18} color={c.danger} />
@@ -993,40 +998,44 @@ export default function EmpleadoDetailRoute() {
 
             {/* Active / inactive toggle. Deactivating keeps the record (and
                history); reactivating brings them back. */}
-            <Pressable
-              onPress={toggleActive}
-              style={{ width: '48.75%' }}
-              className={`items-center justify-center gap-1.5 py-4 px-2 rounded-2xl border ${
-                employee.active ? 'bg-card border-border active:bg-surface' : 'bg-emerald-500/10 border-emerald-200 active:bg-emerald-100'
-              }`}
-            >
-              {employee.active ? (
-                <UserX size={18} color={c.muted} />
-              ) : (
-                <UserCheck size={18} color={c.success} />
-              )}
-              <Text className={`text-xs font-semibold text-center ${employee.active ? 'text-muted' : 'text-emerald-700'}`}>
-                {employee.active ? t.deactivateBtn : t.reactivateBtn}
-              </Text>
-            </Pressable>
+            {canEditEmployee ? (
+              <Pressable
+                onPress={toggleActive}
+                style={{ width: '48.75%' }}
+                className={`items-center justify-center gap-1.5 py-4 px-2 rounded-2xl border ${
+                  employee.active ? 'bg-card border-border active:bg-surface' : 'bg-emerald-500/10 border-emerald-200 active:bg-emerald-100'
+                }`}
+              >
+                {employee.active ? (
+                  <UserX size={18} color={c.muted} />
+                ) : (
+                  <UserCheck size={18} color={c.success} />
+                )}
+                <Text className={`text-xs font-semibold text-center ${employee.active ? 'text-muted' : 'text-emerald-700'}`}>
+                  {employee.active ? t.deactivateBtn : t.reactivateBtn}
+                </Text>
+              </Pressable>
+            ) : null}
 
             {/* Roster flag — keep office members out of job crew pickers. */}
-            <Pressable
-              onPress={toggleRoster}
-              style={{ width: '48.75%' }}
-              className={`items-center justify-center gap-1.5 py-4 px-2 rounded-2xl border ${
-                (employee.show_in_roster ?? true) ? 'bg-card border-border active:bg-surface' : 'bg-amber-500/10 border-amber-200 active:bg-amber-100'
-              }`}
-            >
-              {(employee.show_in_roster ?? true) ? (
-                <UserX size={18} color={c.muted} />
-              ) : (
-                <UserCheck size={18} color={c.warning} />
-              )}
-              <Text className={`text-xs font-semibold text-center ${(employee.show_in_roster ?? true) ? 'text-muted' : 'text-amber-700'}`}>
-                {(employee.show_in_roster ?? true) ? t.rosterRemoveBtn : t.rosterAddBtn}
-              </Text>
-            </Pressable>
+            {canEditEmployee ? (
+              <Pressable
+                onPress={toggleRoster}
+                style={{ width: '48.75%' }}
+                className={`items-center justify-center gap-1.5 py-4 px-2 rounded-2xl border ${
+                  (employee.show_in_roster ?? true) ? 'bg-card border-border active:bg-surface' : 'bg-amber-500/10 border-amber-200 active:bg-amber-100'
+                }`}
+              >
+                {(employee.show_in_roster ?? true) ? (
+                  <UserX size={18} color={c.muted} />
+                ) : (
+                  <UserCheck size={18} color={c.warning} />
+                )}
+                <Text className={`text-xs font-semibold text-center ${(employee.show_in_roster ?? true) ? 'text-muted' : 'text-amber-700'}`}>
+                  {(employee.show_in_roster ?? true) ? t.rosterRemoveBtn : t.rosterAddBtn}
+                </Text>
+              </Pressable>
+            ) : null}
 
             {/* Transfer ownership — owner only, on a member with app access. */}
             {canTransferOwnership ? (

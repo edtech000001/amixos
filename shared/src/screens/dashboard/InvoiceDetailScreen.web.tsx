@@ -97,6 +97,12 @@ export interface InvoiceDetailScreenProps {
   branding: InvoiceBranding;
   /** Resolved template config (per-invoice override → business default → app default). */
   templateConfig: InvoiceTemplateConfig;
+  /** Gate the edit-class write actions (Edit, Send, Record/Edit/Delete payment,
+   *  Undo, Autoprice, add/remove/edit jobs & line items, and the ordinary
+   *  Mark-sent / Mark-paid / Undo-sent status buttons). Defaults to true. */
+  canEdit?: boolean;
+  /** Gate the write-off / total-loss / reinstate status buttons. Defaults to true. */
+  canWriteOff?: boolean;
   updating: boolean;
   onBack: () => void;
   onUpdateStatus: (status: 'sent' | 'paid' | 'draft' | 'total_loss') => Promise<void> | void;
@@ -168,6 +174,8 @@ function fmt(n: number) {
 export function InvoiceDetailScreen({
   loading,
   invoice,
+  canEdit = true,
+  canWriteOff = true,
   updating,
   onBack,
   onUpdateStatus,
@@ -278,7 +286,7 @@ export function InvoiceDetailScreen({
           </div>
         </div>
         <div className="flex items-center gap-1">
-          {onAutoprice ? (
+          {onAutoprice && canEdit ? (
             <button type="button" onClick={onAutoprice} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-surface text-sm font-semibold text-primary transition-colors mr-1">
               <DollarSign size={15} /> {ui.dashboard.jobs.detail.autopriceBtn}
             </button>
@@ -293,7 +301,7 @@ export function InvoiceDetailScreen({
               <Printer size={18} className="text-muted" />
             </button>
           ) : null}
-          {onEdit ? (
+          {onEdit && canEdit ? (
             <button type="button" onClick={onEdit} className="p-2 rounded-xl hover:bg-border-soft transition-colors">
               <Pencil size={18} className="text-muted" />
             </button>
@@ -404,7 +412,7 @@ export function InvoiceDetailScreen({
               const q = Number(li.qty) || 0;
               const r = Number(li.rate) || 0;
               const jid = li.job_id ?? null;
-              const showActions = editable && !!jid && !!onRemoveJob && !seen.has(jid);
+              const showActions = editable && canEdit && !!jid && !!onRemoveJob && !seen.has(jid);
               if (jid) seen.add(jid);
               return (
                 <div key={idx} className="flex items-center justify-between gap-3 py-2.5 border-b border-border">
@@ -435,7 +443,7 @@ export function InvoiceDetailScreen({
                           {tInv.jobsSection.removeBtn}
                         </button>
                       </>
-                    ) : editable && !jid && (onEditManualItem || onRemoveManualItem) ? (
+                    ) : editable && canEdit && !jid && (onEditManualItem || onRemoveManualItem) ? (
                       <>
                         {onEditManualItem ? (
                           <button onClick={() => onEditManualItem(idx)} disabled={jobBusy} className="text-xs font-semibold text-muted hover:text-primary disabled:opacity-40">
@@ -456,7 +464,7 @@ export function InvoiceDetailScreen({
             });
           })()}
 
-          {editable && onAddJob ? (
+          {editable && onAddJob && canEdit ? (
             <button onClick={onAddJob} disabled={jobBusy} className="mt-3 text-sm font-semibold text-primary hover:underline disabled:opacity-40">
               + {tInv.jobsSection.addBtn}
             </button>
@@ -508,7 +516,7 @@ export function InvoiceDetailScreen({
                     </span>
                     <span className="flex items-center gap-2">
                       <span className="text-sm text-emerald-700">−{fmt(p.amount)}</span>
-                      {onEditPayment ? (
+                      {onEditPayment && canEdit ? (
                         <button
                           type="button"
                           onClick={() => onEditPayment(p)}
@@ -518,7 +526,7 @@ export function InvoiceDetailScreen({
                           <Pencil size={13} />
                         </button>
                       ) : null}
-                      {onDeletePayment ? (
+                      {onDeletePayment && canEdit ? (
                         <button
                           type="button"
                           onClick={() => onDeletePayment(p)}
@@ -543,7 +551,7 @@ export function InvoiceDetailScreen({
         </div>
 
         {/* Primary actions — draft: Send + Mark sent (no email) · sent: Mark paid + Undo */}
-        {invoice.status === 'draft' ? (
+        {invoice.status === 'draft' && canEdit ? (
           <div className="flex flex-col gap-2">
             {onSendInvoice ? (
               <button onClick={onSendInvoice} disabled={updating} className="flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-2xl font-semibold hover:opacity-90 disabled:opacity-60">
@@ -555,26 +563,32 @@ export function InvoiceDetailScreen({
             </button>
           </div>
         ) : null}
-        {sentLike ? (
+        {sentLike && (canEdit || canWriteOff) ? (
           <div className="flex flex-col gap-2">
-            <button onClick={() => (onRecordPayment ? onRecordPayment() : onUpdateStatus('paid'))} disabled={updating} className="flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-2xl font-semibold hover:opacity-90 disabled:opacity-60">
-              <CheckCircle size={16} /> {paidSoFar > 0 ? tInv.payments.recordBtn : tInv.markPaid}
-            </button>
-            <button onClick={() => onUpdateStatus('draft')} disabled={updating} className="flex items-center justify-center gap-2 border border-border bg-card text-muted py-3 rounded-2xl font-semibold hover:bg-surface disabled:opacity-60">
-              <Undo2 size={16} /> {tInv.undoSent}
-            </button>
+            {canEdit ? (
+              <button onClick={() => (onRecordPayment ? onRecordPayment() : onUpdateStatus('paid'))} disabled={updating} className="flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-2xl font-semibold hover:opacity-90 disabled:opacity-60">
+                <CheckCircle size={16} /> {paidSoFar > 0 ? tInv.payments.recordBtn : tInv.markPaid}
+              </button>
+            ) : null}
+            {canEdit ? (
+              <button onClick={() => onUpdateStatus('draft')} disabled={updating} className="flex items-center justify-center gap-2 border border-border bg-card text-muted py-3 rounded-2xl font-semibold hover:bg-surface disabled:opacity-60">
+                <Undo2 size={16} /> {tInv.undoSent}
+              </button>
+            ) : null}
             {/* Write-off: an invoice the client will never pay. Drops out of overdue. */}
-            <button onClick={() => onUpdateStatus('total_loss')} disabled={updating} className="flex items-center justify-center gap-2 text-muted py-2 rounded-2xl font-semibold text-sm hover:opacity-70 disabled:opacity-60">
-              <Ban size={15} /> {tInv.markTotalLoss}
-            </button>
+            {canWriteOff ? (
+              <button onClick={() => onUpdateStatus('total_loss')} disabled={updating} className="flex items-center justify-center gap-2 text-muted py-2 rounded-2xl font-semibold text-sm hover:opacity-70 disabled:opacity-60">
+                <Ban size={15} /> {tInv.markTotalLoss}
+              </button>
+            ) : null}
           </div>
         ) : null}
-        {invoice.status === 'total_loss' ? (
+        {invoice.status === 'total_loss' && canWriteOff ? (
           <button onClick={() => onUpdateStatus('sent')} disabled={updating} className="w-full flex items-center justify-center gap-2 border border-border bg-card text-muted py-3 rounded-2xl font-semibold hover:bg-surface disabled:opacity-60">
             <Undo2 size={16} /> {tInv.reinstateInvoice}
           </button>
         ) : null}
-        {invoice.status === 'paid' && onUndoPaid ? (
+        {invoice.status === 'paid' && onUndoPaid && canEdit ? (
           <button onClick={onUndoPaid} disabled={updating} className="flex items-center justify-center gap-2 border border-border bg-card text-muted py-3 rounded-2xl font-semibold hover:bg-surface disabled:opacity-60">
             <Undo2 size={16} /> {tInv.payments.undoPaid}
           </button>

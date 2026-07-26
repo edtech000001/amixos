@@ -86,10 +86,12 @@ export interface EmployeesScreenProps {
   hourTotals?: HourTotalItem[];
   /** Human label for the current pay period, e.g. "Jul 14 – Jul 27". */
   payPeriodLabel?: string | null;
-  onAddEmployee: () => void;
+  /** Omit to hide the Add-employee affordances (no create permission). */
+  onAddEmployee?: () => void;
   onEditEmployee: (id: string) => void;
   onToggleActive: (id: string) => void;
-  onLogHours: () => void;
+  /** Omit to hide the Log-hours / Add-hours buttons (no timesheet write). */
+  onLogHours?: () => void;
   /** Edit / delete a logged-hours entry (History tab). */
   onEditTimesheet?: (id: string) => void;
   onDeleteTimesheet?: (id: string) => void;
@@ -274,22 +276,26 @@ export function EmployeesScreen({
           </p>
         </div>
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={onLogHours}
-            className="flex items-center gap-1.5 bg-card border border-border px-4 py-2.5 rounded-xl text-sm font-semibold text-ink hover:bg-surface transition-colors"
-          >
-            <Clock size={15} className="text-ink" />
-            {t.logHours}
-          </button>
-          <button
-            type="button"
-            onClick={onAddEmployee}
-            className="flex items-center gap-1.5 bg-primary px-4 py-2.5 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
-          >
-            <Plus size={15} className="text-white" />
-            {t.addBtn}
-          </button>
+          {onLogHours ? (
+            <button
+              type="button"
+              onClick={onLogHours}
+              className="flex items-center gap-1.5 bg-card border border-border px-4 py-2.5 rounded-xl text-sm font-semibold text-ink hover:bg-surface transition-colors"
+            >
+              <Clock size={15} className="text-ink" />
+              {t.logHours}
+            </button>
+          ) : null}
+          {onAddEmployee ? (
+            <button
+              type="button"
+              onClick={onAddEmployee}
+              className="flex items-center gap-1.5 bg-primary px-4 py-2.5 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+            >
+              <Plus size={15} className="text-white" />
+              {t.addBtn}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -453,9 +459,11 @@ export function EmployeesScreen({
           <div className="flex flex-col items-center py-20">
             <UserCheck size={40} className="text-faint" />
             <p className="text-sm text-faint mt-3">{t.emptyEmployees}</p>
-            <button type="button" onClick={onAddEmployee} className="text-primary text-sm font-medium mt-1 hover:underline">
-              {t.addFirst}
-            </button>
+            {onAddEmployee ? (
+              <button type="button" onClick={onAddEmployee} className="text-primary text-sm font-medium mt-1 hover:underline">
+                {t.addFirst}
+              </button>
+            ) : null}
           </div>
         ) : (
           <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
@@ -588,14 +596,16 @@ export function EmployeesScreen({
                 </button>
               ) : null}
             </div>
-            <button
-              type="button"
-              onClick={onLogHours}
-              className="shrink-0 flex items-center gap-1.5 bg-primary px-4 py-2.5 rounded-2xl text-sm font-semibold text-white hover:opacity-90 transition-opacity shadow-sm"
-            >
-              <Plus size={15} className="text-white" />
-              {t.addHours}
-            </button>
+            {onLogHours ? (
+              <button
+                type="button"
+                onClick={onLogHours}
+                className="shrink-0 flex items-center gap-1.5 bg-primary px-4 py-2.5 rounded-2xl text-sm font-semibold text-white hover:opacity-90 transition-opacity shadow-sm"
+              >
+                <Plus size={15} className="text-white" />
+                {t.addHours}
+              </button>
+            ) : null}
           </div>
           {filteredTimesheets.length === 0 ? (
             <div className="flex flex-col items-center py-20">
@@ -623,22 +633,26 @@ export function EmployeesScreen({
                   <span className="w-16 text-sm font-semibold text-ink text-center">{ts.hoursWorked ?? '—'}</span>
                   <span className="w-40 text-xs text-faint truncate">{ts.jobDescription ?? '—'}</span>
                   <span className="w-20 shrink-0 flex items-center justify-end gap-1">
-                    <button
-                      type="button"
-                      onClick={() => onEditTimesheet?.(ts.id)}
-                      className="p-1.5 rounded-lg text-muted hover:bg-surface hover:text-primary transition-colors"
-                      aria-label={full.common.buttons.edit}
-                    >
-                      <Pencil size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDeleteTimesheet?.(ts.id)}
-                      className="p-1.5 rounded-lg text-muted hover:bg-red-50 hover:text-red-500 transition-colors"
-                      aria-label={full.common.buttons.delete}
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    {onEditTimesheet ? (
+                      <button
+                        type="button"
+                        onClick={() => onEditTimesheet(ts.id)}
+                        className="p-1.5 rounded-lg text-muted hover:bg-surface hover:text-primary transition-colors"
+                        aria-label={full.common.buttons.edit}
+                      >
+                        <Pencil size={15} />
+                      </button>
+                    ) : null}
+                    {onDeleteTimesheet ? (
+                      <button
+                        type="button"
+                        onClick={() => onDeleteTimesheet(ts.id)}
+                        className="p-1.5 rounded-lg text-muted hover:bg-red-50 hover:text-red-500 transition-colors"
+                        aria-label={full.common.buttons.delete}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    ) : null}
                   </span>
                 </div>
               ))}

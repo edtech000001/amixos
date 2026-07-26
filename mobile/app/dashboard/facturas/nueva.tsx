@@ -29,6 +29,7 @@ import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
 import { Button, Input, Select, DatePicker } from '@amixos/shared/ui';
 import type { InvoiceLang } from '@amixos/shared';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
+import { can } from '@amixos/shared/lib/permissions';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
 import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import { clientPickerDisplay } from '@amixos/shared/lib/clientSearch';
@@ -98,13 +99,23 @@ export default function NuevaFacturaRoute() {
   const { edit } = useLocalSearchParams<{ edit?: string }>();
   const supabase = createSupabaseClient();
   const insets = useSafeAreaInsets();
-  const { business, activeLocationId, myHomeLocationId } = useApp();
+  const { business, currentRole, activeLocationId, myHomeLocationId } = useApp();
   const { t: full, locale } = useLang();
   const c = useThemeColors();
   const t = full.dashboard.invoices.new;
   const tc = full.common;
 
   const editId = edit ?? null;
+
+  // Route guard: creating needs createInvoice, editing needs editInvoice. RLS
+  // blocks the write regardless — this stops a read-only role from reaching the
+  // form via a deep link.
+  useEffect(() => {
+    if (!business) return;
+    const allowed = editId ? can.editInvoice(currentRole) : can.createInvoice(currentRole);
+    if (!allowed) router.replace('/dashboard/facturas' as never);
+  }, [business, currentRole, editId, router]);
+
   const [loadingEdit, setLoadingEdit] = useState(!!editId);
 
   // Auto-filled with the next sequential number once the invoice count loads

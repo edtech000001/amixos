@@ -30,10 +30,12 @@ export interface InventoryScreenProps {
   items: InventoryItem[];
   /** Resolve the localized unit label for a stored DB value. */
   unitLabel: (dbValue: string) => string;
-  onAddItem: () => void;
-  onEditItem: (id: string) => void;
-  onAdjustItem: (id: string) => void;
-  onDeleteItem: (id: string) => void;
+  // Write callbacks are optional: a caller that omits one (e.g. a read-only
+  // role gated in the wrapper) hides the matching action button entirely.
+  onAddItem?: () => void;
+  onEditItem?: (id: string) => void;
+  onAdjustItem?: (id: string) => void;
+  onDeleteItem?: (id: string) => void;
   modalsSlot?: ReactNode;
 }
 
@@ -164,15 +166,21 @@ export function InventoryScreen({
             ${item.unitCost.toFixed(2)} · {t.itemMeta.minPrefix.replace('{{min}}', String(item.lowStockThreshold))}
           </Text>
           <View className="flex-row items-center gap-1">
-            <Pressable onPress={() => onAdjustItem(item.id)} className="p-2 rounded-lg active:bg-primary/10">
-              <TrendingUp size={16} color={c.primary} />
-            </Pressable>
-            <Pressable onPress={() => onEditItem(item.id)} className="p-2 rounded-lg active:bg-border-soft">
-              <Pencil size={16} color={c.faint} />
-            </Pressable>
-            <Pressable onPress={() => onDeleteItem(item.id)} className="p-2 rounded-lg active:bg-red-500/10">
-              <Trash2 size={16} color={c.danger} />
-            </Pressable>
+            {onAdjustItem ? (
+              <Pressable onPress={() => onAdjustItem(item.id)} className="p-2 rounded-lg active:bg-primary/10">
+                <TrendingUp size={16} color={c.primary} />
+              </Pressable>
+            ) : null}
+            {onEditItem ? (
+              <Pressable onPress={() => onEditItem(item.id)} className="p-2 rounded-lg active:bg-border-soft">
+                <Pencil size={16} color={c.faint} />
+              </Pressable>
+            ) : null}
+            {onDeleteItem ? (
+              <Pressable onPress={() => onDeleteItem(item.id)} className="p-2 rounded-lg active:bg-red-500/10">
+                <Trash2 size={16} color={c.danger} />
+              </Pressable>
+            ) : null}
           </View>
         </View>
       </View>
@@ -202,7 +210,7 @@ export function InventoryScreen({
               <Text className="text-sm text-faint mt-3">
                 {search || filter !== 'todos' ? t.emptyNoMatch : t.emptyAll}
               </Text>
-              {!search && filter === 'todos' ? (
+              {onAddItem && !search && filter === 'todos' ? (
                 <Pressable onPress={onAddItem} className="mt-1">
                   <Text className="text-primary text-sm font-medium">{t.addFirst}</Text>
                 </Pressable>
@@ -217,7 +225,7 @@ export function InventoryScreen({
         maxToRenderPerBatch={10}
       />
 
-      <Fab onPress={onAddItem} />
+      {onAddItem ? <Fab onPress={onAddItem} /> : null}
       {modalsSlot}
     </View>
   );

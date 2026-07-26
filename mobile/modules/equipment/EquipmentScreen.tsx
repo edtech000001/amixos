@@ -63,6 +63,7 @@ import { newUuid } from '@/lib/offline/ids';
 import { isOnlineNow } from '@/lib/offline/network';
 import { Button, Input, DatePicker, Toggle, Fab } from '@amixos/shared/ui';
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
+import { can } from '@amixos/shared/lib/permissions';
 import {
   EQUIPMENT_BUCKET,
   MAX_PHOTOS_PER_EQUIPMENT,
@@ -291,7 +292,11 @@ export default function EquipmentScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = Dimensions.get('window');
   const supabase = createSupabaseClient();
-  const { business, user, locations, activeLocationId, myHomeLocationId } = useApp();
+  const { business, user, locations, activeLocationId, myHomeLocationId, currentRole } = useApp();
+  // Equipment maps to the inventory permission per the role matrix. Read-only
+  // roles keep view access; add/edit/delete + photo management are gated off
+  // (RLS blocks the writes server-side either way).
+  const canEdit = can.editInventory(currentRole);
   const multiLocation = (locations?.length ?? 0) > 1;
   const { t: full, locale } = useLang();
   const t = full.dashboard.modules.equipment;
@@ -953,7 +958,7 @@ export default function EquipmentScreen() {
       />
 
       {/* Add equipment — floating action, one-handed thumb reach. */}
-      <Fab onPress={openAdd} />
+      {canEdit ? <Fab onPress={openAdd} /> : null}
 
       {/* Add / edit modal — same floating sheet pattern as the empleados
          modal so the look is consistent. */}
@@ -1233,20 +1238,24 @@ export default function EquipmentScreen() {
               <ChevronLeft size={22} color={c.ink} />
             </Pressable>
             <Text className="text-lg font-bold text-ink flex-1 mx-1" numberOfLines={1}>{selected.name}</Text>
-            <Pressable
-              onPress={() => openEdit(selected)}
-              hitSlop={8}
-              className="p-2 rounded-lg active:bg-border-soft"
-            >
-              <Pencil size={18} color={c.muted} />
-            </Pressable>
-            <Pressable
-              onPress={onDelete}
-              hitSlop={8}
-              className="p-2 rounded-lg active:bg-red-500/10"
-            >
-              <Trash2 size={18} color={c.danger} />
-            </Pressable>
+            {canEdit ? (
+              <>
+                <Pressable
+                  onPress={() => openEdit(selected)}
+                  hitSlop={8}
+                  className="p-2 rounded-lg active:bg-border-soft"
+                >
+                  <Pencil size={18} color={c.muted} />
+                </Pressable>
+                <Pressable
+                  onPress={onDelete}
+                  hitSlop={8}
+                  className="p-2 rounded-lg active:bg-red-500/10"
+                >
+                  <Trash2 size={18} color={c.danger} />
+                </Pressable>
+              </>
+            ) : null}
           </View>
           <ScrollView contentContainerClassName="px-5 pt-5 pb-32 gap-4" keyboardShouldPersistTaps="handled">
                 {photos.length > 0 ? (
@@ -1394,22 +1403,24 @@ export default function EquipmentScreen() {
             <Text className="text-sm font-medium text-white/80">
               {viewerIndex !== null ? `${viewerIndex + 1} / ${photos.length}` : ''}
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
-              <Pressable
-                onPress={() => viewerPhoto && void setCover(viewerPhoto)}
-                hitSlop={10}
-                accessibilityLabel={t.setCoverBtn}
-              >
-                <Star
-                  size={22}
-                  color={viewerIndex === 0 ? '#FBBF24' : '#FFFFFF'}
-                  fill={viewerIndex === 0 ? '#FBBF24' : 'none'}
-                />
-              </Pressable>
-              <Pressable onPress={rotateCurrent} hitSlop={10} accessibilityLabel="Rotate">
-                <RotateCw size={22} color="#FFFFFF" />
-              </Pressable>
-            </View>
+            {canEdit ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+                <Pressable
+                  onPress={() => viewerPhoto && void setCover(viewerPhoto)}
+                  hitSlop={10}
+                  accessibilityLabel={t.setCoverBtn}
+                >
+                  <Star
+                    size={22}
+                    color={viewerIndex === 0 ? '#FBBF24' : '#FFFFFF'}
+                    fill={viewerIndex === 0 ? '#FBBF24' : 'none'}
+                  />
+                </Pressable>
+                <Pressable onPress={rotateCurrent} hitSlop={10} accessibilityLabel="Rotate">
+                  <RotateCw size={22} color="#FFFFFF" />
+                </Pressable>
+              </View>
+            ) : <View />}
           </View>
 
           <View style={{ flex: 1 }}>

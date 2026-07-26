@@ -78,8 +78,11 @@ export interface CalendarScreenProps {
   /** Fetch items for an arbitrary range without disturbing the main view —
       used by the availability panel so its week works in any calendar view. */
   onFetchRange?: (start: Date, end: Date) => Promise<CalItem[]>;
-  onSaveEvent: (input: CalendarEventInput, editingId: string | null) => Promise<void> | void;
-  onDeleteEvent: (id: string) => Promise<void> | void;
+  // Write callbacks are optional: omit them (e.g. a read-only role gated in the
+  // wrapper) to hide all create/edit/delete affordances. onSaveEvent gates
+  // create + edit; onDeleteEvent gates delete.
+  onSaveEvent?: (input: CalendarEventInput, editingId: string | null) => Promise<void> | void;
+  onDeleteEvent?: (id: string) => Promise<void> | void;
   onJobPress: (id: string) => void;
 }
 
@@ -323,13 +326,17 @@ export function CalendarScreen({
   }, [view, cursor, dateLocale]);
 
   // ── Form helpers ────────────────────────────────────────────────────────────
+  const canEdit = !!onSaveEvent;   // may create / edit events
+  const canDelete = !!onDeleteEvent;
   const openNew = (day: Date) => {
+    if (!onSaveEvent) return;
     setEditingId(null);
     setForm(blankForm(day));
     setDetailItem(null);
     setFormOpen(true);
   };
   const openEdit = (it: CalItem) => {
+    if (!onSaveEvent) return;
     setEditingId(it.id);
     setForm(fromItem(it));
     setDetailItem(null);
@@ -342,7 +349,7 @@ export function CalendarScreen({
 
   const canSave = form.title.trim().length > 0 && !!form.date;
   const saveForm = async () => {
-    if (!canSave) return;
+    if (!canSave || !onSaveEvent) return;
     setSaving(true);
     try {
       const normalized: CalendarEventInput = {
@@ -356,7 +363,7 @@ export function CalendarScreen({
     }
   };
   const removeEvent = async () => {
-    if (!detailItem) return;
+    if (!detailItem || !onDeleteEvent) return;
     setDeleting(true);
     try {
       await onDeleteEvent(detailItem.id);
@@ -385,7 +392,7 @@ export function CalendarScreen({
               <Users size={15} color={c.muted} />
               <Text className="text-sm font-semibold text-muted">{t.availability.button}</Text>
             </Pressable>
-            {Platform.OS === 'web' ? (
+            {Platform.OS === 'web' && canEdit ? (
               <Pressable
                 onPress={() => openNew(agendaDay)}
                 className="flex-row items-center gap-1.5 bg-primary px-3.5 py-2 rounded-xl active:opacity-90"
@@ -487,14 +494,21 @@ export function CalendarScreen({
         <View className="mt-6" onLayout={e => { agendaYRef.current = e.nativeEvent.layout.y; }}>
           <AgendaHeader day={agendaDay} count={agendaItems.length} dateLocale={dateLocale} t={t} />
           {agendaItems.length === 0 ? (
-            <Pressable
-              onPress={() => openNew(agendaDay)}
-              className="items-center justify-center py-10 rounded-2xl border border-dashed border-border bg-white/50 active:bg-surface"
-            >
-              <CalendarDays size={26} color={c.faint} />
-              <Text className="text-sm text-faint mt-2">{t.agenda.empty}</Text>
-              <Text className="text-xs text-primary font-semibold mt-1">{t.agenda.emptyAdd}</Text>
-            </Pressable>
+            canEdit ? (
+              <Pressable
+                onPress={() => openNew(agendaDay)}
+                className="items-center justify-center py-10 rounded-2xl border border-dashed border-border bg-white/50 active:bg-surface"
+              >
+                <CalendarDays size={26} color={c.faint} />
+                <Text className="text-sm text-faint mt-2">{t.agenda.empty}</Text>
+                <Text className="text-xs text-primary font-semibold mt-1">{t.agenda.emptyAdd}</Text>
+              </Pressable>
+            ) : (
+              <View className="items-center justify-center py-10 rounded-2xl border border-dashed border-border bg-white/50">
+                <CalendarDays size={26} color={c.faint} />
+                <Text className="text-sm text-faint mt-2">{t.agenda.empty}</Text>
+              </View>
+            )
           ) : (
             <View className="gap-2">
               {agendaItems.map(it => (
@@ -513,7 +527,7 @@ export function CalendarScreen({
       </ScrollView>
 
       {/* New event — floating button (native thumb reach; web uses header btn) */}
-      {Platform.OS !== 'web' ? <Fab onPress={() => openNew(agendaDay)} /> : null}
+      {Platform.OS !== 'web' && canEdit ? <Fab onPress={() => openNew(agendaDay)} /> : null}
 
       {/* Team availability — a week grid of who's booked (from assigned jobs),
           with its own week nav so you can scan a range at a glance. */}
@@ -629,25 +643,31 @@ export function CalendarScreen({
                 </View>
               ) : null}
             </View>
-            <View className="flex-row gap-2 pt-1">
-              <Pressable
-                onPress={() => openEdit(detailItem)}
-                className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl border border-border active:bg-surface"
-              >
-                <Pencil size={14} color={c.muted} />
-                <Text className="text-sm font-semibold text-ink">{tc.buttons.edit}</Text>
-              </Pressable>
-              <Pressable
-                onPress={removeEvent}
-                disabled={deleting}
-                className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl bg-red-500/10 active:bg-red-100"
-              >
-                <Trash2 size={14} color={c.danger} />
-                <Text className="text-sm font-semibold text-red-600">
-                  {deleting ? tc.states.saving : tc.buttons.delete}
-                </Text>
-              </Pressable>
-            </View>
+            {canEdit || canDelete ? (
+              <View className="flex-row gap-2 pt-1">
+                {canEdit ? (
+                  <Pressable
+                    onPress={() => openEdit(detailItem)}
+                    className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl border border-border active:bg-surface"
+                  >
+                    <Pencil size={14} color={c.muted} />
+                    <Text className="text-sm font-semibold text-ink">{tc.buttons.edit}</Text>
+                  </Pressable>
+                ) : null}
+                {canDelete ? (
+                  <Pressable
+                    onPress={removeEvent}
+                    disabled={deleting}
+                    className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-xl bg-red-500/10 active:bg-red-100"
+                  >
+                    <Trash2 size={14} color={c.danger} />
+                    <Text className="text-sm font-semibold text-red-600">
+                      {deleting ? tc.states.saving : tc.buttons.delete}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
           </View>
         ) : null}
       </Modal>

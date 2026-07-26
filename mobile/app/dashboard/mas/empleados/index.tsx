@@ -42,7 +42,7 @@ import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { fetchEmployeeLocations, employeeIdsAtLocation, type EmployeeLocation } from '@amixos/shared/lib/locations';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { resolveAccess, orphanMembers, displayNameFromAccount, type AccessMember, type AccessInvite } from '@amixos/shared/lib/teamPeople';
-import { can, type Role } from '@amixos/shared/lib/permissions';
+import { can, isReadOnly, type Role } from '@amixos/shared/lib/permissions';
 
 interface RawEmployee {
   id: string;
@@ -158,6 +158,15 @@ export default function EmpleadosRoute() {
   const t = full.dashboard.employees;
   const tc = full.common;
   const insets = useSafeAreaInsets();
+
+  // UI-hygiene gates (RLS is the real lock). A read-only viewer never sees
+  // write affordances. Log-hours stays for field crew (writeOwnTimesheet) and
+  // for managers who see all timesheets, but never for a read-only viewer.
+  const canCreateEmployee = can.createEmployee(currentRole);
+  const canEditEmployee = can.editEmployee(currentRole);
+  const canLogHours =
+    can.writeOwnTimesheet(currentRole) ||
+    (can.seeAllTimesheets(currentRole) && !isReadOnly(currentRole));
 
   // Floating bottom-sheet look (matches the client picker): a heavier scrim so
   // the screen behind reads as a soft dark wash, plus a rounded card lifted off
@@ -989,12 +998,12 @@ export default function EmpleadosRoute() {
         timesheets={tsList}
         hourTotals={hourTotals}
         payPeriodLabel={payPeriodLabel}
-        onAddEmployee={openAddEmp}
+        onAddEmployee={canCreateEmployee ? openAddEmp : undefined}
         onEditEmployee={openEditEmpById}
         onToggleActive={toggleActive}
-        onLogHours={openLogHours}
-        onEditTimesheet={editTimesheet}
-        onDeleteTimesheet={deleteTimesheet}
+        onLogHours={canLogHours ? openLogHours : undefined}
+        onEditTimesheet={canEditEmployee ? editTimesheet : undefined}
+        onDeleteTimesheet={canEditEmployee ? deleteTimesheet : undefined}
         onBulkDelete={can.deleteEmployee(currentRole) ? bulkDeleteEmployees : undefined}
         bulkDeleting={bulkDeleting}
         modalsSlot={modalsSlot}

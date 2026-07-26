@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { InvoiceLang } from '@amixos/shared';
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
+import { can } from '@amixos/shared/lib/permissions';
 import { useLang } from '@/i18n/LangProvider';
 import { useDirty, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
@@ -69,10 +70,19 @@ function NuevaFacturaContent() {
   const { t: full, locale } = useLang();
   const t = full.dashboard.invoices.new;
   const supabase = createSupabaseClient();
-  const { business, activeLocationId, myHomeLocationId } = useApp();
+  const { business, currentRole, activeLocationId, myHomeLocationId } = useApp();
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get('edit');
+
+  // Route guard: creating needs createInvoice, editing needs editInvoice. RLS
+  // blocks the write regardless — this stops a read-only role from reaching the
+  // form via a direct link.
+  useEffect(() => {
+    if (!business) return;
+    const allowed = editId ? can.editInvoice(currentRole) : can.createInvoice(currentRole);
+    if (!allowed) router.replace('/dashboard/facturas');
+  }, [business, currentRole, editId, router]);
   const [clients, setClients] = useState<Client[]>([]);
   const initialClient = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('client') : null;
   const [clientIds, setClientIds] = useState<string[]>(initialClient ? [initialClient] : []);

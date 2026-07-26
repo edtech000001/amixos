@@ -50,6 +50,7 @@ import {
 import { useSignedUrls } from '@amixos/shared/lib/storageUrls';
 import { formatDateLong, formatDateTimeLong, formatPhoneInput } from '@amixos/shared/lib/format';
 import { nextRotation } from '@amixos/shared/lib/jobPhotos';
+import { can } from '@amixos/shared/lib/permissions';
 import {
   groupEquipment,
   parseEquipmentGroupKey,
@@ -146,7 +147,11 @@ function DetailCard({ children }: { children: ReactNode }) {
 
 export default function EquipmentModule() {
   const supabase = createSupabaseClient();
-  const { business, user, locations, activeLocationId, myHomeLocationId } = useApp();
+  const { business, user, locations, activeLocationId, myHomeLocationId, currentRole } = useApp();
+  // Equipment maps to the inventory permission per the role matrix. Read-only
+  // roles keep view access; add/edit/delete + photo management are gated off
+  // (RLS blocks the writes server-side either way).
+  const canEdit = can.editInventory(currentRole);
   const multiLocation = (locations?.length ?? 0) > 1;
   const { t: full, locale } = useLang();
   const t = full.dashboard.modules.equipment;
@@ -594,10 +599,12 @@ export default function EquipmentModule() {
             </p>
           </div>
         </div>
-        <Button onClick={openAdd}>
-          <Plus size={14} className="mr-1.5" />
-          {t.addBtn}
-        </Button>
+        {canEdit ? (
+          <Button onClick={openAdd}>
+            <Plus size={14} className="mr-1.5" />
+            {t.addBtn}
+          </Button>
+        ) : null}
       </div>
 
       <div className="flex items-center gap-3 mb-5">
@@ -1097,14 +1104,16 @@ export default function EquipmentModule() {
               <DetailRow label={t.updatedLabel} value={selected.updated_at ? formatDateTimeLong(selected.updated_at, locale) : null} />
             </DetailCard>
 
-            <div className="flex gap-3 pt-1">
-              <Button variant="secondary" onClick={onDelete}>
-                <Trash2 size={14} className="mr-1.5" />
-                {t.deleteBtn}
-              </Button>
-              <div className="flex-1" />
-              <Button onClick={() => openEdit(selected)}>{t.editBtn}</Button>
-            </div>
+            {canEdit ? (
+              <div className="flex gap-3 pt-1">
+                <Button variant="secondary" onClick={onDelete}>
+                  <Trash2 size={14} className="mr-1.5" />
+                  {t.deleteBtn}
+                </Button>
+                <div className="flex-1" />
+                <Button onClick={() => openEdit(selected)}>{t.editBtn}</Button>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </Modal>
@@ -1130,24 +1139,26 @@ export default function EquipmentModule() {
               <X size={20} />
             </button>
             <span className="text-sm text-white/70">{(viewerIndex ?? 0) + 1} / {photos.length}</span>
-            <div className="flex items-center gap-2">
-              {/* Set the current photo as the list/cover thumbnail. */}
-              <button
-                onClick={() => void setCover(viewerPhoto)}
-                aria-label={t.setCoverBtn}
-                title={t.setCoverBtn}
-                className={`w-10 h-10 rounded-full flex items-center justify-center ${(viewerIndex ?? 0) === 0 ? 'bg-amber-400/90 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
-              >
-                <Star size={18} fill={(viewerIndex ?? 0) === 0 ? 'currentColor' : 'none'} />
-              </button>
-              <button
-                onClick={() => void rotateCurrent()}
-                aria-label="Rotate"
-                className="w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20"
-              >
-                <RotateCw size={18} />
-              </button>
-            </div>
+            {canEdit ? (
+              <div className="flex items-center gap-2">
+                {/* Set the current photo as the list/cover thumbnail. */}
+                <button
+                  onClick={() => void setCover(viewerPhoto)}
+                  aria-label={t.setCoverBtn}
+                  title={t.setCoverBtn}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center ${(viewerIndex ?? 0) === 0 ? 'bg-amber-400/90 text-white' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                >
+                  <Star size={18} fill={(viewerIndex ?? 0) === 0 ? 'currentColor' : 'none'} />
+                </button>
+                <button
+                  onClick={() => void rotateCurrent()}
+                  aria-label="Rotate"
+                  className="w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20"
+                >
+                  <RotateCw size={18} />
+                </button>
+              </div>
+            ) : <div />}
           </div>
 
           {(viewerIndex ?? 0) > 0 ? (

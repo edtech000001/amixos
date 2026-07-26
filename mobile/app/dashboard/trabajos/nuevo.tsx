@@ -224,6 +224,10 @@ export default function NuevoTrabajoRoute() {
   // and no crew-visibility toggle. Their job is forced visible-to-crew +
   // self-assigned so they can see it (RLS 044/089). Mirrors logFieldJob.
   const restrictedCreator = !!currentRole && !can.seeAllJobs(currentRole);
+  // Crew-assignment rights (matches migration 164's job_assignments policy):
+  // managers+ get the dispatcher tools; a field creator keeps self-assign on
+  // their own job; office/viewer get nothing (they can't write job_assignments).
+  const canAssign = can.assignWorkers(currentRole);
   // Can this creator schedule / change status? Field crew without the toggle
   // may only RECORD completed work — status is locked to "completed".
   const canSchedule = can.scheduleJobs(currentRole);
@@ -978,10 +982,10 @@ export default function NuevoTrabajoRoute() {
     if (k === 'assigned_workers') {
       return (
         <Fragment key={k}>
-          {employees.length > 0 ? (
+          {employees.length > 0 && (canAssign || restrictedCreator) ? (
             <>
-              {/* Crew Finder — dispatcher tool; hidden for field creators. */}
-              {!restrictedCreator ? (
+              {/* Crew Finder — dispatcher tool; managers+ only. */}
+              {canAssign ? (
               <Pressable
                 onPress={() => setCrewFinderOpen(true)}
                 className="mb-4 flex-row items-center justify-center gap-1.5 rounded-2xl border border-primary/30 bg-primary/5 py-3"
@@ -992,7 +996,7 @@ export default function NuevoTrabajoRoute() {
               ) : null}
               {/* Lead picker — one designated lead (crew mode only). Hidden for
                  field creators: the person logging the job IS the lead. */}
-              {business?.job_crew_mode !== false && !restrictedCreator ? (
+              {business?.job_crew_mode !== false && canAssign ? (
                 <View className="mb-4">
                   <Text className="text-sm font-semibold text-ink mb-2">{t.leadLabel}</Text>
                   <Pressable
@@ -1048,7 +1052,7 @@ export default function NuevoTrabajoRoute() {
 
           {/* Drivers — optional multi-select (like crew). Each driver is
               credited driverHours on top of the job's total hours. */}
-          {employees.length > 0 ? (
+          {employees.length > 0 && (canAssign || restrictedCreator) ? (
             <View className="mt-4">
               <Text className="text-sm font-semibold text-ink mb-2">{t.driverLabel}</Text>
               <Pressable

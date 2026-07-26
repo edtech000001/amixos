@@ -76,8 +76,11 @@ export interface CalendarScreenProps {
   loading?: boolean;
   onRangeChange: (start: Date, end: Date) => void;
   onFetchRange?: (start: Date, end: Date) => Promise<CalItem[]>;
-  onSaveEvent: (input: CalendarEventInput, editingId: string | null) => Promise<void> | void;
-  onDeleteEvent: (id: string) => Promise<void> | void;
+  // Write callbacks are optional: omit them (e.g. a read-only role gated in the
+  // wrapper) to hide all create/edit/delete affordances. onSaveEvent gates
+  // create + edit; onDeleteEvent gates delete.
+  onSaveEvent?: (input: CalendarEventInput, editingId: string | null) => Promise<void> | void;
+  onDeleteEvent?: (id: string) => Promise<void> | void;
   onJobPress: (id: string) => void;
 }
 
@@ -337,13 +340,15 @@ export function CalendarScreen({
     return cursor.toLocaleDateString(dateLocale, { weekday: 'long', day: 'numeric', month: 'long' });
   }, [view, cursor, dateLocale]);
 
-  const openNew = (day: Date) => { setEditingId(null); setForm(blankForm(day)); setDetailItem(null); setFormOpen(true); };
-  const openEdit = (it: CalItem) => { setEditingId(it.id); setForm(fromItem(it)); setDetailItem(null); setFormOpen(true); };
+  const canEdit = !!onSaveEvent;   // may create / edit events
+  const canDelete = !!onDeleteEvent;
+  const openNew = (day: Date) => { if (!onSaveEvent) return; setEditingId(null); setForm(blankForm(day)); setDetailItem(null); setFormOpen(true); };
+  const openEdit = (it: CalItem) => { if (!onSaveEvent) return; setEditingId(it.id); setForm(fromItem(it)); setDetailItem(null); setFormOpen(true); };
   const onItemPress = (it: CalItem) => { if (it.kind === 'job') onJobPress(it.id); else setDetailItem(it); };
 
   const canSave = form.title.trim().length > 0 && !!form.date;
   const saveForm = async () => {
-    if (!canSave) return;
+    if (!canSave || !onSaveEvent) return;
     setSaving(true);
     try {
       const normalized: CalendarEventInput = { ...form, endDate: form.endDate && form.endDate >= form.date ? form.endDate : form.date };
@@ -352,7 +357,7 @@ export function CalendarScreen({
     } finally { setSaving(false); }
   };
   const removeEvent = async () => {
-    if (!detailItem) return;
+    if (!detailItem || !onDeleteEvent) return;
     setDeleting(true);
     try { await onDeleteEvent(detailItem.id); setDetailItem(null); } finally { setDeleting(false); }
   };
@@ -369,11 +374,13 @@ export function CalendarScreen({
               <Users size={15} color="#4B5563" />
               <span className="text-sm font-semibold text-muted">{t.availability.button}</span>
             </button>
+            {canEdit ? (
             <button type="button" onClick={() => openNew(agendaDay)}
               className="flex items-center gap-1.5 bg-primary px-3.5 py-2 rounded-xl hover:opacity-90">
               <Plus size={15} color="#FFFFFF" />
               <span className="text-sm font-semibold text-white">{t.newEvent}</span>
             </button>
+            ) : null}
           </div>
         </div>
 
@@ -443,12 +450,19 @@ export function CalendarScreen({
             {agendaItems.length > 0 ? <div className="text-xs text-faint">{t.agenda.count.replace('{{count}}', String(agendaItems.length))}</div> : null}
           </div>
           {agendaItems.length === 0 ? (
-            <button type="button" onClick={() => openNew(agendaDay)}
-              className="w-full flex flex-col items-center justify-center py-10 rounded-2xl border border-dashed border-border bg-surface/50 hover:bg-surface">
-              <CalendarDays size={26} color="#D1D5DB" />
-              <span className="text-sm text-faint mt-2">{t.agenda.empty}</span>
-              <span className="text-xs text-primary font-semibold mt-1">{t.agenda.emptyAdd}</span>
-            </button>
+            canEdit ? (
+              <button type="button" onClick={() => openNew(agendaDay)}
+                className="w-full flex flex-col items-center justify-center py-10 rounded-2xl border border-dashed border-border bg-surface/50 hover:bg-surface">
+                <CalendarDays size={26} color="#D1D5DB" />
+                <span className="text-sm text-faint mt-2">{t.agenda.empty}</span>
+                <span className="text-xs text-primary font-semibold mt-1">{t.agenda.emptyAdd}</span>
+              </button>
+            ) : (
+              <div className="w-full flex flex-col items-center justify-center py-10 rounded-2xl border border-dashed border-border bg-surface/50">
+                <CalendarDays size={26} color="#D1D5DB" />
+                <span className="text-sm text-faint mt-2">{t.agenda.empty}</span>
+              </div>
+            )
           ) : (
             <div className="flex flex-col gap-2">
               {agendaItems.map(it => (
@@ -531,10 +545,12 @@ export function CalendarScreen({
               <div className="flex items-center gap-2"><Clock size={14} color="#9CA3AF" /><span className="text-sm text-muted">{whenLabel(detailItem, dateLocale, t)}</span></div>
               {detailItem.location ? <div className="flex items-center gap-2"><MapPin size={14} color="#9CA3AF" /><span className="text-sm text-muted">{detailItem.location}</span></div> : null}
             </div>
-            <div className="flex gap-2 pt-1">
-              <Btn variant="secondary" onClick={() => openEdit(detailItem)} className="flex-1"><Pencil size={14} color="#4B5563" />{tc.buttons.edit}</Btn>
-              <Btn variant="danger" onClick={removeEvent} disabled={deleting} className="flex-1"><Trash2 size={14} color="#DC2626" />{deleting ? tc.states.saving : tc.buttons.delete}</Btn>
-            </div>
+            {canEdit || canDelete ? (
+              <div className="flex gap-2 pt-1">
+                {canEdit ? <Btn variant="secondary" onClick={() => openEdit(detailItem)} className="flex-1"><Pencil size={14} color="#4B5563" />{tc.buttons.edit}</Btn> : null}
+                {canDelete ? <Btn variant="danger" onClick={removeEvent} disabled={deleting} className="flex-1"><Trash2 size={14} color="#DC2626" />{deleting ? tc.states.saving : tc.buttons.delete}</Btn> : null}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </WebModal>

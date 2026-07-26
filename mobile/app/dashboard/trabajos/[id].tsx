@@ -171,7 +171,7 @@ interface JobAssignment {
   id: string;
   worker_name: string | null;
   is_lead: boolean | null;
-  employees: { first_name: string; last_name: string } | null;
+  employees: { first_name: string; last_name: string; user_id: string | null } | null;
 }
 
 interface JobItem {
@@ -303,6 +303,7 @@ export default function JobDetailRoute() {
   };
   const setActiveBusiness = useAuthStore((s) => s.setActiveBusiness);
   const currentRole = useAuthStore((s) => s.currentRole);
+  const authUser = useAuthStore((s) => s.user);
   const tw = full.dashboard.workspaces;
 
   const PROPOSAL_PIPELINE: PipelineStep[] = [
@@ -354,7 +355,7 @@ export default function JobDetailRoute() {
       loadCached(`job_assignments_${id}`, async () => {
         const { data, error } = await supabase
           .from('job_assignments')
-          .select('id, worker_name, is_lead, employees(first_name, last_name)')
+          .select('id, worker_name, is_lead, employees(first_name, last_name, user_id)')
           .eq('job_id', id);
         if (error) throw error;
         return data ?? [];
@@ -991,6 +992,12 @@ export default function JobDetailRoute() {
   const pipelineIdx = pipeline.findIndex((s) => s.key === job.status);
   const isCancelled = job.status === 'cancelled' || job.status === 'declined';
   const canInvoice = (job.status === 'completed' || job.status === 'accepted') && !job.invoice_id && can.createInvoice(currentRole);
+  // Status-pipeline write gate. Managers/owners with jobs.edit can always drive
+  // the pipeline; a field worker assigned to THIS job may also advance it
+  // (matches the field-home surface). Read-only viewers see the pipeline but
+  // none of the action buttons. RLS enforces the same rule server-side.
+  const isAssignedToMe = !!authUser && assignments.some(a => a.employees?.user_id === authUser.id);
+  const canChangeStatus = can.changeJobStatus(currentRole) || (can.changeJobStatusIfAssigned(currentRole) && isAssignedToMe);
   const clientName = job.clients ? `${job.clients.first_name} ${job.clients.last_name}` : null;
   const itemSubtotal = items.reduce((s, i) => s + i.total, 0);
   const total = isProposal && job.total_amount > 0 ? job.total_amount : itemSubtotal;
@@ -1026,7 +1033,7 @@ export default function JobDetailRoute() {
 
   // Cancel — moved off the jobs list (accidental taps) to here, behind a
   // confirm. Only for active, pre-completion statuses.
-  const canCancel = !isCancelled && ['posible', 'proposal', 'sent', 'accepted', 'scheduled', 'in_progress'].includes(job.status);
+  const canCancel = canChangeStatus && !isCancelled && ['posible', 'proposal', 'sent', 'accepted', 'scheduled', 'in_progress'].includes(job.status);
   const confirmCancelJob = () => {
     confirmAction({
       // A signed estimate gets the stronger warning: cancelling + reinstating
@@ -1284,14 +1291,16 @@ export default function JobDetailRoute() {
                   {td.declinedOn.replace('{{date}}', fmtDateTime(job.declined_at))}
                 </Text>
               ) : null}
-              <Pressable
-                onPress={reinstateJob}
-                disabled={updatingStatus}
-                className="self-start mt-2 flex-row items-center gap-1.5 bg-card px-3 py-1.5 rounded-lg border border-red-200 active:bg-red-500/10"
-              >
-                <RotateCcw size={12} color={c.danger} />
-                <Text className="text-xs font-semibold text-red-600">{td.reinstate}</Text>
-              </Pressable>
+              {canChangeStatus ? (
+                <Pressable
+                  onPress={reinstateJob}
+                  disabled={updatingStatus}
+                  className="self-start mt-2 flex-row items-center gap-1.5 bg-card px-3 py-1.5 rounded-lg border border-red-200 active:bg-red-500/10"
+                >
+                  <RotateCcw size={12} color={c.danger} />
+                  <Text className="text-xs font-semibold text-red-600">{td.reinstate}</Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
         ) : null}
@@ -1336,7 +1345,7 @@ export default function JobDetailRoute() {
             </Pressable>
           ) : null}
 
-          {job.status === 'invoiced' && job.invoice_id ? (
+          {canChangeStatus && job.status === 'invoiced' && job.invoice_id ? (
             <Pressable
               onPress={unInvoice}
               disabled={unInvoicing}
@@ -1347,7 +1356,7 @@ export default function JobDetailRoute() {
             </Pressable>
           ) : null}
 
-          {nextStatusAction || prevStatusAction ? (
+          {canChangeStatus && (nextStatusAction || prevStatusAction) ? (
             <View className="flex-row gap-2">
               {prevStatusAction ? (
                 <Pressable
@@ -1375,7 +1384,7 @@ export default function JobDetailRoute() {
 
           {/* Sign on site — hand the device to the client to accept + sign
              an estimate in person. */}
-          {isProposal && ['proposal', 'sent'].includes(job.status) ? (
+          {canChangeStatus && isProposal && ['proposal', 'sent'].includes(job.status) ? (
             <Pressable
               onPress={openSignSheet}
               className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-card border border-border active:bg-surface"

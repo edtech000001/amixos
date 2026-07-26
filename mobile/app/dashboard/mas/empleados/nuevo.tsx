@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronLeft, DollarSign } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
+import { can } from '@amixos/shared/lib/permissions';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { setEmployeePrimaryLocation } from '@amixos/shared/lib/locations';
@@ -106,11 +107,19 @@ const US_STATES = [
 export default function NuevoEmpleadoRoute() {
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, user, locations, activeLocationId } = useApp();
+  const { business, user, currentRole, locations, activeLocationId } = useApp();
   const { t: full, locale } = useLang();
   const c = useThemeColors();
   const t = full.dashboard.employees;
   const tc = full.common;
+
+  // Route guard (UI hygiene; RLS is the real lock). Only roles that can create
+  // employees may reach the add form — bounce everyone else back to the list.
+  useEffect(() => {
+    if (currentRole && !can.createEmployee(currentRole)) {
+      router.replace('/dashboard/mas/empleados');
+    }
+  }, [currentRole, router]);
 
   const PAY_TYPE_OPTIONS = [
     { value: 'hourly', label: t.payTypes.hourly },

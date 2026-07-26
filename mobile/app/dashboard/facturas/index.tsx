@@ -91,6 +91,7 @@ export default function FacturasTab() {
   useFocusEffect(useCallback(() => { load(); }, [business?.id, activeLocationId]));
 
   const updateStatus = async (id: string, status: 'sent' | 'paid') => {
+    if (!can.editInvoice(currentRole)) return;
     const update: any = { status };
     if (status === 'paid') update.paid_at = new Date().toISOString();
     if (status === 'sent') update.sent_at = new Date().toISOString();
@@ -109,7 +110,7 @@ export default function FacturasTab() {
         loading={loading}
         invoices={invoices}
         onInvoicePress={(id) => router.push(`/dashboard/facturas/${id}`)}
-        onNewInvoicePress={() => router.push('/dashboard/facturas/nueva' as never)}
+        onNewInvoicePress={can.createInvoice(currentRole) ? () => router.push('/dashboard/facturas/nueva' as never) : undefined}
         onPriceSheetPress={() => router.push('/dashboard/facturas/precios' as never)}
         onUpdateStatus={updateStatus}
         businessId={business?.id}

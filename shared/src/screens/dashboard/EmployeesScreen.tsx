@@ -80,10 +80,12 @@ export interface EmployeesScreenProps {
   hourTotals?: HourTotalItem[];
   /** Human label for the current pay period, e.g. "Jul 14 – Jul 27". */
   payPeriodLabel?: string | null;
-  onAddEmployee: () => void;
+  /** Omit to hide the Add-employee affordances (no create permission). */
+  onAddEmployee?: () => void;
   onEditEmployee: (id: string) => void;
   onToggleActive: (id: string) => void;
-  onLogHours: () => void;
+  /** Omit to hide the Log-hours / Add-hours buttons (no timesheet write). */
+  onLogHours?: () => void;
   /** Edit / delete a logged-hours entry (History tab). */
   onEditTimesheet?: (id: string) => void;
   onDeleteTimesheet?: (id: string) => void;
@@ -254,13 +256,15 @@ export function EmployeesScreen({
                   .replace('{{hours}}', String(periodHours))}
           </Text>
         </View>
-        <Pressable
-          onPress={onLogHours}
-          className="flex-row items-center gap-1.5 bg-card border border-border px-4 py-2.5 rounded-xl active:bg-surface"
-        >
-          <Clock size={15} color={c.muted} />
-          <Text className="text-sm font-semibold text-ink">{t.logHours}</Text>
-        </Pressable>
+        {onLogHours ? (
+          <Pressable
+            onPress={onLogHours}
+            className="flex-row items-center gap-1.5 bg-card border border-border px-4 py-2.5 rounded-xl active:bg-surface"
+          >
+            <Clock size={15} color={c.muted} />
+            <Text className="text-sm font-semibold text-ink">{t.logHours}</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <View className="flex-row gap-1 bg-border-soft p-1 rounded-xl mb-6 self-start">
@@ -445,13 +449,15 @@ export function EmployeesScreen({
           </Pressable>
         ) : null}
       </View>
-      <Pressable
-        onPress={onLogHours}
-        className="flex-row items-center gap-1.5 bg-primary px-4 py-3 rounded-2xl active:opacity-90"
-      >
-        <Plus size={15} color="#fff" />
-        <Text className="text-sm font-semibold text-white">{t.addHours}</Text>
-      </Pressable>
+      {onLogHours ? (
+        <Pressable
+          onPress={onLogHours}
+          className="flex-row items-center gap-1.5 bg-primary px-4 py-3 rounded-2xl active:opacity-90"
+        >
+          <Plus size={15} color="#fff" />
+          <Text className="text-sm font-semibold text-white">{t.addHours}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 
@@ -477,12 +483,16 @@ export function EmployeesScreen({
         <Text className="text-sm font-semibold text-ink mr-1">
           {ts.hoursWorked ?? '—'}h
         </Text>
-        <Pressable onPress={() => onEditTimesheet?.(ts.id)} hitSlop={8} className="p-2 active:opacity-60">
-          <Pencil size={16} color={c.muted} />
-        </Pressable>
-        <Pressable onPress={() => onDeleteTimesheet?.(ts.id)} hitSlop={8} className="p-2 active:opacity-60">
-          <Trash2 size={16} color={c.danger} />
-        </Pressable>
+        {onEditTimesheet ? (
+          <Pressable onPress={() => onEditTimesheet(ts.id)} hitSlop={8} className="p-2 active:opacity-60">
+            <Pencil size={16} color={c.muted} />
+          </Pressable>
+        ) : null}
+        {onDeleteTimesheet ? (
+          <Pressable onPress={() => onDeleteTimesheet(ts.id)} hitSlop={8} className="p-2 active:opacity-60">
+            <Trash2 size={16} color={c.danger} />
+          </Pressable>
+        ) : null}
       </View>
     );
   };
@@ -499,9 +509,11 @@ export function EmployeesScreen({
             <View className="items-center py-20">
               <UserCheck size={40} color={c.faint} />
               <Text className="text-sm text-faint mt-3">{t.emptyEmployees}</Text>
-              <Pressable onPress={onAddEmployee} className="mt-1">
-                <Text className="text-primary text-sm font-medium">{t.addFirst}</Text>
-              </Pressable>
+              {onAddEmployee ? (
+                <Pressable onPress={onAddEmployee} className="mt-1">
+                  <Text className="text-primary text-sm font-medium">{t.addFirst}</Text>
+                </Pressable>
+              ) : null}
             </View>
           }
           contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: selectionMode ? 320 : 176 }}
@@ -539,7 +551,7 @@ export function EmployeesScreen({
 
     {/* New employee — floating action, bottom-right thumb reach. The Hours
        logged tab has its own inline "add entry" button. Hidden while selecting. */}
-    {tab === 'empleados' && !selectionMode ? <Fab onPress={onAddEmployee} /> : null}
+    {tab === 'empleados' && !selectionMode && onAddEmployee ? <Fab onPress={onAddEmployee} /> : null}
 
     {/* Bulk-delete pill — floating bottom-left, matching the jobs list. */}
     {tab === 'empleados' && selectionMode ? (

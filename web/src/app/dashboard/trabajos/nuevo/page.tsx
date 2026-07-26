@@ -185,6 +185,10 @@ function NuevoTrabajoContent() {
   // visible-to-crew + self-assigned so they can actually see it (RLS 044/089
   // hides unpublished/unassigned jobs from field). Mirrors logFieldJob.
   const restrictedCreator = !!currentRole && !can.seeAllJobs(currentRole);
+  // Crew-assignment rights (matches migration 164's job_assignments policy):
+  // managers+ get the dispatcher tools; a field creator keeps self-assign on
+  // their own job; office/viewer get nothing (they can't write job_assignments).
+  const canAssign = can.assignWorkers(currentRole);
   // Can this creator schedule / change status? Field crew without the toggle
   // may only RECORD completed work — status is locked to "completed".
   const canSchedule = can.scheduleJobs(currentRole);
@@ -1556,7 +1560,7 @@ function NuevoTrabajoContent() {
                 <Users size={15} className="text-primary"/>
                 <p className="text-xs font-semibold text-faint uppercase tracking-wide">{t.workersHeading}</p>
               </div>
-              {employees.length > 0 && !restrictedCreator && (
+              {employees.length > 0 && canAssign && (
                 <button type="button" onClick={() => setCrewFinderOpen(true)}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors">
                   <Navigation size={13} /> {full.dashboard.crewFinder.openButton}
@@ -1575,7 +1579,7 @@ function NuevoTrabajoContent() {
                 {/* Lead picker — searchable single-select dropdown (mirrors
                    the client picker). Hidden for field creators: the person
                    logging the job IS the lead. */}
-                {business?.job_crew_mode !== false && !restrictedCreator && (
+                {business?.job_crew_mode !== false && canAssign && (
                   <div className="flex flex-col gap-1.5 mb-4 max-w-xs">
                     <label className="text-sm font-medium text-ink">{t.leadLabel}</label>
                     <div className="relative" ref={leadDropdownRef}>
@@ -1622,7 +1626,9 @@ function NuevoTrabajoContent() {
                 )}
 
                 {/* Crew — searchable multi-select dropdown. Replaces the
-                   all-at-once grid so larger teams aren't overwhelming. */}
+                   all-at-once grid so larger teams aren't overwhelming.
+                   Managers+ assign; a field creator self-assigns their job. */}
+                {(canAssign || restrictedCreator) && (
                 <div className="flex flex-col gap-1.5 mb-3 max-w-xs">
                   {business?.job_crew_mode !== false && (
                     <label className="text-sm font-medium text-ink">{t.crewLabel}</label>
@@ -1685,13 +1691,14 @@ function NuevoTrabajoContent() {
                     </div>
                   )}
                 </div>
+                )}
               </>
             )}
             {/* Drivers — optional multi-select (like crew). Each driver is
                 credited driverHours on top of the job's total hours. Pool is
                 ALL employees, so a driver who didn't work the job can be added
                 without picking up the work hours. */}
-            {employees.length > 0 && (
+            {employees.length > 0 && (canAssign || restrictedCreator) && (
               <div className="flex flex-col gap-1.5 max-w-xs">
                 <label className="text-sm font-medium text-ink">{t.driverLabel}</label>
                 <div className="relative" ref={driverDropdownRef}>

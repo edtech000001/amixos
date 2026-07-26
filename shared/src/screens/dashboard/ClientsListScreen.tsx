@@ -58,11 +58,15 @@ export interface ClientsListScreenProps {
   onSelectMany?: (ids: string[]) => void;
   onToggleSelectAll: () => void;
   onClientPress: (id: string) => void;
-  onEditPress: (id: string) => void;
-  onDeletePress: (id: string) => void;
-  onNewClientPress: () => void;
+  /** Omit to hide per-row edit (web) — no edit permission. */
+  onEditPress?: (id: string) => void;
+  /** Omit to hide per-row delete (web) — no delete permission. */
+  onDeletePress?: (id: string) => void;
+  /** Omit to hide the New/Fab + empty-state create link — no create permission. */
+  onNewClientPress?: () => void;
   onImportPress?: () => void;
-  onBulkDeletePress: () => void;
+  /** Omit to hide the multi-select toggle + bulk-delete pill — no delete permission. */
+  onBulkDeletePress?: () => void;
   onClearSelection: () => void;
   bulkDeleting: boolean;
   /** Custom-field definitions, for the "group by custom field" menu options. */
@@ -108,6 +112,10 @@ export function ClientsListScreen({
   const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
   const c = useThemeColors();
+
+  // Multi-select (select mode + bulk delete) only makes sense when the caller
+  // can actually delete — hide the toggle, long-press entry, and pill otherwise.
+  const canBulkDelete = !!onBulkDeletePress;
 
   // Group-by control (mirrors the jobs list). 'name' = A–Z (default). The
   // choice persists across navigation + refresh via AsyncStorage.
@@ -293,16 +301,19 @@ export function ClientsListScreen({
           </Text>
         </View>
         <View className="flex-row gap-2">
-          {/* Select-mode toggle — same entry point as the jobs list. */}
-          <Pressable
-            onPress={() => (selectionMode ? exitSelect() : setSelectMode(true))}
-            accessibilityLabel={t.selectButton}
-            className={`items-center justify-center px-3 py-2.5 rounded-xl border active:opacity-80 ${
-              selectionMode ? 'bg-primary/10 border-primary' : 'bg-card border-border'
-            }`}
-          >
-            <ListChecks size={15} color={selectionMode ? c.primary : c.muted} />
-          </Pressable>
+          {/* Select-mode toggle — same entry point as the jobs list. Hidden
+             when the caller can't bulk-delete. */}
+          {canBulkDelete ? (
+            <Pressable
+              onPress={() => (selectionMode ? exitSelect() : setSelectMode(true))}
+              accessibilityLabel={t.selectButton}
+              className={`items-center justify-center px-3 py-2.5 rounded-xl border active:opacity-80 ${
+                selectionMode ? 'bg-primary/10 border-primary' : 'bg-card border-border'
+              }`}
+            >
+              <ListChecks size={15} color={selectionMode ? c.primary : c.muted} />
+            </Pressable>
+          ) : null}
           {/* Group-by control — highlighted when not the default A–Z. */}
           <Pressable
             onPress={() => setGroupMenuOpen(true)}
@@ -385,7 +396,7 @@ export function ClientsListScreen({
           <Text className="text-sm text-faint mt-3">
             {search ? t.emptyNoMatch : t.emptyAll}
           </Text>
-          {!search ? (
+          {!search && onNewClientPress ? (
             <Pressable onPress={onNewClientPress} className="mt-1">
               <Text className="text-primary text-sm font-medium">{t.addFirst}</Text>
             </Pressable>
@@ -425,6 +436,7 @@ export function ClientsListScreen({
           // Fixed height in alphabetical mode keeps getItemLayout exact; while
           // searching, rows size to content (matched contacts expand them).
           fixedHeight={searching ? undefined : CLIENT_ROW_H}
+          canSelect={canBulkDelete}
           onToggleSelect={onToggleSelect}
           onClientPress={onClientPress}
           onExitSelect={exitSelect}
@@ -480,11 +492,12 @@ export function ClientsListScreen({
       ) : null}
 
       {/* New client — floating action, bottom-right thumb reach. Hidden while
-         selecting so the delete pill owns the bottom edge (jobs pattern). */}
-      {selectionMode ? null : <Fab onPress={onNewClientPress} />}
+         selecting so the delete pill owns the bottom edge (jobs pattern), and
+         hidden entirely when the caller can't create. */}
+      {selectionMode || !onNewClientPress ? null : <Fab onPress={onNewClientPress} />}
 
       {/* Bulk-delete pill — bottom-left, same as the jobs list. */}
-      {selectionMode ? (
+      {selectionMode && onBulkDeletePress ? (
         <Pressable
           onPress={onBulkDeletePress}
           disabled={selectedIds.size === 0 || bulkDeleting}
@@ -708,6 +721,8 @@ interface ClientRowProps {
   isLast: boolean;
   /** Fixed row height for alphabetical mode (keeps getItemLayout exact). */
   fixedHeight?: number;
+  /** Whether long-press may enter selection mode (only when bulk-delete is available). */
+  canSelect?: boolean;
   onToggleSelect: (id: string) => void;
   onClientPress: (id: string) => void;
   onExitSelect: () => void;
@@ -720,6 +735,7 @@ const ClientRow = memo(function ClientRow({
   isChecked,
   isLast,
   fixedHeight,
+  canSelect,
   onToggleSelect,
   onClientPress,
   onExitSelect,
@@ -733,7 +749,7 @@ const ClientRow = memo(function ClientRow({
       // scroll back to the header toggle). While in selection mode the whole
       // row is the toggle target (no tiny checkbox to aim for).
       onPress={() => (selectionMode ? onToggleSelect(c.id) : onClientPress(c.id))}
-      onLongPress={() => (selectionMode ? onExitSelect() : onToggleSelect(c.id))}
+      onLongPress={() => (selectionMode ? onExitSelect() : canSelect ? onToggleSelect(c.id) : undefined)}
       delayLongPress={300}
       // Row sits inside the white card; border-x continues the card frame.
       // border-b-gray-200 keeps the divider readable (the original gray-50

@@ -437,6 +437,12 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   }, [id, business, locale]);
 
   const updateStatus = async (status: 'sent' | 'paid' | 'draft' | 'total_loss') => {
+    // Write-off (→ total_loss) and reinstate (total_loss → sent) are a
+    // deletion-class action, gated on deleteInvoice; ordinary sent/paid/draft
+    // transitions need editInvoice. The shared screen renders these buttons by
+    // invoice.status (not prop presence), so the permission split lives here.
+    const writeOffPath = status === 'total_loss' || invoice?.status === 'total_loss';
+    if (writeOffPath ? !can.deleteInvoice(currentRole) : !can.editInvoice(currentRole)) return;
     setUpdating(true);
     const update: any = { status };
     if (status === 'paid') update.paid_at = new Date().toISOString();
@@ -698,6 +704,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   };
 
   const canDelete = can.deleteInvoice(currentRole);
+  const canEdit = can.editInvoice(currentRole);
 
   return (
     <>
@@ -710,28 +717,30 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         }}
         branding={branding}
         templateConfig={templateConfig}
+        canEdit={canEdit}
+        canWriteOff={canDelete}
         updating={updating}
         onBack={goBack}
         onUpdateStatus={updateStatus}
         onPrint={onPrint}
         onShareLink={onShareLink}
-        onEdit={invoice ? () => router.push(`/dashboard/facturas/nueva?edit=${id}`) : undefined}
+        onEdit={invoice && canEdit ? () => router.push(`/dashboard/facturas/nueva?edit=${id}`) : undefined}
         onDelete={invoice && canDelete ? () => setDeleteOpen(true) : undefined}
-        onAutoprice={invoice && invoice.status === 'draft' && priceItems.length > 0 ? runAutoprice : undefined}
+        onAutoprice={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? runAutoprice : undefined}
         autopriceVerify={showInvVerify}
-        onMoveJob={openMove}
-        onRemoveJob={removeJob}
-        onAddJob={openAdd}
-        onRemoveManualItem={removeManual}
-        onEditManualItem={editManual}
+        onMoveJob={canEdit ? openMove : undefined}
+        onRemoveJob={canEdit ? removeJob : undefined}
+        onAddJob={canEdit ? openAdd : undefined}
+        onRemoveManualItem={canEdit ? removeManual : undefined}
+        onEditManualItem={canEdit ? editManual : undefined}
         onJobPress={(jobId) => setPreviewJobId(jobId)}
         jobBusy={jobBusy}
-        onSendInvoice={sendInvoice}
+        onSendInvoice={canEdit ? sendInvoice : undefined}
         payments={payments}
-        onRecordPayment={openRecordPayment}
-        onEditPayment={openEditPayment}
-        onDeletePayment={setDelPayment}
-        onUndoPaid={() => setUndoPaidOpen(true)}
+        onRecordPayment={canEdit ? openRecordPayment : undefined}
+        onEditPayment={canEdit ? openEditPayment : undefined}
+        onDeletePayment={canEdit ? setDelPayment : undefined}
+        onUndoPaid={canEdit ? () => setUndoPaidOpen(true) : undefined}
         onClientPress={(clientId) => router.push(`/dashboard/clientes/${clientId}?from=invoice&invoice=${id}`)}
         jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
       />

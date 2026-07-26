@@ -14,6 +14,7 @@ import {
   type InventoryItem as ScreenItem,
 } from '@amixos/shared/screens/dashboard/InventoryScreen';
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
+import { can } from '@amixos/shared/lib/permissions';
 
 interface RawItem {
   id: string;
@@ -43,7 +44,10 @@ export default function InventoryModule() {
   const tc = full.common;
 
   const supabase = createSupabaseClient();
-  const { business, locations, activeLocationId, myHomeLocationId } = useApp();
+  const { business, locations, activeLocationId, myHomeLocationId, currentRole } = useApp();
+  // Read-only / non-writer roles keep view access; the add/edit/adjust/delete
+  // buttons are gated off (RLS blocks the writes server-side either way).
+  const canEdit = can.editInventory(currentRole);
   const [items, setItems] = useState<RawItem[]>([]);
   const [modal, setModal] = useState<'add' | 'edit' | 'adjust' | null>(null);
   const [selected, setSelected] = useState<RawItem | null>(null);
@@ -233,11 +237,11 @@ export default function InventoryModule() {
       loading={loading}
       items={screenItems}
       unitLabel={unitLabel}
-      onAddItem={openAdd}
-      onEditItem={openEdit}
-      onAdjustItem={openAdjust}
-      onDeleteItem={remove}
-      modalsSlot={modals}
+      onAddItem={canEdit ? openAdd : undefined}
+      onEditItem={canEdit ? openEdit : undefined}
+      onAdjustItem={canEdit ? openAdjust : undefined}
+      onDeleteItem={canEdit ? remove : undefined}
+      modalsSlot={canEdit ? modals : undefined}
     />
   );
 }

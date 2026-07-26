@@ -118,6 +118,7 @@ export default function FacturasPage() {
   useEffect(() => { load(); }, [business, activeLocationId]);
 
   const updateStatus = async (id: string, status: 'sent' | 'paid') => {
+    if (!can.editInvoice(currentRole)) return;
     const update: any = { status };
     if (status === 'paid') update.paid_at = new Date().toISOString();
     if (status === 'sent') update.sent_at = new Date().toISOString();
@@ -147,7 +148,7 @@ export default function FacturasPage() {
       loading={loading}
       invoices={invoices}
       onInvoicePress={(id) => { saveScrollAnchor('invoices-list', id); router.push(`/dashboard/facturas/${id}`); }}
-      onNewInvoicePress={() => router.push('/dashboard/facturas/nueva')}
+      onNewInvoicePress={can.createInvoice(currentRole) ? () => router.push('/dashboard/facturas/nueva') : undefined}
       onPriceSheetPress={() => router.push('/dashboard/precios')}
       onUpdateStatus={updateStatus}
       businessId={business?.id}

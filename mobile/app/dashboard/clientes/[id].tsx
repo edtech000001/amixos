@@ -38,6 +38,7 @@ import { queuedInsert, queuedUpdate } from '@/lib/offline/mutate';
 import { newUuid } from '@/lib/offline/ids';
 import { isOnlineNow } from '@/lib/offline/network';
 import { useApp } from '@/lib/AppContext';
+import { can } from '@amixos/shared/lib/permissions';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { AutocompleteInput, Button, Input, Toggle } from '@amixos/shared/ui';
@@ -173,7 +174,12 @@ export default function ClienteDetailRoute() {
     }
   };
   const supabase = createSupabaseClient();
-  const { business, user } = useApp();
+  const { business, user, currentRole } = useApp();
+  // Write gates: viewer / field can read a client but not edit or delete it,
+  // nor manage its contacts. RLS enforces this server-side; we hide the
+  // buttons so those roles don't tap actions that would silently fail.
+  const canEdit = can.editClient(currentRole);
+  const canDelete = can.deleteClient(currentRole);
   const syncBanner = useGoogleSyncBanner();
   const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
@@ -594,20 +600,24 @@ export default function ClienteDetailRoute() {
           >
             <Share2 size={18} color={c.muted} />
           </Pressable>
-          <Pressable
-            onPress={() => router.push(`/dashboard/clientes/nuevo?edit=${client.id}` as never)}
-            hitSlop={8}
-            className="p-2 rounded-lg active:bg-border-soft"
-          >
-            <Pencil size={18} color={c.muted} />
-          </Pressable>
-          <Pressable
-            onPress={confirmDelete}
-            hitSlop={8}
-            className="p-2 rounded-lg active:bg-red-500/10"
-          >
-            <Trash2 size={18} color={c.danger} />
-          </Pressable>
+          {canEdit ? (
+            <Pressable
+              onPress={() => router.push(`/dashboard/clientes/nuevo?edit=${client.id}` as never)}
+              hitSlop={8}
+              className="p-2 rounded-lg active:bg-border-soft"
+            >
+              <Pencil size={18} color={c.muted} />
+            </Pressable>
+          ) : null}
+          {canDelete ? (
+            <Pressable
+              onPress={confirmDelete}
+              hitSlop={8}
+              className="p-2 rounded-lg active:bg-red-500/10"
+            >
+              <Trash2 size={18} color={c.danger} />
+            </Pressable>
+          ) : null}
         </View>
       </View>
 
@@ -819,21 +829,25 @@ export default function ClienteDetailRoute() {
             <Text className="text-xs font-semibold text-faint uppercase">
               {td.contactPeople}
             </Text>
-            <Pressable
-              onPress={openAddContact}
-              hitSlop={8}
-              className="p-1 rounded-lg active:bg-border-soft"
-            >
-              <UserPlus size={15} color={c.faint} />
-            </Pressable>
+            {canEdit ? (
+              <Pressable
+                onPress={openAddContact}
+                hitSlop={8}
+                className="p-1 rounded-lg active:bg-border-soft"
+              >
+                <UserPlus size={15} color={c.faint} />
+              </Pressable>
+            ) : null}
           </View>
 
           {contacts.length === 0 ? (
             <View className="items-center py-2">
               <Text className="text-xs text-faint">{td.noContacts}</Text>
-              <Pressable onPress={openAddContact} className="mt-1">
-                <Text className="text-xs text-primary font-medium">{td.addContact}</Text>
-              </Pressable>
+              {canEdit ? (
+                <Pressable onPress={openAddContact} className="mt-1">
+                  <Text className="text-xs text-primary font-medium">{td.addContact}</Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : (
             <View>
@@ -865,22 +879,24 @@ export default function ClienteDetailRoute() {
                         <Text className="text-xs text-faint italic mt-1">{ct.notes}</Text>
                       ) : null}
                     </View>
-                    <View className="flex-row gap-1">
-                      <Pressable
-                        onPress={() => openEditContact(ct)}
-                        hitSlop={6}
-                        className="p-1.5 rounded-lg active:bg-blue-500/10"
-                      >
-                        <Pencil size={13} color={c.primary} />
-                      </Pressable>
-                      <Pressable
-                        onPress={() => removeContact(ct.id)}
-                        hitSlop={6}
-                        className="p-1.5 rounded-lg active:bg-red-500/10"
-                      >
-                        <Trash2 size={13} color={c.danger} />
-                      </Pressable>
-                    </View>
+                    {canEdit ? (
+                      <View className="flex-row gap-1">
+                        <Pressable
+                          onPress={() => openEditContact(ct)}
+                          hitSlop={6}
+                          className="p-1.5 rounded-lg active:bg-blue-500/10"
+                        >
+                          <Pencil size={13} color={c.primary} />
+                        </Pressable>
+                        <Pressable
+                          onPress={() => removeContact(ct.id)}
+                          hitSlop={6}
+                          className="p-1.5 rounded-lg active:bg-red-500/10"
+                        >
+                          <Trash2 size={13} color={c.danger} />
+                        </Pressable>
+                      </View>
+                    ) : null}
                   </View>
 
                   {(ct.phone || ct.email) ? (

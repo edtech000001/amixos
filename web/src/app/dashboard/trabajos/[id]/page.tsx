@@ -737,6 +737,12 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const clientName = job.clients ? `${job.clients.first_name} ${job.clients.last_name}` : null;
   const isExpired = job.expiry_date && job.status === 'sent' && new Date(job.expiry_date) < new Date();
   const canInvoice = (job.status === 'completed' || job.status === 'accepted') && !job.invoice_id && can.createInvoice(currentRole);
+  // Status-pipeline write gate. Managers/owners with jobs.edit can always drive
+  // the pipeline; a field worker assigned to THIS job may also advance it
+  // (matches the field-home surface). Read-only viewers see the pipeline but
+  // none of the action buttons. RLS enforces the same rule server-side.
+  const isAssignedToMe = !!user && assignments.some(a => a.employees?.user_id === user.id);
+  const canChangeStatus = can.changeJobStatus(currentRole) || (can.changeJobStatusIfAssigned(currentRole) && isAssignedToMe);
 
   // Back target — return to the invoice when this job was opened from one
   // (?from=invoice&invoice=<id>), otherwise the jobs list.
@@ -930,7 +936,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
           {/* Next action buttons — back on the LEFT, forward (→) on the RIGHT
              so the pipeline reads left→right (matches mobile). Cancel sits on
-             its own row below, away from the advance buttons. */}
+             its own row below, away from the advance buttons. Hidden entirely
+             for read-only viewers (no jobs.edit and not assigned). */}
+          {canChangeStatus && (
           <div className="mt-4 pt-4 border-t border-border-soft flex flex-col items-center gap-3">
             <div className="flex justify-center gap-3 flex-wrap">
               {/* One-step back — left */}
@@ -983,9 +991,11 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                   <Button size="sm" onClick={promptSchedule} loading={updatingStatus}>
                     {td.scheduleWork} <ArrowRight size={14} className="ml-1.5"/>
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={() => setInvoiceModal(true)}>
-                    <FileText size={14} className="mr-1.5"/> {td.invoiceDirectly}
-                  </Button>
+                  {canInvoice && (
+                    <Button variant="secondary" size="sm" onClick={() => setInvoiceModal(true)}>
+                      <FileText size={14} className="mr-1.5"/> {td.invoiceDirectly}
+                    </Button>
+                  )}
                 </>
               )}
 
@@ -1000,7 +1010,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                   {t.actions.markCompleted} <ArrowRight size={14} className="ml-1.5"/>
                 </Button>
               )}
-              {job.status === 'completed' && !job.invoice_id && (
+              {job.status === 'completed' && !job.invoice_id && canInvoice && (
                 <Button onClick={() => setInvoiceModal(true)} size="sm">
                   <FileText size={14} className="mr-1.5"/> {td.generateInvoiceBtn}
                 </Button>
@@ -1045,6 +1055,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               </>
             )}
           </div>
+          )}
         </div>
       )}
 
@@ -1100,10 +1111,13 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               </p>
             )}
           </div>
-          {/* Reinstate covers declined too: rework the estimate and re-send it. */}
-          <Button variant="secondary" size="sm" onClick={reinstateJob} loading={updatingStatus}>
-            <RotateCcw size={14} className="mr-1.5"/> {td.reinstate}
-          </Button>
+          {/* Reinstate covers declined too: rework the estimate and re-send it.
+             A status write, so hidden for read-only viewers. */}
+          {canChangeStatus && (
+            <Button variant="secondary" size="sm" onClick={reinstateJob} loading={updatingStatus}>
+              <RotateCcw size={14} className="mr-1.5"/> {td.reinstate}
+            </Button>
+          )}
         </div>
       )}
 

@@ -94,6 +94,12 @@ export interface InvoiceDetailScreenProps {
   branding: InvoiceBranding;
   /** Resolved template config (per-invoice override → business default → app default). */
   templateConfig: InvoiceTemplateConfig;
+  /** Gate the edit-class write actions (Edit, Send, Record/Edit/Delete payment,
+   *  Undo, Autoprice, add/remove/edit jobs & line items, and the ordinary
+   *  Mark-sent / Mark-paid / Undo-sent status buttons). Defaults to true. */
+  canEdit?: boolean;
+  /** Gate the write-off / total-loss / reinstate status buttons. Defaults to true. */
+  canWriteOff?: boolean;
   updating: boolean;
   onBack: () => void;
   onUpdateStatus: (status: 'sent' | 'paid' | 'draft' | 'total_loss') => Promise<void> | void;
@@ -168,6 +174,8 @@ function fmt(n: number) {
 export function InvoiceDetailScreen({
   loading,
   invoice,
+  canEdit = true,
+  canWriteOff = true,
   updating,
   onBack,
   onUpdateStatus,
@@ -285,7 +293,7 @@ export function InvoiceDetailScreen({
           </View>
         </View>
         <View className="flex-row items-center gap-0.5 shrink-0">
-          {onAutoprice ? (
+          {onAutoprice && canEdit ? (
             <Pressable onPress={onAutoprice} className="p-2 rounded-xl bg-primary/10 active:opacity-80 mr-0.5" accessibilityLabel={ui.dashboard.jobs.detail.autopriceBtn}><DollarSign size={18} color={c.primary} /></Pressable>
           ) : null}
           {onShareLink ? (
@@ -294,7 +302,7 @@ export function InvoiceDetailScreen({
           {onPrint ? (
             <Pressable onPress={onPrint} className="p-2 rounded-xl active:bg-border-soft"><Printer size={18} color={c.muted} /></Pressable>
           ) : null}
-          {onEdit ? (
+          {onEdit && canEdit ? (
             <Pressable onPress={onEdit} className="p-2 rounded-xl active:bg-border-soft"><Pencil size={18} color={c.muted} /></Pressable>
           ) : null}
           {onDelete ? (
@@ -394,7 +402,7 @@ export function InvoiceDetailScreen({
             const q = Number(li.qty) || 0;
             const r = Number(li.rate) || 0;
             const jid = li.job_id ?? null;
-            const showActions = editable && !!jid && !!onRemoveJob && !seen.has(jid);
+            const showActions = editable && canEdit && !!jid && !!onRemoveJob && !seen.has(jid);
             if (jid) seen.add(jid);
             return (
               <View key={idx} className="py-2.5 border-b border-border">
@@ -427,7 +435,7 @@ export function InvoiceDetailScreen({
                       <Text className="text-xs font-semibold text-red-500">{tInv.jobsSection.removeBtn}</Text>
                     </Pressable>
                   </View>
-                ) : editable && !jid && (onEditManualItem || onRemoveManualItem) ? (
+                ) : editable && canEdit && !jid && (onEditManualItem || onRemoveManualItem) ? (
                   <View className="flex-row justify-end gap-4 mt-1.5">
                     {onEditManualItem ? (
                       <Pressable onPress={() => onEditManualItem(idx)} disabled={jobBusy} hitSlop={6}>
@@ -446,7 +454,7 @@ export function InvoiceDetailScreen({
           });
         })()}
 
-        {editable && onAddJob ? (
+        {editable && onAddJob && canEdit ? (
           <Pressable onPress={onAddJob} disabled={jobBusy} className="self-start py-2 mt-1" hitSlop={6}>
             <Text className="text-sm font-semibold text-primary">+ {tInv.jobsSection.addBtn}</Text>
           </Pressable>
@@ -500,12 +508,12 @@ export function InvoiceDetailScreen({
                   </Text>
                   <View className="flex-row items-center gap-2">
                     <Text className="text-sm text-emerald-700">−{fmt(p.amount)}</Text>
-                    {onEditPayment ? (
+                    {onEditPayment && canEdit ? (
                       <Pressable onPress={() => onEditPayment(p)} disabled={updating} className="p-1 active:opacity-60" hitSlop={8}>
                         <Pencil size={13} color={c.faint} />
                       </Pressable>
                     ) : null}
-                    {onDeletePayment ? (
+                    {onDeletePayment && canEdit ? (
                       <Pressable onPress={() => onDeletePayment(p)} disabled={updating} className="p-1 active:opacity-60" hitSlop={8}>
                         <Trash2 size={13} color={c.faint} />
                       </Pressable>
@@ -525,7 +533,7 @@ export function InvoiceDetailScreen({
       </View>
 
       {/* Primary actions — draft: Send + Mark sent (no email) · sent: Mark paid + Undo */}
-      {invoice.status === 'draft' ? (
+      {invoice.status === 'draft' && canEdit ? (
         <View className="gap-2.5 mb-4">
           {onSendInvoice ? (
             <Pressable onPress={onSendInvoice} disabled={updating} className="flex-row items-center justify-center gap-2 bg-primary py-3.5 rounded-2xl active:opacity-90">
@@ -539,30 +547,36 @@ export function InvoiceDetailScreen({
           </Pressable>
         </View>
       ) : null}
-      {sentLike ? (
+      {sentLike && (canEdit || canWriteOff) ? (
         <View className="gap-2.5 mb-4">
-          <Pressable onPress={() => (onRecordPayment ? onRecordPayment() : onUpdateStatus('paid'))} disabled={updating} className="flex-row items-center justify-center gap-2 bg-primary py-3.5 rounded-2xl active:opacity-90">
-            <CheckCircle size={16} color="#FFFFFF" />
-            <Text className="text-white font-semibold">{paidSoFar > 0 ? tInv.payments.recordBtn : tInv.markPaid}</Text>
-          </Pressable>
-          <Pressable onPress={() => onUpdateStatus('draft')} disabled={updating} className="flex-row items-center justify-center gap-2 border border-border bg-card py-3.5 rounded-2xl active:bg-surface">
-            <Undo2 size={16} color={c.muted} />
-            <Text className="text-muted font-semibold">{tInv.undoSent}</Text>
-          </Pressable>
+          {canEdit ? (
+            <Pressable onPress={() => (onRecordPayment ? onRecordPayment() : onUpdateStatus('paid'))} disabled={updating} className="flex-row items-center justify-center gap-2 bg-primary py-3.5 rounded-2xl active:opacity-90">
+              <CheckCircle size={16} color="#FFFFFF" />
+              <Text className="text-white font-semibold">{paidSoFar > 0 ? tInv.payments.recordBtn : tInv.markPaid}</Text>
+            </Pressable>
+          ) : null}
+          {canEdit ? (
+            <Pressable onPress={() => onUpdateStatus('draft')} disabled={updating} className="flex-row items-center justify-center gap-2 border border-border bg-card py-3.5 rounded-2xl active:bg-surface">
+              <Undo2 size={16} color={c.muted} />
+              <Text className="text-muted font-semibold">{tInv.undoSent}</Text>
+            </Pressable>
+          ) : null}
           {/* Write-off: an invoice the client will never pay. Drops out of overdue. */}
-          <Pressable onPress={() => onUpdateStatus('total_loss')} disabled={updating} className="flex-row items-center justify-center gap-2 py-2 rounded-2xl active:opacity-70">
-            <Ban size={15} color={c.muted} />
-            <Text className="text-muted font-semibold text-sm">{tInv.markTotalLoss}</Text>
-          </Pressable>
+          {canWriteOff ? (
+            <Pressable onPress={() => onUpdateStatus('total_loss')} disabled={updating} className="flex-row items-center justify-center gap-2 py-2 rounded-2xl active:opacity-70">
+              <Ban size={15} color={c.muted} />
+              <Text className="text-muted font-semibold text-sm">{tInv.markTotalLoss}</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
-      {invoice.status === 'total_loss' ? (
+      {invoice.status === 'total_loss' && canWriteOff ? (
         <Pressable onPress={() => onUpdateStatus('sent')} disabled={updating} className="flex-row items-center justify-center gap-2 border border-border bg-card py-3.5 rounded-2xl active:bg-surface mb-4">
           <Undo2 size={16} color={c.muted} />
           <Text className="text-muted font-semibold">{tInv.reinstateInvoice}</Text>
         </Pressable>
       ) : null}
-      {invoice.status === 'paid' && onUndoPaid ? (
+      {invoice.status === 'paid' && onUndoPaid && canEdit ? (
         <Pressable onPress={onUndoPaid} disabled={updating} className="flex-row items-center justify-center gap-2 border border-border bg-card py-3.5 rounded-2xl active:bg-surface mb-4">
           <Undo2 size={16} color={c.muted} />
           <Text className="text-muted font-semibold">{tInv.payments.undoPaid}</Text>

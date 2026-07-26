@@ -15,6 +15,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, Building2, Phone, Mail, MapPin } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { can } from '@amixos/shared/lib/permissions';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { Input, Select, DatePicker } from '@amixos/shared/ui';
@@ -75,7 +76,7 @@ export default function NuevoClienteRoute() {
   const router = useRouter();
   const { edit } = useLocalSearchParams<{ edit?: string }>();
   const supabase = createSupabaseClient();
-  const { business, locations } = useApp();
+  const { business, locations, currentRole } = useApp();
   const multiLocation = (locations?.length ?? 0) > 1;
   const syncBanner = useGoogleSyncBanner();
   const { t: full, locale } = useLang();
@@ -85,6 +86,20 @@ export default function NuevoClienteRoute() {
 
   const editId = edit ?? null;
   const [loadingEdit, setLoadingEdit] = useState(!!editId);
+
+  // Route guard: read-only (viewer) and field roles can't create or edit
+  // clients — RLS rejects the write server-side, so bounce them out of the
+  // form UI entirely rather than let them fill fields they can't save. Wait
+  // for currentRole to load before deciding (null = not yet known).
+  useEffect(() => {
+    if (!currentRole) return;
+    const allowed = editId ? can.editClient(currentRole) : can.createClient(currentRole);
+    if (!allowed) {
+      if (editId) router.replace(`/dashboard/clientes/${editId}` as never);
+      else router.replace('/dashboard/clientes' as never);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRole, editId]);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');

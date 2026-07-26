@@ -43,7 +43,7 @@ import {
 } from '@amixos/shared/lib/employeeFieldSections';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { resolveAccess, orphanMembers, displayNameFromAccount, type AccessMember, type AccessInvite } from '@amixos/shared/lib/teamPeople';
-import { INVITABLE_ROLES, ROLE_LABELS, can, type Role } from '@amixos/shared/lib/permissions';
+import { INVITABLE_ROLES, ROLE_LABELS, can, isReadOnly, type Role } from '@amixos/shared/lib/permissions';
 import ImportModal from '@/components/dashboard/ImportModal';
 
 interface RawEmployee {
@@ -133,6 +133,15 @@ export default function EmpleadosPage() {
   const lang: 'es' | 'en' = locale === 'es' ? 'es' : 'en';
   const supabase = createSupabaseClient();
   const { business, user, currentRole, startImpersonation, activeLocationId, locations } = useApp();
+  // UI-hygiene gates (RLS is the real lock). A read-only viewer never sees
+  // write affordances. Log-hours stays for anyone who may write timesheets
+  // (field crew via writeOwnTimesheet, managers via seeAllTimesheets) but
+  // never for a read-only viewer.
+  const canCreateEmployee = can.createEmployee(currentRole);
+  const canEditEmployee = can.editEmployee(currentRole);
+  const canLogHours =
+    can.writeOwnTimesheet(currentRole) ||
+    (can.seeAllTimesheets(currentRole) && !isReadOnly(currentRole));
   const [employees, setEmployees] = useState<RawEmployee[]>([]);
   // Coming back from an employee detail lands at the top otherwise — restore
   // the list scroll position once the rows have rendered. (This page has no
@@ -476,7 +485,8 @@ export default function EmpleadosPage() {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('import') === '1') {
-      setImportOpen(true);
+      // Importing team members creates employee rows — gate on create.
+      if (canCreateEmployee) setImportOpen(true);
       params.delete('import');
       const qs = params.toString();
       window.history.replaceState(null, '', `/dashboard/empleados${qs ? `?${qs}` : ''}`);
@@ -1205,12 +1215,12 @@ export default function EmpleadosPage() {
       timesheets={tsList}
       hourTotals={hourTotals}
       payPeriodLabel={payPeriodLabel}
-      onAddEmployee={openAddEmp}
+      onAddEmployee={canCreateEmployee ? openAddEmp : undefined}
       onEditEmployee={openEditEmpById}
       onToggleActive={toggleActive}
-      onLogHours={() => { setTsForm(EMPTY_TS); setError(''); setTsModal(true); }}
-      onEditTimesheet={editTimesheet}
-      onDeleteTimesheet={deleteTimesheet}
+      onLogHours={canLogHours ? () => { setTsForm(EMPTY_TS); setError(''); setTsModal(true); } : undefined}
+      onEditTimesheet={canEditEmployee ? editTimesheet : undefined}
+      onDeleteTimesheet={canEditEmployee ? deleteTimesheet : undefined}
       onBulkDelete={can.deleteEmployee(currentRole) ? bulkDeleteEmployees : undefined}
       bulkDeleting={bulkDeleting}
       modalsSlot={modals}

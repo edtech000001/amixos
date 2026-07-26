@@ -38,11 +38,15 @@ export interface ClientsListScreenProps {
   onSelectMany?: (ids: string[]) => void;
   onToggleSelectAll: () => void;
   onClientPress: (id: string) => void;
-  onEditPress: (id: string) => void;
-  onDeletePress: (id: string) => void;
-  onNewClientPress: () => void;
+  /** Omit to hide the per-row edit action — no edit permission. */
+  onEditPress?: (id: string) => void;
+  /** Omit to hide the per-row delete action — no delete permission. */
+  onDeletePress?: (id: string) => void;
+  /** Omit to hide the New button + empty-state create link — no create permission. */
+  onNewClientPress?: () => void;
   onImportPress?: () => void;
-  onBulkDeletePress: () => void;
+  /** Omit to hide the multi-select toggle + bulk-delete bar — no delete permission. */
+  onBulkDeletePress?: () => void;
   onClearSelection: () => void;
   bulkDeleting: boolean;
   /** Custom-field definitions, for the "group by custom field" menu options. */
@@ -169,9 +173,11 @@ export function ClientsListScreen({
               <Upload size={15} /> {t.importBtn}
             </button>
           ) : null}
-          <button onClick={onNewClientPress} className="flex items-center gap-1.5 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90">
-            <Plus size={15} /> {t.newClient}
-          </button>
+          {onNewClientPress ? (
+            <button onClick={onNewClientPress} className="flex items-center gap-1.5 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90">
+              <Plus size={15} /> {t.newClient}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -234,15 +240,17 @@ export function ClientsListScreen({
               </>
             ) : null}
           </div>
-          <button
-            onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
-            title={t.selectButton}
-            className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
-              selectMode ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-ink hover:bg-surface'
-            }`}
-          >
-            <ListChecks size={15} /> {t.selectButton}
-          </button>
+          {onBulkDeletePress ? (
+            <button
+              onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+              title={t.selectButton}
+              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
+                selectMode ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-ink hover:bg-surface'
+              }`}
+            >
+              <ListChecks size={15} /> {t.selectButton}
+            </button>
+          ) : null}
       </div>
 
       {/* Selection bar — visible while select mode is on (jobs-list pattern). */}
@@ -256,13 +264,15 @@ export function ClientsListScreen({
             </button>
           ) : null}
           <div className="flex-1" />
-          <button
-            onClick={onBulkDeletePress}
-            disabled={bulkDeleting || selectedIds.size === 0}
-            className="flex items-center gap-1.5 bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:opacity-90 disabled:opacity-60"
-          >
-            <Trash2 size={14} /> {t.bulkDelete}{selectedIds.size > 0 ? ` · ${selectedIds.size}` : ''}
-          </button>
+          {onBulkDeletePress ? (
+            <button
+              onClick={onBulkDeletePress}
+              disabled={bulkDeleting || selectedIds.size === 0}
+              className="flex items-center gap-1.5 bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:opacity-90 disabled:opacity-60"
+            >
+              <Trash2 size={14} /> {t.bulkDelete}{selectedIds.size > 0 ? ` · ${selectedIds.size}` : ''}
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -275,7 +285,7 @@ export function ClientsListScreen({
         <div className="flex flex-col items-center py-20">
           <User size={40} className="text-faint" />
           <p className="text-sm text-faint mt-3">{search ? t.emptyNoMatch : t.emptyAll}</p>
-          {!search ? (
+          {!search && onNewClientPress ? (
             <button onClick={onNewClientPress} className="text-primary text-sm font-medium mt-1 hover:underline">{t.addFirst}</button>
           ) : null}
         </div>
@@ -329,8 +339,8 @@ const ClientRow = memo(function ClientRow({
   isChecked: boolean;
   onToggleSelect: (id: string, shiftKey?: boolean) => void;
   onClientPress: (id: string) => void;
-  onEditPress: (id: string) => void;
-  onDeletePress: (id: string) => void;
+  onEditPress?: (id: string) => void;
+  onDeletePress?: (id: string) => void;
 }) {
   const matchedContacts = matchingContacts(c, search);
   return (
@@ -394,15 +404,22 @@ const ClientRow = memo(function ClientRow({
           {c.city ? (<><MapPin size={11} className="shrink-0" /> <span className="truncate">{c.city}{c.state ? `, ${c.state}` : ''}</span></>) : null}
         </span>
       </button>
-      {/* Hover actions — web idiom; hidden while selecting. */}
-      <div className={`flex items-center gap-1 opacity-0 transition-opacity shrink-0 ${selectMode ? '' : 'group-hover:opacity-100'}`}>
-        <button onClick={() => onEditPress(c.id)} className="p-2 rounded-lg text-faint hover:text-ink hover:bg-border-soft" aria-label="Edit">
-          <Pencil size={15} />
-        </button>
-        <button onClick={() => onDeletePress(c.id)} className="p-2 rounded-lg text-faint hover:text-red-600 hover:bg-red-500/10" aria-label="Delete">
-          <Trash2 size={15} />
-        </button>
-      </div>
+      {/* Hover actions — web idiom; hidden while selecting. Each button only
+         renders when its callback is present (role gating). */}
+      {onEditPress || onDeletePress ? (
+        <div className={`flex items-center gap-1 opacity-0 transition-opacity shrink-0 ${selectMode ? '' : 'group-hover:opacity-100'}`}>
+          {onEditPress ? (
+            <button onClick={() => onEditPress(c.id)} className="p-2 rounded-lg text-faint hover:text-ink hover:bg-border-soft" aria-label="Edit">
+              <Pencil size={15} />
+            </button>
+          ) : null}
+          {onDeletePress ? (
+            <button onClick={() => onDeletePress(c.id)} className="p-2 rounded-lg text-faint hover:text-red-600 hover:bg-red-500/10" aria-label="Delete">
+              <Trash2 size={15} />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 });

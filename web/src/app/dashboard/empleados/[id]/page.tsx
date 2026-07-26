@@ -404,6 +404,9 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
     [employee, members, invites],
   );
   const canManageAccess = can.manageMembers(currentRole);
+  // UI-hygiene gate (RLS is the real lock): a read-only viewer never sees the
+  // edit pencil or the record-write tiles (deactivate / roster).
+  const canEditEmployee = can.editEmployee(currentRole);
   const canVerComoSel =
     !!selAccess && selAccess.kind === 'active' && !selAccess.isYou &&
     canManageAccess && selAccess.role !== 'owner' &&
@@ -498,13 +501,15 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
         <div className="flex items-center gap-1">
           {isView ? (
             <>
-              <button
-                type="button"
-                onClick={() => setMode('edit')}
-                className="p-2 rounded-lg hover:bg-border-soft transition-colors"
-              >
-                <Pencil size={16} className="text-muted" />
-              </button>
+              {canEditEmployee ? (
+                <button
+                  type="button"
+                  onClick={() => setMode('edit')}
+                  className="p-2 rounded-lg hover:bg-border-soft transition-colors"
+                >
+                  <Pencil size={16} className="text-muted" />
+                </button>
+              ) : null}
               {canDeleteEmployee ? (
                 <button
                   type="button"
@@ -597,45 +602,49 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
             </button>
 
             {/* Deactivate / reactivate */}
-            <button
-              type="button"
-              onClick={toggleActive}
-              className={`flex flex-col items-center justify-center gap-1.5 py-4 px-2 rounded-xl border transition-colors ${
-                employee.active
-                  ? 'bg-card border-border-soft hover:bg-surface'
-                  : 'bg-emerald-500/10 border-emerald-200 hover:bg-emerald-500/20'
-              }`}
-            >
-              {employee.active ? (
-                <UserX size={18} className="text-muted" />
-              ) : (
-                <UserCheck size={18} className="text-emerald-600" />
-              )}
-              <span className={`text-xs font-semibold text-center ${employee.active ? 'text-muted' : 'text-emerald-600'}`}>
-                {employee.active ? t.deactivateBtn : t.reactivateBtn}
-              </span>
-            </button>
+            {canEditEmployee ? (
+              <button
+                type="button"
+                onClick={toggleActive}
+                className={`flex flex-col items-center justify-center gap-1.5 py-4 px-2 rounded-xl border transition-colors ${
+                  employee.active
+                    ? 'bg-card border-border-soft hover:bg-surface'
+                    : 'bg-emerald-500/10 border-emerald-200 hover:bg-emerald-500/20'
+                }`}
+              >
+                {employee.active ? (
+                  <UserX size={18} className="text-muted" />
+                ) : (
+                  <UserCheck size={18} className="text-emerald-600" />
+                )}
+                <span className={`text-xs font-semibold text-center ${employee.active ? 'text-muted' : 'text-emerald-600'}`}>
+                  {employee.active ? t.deactivateBtn : t.reactivateBtn}
+                </span>
+              </button>
+            ) : null}
 
             {/* Roster flag — keep office members out of job crew pickers. */}
-            <button
-              type="button"
-              onClick={toggleRoster}
-              title={t.rosterHint}
-              className={`flex flex-col items-center justify-center gap-1.5 py-4 px-2 rounded-xl border transition-colors ${
-                (employee.show_in_roster ?? true)
-                  ? 'bg-card border-border-soft hover:bg-surface'
-                  : 'bg-amber-500/10 border-amber-200 hover:bg-amber-500/20'
-              }`}
-            >
-              {(employee.show_in_roster ?? true) ? (
-                <UserX size={18} className="text-muted" />
-              ) : (
-                <UserCheck size={18} className="text-amber-600" />
-              )}
-              <span className={`text-xs font-semibold text-center ${(employee.show_in_roster ?? true) ? 'text-muted' : 'text-amber-600'}`}>
-                {(employee.show_in_roster ?? true) ? t.rosterRemoveBtn : t.rosterAddBtn}
-              </span>
-            </button>
+            {canEditEmployee ? (
+              <button
+                type="button"
+                onClick={toggleRoster}
+                title={t.rosterHint}
+                className={`flex flex-col items-center justify-center gap-1.5 py-4 px-2 rounded-xl border transition-colors ${
+                  (employee.show_in_roster ?? true)
+                    ? 'bg-card border-border-soft hover:bg-surface'
+                    : 'bg-amber-500/10 border-amber-200 hover:bg-amber-500/20'
+                }`}
+              >
+                {(employee.show_in_roster ?? true) ? (
+                  <UserX size={18} className="text-muted" />
+                ) : (
+                  <UserCheck size={18} className="text-amber-600" />
+                )}
+                <span className={`text-xs font-semibold text-center ${(employee.show_in_roster ?? true) ? 'text-muted' : 'text-amber-600'}`}>
+                  {(employee.show_in_roster ?? true) ? t.rosterRemoveBtn : t.rosterAddBtn}
+                </span>
+              </button>
+            ) : null}
 
             {/* Transfer ownership — owner only, on a member with app access. */}
             {canTransferOwnership && (

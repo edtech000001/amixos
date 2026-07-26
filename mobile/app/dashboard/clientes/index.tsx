@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
 import { loadCached } from '@/lib/offline/cache';
 import { useApp } from '@/lib/AppContext';
+import { can } from '@amixos/shared/lib/permissions';
 import {
   ClientsListScreen,
   type ClientListItem,
@@ -48,7 +49,7 @@ export default function ClientesTab() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, activeLocationId } = useApp();
+  const { business, activeLocationId, currentRole } = useApp();
   const [clientLocations, setClientLocations] = useState<ClientLocation[]>([]);
   const syncBanner = useGoogleSyncBanner();
   const { t: full, locale } = useLang();
@@ -176,6 +177,10 @@ export default function ClientesTab() {
     router.push(`/dashboard/clientes/nuevo?edit=${id}` as never);
 
   const remove = (id: string) => {
+    // Read-only / field roles can't delete — RLS rejects it, and the
+    // optimistic setClients() below would otherwise wipe the row from the
+    // UI while the server keeps it (phantom delete). Gate here.
+    if (!can.deleteClient(currentRole)) return;
     Alert.alert('Eliminar cliente', t.confirmDeleteSingle, [
       { text: 'Cancelar', style: 'cancel' },
       {
@@ -213,6 +218,7 @@ export default function ClientesTab() {
   };
 
   const bulkDelete = () => {
+    if (!can.deleteClient(currentRole)) return;
     if (selectedIds.size === 0) return;
     Alert.alert(
       'Eliminar clientes',
@@ -280,10 +286,10 @@ export default function ClientesTab() {
         onToggleSelect={toggleSelect}
         onToggleSelectAll={toggleSelectAll}
         onClientPress={openDetail}
-        onEditPress={openEdit}
-        onDeletePress={remove}
-        onNewClientPress={openAdd}
-        onBulkDeletePress={bulkDelete}
+        onEditPress={can.editClient(currentRole) ? openEdit : undefined}
+        onDeletePress={can.deleteClient(currentRole) ? remove : undefined}
+        onNewClientPress={can.createClient(currentRole) ? openAdd : undefined}
+        onBulkDeletePress={can.deleteClient(currentRole) ? bulkDelete : undefined}
         onClearSelection={() => setSelectedIds(new Set())}
         bulkDeleting={bulkDeleting}
         businessId={business?.id}

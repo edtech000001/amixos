@@ -31,7 +31,8 @@ export interface InvoicesListScreenProps {
   loading: boolean;
   invoices: InvoiceListItem[];
   onInvoicePress: (id: string) => void;
-  onNewInvoicePress: () => void;
+  /** Omit to hide the New-invoice button + empty-state create link — no create permission. */
+  onNewInvoicePress?: () => void;
   /** Opens the price sheet (autopricing catalog). Shows a header button. */
   onPriceSheetPress?: () => void;
   onUpdateStatus: (id: string, status: 'sent' | 'paid') => Promise<void> | void;
@@ -246,9 +247,11 @@ export function InvoicesListScreen({
               <DollarSign size={16} /> {full.dashboard.settings.priceSheet.title}
             </button>
           ) : null}
-          <button onClick={onNewInvoicePress} className="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90">
-            <Plus size={16} /> {t.newInvoice}
-          </button>
+          {onNewInvoicePress ? (
+            <button onClick={onNewInvoicePress} className="flex items-center gap-2 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90">
+              <Plus size={16} /> {t.newInvoice}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -445,7 +448,9 @@ export function InvoicesListScreen({
         <div className="flex flex-col items-center py-20">
           <FileText size={40} className="text-faint" />
           <p className="text-sm text-faint mt-3">{t.empty}</p>
-          <button onClick={onNewInvoicePress} className="text-primary text-sm font-medium mt-1 hover:underline">{t.createFirst}</button>
+          {onNewInvoicePress ? (
+            <button onClick={onNewInvoicePress} className="text-primary text-sm font-medium mt-1 hover:underline">{t.createFirst}</button>
+          ) : null}
         </div>
       ) : (
         <div className="flex flex-col gap-4">

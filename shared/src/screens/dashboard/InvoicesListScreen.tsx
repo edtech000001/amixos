@@ -33,7 +33,8 @@ export interface InvoicesListScreenProps {
   loading: boolean;
   invoices: InvoiceListItem[];
   onInvoicePress: (id: string) => void;
-  onNewInvoicePress: () => void;
+  /** Omit to hide the New-invoice FAB + empty-state create link — no create permission. */
+  onNewInvoicePress?: () => void;
   /** Opens the price sheet (autopricing catalog). Shows a header button. */
   onPriceSheetPress?: () => void;
   onUpdateStatus: (id: string, status: 'sent' | 'paid') => Promise<void> | void;
@@ -447,9 +448,11 @@ export function InvoicesListScreen({
             <View className="items-center py-20">
               <FileText size={40} color={c.faint} />
               <Text className="text-sm text-faint mt-3">{t.empty}</Text>
-              <Pressable onPress={onNewInvoicePress} className="mt-1">
-                <Text className="text-primary text-sm font-medium">{t.createFirst}</Text>
-              </Pressable>
+              {onNewInvoicePress ? (
+                <Pressable onPress={onNewInvoicePress} className="mt-1">
+                  <Text className="text-primary text-sm font-medium">{t.createFirst}</Text>
+                </Pressable>
+              ) : null}
             </View>
           )
         }
@@ -520,8 +523,9 @@ export function InvoicesListScreen({
       </Pressable>
     </RNModal>
 
-    {/* New invoice — floating action, bottom-right thumb reach */}
-    <Fab onPress={onNewInvoicePress} />
+    {/* New invoice — floating action, bottom-right thumb reach. Hidden when the
+       caller can't create invoices. */}
+    {onNewInvoicePress ? <Fab onPress={onNewInvoicePress} /> : null}
 
     <DateRangeSheet
       open={dateOpen}

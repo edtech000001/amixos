@@ -7,6 +7,7 @@ import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { can } from '@amixos/shared/lib/permissions';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { triggerGoogleSyncOrThrow, googleSyncErrorMessage } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
@@ -82,7 +83,7 @@ export default function ClientesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createSupabaseClient();
-  const { business, activeLocationId, locations } = useApp();
+  const { business, activeLocationId, locations, currentRole } = useApp();
   const multiLocation = (locations?.length ?? 0) > 1;
   const syncBanner = useGoogleSyncBanner();
   const cacheKey = business?.id ?? null;
@@ -149,7 +150,11 @@ export default function ClientesPage() {
 
   // New client defaults to ALL branches selected = shared everywhere; an edited
   // client with no explicit links shows all selected too. Deselecting limits it.
-  const openAdd = () => { setSelected(null); setBranchIds(locations.map(l => l.id)); setError(''); setFormMode('add'); };
+  // Write gates. The shared ClientsListScreen renders the New/Edit/Delete
+  // controls unconditionally, so we gate the callbacks here: opening the
+  // add/edit form is a no-op for roles that can't write, and delete bails
+  // before the optimistic setClients() would wipe rows RLS keeps.
+  const openAdd = () => { if (!can.createClient(currentRole)) return; setSelected(null); setBranchIds(locations.map(l => l.id)); setError(''); setFormMode('add'); };
   const openEdit = (c: Client) => {
     setSelected(c);
     const links = clientLocations.filter(l => l.client_id === c.id).map(l => l.location_id);
@@ -252,6 +257,7 @@ export default function ClientesPage() {
   };
 
   const remove = async (id: string) => {
+    if (!can.deleteClient(currentRole)) return;
     if (!(await confirm({ message: t.confirmDeleteSingle, destructive: true }))) return;
     // Sync to Google BEFORE local delete so the API can read the
     // client's google_resource_name. If Google rejects the delete we
@@ -320,6 +326,7 @@ export default function ClientesPage() {
   };
 
   const bulkDelete = async () => {
+    if (!can.deleteClient(currentRole)) return;
     if (selectedIds.size === 0) return;
     if (!(await confirm({ message: t.confirmDeleteBulk.replace('{{count}}', String(selectedIds.size)), destructive: true }))) return;
     setDeleting(true);
@@ -366,31 +373,34 @@ export default function ClientesPage() {
   // Deep link: ?import=1 auto-opens the wizard (the Ajustes hub mounts its
   // own instance directly, so this is only for external links/bookmarks).
   useEffect(() => {
-    if (searchParams.get('import') === '1') {
-      setImportModal(true);
-      // Strip the param so reloads / back-nav don't re-open the modal.
-      const params = new URLSearchParams(searchParams.toString());
-      params.delete('import');
-      params.delete('back');
-      const qs = params.toString();
-      router.replace(`/dashboard/clientes${qs ? `?${qs}` : ''}`);
-    }
-  }, [searchParams, router]);
+    // Wait for currentRole before acting so a late-loading role doesn't lose
+    // the deep-link. Import creates clients → gate behind can.createClient.
+    if (searchParams.get('import') !== '1' || !currentRole) return;
+    if (can.createClient(currentRole)) setImportModal(true);
+    // Strip the param so reloads / back-nav don't re-open the modal.
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('import');
+    params.delete('back');
+    const qs = params.toString();
+    router.replace(`/dashboard/clientes${qs ? `?${qs}` : ''}`);
+  }, [searchParams, router, currentRole]);
 
   // Dashboard "Nuevo cliente" quick action navigates here with ?new=1 to
   // auto-open the add-client form (the add flow lives in this modal).
   useEffect(() => {
-    if (searchParams.get('new') === '1') {
-      openAdd();
-      const params = new URLSearchParams(searchParams.toString());
-      params.delete('new');
-      const qs = params.toString();
-      router.replace(`/dashboard/clientes${qs ? `?${qs}` : ''}`);
-    }
+    // Wait for currentRole so the deep-link isn't consumed before the gate is
+    // known. openAdd() itself no-ops for roles without create permission.
+    if (searchParams.get('new') !== '1' || !currentRole) return;
+    openAdd();
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('new');
+    const qs = params.toString();
+    router.replace(`/dashboard/clientes${qs ? `?${qs}` : ''}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, router]);
+  }, [searchParams, router, currentRole]);
 
   const editById = (id: string) => {
+    if (!can.editClient(currentRole)) return;
     const c = clients.find(cl => cl.id === id);
     if (c) openEdit(c);
   };
@@ -461,10 +471,10 @@ export default function ClientesPage() {
       onSelectMany={(ids) => setSelectedIds(prev => { const next = new Set(prev); ids.forEach(i => next.add(i)); return next; })}
       onToggleSelectAll={toggleSelectAll}
       onClientPress={(id) => { saveScrollAnchor('clients-list', id); router.push(`/dashboard/clientes/${id}`); }}
-      onEditPress={editById}
-      onDeletePress={remove}
-      onNewClientPress={openAdd}
-      onBulkDeletePress={bulkDelete}
+      onEditPress={can.editClient(currentRole) ? editById : undefined}
+      onDeletePress={can.deleteClient(currentRole) ? remove : undefined}
+      onNewClientPress={can.createClient(currentRole) ? openAdd : undefined}
+      onBulkDeletePress={can.deleteClient(currentRole) ? bulkDelete : undefined}
       onClearSelection={() => setSelectedIds(new Set())}
       bulkDeleting={deleting}
       bottomSlot={modals}

@@ -18,6 +18,7 @@ import {
   type RawJob,
 } from '@amixos/shared/lib/calendarModel';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { can } from '@amixos/shared/lib/permissions';
 
 interface JobRow {
   id: string;
@@ -81,7 +82,10 @@ function dayEndISO(d: Date) {
 export default function CalendarioPage() {
   const supabase = createSupabaseClient();
   const router = useRouter();
-  const { business, user, activeLocationId } = useApp();
+  const { business, user, activeLocationId, currentRole } = useApp();
+  // Read-only roles keep view access; create/edit/delete affordances are gated
+  // off (RLS blocks the writes server-side either way).
+  const canEdit = can.editCalendar(currentRole);
 
   const [items, setItems] = useState<CalItem[]>([]);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
@@ -244,8 +248,8 @@ export default function CalendarioPage() {
       leads={leads}
       onRangeChange={onRangeChange}
       onFetchRange={fetchItems}
-      onSaveEvent={saveEvent}
-      onDeleteEvent={deleteEvent}
+      onSaveEvent={canEdit ? saveEvent : undefined}
+      onDeleteEvent={canEdit ? deleteEvent : undefined}
       onJobPress={id => router.push(`/dashboard/trabajos/${id}`)}
     />
   );

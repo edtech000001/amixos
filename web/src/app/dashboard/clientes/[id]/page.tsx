@@ -9,6 +9,7 @@ import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, Phone, Mail, MapPin, FileText, Plus, Pencil, Building2, Trash2, Star, UserPlus, Printer, Share2 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { can } from '@amixos/shared/lib/permissions';
 import { Button } from '@/components/ui/Button';
 import { Toggle } from '@/components/ui/Toggle';
 import { isValidEmail } from '@amixos/shared/lib/validation';
@@ -140,7 +141,12 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
   };
   const tStatus = full.dashboard.invoiceStatus;
   const supabase = createSupabaseClient();
-  const { business, user } = useApp();
+  const { business, user, currentRole } = useApp();
+  // Write gates: viewer / field can read a client but not edit or delete it,
+  // nor manage its contacts. RLS enforces this; hide the buttons so those
+  // roles don't tap actions that would fail server-side.
+  const canEdit = can.editClient(currentRole);
+  const canDelete = can.deleteClient(currentRole);
   const [client, setClient] = useState<Client | null>(null);
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -460,19 +466,23 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" size="sm" onClick={deleteClient}
-            className="text-red-600 hover:bg-red-500/10 hover:text-red-700">
-            <Trash2 size={14} className="mr-1.5"/> {tc.buttons.delete}
-          </Button>
+          {canDelete && (
+            <Button variant="secondary" size="sm" onClick={deleteClient}
+              className="text-red-600 hover:bg-red-500/10 hover:text-red-700">
+              <Trash2 size={14} className="mr-1.5"/> {tc.buttons.delete}
+            </Button>
+          )}
           <Button variant="secondary" size="sm" onClick={() => setShareDialog(true)}>
             <Printer size={14} className="mr-1.5"/> {td.sharePdfBtn}
           </Button>
           <Button variant="secondary" size="sm" onClick={onShareCsv}>
             <Share2 size={14} className="mr-1.5"/> CSV
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => { setEditError(''); setEditModal(true); }}>
-            <Pencil size={14} className="mr-1.5"/> {tc.buttons.edit}
-          </Button>
+          {canEdit && (
+            <Button variant="secondary" size="sm" onClick={() => { setEditError(''); setEditModal(true); }}>
+              <Pencil size={14} className="mr-1.5"/> {tc.buttons.edit}
+            </Button>
+          )}
           <Link href={`/dashboard/trabajos/nuevo?client=${id}`}>
             <Button variant="secondary" size="sm"><Plus size={14} className="mr-1.5"/> {full.dashboard.jobs.newDropdown.jobOption}</Button>
           </Link>
@@ -507,16 +517,20 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-xs font-semibold text-faint uppercase tracking-wide">{td.contactPeople}</h2>
-              <button onClick={openAddContact} className="p-1 rounded-lg hover:bg-border-soft transition-colors">
-                <UserPlus size={14} className="text-faint"/>
-              </button>
+              {canEdit && (
+                <button onClick={openAddContact} className="p-1 rounded-lg hover:bg-border-soft transition-colors">
+                  <UserPlus size={14} className="text-faint"/>
+                </button>
+              )}
             </div>
             {contacts.length === 0 ? (
               <div className="text-center py-4">
                 <p className="text-xs text-faint">{td.noContacts}</p>
-                <button onClick={openAddContact} className="text-xs text-primary font-medium hover:underline mt-1">
-                  {td.addContact}
-                </button>
+                {canEdit && (
+                  <button onClick={openAddContact} className="text-xs text-primary font-medium hover:underline mt-1">
+                    {td.addContact}
+                  </button>
+                )}
               </div>
             ) : (
               <div className="flex flex-col divide-y divide-border-soft">
@@ -541,14 +555,16 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                         )}
                         {ct.notes && <p className="text-xs text-faint mt-1 italic">{ct.notes}</p>}
                       </div>
-                      <div className="flex gap-1 shrink-0">
-                        <button onClick={() => openEditContact(ct)} className="p-1 rounded-lg hover:bg-blue-500/10 transition-colors">
-                          <Pencil size={12} className="text-blue-400"/>
-                        </button>
-                        <button onClick={() => removeContact(ct.id)} className="p-1 rounded-lg hover:bg-red-500/10 transition-colors">
-                          <Trash2 size={12} className="text-red-400"/>
-                        </button>
-                      </div>
+                      {canEdit && (
+                        <div className="flex gap-1 shrink-0">
+                          <button onClick={() => openEditContact(ct)} className="p-1 rounded-lg hover:bg-blue-500/10 transition-colors">
+                            <Pencil size={12} className="text-blue-400"/>
+                          </button>
+                          <button onClick={() => removeContact(ct.id)} className="p-1 rounded-lg hover:bg-red-500/10 transition-colors">
+                            <Trash2 size={12} className="text-red-400"/>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
