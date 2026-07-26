@@ -75,6 +75,17 @@ export interface ClientsListScreenProps {
   bottomSlot?: ReactNode;
   /** Active business id — scopes the group-by choice per business. */
   businessId?: string;
+  // ── Server mode (opt-in) — the wrapper does the search/count/paging in the DB.
+  // On: this screen skips its own search filter, uses `serverTotal` for the
+  // header, reports search+group changes via `onFiltersChange`, and asks for more
+  // via `onLoadMore` near the bottom. Off = today's client-side behavior.
+  serverMode?: boolean;
+  /** Total clients matching the active search (for the header count). */
+  serverTotal?: number;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
+  onFiltersChange?: (f: { search: string; groupBy: ClientGroupKey }) => void;
 }
 
 type Section = ClientSection<ClientListItem>;
@@ -108,6 +119,12 @@ export function ClientsListScreen({
   customFieldTemplates = [],
   bottomSlot,
   businessId,
+  serverMode = false,
+  serverTotal,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+  onFiltersChange,
 }: ClientsListScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
@@ -122,6 +139,9 @@ export function ClientsListScreen({
   const [groupBy, setGroupBy] = useState<ClientGroupKey>('name');
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const groupHydrated = useRef(false);
+  // A state mirror of groupHydrated so the server-mode report effect (below)
+  // re-runs once hydration finishes — a ref alone wouldn't trigger it.
+  const [ready, setReady] = useState(false);
   // Scope the group-by per business so it doesn't carry across companies.
   const groupKey = businessId ? `${CLIENTS_GROUP_KEY}.${businessId}` : CLIENTS_GROUP_KEY;
   useEffect(() => {
@@ -129,7 +149,7 @@ export function ClientsListScreen({
     groupHydrated.current = false;
     AsyncStorage.getItem(groupKey)
       .then(raw => { if (!cancelled) setGroupBy(parseClientGroupKey(raw)); })
-      .finally(() => { groupHydrated.current = true; });
+      .finally(() => { groupHydrated.current = true; setReady(true); });
     return () => { cancelled = true; };
   }, [groupKey]);
   useEffect(() => {
@@ -149,14 +169,30 @@ export function ClientsListScreen({
     groupBy === 'city' ? t.group.noCity :
     t.group.noValue;
 
+  // In server mode `clients` is ALREADY the search-filtered page(s) from the DB,
+  // so we don't re-filter — we only group the loaded rows. In client mode we
+  // filter the full array (own fields + contact people; state name ↔ abbr
+  // expansion is handled inside — see clientSearch / usStates).
   const filtered = useMemo(
-    // Matches own fields + contact people; state name ↔ abbr expansion is
-    // handled inside (see clientSearch / usStates).
-    () => clients.filter(c => clientMatchesSearch(c, search)),
-    [clients, search],
+    () => serverMode ? clients : clients.filter(c => clientMatchesSearch(c, search)),
+    [clients, search, serverMode],
   );
 
   const searching = search.trim().length > 0;
+
+  // Server mode: report search + group changes UP so the wrapper re-queries.
+  // Search is debounced so we don't fire a query per keystroke. Gated on `ready`
+  // so the first query uses the restored group-by.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(id);
+  }, [search]);
+  useEffect(() => {
+    if (!serverMode || !onFiltersChange || !ready) return;
+    onFiltersChange({ search: debouncedSearch, groupBy });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverMode, ready, debouncedSearch, groupBy]);
   // Sections by the chosen group key; A–Z by default. Flat while searching.
   const sections = useMemo(
     () => groupClients(filtered, groupBy, searching, { emptyLabel, formatState: s => usStateName(s, locale) }),
@@ -296,8 +332,8 @@ export function ClientsListScreen({
           <Text className="text-2xl font-bold text-ink">{t.title}</Text>
           <Text className="text-sm text-muted mt-0.5">
             {search.trim()
-              ? t.countFound.replace('{{count}}', String(filtered.length))
-              : t.countTotal.replace('{{count}}', String(clients.length))}
+              ? t.countFound.replace('{{count}}', String(serverMode ? (serverTotal ?? filtered.length) : filtered.length))
+              : t.countTotal.replace('{{count}}', String(serverMode ? (serverTotal ?? clients.length) : clients.length))}
           </Text>
         </View>
         <View className="flex-row gap-2">
@@ -479,6 +515,17 @@ export function ClientsListScreen({
         windowSize={7}
         maxToRenderPerBatch={10}
         keyboardShouldPersistTaps="handled"
+        onEndReachedThreshold={0.6}
+        onEndReached={() => { if (serverMode && hasMore && !loadingMore) onLoadMore?.(); }}
+        ListFooterComponent={
+          serverMode && loadingMore ? (
+            <View className="items-center py-6">
+              <View className="flex-row gap-1">
+                {[0, 1, 2].map(i => (<View key={i} className="w-2 h-2 rounded-full bg-primary" />))}
+              </View>
+            </View>
+          ) : null
+        }
       />
 
       {/* A–Z index — only meaningful for the alphabetical (name) grouping.

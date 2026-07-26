@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
+import { confirm } from '@amixos/shared/ui/confirmBus';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -11,11 +11,16 @@ import { can } from '@amixos/shared/lib/permissions';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { triggerGoogleSyncOrThrow, googleSyncErrorMessage } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
-import { fetchAll, fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
 import { CLIENT_FIELDS_ALWAYS_SHOWN } from '@amixos/shared/lib/clientFieldSections';
 import { logAudit } from '@amixos/shared/lib/audit';
-import { clientMatchesSearch } from '@amixos/shared/lib/clientSearch';
+import {
+  fetchClientsPage,
+  fetchAllClientsMatching,
+  fetchClientCount,
+  clientGroupNeedsAll,
+  type ClientsCursor,
+} from '@amixos/shared/lib/clientsQuery';
 import { fetchClientLocations, setClientLocations as saveClientLocations, clientIdsAtLocation, clientsWithAnyLocation, type ClientLocation } from '@amixos/shared/lib/locations';
 import { usePersistedSearch } from '@amixos/shared/lib/usePersistedSearch';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
@@ -37,12 +42,12 @@ interface FieldTemplate extends ClientFieldTemplate {
   sort_order: number;
 }
 
+interface EmbeddedContact { name: string; role: string | null; is_primary: boolean | null }
 interface Client {
   id: string;
   first_name: string;
   last_name: string;
   company: string | null;
-  phone: string | null;
   phone_cell: string | null;
   phone_office: string | null;
   email: string | null;
@@ -57,7 +62,15 @@ interface Client {
   custom_fields: Record<string, string> | null;
   created_at: string;
   updated_at: string;
+  /** Contact people, embedded on the page query (server mode). */
+  client_contacts?: EmbeddedContact[];
 }
+
+// Full page includes contact people (searched + shown under a matched row).
+// A page is ≤50 rows, so the nested join is cheap. The load-all path (group-by)
+// isn't a search, so it skips contacts entirely to stay light at scale.
+const CLIENT_PAGE_SELECT = '*, client_contacts(name, role, is_primary)';
+const CLIENT_GROUP_SELECT = '*';
 
 function fmtPhone(raw: string): string {
   const digits = raw.replace(/\D/g, '');
@@ -71,32 +84,21 @@ const FIELD_LABEL_KEYS: (keyof ClientFormValues)[] = [
   'email_office', 'email_home', 'address', 'city', 'state', 'zip_code',
 ];
 
-// Module-level cache — survives SPA route changes, so coming back from a
-// client detail paints the last full list instantly (no loading flash, and
-// the scroll restore has the real page height) while a refresh replaces it.
-let clientsListCache: { key: string; clients: Client[] } | null = null;
-
 export default function ClientesPage() {
   const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
-  const tc = full.common;
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createSupabaseClient();
   const { business, activeLocationId, locations, currentRole } = useApp();
   const multiLocation = (locations?.length ?? 0) > 1;
   const syncBanner = useGoogleSyncBanner();
-  const cacheKey = business?.id ?? null;
   const [clientLocations, setClientLocations] = useState<ClientLocation[]>([]);
-  const [clients, setClients] = useState<Client[]>(() =>
-    cacheKey && clientsListCache?.key === cacheKey ? clientsListCache.clients : []);
-  const [contactsByClient, setContactsByClient] = useState<
-    Map<string, { name: string; role: string | null }[]>
-  >(new Map());
+  // Server-side pagination: rawClients holds the loaded page(s), not the table.
+  const [rawClients, setRawClients] = useState<Client[]>([]);
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
   const [search, setSearch] = usePersistedSearch(business ? `search.clients.${business.id}` : null);
-  const [loading, setLoading] = useState(() =>
-    !(cacheKey && clientsListCache?.key === cacheKey));
+  const [loading, setLoading] = useState(true);
 
   // Coming back from a client detail lands at the top otherwise — restore the
   // list scroll position once the rows have rendered.
@@ -110,50 +112,114 @@ export default function ClientesPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
 
-  const load = async () => {
+  // ── Server-side pagination + search + count ─────────────────────────────────
+  const [serverTotal, setServerTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadSeqRef = useRef(0);
+  const cursorRef = useRef<ClientsCursor | null>(null);
+  // The last base params (search) so a re-run (branch switch, mutation) reuses
+  // them; excludeIds is injected fresh each call from the ref below.
+  const paramsRef = useRef<{ businessId: string; search: string } | null>(null);
+  const loadAllRef = useRef(false);
+
+  // Branch scoping: clients restricted to OTHER branches are hidden. Restricted
+  // clients (any link) minus those at the active branch. Small set (only
+  // explicitly-restricted clients have links). Empty for "All locations".
+  const excludeIds = useMemo(() => {
+    if (!activeLocationId) return [] as string[];
+    const atBranch = clientIdsAtLocation(clientLocations, activeLocationId);
+    const withAny = clientsWithAnyLocation(clientLocations);
+    return Array.from(withAny).filter(id => !atBranch.has(id));
+  }, [clientLocations, activeLocationId]);
+  const excludeIdsRef = useRef<string[]>([]);
+  useEffect(() => { excludeIdsRef.current = excludeIds; }, [excludeIds]);
+
+  const loadMeta = async () => {
     if (!business) return;
     const businessId = business.id;
-    const [cl, contactRows, { data: tpl }] = await Promise.all([
-      fetchAllById<Client>((afterId, pageSize) => {
-        let q = supabase.from('clients').select('*').eq('business_id', businessId)
-          .order('id', { ascending: true }).limit(pageSize);
-        if (afterId) q = q.gt('id', afterId);
-        return q;
-      }),
-      // Contact people across the whole business — searched + shown under the
-      // matched client. Paginated: a busy business can have >1000 contacts.
-      fetchAll<{ client_id: string; name: string; role: string | null }>((from, to) =>
-        supabase.from('client_contacts').select('client_id, name, role')
-          .eq('business_id', businessId)
-          .order('is_primary', { ascending: false }).range(from, to)),
-      // Field templates are bounded config (one row per custom field); a
-      // single page is always enough.
+    const [{ data: tpl }, cl] = await Promise.all([
       supabase.from('client_field_templates').select('*').eq('business_id', businessId).order('sort_order'),
+      fetchClientLocations(supabase, businessId).catch(() => [] as ClientLocation[]),
     ]);
-    // Client↔branch links (multi-location). A client with no link is shared
-    // and shows in every branch.
-    void fetchClientLocations(supabase, businessId).then(setClientLocations).catch(() => {});
-    const byClient = new Map<string, { name: string; role: string | null }[]>();
-    for (const ct of contactRows) {
-      const arr = byClient.get(ct.client_id);
-      if (arr) arr.push({ name: ct.name, role: ct.role });
-      else byClient.set(ct.client_id, [{ name: ct.name, role: ct.role }]);
-    }
-    setClients(cl);
-    setContactsByClient(byClient);
     setTemplates(localizeTemplates(tpl ?? [], locale));
-    setLoading(false);
-    clientsListCache = { key: businessId, clients: cl };
+    setClientLocations(cl);
+  };
+  useEffect(() => { void loadMeta(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [business, locale]);
+
+  const runQuery = async (base: { businessId: string; search: string }, loadAll = false) => {
+    const seq = ++loadSeqRef.current;
+    paramsRef.current = base;
+    loadAllRef.current = loadAll;
+    setLoading(true);
+    cursorRef.current = null;
+    setHasMore(false);
+    const params = { ...base, excludeIds: excludeIdsRef.current };
+    try {
+      const countP = fetchClientCount(supabase, params);
+      if (loadAll) {
+        // Group-by needs every matching row to bucket. Progressive render.
+        const acc: Client[] = [];
+        let cursor: ClientsCursor | null = null;
+        for (let i = 0; i < 100; i++) {
+          const page = await fetchClientsPage<Client>(supabase, CLIENT_GROUP_SELECT, { ...params, cursor, pageSize: 1000 });
+          acc.push(...page.clients);
+          if (seq === loadSeqRef.current) setRawClients([...acc]);
+          if (!page.nextCursor) break;
+          cursor = page.nextCursor;
+        }
+        const total = await countP;
+        if (seq !== loadSeqRef.current) return;
+        setServerTotal(total);
+      } else {
+        const [page, total] = await Promise.all([
+          fetchClientsPage<Client>(supabase, CLIENT_PAGE_SELECT, { ...params, pageSize: 50 }),
+          countP,
+        ]);
+        if (seq !== loadSeqRef.current) return;
+        setRawClients(page.clients);
+        cursorRef.current = page.nextCursor;
+        setHasMore(!!page.nextCursor);
+        setServerTotal(total);
+      }
+    } catch (e) {
+      console.error('Clients query failed', e);
+    } finally {
+      if (seq === loadSeqRef.current) setLoading(false);
+    }
   };
 
-  useEffect(() => { load(); }, [business, locale]);
+  const loadMore = async () => {
+    if (loadingMore || !paramsRef.current || loadAllRef.current || !cursorRef.current) return;
+    const seq = loadSeqRef.current;
+    setLoadingMore(true);
+    try {
+      const page = await fetchClientsPage<Client>(supabase, CLIENT_PAGE_SELECT, { ...paramsRef.current, excludeIds: excludeIdsRef.current, cursor: cursorRef.current, pageSize: 50 });
+      if (seq !== loadSeqRef.current) return;
+      setRawClients(prev => [...prev, ...page.clients]);
+      cursorRef.current = page.nextCursor;
+      setHasMore(!!page.nextCursor);
+    } catch (e) {
+      console.error('Clients load-more failed', e);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const reRun = () => { if (paramsRef.current) void runQuery(paramsRef.current, loadAllRef.current); };
+  // Re-run when the branch scope changes (locations load, or branch switch).
+  useEffect(() => {
+    if (paramsRef.current) void runQuery(paramsRef.current, loadAllRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [excludeIds]);
+
+  const handleFiltersChange = (f: { search: string; groupBy: string }) => {
+    if (!business) return;
+    void runQuery({ businessId: business.id, search: f.search }, clientGroupNeedsAll(f.groupBy));
+  };
 
   // New client defaults to ALL branches selected = shared everywhere; an edited
   // client with no explicit links shows all selected too. Deselecting limits it.
-  // Write gates. The shared ClientsListScreen renders the New/Edit/Delete
-  // controls unconditionally, so we gate the callbacks here: opening the
-  // add/edit form is a no-op for roles that can't write, and delete bails
-  // before the optimistic setClients() would wipe rows RLS keeps.
   const openAdd = () => { if (!can.createClient(currentRole)) return; setSelected(null); setBranchIds(locations.map(l => l.id)); setError(''); setFormMode('add'); };
   const openEdit = (c: Client) => {
     setSelected(c);
@@ -253,7 +319,7 @@ export default function ClientesPage() {
         await saveClientLocations(supabase, business!.id, selected.id, branchLinksToSave, branchLinksToSave[0] ?? null);
       }
     }
-    await load(); setSaving(false); setFormMode(null);
+    await loadMeta(); reRun(); setSaving(false); setFormMode(null);
   };
 
   const remove = async (id: string) => {
@@ -261,8 +327,7 @@ export default function ClientesPage() {
     if (!(await confirm({ message: t.confirmDeleteSingle, destructive: true }))) return;
     // Sync to Google BEFORE local delete so the API can read the
     // client's google_resource_name. If Google rejects the delete we
-    // still proceed with the local delete — the banner notifies the user
-    // so they can clean up the orphan in Google manually.
+    // still proceed with the local delete — the banner notifies the user.
     const apiBaseUrl = getApiBaseUrl();
     const jwt = await getJwt();
     if (apiBaseUrl && jwt) {
@@ -272,14 +337,14 @@ export default function ClientesPage() {
         syncBanner.reportError(googleSyncErrorMessage(e, 'No se pudo eliminar el contacto de Google Contacts.'));
       }
     }
-    const deleted = clients.find(c => c.id === id);
+    const deleted = rawClients.find(c => c.id === id);
     await supabase.from('clients').delete().eq('id', id);
     if (business) {
       void logAudit(supabase, business.id, 'client.deleted', 'client', id, {
         name: deleted ? `${deleted.first_name} ${deleted.last_name}`.trim() : undefined,
       });
     }
-    setClients(prev => prev.filter(c => c.id !== id));
+    setRawClients(prev => prev.filter(c => c.id !== id));
     setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
   };
 
@@ -291,34 +356,25 @@ export default function ClientesPage() {
     });
   };
 
-  // Scope to the active branch: clients linked to it, PLUS shared clients
-  // (no branch link at all). "All locations" = no filter.
-  const scopedClients = useMemo(() => {
-    if (!activeLocationId) return clients;
-    const atBranch = clientIdsAtLocation(clientLocations, activeLocationId);
-    const withAny = clientsWithAnyLocation(clientLocations);
-    return clients.filter(c => atBranch.has(c.id) || !withAny.has(c.id));
-  }, [clients, clientLocations, activeLocationId]);
-
-  const listItems: ClientListItem[] = useMemo(() => scopedClients.map(c => ({
+  const listItems: ClientListItem[] = useMemo(() => rawClients.map(c => ({
     id: c.id,
     firstName: c.first_name,
     lastName: c.last_name,
     company: c.company,
-    phoneDisplay: (c.phone_cell ?? c.phone) ? fmtPhone(c.phone_cell ?? c.phone ?? '') : null,
+    phoneDisplay: c.phone_cell ? fmtPhone(c.phone_cell) : null,
     emailDisplay: c.email_office ?? c.email,
     city: c.city,
     state: c.state,
-    contacts: contactsByClient.get(c.id),
+    contacts: (c.client_contacts ?? [])
+      .slice()
+      .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
+      .map(ct => ({ name: ct.name, role: ct.role })),
     customFields: c.custom_fields,
-  })), [scopedClients, contactsByClient]);
+  })), [rawClients]);
 
-  // Keep this in lockstep with the list screen's own filter so select-all /
-  // bulk-delete operate on exactly the rows the user sees.
-  const filteredIds = useMemo(
-    () => new Set(listItems.filter(c => clientMatchesSearch(c, search)).map(c => c.id)),
-    [listItems, search],
-  );
+  // In server mode the loaded rows ARE the matching set, so select-all /
+  // bulk-delete operate on exactly what's loaded (visible).
+  const filteredIds = useMemo(() => new Set(listItems.map(c => c.id)), [listItems]);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredIds.size) setSelectedIds(new Set());
@@ -331,10 +387,7 @@ export default function ClientesPage() {
     if (!(await confirm({ message: t.confirmDeleteBulk.replace('{{count}}', String(selectedIds.size)), destructive: true }))) return;
     setDeleting(true);
     const ids = Array.from(selectedIds);
-    // Pre-fetch resource_names ONLY for clients that were actually synced
-    // to Google. Unsynced clients (google_resource_name IS NULL) skip the
-    // Google round-trip entirely. Local delete happens immediately for
-    // every selected row; orphan cleanup runs in the background queue.
+    // Pre-fetch resource_names ONLY for clients actually synced to Google.
     let orphans: { businessId: string; resourceName: string }[] = [];
     if (business?.id) {
       const { data: syncedRows } = await supabase
@@ -353,15 +406,13 @@ export default function ClientesPage() {
       if (e) hasError = true;
     }
     if (!hasError) {
-      // One summary entry for the batch rather than N rows flooding the log.
       if (business) {
         void logAudit(supabase, business.id, 'client.deleted', 'client', null, { count: ids.length });
       }
-      setClients(prev => prev.filter(c => !selectedIds.has(c.id)));
+      setRawClients(prev => prev.filter(c => !selectedIds.has(c.id)));
       setSelectedIds(new Set());
     }
     setDeleting(false);
-    // Hand orphans to the banner queue — throttled, persisted, resumable.
     if (orphans.length > 0) {
       syncBanner.runDeleteBatch(orphans);
     }
@@ -370,14 +421,10 @@ export default function ClientesPage() {
   // ── Import (wizard lives in components/dashboard/ImportClientsModal) ──────
   const [importModal, setImportModal] = useState(false);
 
-  // Deep link: ?import=1 auto-opens the wizard (the Ajustes hub mounts its
-  // own instance directly, so this is only for external links/bookmarks).
+  // Deep link: ?import=1 auto-opens the wizard.
   useEffect(() => {
-    // Wait for currentRole before acting so a late-loading role doesn't lose
-    // the deep-link. Import creates clients → gate behind can.createClient.
     if (searchParams.get('import') !== '1' || !currentRole) return;
     if (can.createClient(currentRole)) setImportModal(true);
-    // Strip the param so reloads / back-nav don't re-open the modal.
     const params = new URLSearchParams(searchParams.toString());
     params.delete('import');
     params.delete('back');
@@ -385,11 +432,8 @@ export default function ClientesPage() {
     router.replace(`/dashboard/clientes${qs ? `?${qs}` : ''}`);
   }, [searchParams, router, currentRole]);
 
-  // Dashboard "Nuevo cliente" quick action navigates here with ?new=1 to
-  // auto-open the add-client form (the add flow lives in this modal).
+  // Dashboard "Nuevo cliente" quick action navigates here with ?new=1.
   useEffect(() => {
-    // Wait for currentRole so the deep-link isn't consumed before the gate is
-    // known. openAdd() itself no-ops for roles without create permission.
     if (searchParams.get('new') !== '1' || !currentRole) return;
     openAdd();
     const params = new URLSearchParams(searchParams.toString());
@@ -401,7 +445,7 @@ export default function ClientesPage() {
 
   const editById = (id: string) => {
     if (!can.editClient(currentRole)) return;
-    const c = clients.find(cl => cl.id === id);
+    const c = rawClients.find(cl => cl.id === id);
     if (c) openEdit(c);
   };
 
@@ -411,7 +455,7 @@ export default function ClientesPage() {
           first_name: selected.first_name,
           last_name: selected.last_name,
           company: selected.company ?? '',
-          phone_cell: selected.phone_cell ?? selected.phone ?? '',
+          phone_cell: selected.phone_cell ?? '',
           phone_office: selected.phone_office ?? '',
           email_office: selected.email_office ?? selected.email ?? '',
           email_home: selected.email_home ?? '',
@@ -444,8 +488,6 @@ export default function ClientesPage() {
         onSubmit={save}
       />
 
-      {/* CSV import wizard — extracted component (also mounted by the
-         Ajustes → Importar datos hub). */}
       {business && (
         <ImportClientsModal
           open={importModal}
@@ -453,7 +495,7 @@ export default function ClientesPage() {
           templates={templates.map(tpl => ({ field_key: tpl.field_key, field_label: tpl.field_label }))}
           locations={locations.map(l => ({ id: l.id, name: l.name }))}
           onClose={() => setImportModal(false)}
-          onDone={load}
+          onDone={() => { void loadMeta(); reRun(); }}
         />
       )}
     </>
@@ -479,6 +521,12 @@ export default function ClientesPage() {
       bulkDeleting={deleting}
       bottomSlot={modals}
       businessId={business?.id}
+      serverMode
+      serverTotal={serverTotal}
+      hasMore={hasMore}
+      loadingMore={loadingMore}
+      onLoadMore={loadMore}
+      onFiltersChange={handleFiltersChange}
     />
   );
 }

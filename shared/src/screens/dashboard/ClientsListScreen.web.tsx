@@ -54,6 +54,17 @@ export interface ClientsListScreenProps {
   bottomSlot?: ReactNode;
   /** Active business id — scopes the group-by choice per business. */
   businessId?: string;
+  // ── Server mode (opt-in) — the wrapper does the search/count/paging in the DB.
+  // On: this screen skips its own search filter, uses `serverTotal` for the
+  // header, reports search+group changes via `onFiltersChange`, and asks for more
+  // via `onLoadMore` near the bottom. Off = today's client-side behavior.
+  serverMode?: boolean;
+  /** Total clients matching the active search (for the header count). */
+  serverTotal?: number;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
+  onFiltersChange?: (f: { search: string; groupBy: ClientGroupKey }) => void;
 }
 
 export function ClientsListScreen({
@@ -76,6 +87,12 @@ export function ClientsListScreen({
   customFieldTemplates = [],
   bottomSlot,
   businessId,
+  serverMode = false,
+  serverTotal,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+  onFiltersChange,
 }: ClientsListScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
@@ -110,14 +127,45 @@ export function ClientsListScreen({
     groupBy === 'city' ? t.group.noCity :
     t.group.noValue;
 
+  // In server mode `clients` is ALREADY the search-filtered page(s) from the DB,
+  // so we don't re-filter — we only group the loaded rows. In client mode we
+  // filter the full array (own fields + contact people; state name ↔ abbr
+  // expansion is handled inside — see clientSearch / usStates).
   const filtered = useMemo(
-    // Matches own fields + contact people; state name ↔ abbr expansion is
-    // handled inside (see clientSearch / usStates).
-    () => clients.filter((c) => clientMatchesSearch(c, search)),
-    [clients, search],
+    () => serverMode ? clients : clients.filter((c) => clientMatchesSearch(c, search)),
+    [clients, search, serverMode],
   );
 
   const searching = search.trim().length > 0;
+
+  // Server mode: report search + group changes UP so the wrapper re-queries.
+  // Search is debounced so we don't fire a query per keystroke. Gated on
+  // `groupHydrated` so the first query uses the restored group-by.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(id);
+  }, [search]);
+  useEffect(() => {
+    if (!serverMode || !onFiltersChange || !groupHydrated) return;
+    onFiltersChange({ search: debouncedSearch, groupBy });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverMode, groupHydrated, debouncedSearch, groupBy]);
+
+  // Infinite scroll: load the next page when a sentinel near the list bottom
+  // scrolls into view.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!serverMode || !onLoadMore) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => { if (entries[0]?.isIntersecting && hasMore && !loadingMore) onLoadMore(); },
+      { rootMargin: '800px' },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [serverMode, onLoadMore, hasMore, loadingMore]);
   // Sections by the chosen group key; A–Z by default. Flat while searching.
   const sections = useMemo(
     () => groupClients(filtered, groupBy, searching, { emptyLabel, formatState: s => usStateName(s, locale) }),
@@ -163,8 +211,8 @@ export function ClientsListScreen({
           <h1 className="text-2xl font-bold text-ink">{t.title}</h1>
           <p className="text-sm text-muted mt-0.5">
             {search.trim()
-              ? t.countFound.replace('{{count}}', String(filtered.length))
-              : t.countTotal.replace('{{count}}', String(clients.length))}
+              ? t.countFound.replace('{{count}}', String(serverMode ? (serverTotal ?? filtered.length) : filtered.length))
+              : t.countTotal.replace('{{count}}', String(serverMode ? (serverTotal ?? clients.length) : clients.length))}
           </p>
         </div>
         <div className="flex gap-2">
@@ -314,6 +362,18 @@ export function ClientsListScreen({
               ))}
             </Fragment>
           ))}
+          {/* Infinite-scroll footer: sentinel triggers the next page, spinner
+             shows while it loads. */}
+          {serverMode ? (
+            <>
+              {loadingMore ? (
+                <div className="flex items-center justify-center py-6">
+                  <div className="flex gap-1">{[0, 1, 2].map((i) => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
+                </div>
+              ) : null}
+              <div ref={sentinelRef} className="h-1" />
+            </>
+          ) : null}
         </div>
       )}
 

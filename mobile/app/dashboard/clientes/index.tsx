@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,19 +14,24 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { triggerGoogleSyncOrThrow, googleSyncErrorMessage } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
-import { fetchAll, fetchAllById } from '@amixos/shared/lib/supabaseFetch';
+import {
+  fetchClientsPage,
+  fetchAllClientsMatching,
+  fetchClientCount,
+  clientGroupNeedsAll,
+  type ClientsCursor,
+} from '@amixos/shared/lib/clientsQuery';
 import { usePersistedSearch } from '@amixos/shared/lib/usePersistedSearch';
 import { logAudit } from '@amixos/shared/lib/audit';
-import { clientMatchesSearch } from '@amixos/shared/lib/clientSearch';
 import { fetchClientLocations, clientIdsAtLocation, clientsWithAnyLocation, type ClientLocation } from '@amixos/shared/lib/locations';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 
+interface EmbeddedContact { name: string; role: string | null; is_primary: boolean | null }
 interface Client {
   id: string;
   first_name: string;
   last_name: string;
   company: string | null;
-  phone: string | null;
   phone_cell: string | null;
   phone_office: string | null;
   email: string | null;
@@ -35,7 +40,14 @@ interface Client {
   city: string | null;
   state: string | null;
   custom_fields: Record<string, string> | null;
+  client_contacts?: EmbeddedContact[];
 }
+
+// Full page includes contact people (searched + shown under a matched row); a
+// page is ≤50 rows so the nested join is cheap. The load-all path (group-by)
+// isn't a search, so it skips contacts to stay light at scale.
+const CLIENT_PAGE_SELECT = '*, client_contacts(name, role, is_primary)';
+const CLIENT_GROUP_SELECT = '*';
 
 function fmtPhone(raw: string): string {
   const digits = raw.replace(/\D/g, '');
@@ -55,108 +67,141 @@ export default function ClientesTab() {
   const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
 
-  const [clients, setClients] = useState<Client[]>([]);
-  const [contactsByClient, setContactsByClient] = useState<
-    Map<string, { name: string; role: string | null }[]>
-  >(new Map());
+  const [rawClients, setRawClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = usePersistedSearch(business ? `search.clients.${business.id}` : null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  // Custom-field definitions — for the "group by custom field" menu options.
   const [templates, setTemplates] = useState<{ field_key: string; field_label: string }[]>([]);
 
-  const load = async () => {
-    if (!business) return;
-    const businessId = business.id;
-    // Clients list is cached so it (and on-site adds) work offline. Contacts +
-    // templates are best-effort — offline they just come back empty.
-    const clRes = await loadCached(`clients_list_${businessId}`, () =>
-      fetchAllById<Client>((afterId, pageSize) => {
-        let q = supabase
-          .from('clients')
-          .select('*')
-          .eq('business_id', businessId)
-          .order('id', { ascending: true })
-          .limit(pageSize);
-        if (afterId) q = q.gt('id', afterId);
-        return q;
-      }));
-    const cl = clRes.data ?? [];
+  // ── Server-side pagination + search + count ─────────────────────────────────
+  const [serverTotal, setServerTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadSeqRef = useRef(0);
+  const cursorRef = useRef<ClientsCursor | null>(null);
+  const paramsRef = useRef<{ businessId: string; search: string } | null>(null);
+  const loadAllRef = useRef(false);
 
-    let contactRows: { client_id: string; name: string; role: string | null }[] = [];
-    let tplData: { field_key: string; field_label: string }[] = [];
-    try {
-      contactRows = await fetchAll<{ client_id: string; name: string; role: string | null }>((from, to) =>
-        supabase
-          .from('client_contacts')
-          .select('client_id, name, role')
-          .eq('business_id', businessId)
-          .order('is_primary', { ascending: false })
-          .range(from, to));
-    } catch { /* offline — no contacts */ }
+  // Branch scoping: clients restricted to OTHER branches are hidden (small set).
+  const excludeIds = useMemo(() => {
+    if (!activeLocationId) return [] as string[];
+    const atBranch = clientIdsAtLocation(clientLocations, activeLocationId);
+    const withAny = clientsWithAnyLocation(clientLocations);
+    return Array.from(withAny).filter(id => !atBranch.has(id));
+  }, [clientLocations, activeLocationId]);
+  const excludeIdsRef = useRef<string[]>([]);
+  useEffect(() => { excludeIdsRef.current = excludeIds; }, [excludeIds]);
+
+  const loadMeta = async () => {
+    if (!business) return;
     try {
       const tplRes = await supabase
         .from('client_field_templates')
         .select('field_key, field_label, field_label_es, field_label_en')
-        .eq('business_id', businessId)
+        .eq('business_id', business.id)
         .order('sort_order');
-      tplData = (tplRes.data as { field_key: string; field_label: string }[] | null) ?? [];
+      setTemplates(localizeTemplates((tplRes.data as { field_key: string; field_label: string }[] | null) ?? [], locale));
     } catch { /* offline — no templates */ }
-
-    setTemplates(localizeTemplates(tplData, locale));
-    const byClient = new Map<string, { name: string; role: string | null }[]>();
-    for (const ct of contactRows) {
-      const arr = byClient.get(ct.client_id);
-      if (arr) arr.push({ name: ct.name, role: ct.role });
-      else byClient.set(ct.client_id, [{ name: ct.name, role: ct.role }]);
-    }
-    setClients(cl);
-    setContactsByClient(byClient);
-    setLoading(false);
     void fetchClientLocations(supabase, business.id).then(setClientLocations).catch(() => {});
   };
 
-  // Scope to the active branch: clients linked to it + shared clients (no link).
-  const scopedClients = useMemo(() => {
-    if (!activeLocationId) return clients;
-    const atBranch = clientIdsAtLocation(clientLocations, activeLocationId);
-    const withAny = clientsWithAnyLocation(clientLocations);
-    return clients.filter(c => atBranch.has(c.id) || !withAny.has(c.id));
-  }, [clients, clientLocations, activeLocationId]);
+  const runQuery = async (base: { businessId: string; search: string }, loadAll = false) => {
+    const seq = ++loadSeqRef.current;
+    paramsRef.current = base;
+    loadAllRef.current = loadAll;
+    setLoading(true);
+    cursorRef.current = null;
+    setHasMore(false);
+    const params = { ...base, excludeIds: excludeIdsRef.current };
+    if (loadAll) {
+      // Group-by needs every matching row. Online action (not cached).
+      try {
+        const rows = await fetchAllClientsMatching<Client>(supabase, CLIENT_GROUP_SELECT, params);
+        const total = await fetchClientCount(supabase, params);
+        if (seq !== loadSeqRef.current) return;
+        setRawClients(rows);
+        setServerTotal(total);
+      } catch { /* offline / error */ }
+      finally { if (seq === loadSeqRef.current) setLoading(false); }
+      return;
+    }
+    const cacheKey = `clients_list_${base.businessId}_${activeLocationId ?? 'all'}`;
+    const res = await loadCached<{ clients: Client[]; nextCursor: ClientsCursor | null; total: number }>(cacheKey, async () => {
+      const [page, total] = await Promise.all([
+        fetchClientsPage<Client>(supabase, CLIENT_PAGE_SELECT, { ...params, pageSize: 50 }),
+        fetchClientCount(supabase, params),
+      ]);
+      return { clients: page.clients, nextCursor: page.nextCursor, total };
+    });
+    if (seq !== loadSeqRef.current) return;
+    const d = res.data;
+    setRawClients(d?.clients ?? []);
+    cursorRef.current = res.fromCache ? null : (d?.nextCursor ?? null);
+    setHasMore(!res.fromCache && !!d?.nextCursor);
+    setServerTotal(d?.total ?? 0);
+    setLoading(false);
+  };
 
-  // Reload every time the list comes back into focus so edits / new
-  // clients / deletes from sub-pages show up immediately. Keyed on
-  // business.id so switching workspaces also reloads.
+  const loadMore = async () => {
+    if (loadingMore || !paramsRef.current || loadAllRef.current || !cursorRef.current) return;
+    const seq = loadSeqRef.current;
+    setLoadingMore(true);
+    try {
+      const page = await fetchClientsPage<Client>(supabase, CLIENT_PAGE_SELECT, { ...paramsRef.current, excludeIds: excludeIdsRef.current, cursor: cursorRef.current, pageSize: 50 });
+      if (seq !== loadSeqRef.current) return;
+      setRawClients(prev => [...prev, ...page.clients]);
+      cursorRef.current = page.nextCursor;
+      setHasMore(!!page.nextCursor);
+    } catch { /* offline / error — keep what's loaded */ }
+    finally { setLoadingMore(false); }
+  };
+
+  const reRun = () => { if (paramsRef.current) void runQuery(paramsRef.current, loadAllRef.current); };
+  // Re-run when the branch scope changes (locations load, or branch switch).
+  useEffect(() => {
+    if (paramsRef.current) void runQuery(paramsRef.current, loadAllRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [excludeIds]);
+
+  const handleFiltersChange = (f: { search: string; groupBy: string }) => {
+    if (!business) return;
+    void runQuery({ businessId: business.id, search: f.search }, clientGroupNeedsAll(f.groupBy));
+  };
+
+  // Refresh templates/locations + the current query on focus so edits / new
+  // clients / deletes from sub-pages show up. Keyed on business + locale.
   useFocusEffect(
     useCallback(() => {
-      void load();
-    }, [business, locale]),
+      void loadMeta();
+      reRun();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [business, locale, activeLocationId]),
   );
 
   const items: ClientListItem[] = useMemo(
     () =>
-      scopedClients.map(c => ({
+      rawClients.map(c => ({
         id: c.id,
         firstName: c.first_name,
         lastName: c.last_name,
         company: c.company,
-        phoneDisplay: (c.phone_cell ?? c.phone) ? fmtPhone(c.phone_cell ?? c.phone ?? '') : null,
+        phoneDisplay: c.phone_cell ? fmtPhone(c.phone_cell) : null,
         emailDisplay: c.email_office ?? c.email,
         city: c.city,
         state: c.state,
-        contacts: contactsByClient.get(c.id),
+        contacts: (c.client_contacts ?? [])
+          .slice()
+          .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
+          .map(ct => ({ name: ct.name, role: ct.role })),
         customFields: c.custom_fields,
       })),
-    [scopedClients, contactsByClient],
+    [rawClients],
   );
 
-  // Keep this in lockstep with the list screen's own filter so select-all /
-  // bulk-delete operate on exactly the rows the user sees.
-  const filteredIds = useMemo(
-    () => new Set(items.filter(c => clientMatchesSearch(c, search)).map(c => c.id)),
-    [items, search],
-  );
+  // In server mode the loaded rows ARE the matching set, so select-all /
+  // bulk-delete operate on exactly what's loaded (visible).
+  const filteredIds = useMemo(() => new Set(items.map(c => c.id)), [items]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
@@ -177,9 +222,6 @@ export default function ClientesTab() {
     router.push(`/dashboard/clientes/nuevo?edit=${id}` as never);
 
   const remove = (id: string) => {
-    // Read-only / field roles can't delete — RLS rejects it, and the
-    // optimistic setClients() below would otherwise wipe the row from the
-    // UI while the server keeps it (phantom delete). Gate here.
     if (!can.deleteClient(currentRole)) return;
     Alert.alert('Eliminar cliente', t.confirmDeleteSingle, [
       { text: 'Cancelar', style: 'cancel' },
@@ -187,9 +229,6 @@ export default function ClientesTab() {
         text: 'Eliminar',
         style: 'destructive',
         onPress: async () => {
-          // Fire Google delete BEFORE the local row is gone — the API needs
-          // to read the client's google_resource_name. Await so ordering is
-          // guaranteed; sync is fast and a tiny extra wait is fine on delete.
           const apiBaseUrl = getApiBaseUrl();
           const jwt = await getJwt();
           if (apiBaseUrl && jwt) {
@@ -199,14 +238,14 @@ export default function ClientesTab() {
               syncBanner.reportError(googleSyncErrorMessage(e, 'No se pudo eliminar el contacto de Google Contacts.'));
             }
           }
-          const deleted = clients.find(c => c.id === id);
+          const deleted = rawClients.find(c => c.id === id);
           await supabase.from('clients').delete().eq('id', id);
           if (business) {
             void logAudit(supabase, business.id, 'client.deleted', 'client', id, {
               name: deleted ? `${deleted.first_name} ${deleted.last_name}`.trim() : undefined,
             });
           }
-          setClients(prev => prev.filter(c => c.id !== id));
+          setRawClients(prev => prev.filter(c => c.id !== id));
           setSelectedIds(prev => {
             const n = new Set(prev);
             n.delete(id);
@@ -231,10 +270,6 @@ export default function ClientesTab() {
           onPress: async () => {
             setBulkDeleting(true);
             const ids = Array.from(selectedIds);
-            // Pre-fetch resource_names for the subset that's actually
-            // synced to Google. Unsynced rows skip the Google round-trip.
-            // Locals delete immediately; orphan cleanup runs throttled
-            // in the background banner queue.
             let orphans: { businessId: string; resourceName: string }[] = [];
             if (business?.id) {
               const { data: syncedRows } = await supabase
@@ -250,11 +285,10 @@ export default function ClientesTab() {
             for (let i = 0; i < ids.length; i += 50) {
               await supabase.from('clients').delete().in('id', ids.slice(i, i + 50));
             }
-            // One summary entry for the batch rather than N rows in the log.
             if (business) {
               void logAudit(supabase, business.id, 'client.deleted', 'client', null, { count: ids.length });
             }
-            setClients(prev => prev.filter(c => !selectedIds.has(c.id)));
+            setRawClients(prev => prev.filter(c => !selectedIds.has(c.id)));
             setSelectedIds(new Set());
             setBulkDeleting(false);
             if (orphans.length > 0) {
@@ -266,11 +300,6 @@ export default function ClientesTab() {
     );
   };
 
-  // Manual safe-area padding via useSafeAreaInsets. SafeAreaView from
-  // react-native-safe-area-context@4.10.1 was rendering its children at
-  // zero height inside the dashboard tab layout (iOS 26 simulator quirk
-  // or interaction with the GoogleSyncBanner overlay wrap). Using a
-  // plain View + paddingTop sidesteps it.
   return (
     <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       <ClientsListScreen
@@ -293,6 +322,12 @@ export default function ClientesTab() {
         onClearSelection={() => setSelectedIds(new Set())}
         bulkDeleting={bulkDeleting}
         businessId={business?.id}
+        serverMode
+        serverTotal={serverTotal}
+        hasMore={hasMore}
+        loadingMore={loadingMore}
+        onLoadMore={loadMore}
+        onFiltersChange={handleFiltersChange}
       />
     </View>
   );
