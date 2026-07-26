@@ -481,7 +481,7 @@ export function InvoicesListScreen({
                       // exact row when the user returns from the detail.
                       data-scroll-anchor={inv.id}
                       onClick={(e) => (selectMode ? handleSelectClick(inv.id, e.shiftKey) : onInvoicePress(inv.id))}
-                      className={`w-full flex items-center gap-4 px-5 py-4 border-b border-border-soft last:border-b-0 text-left transition-colors ${
+                      className={`[content-visibility:auto] [contain-intrinsic-size:auto_72px] w-full flex items-center gap-4 px-5 py-4 border-b border-border-soft last:border-b-0 text-left transition-colors ${
                         selectMode && selectedIds.has(inv.id) ? 'bg-primary/5' : 'hover:bg-surface'
                       }`}
                     >

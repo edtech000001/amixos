@@ -195,7 +195,7 @@ export function InventoryScreen({
             return (
               <div
                 key={item.id}
-                className={`flex items-center px-5 py-3.5 ${i < filtered.length - 1 ? 'border-b border-border-soft' : ''}`}
+                className={`[content-visibility:auto] [contain-intrinsic-size:auto_60px] flex items-center px-5 py-3.5 ${i < filtered.length - 1 ? 'border-b border-border-soft' : ''}`}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">

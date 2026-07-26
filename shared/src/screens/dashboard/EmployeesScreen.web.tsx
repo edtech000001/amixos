@@ -488,7 +488,7 @@ export function EmployeesScreen({
                 // exact row when the user returns from the detail.
                 data-scroll-anchor={e.id}
                 onClick={(ev) => rowClick(ev, e.id, i)}
-                className={`w-full text-left flex items-center gap-3 px-5 py-4 hover:bg-surface transition-colors select-none ${
+                className={`[content-visibility:auto] [contain-intrinsic-size:auto_72px] w-full text-left flex items-center gap-3 px-5 py-4 hover:bg-surface transition-colors select-none ${
                   selectedIds.has(e.id) ? 'bg-primary/5' : ''
                 } ${i < filteredEmployees.length - 1 ? 'border-b border-border-soft' : ''}`}
               >

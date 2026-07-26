@@ -677,7 +677,7 @@ export default function EquipmentModule() {
               <button
                 key={e.id}
                 onClick={() => openDetail(e)}
-                className="text-left bg-card rounded-2xl border border-border-soft hover:border-border hover:shadow-sm transition-all overflow-hidden flex flex-col"
+                className="[content-visibility:auto] [contain-intrinsic-size:auto_240px] text-left bg-card rounded-2xl border border-border-soft hover:border-border hover:shadow-sm transition-all overflow-hidden flex flex-col"
               >
                 {/* Fixed aspect box; the image is absolutely positioned so it
                    fills the ratio instead of stretching the box to its own
