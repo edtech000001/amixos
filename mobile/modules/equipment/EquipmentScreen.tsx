@@ -18,6 +18,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   FlatList,
+  SectionList,
   Dimensions,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -868,84 +869,88 @@ export default function EquipmentScreen() {
         </View>
       </View>
 
-      {/* List */}
-      <ScrollView className="flex-1" contentContainerClassName="px-4 pt-4 pb-32">
-        {filtered.length === 0 ? (
+      {/* List — SectionList virtualizes rows (+ their images) for large fleets. */}
+      <SectionList
+        className="flex-1"
+        sections={filtered.length === 0 ? [] : sections}
+        keyExtractor={(item) => item.id}
+        stickySectionHeadersEnabled={false}
+        renderSectionHeader={({ section }) =>
+          section.title ? (
+            <Text className="text-xs font-bold text-muted uppercase tracking-wide px-1 pt-5 pb-3">
+              {section.title} <Text className="text-faint">· {section.data.length}</Text>
+            </Text>
+          ) : null
+        }
+        renderItem={({ item: e }) => {
+          const cover = coverPhotos[e.id];
+          const days = plateExpirationDays(e.plate_expiration);
+          const plateBadge =
+            days === null ? null
+            : days < 0 ? { text: t.plateExpired, bg: 'bg-red-500/10', fg: 'text-red-700' }
+            : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), bg: 'bg-amber-500/10', fg: 'text-amber-700' }
+            : null;
+          const assigned = employeeName(e.assigned_employee_id);
+          return (
+            <Pressable
+              onPress={() => openDetail(e)}
+              className="bg-card rounded-2xl border border-border-soft overflow-hidden active:bg-surface"
+            >
+              {cover ? (
+                <Image
+                  source={{ uri: photoUrls[cover.storage_path] }}
+                  style={{ width: '100%', height: 160 }}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={{ height: 160 }} className="bg-surface items-center justify-center">
+                  <Truck size={40} color={c.faint} />
+                </View>
+              )}
+              <View className="p-4 gap-1">
+                <View className="flex-row items-center justify-between gap-2">
+                  <Text className="text-base font-semibold text-ink flex-1" numberOfLines={1}>{e.name}</Text>
+                  {e.paid_off ? (
+                    <View className="bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                      <Text className="text-[10px] font-semibold text-emerald-700">{t.paidOffBadge}</Text>
+                    </View>
+                  ) : e.loan_lender ? (
+                    <View className="bg-amber-500/10 px-2 py-0.5 rounded-full">
+                      <Text className="text-[10px] font-semibold text-amber-700">{t.loanBadge}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text className="text-xs text-muted" numberOfLines={1}>
+                  {[e.year, e.make, e.model].filter(Boolean).join(' ') || e.equipment_type || '—'}
+                </Text>
+                <View className="flex-row items-center gap-1.5 mt-1">
+                  <UserIcon size={12} color={c.muted} />
+                  <Text className="text-xs text-muted">{assigned ?? t.unassignedBadge}</Text>
+                </View>
+                {plateBadge ? (
+                  <View className={`mt-1 self-start flex-row items-center gap-1 ${plateBadge.bg} px-2 py-0.5 rounded-full`}>
+                    <AlertTriangle size={10} color={days! < 0 ? c.danger : c.warning} />
+                    <Text className={`text-[10px] font-semibold ${plateBadge.fg}`}>{plateBadge.text}</Text>
+                  </View>
+                ) : null}
+              </View>
+            </Pressable>
+          );
+        }}
+        ItemSeparatorComponent={() => <View className="h-3" />}
+        ListEmptyComponent={
           <View className="bg-card rounded-2xl border border-border-soft p-8 items-center">
             <Forklift size={32} color={c.faint} />
             <Text className="text-sm font-semibold text-ink mt-3">{t.emptyTitle}</Text>
             <Text className="text-xs text-muted mt-1 text-center">{t.emptyHint}</Text>
           </View>
-        ) : (
-          <View className="gap-5">
-            {sections.map((section) => (
-              <View key={section.title || '__all'} className="gap-3">
-                {section.title ? (
-                  <Text className="text-xs font-bold text-muted uppercase tracking-wide px-1">
-                    {section.title} <Text className="text-faint">· {section.data.length}</Text>
-                  </Text>
-                ) : null}
-                {section.data.map((e) => {
-                  const cover = coverPhotos[e.id];
-                  const days = plateExpirationDays(e.plate_expiration);
-                  const plateBadge =
-                    days === null ? null
-                    : days < 0 ? { text: t.plateExpired, bg: 'bg-red-500/10', fg: 'text-red-700' }
-                    : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), bg: 'bg-amber-500/10', fg: 'text-amber-700' }
-                    : null;
-                  const assigned = employeeName(e.assigned_employee_id);
-                  return (
-                    <Pressable
-                      key={e.id}
-                      onPress={() => openDetail(e)}
-                      className="bg-card rounded-2xl border border-border-soft overflow-hidden active:bg-surface"
-                    >
-                      {cover ? (
-                        <Image
-                          source={{ uri: photoUrls[cover.storage_path] }}
-                          style={{ width: '100%', height: 160 }}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <View style={{ height: 160 }} className="bg-surface items-center justify-center">
-                          <Truck size={40} color={c.faint} />
-                        </View>
-                      )}
-                      <View className="p-4 gap-1">
-                        <View className="flex-row items-center justify-between gap-2">
-                          <Text className="text-base font-semibold text-ink flex-1" numberOfLines={1}>{e.name}</Text>
-                          {e.paid_off ? (
-                            <View className="bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                              <Text className="text-[10px] font-semibold text-emerald-700">{t.paidOffBadge}</Text>
-                            </View>
-                          ) : e.loan_lender ? (
-                            <View className="bg-amber-500/10 px-2 py-0.5 rounded-full">
-                              <Text className="text-[10px] font-semibold text-amber-700">{t.loanBadge}</Text>
-                            </View>
-                          ) : null}
-                        </View>
-                        <Text className="text-xs text-muted" numberOfLines={1}>
-                          {[e.year, e.make, e.model].filter(Boolean).join(' ') || e.equipment_type || '—'}
-                        </Text>
-                        <View className="flex-row items-center gap-1.5 mt-1">
-                          <UserIcon size={12} color={c.muted} />
-                          <Text className="text-xs text-muted">{assigned ?? t.unassignedBadge}</Text>
-                        </View>
-                        {plateBadge ? (
-                          <View className={`mt-1 self-start flex-row items-center gap-1 ${plateBadge.bg} px-2 py-0.5 rounded-full`}>
-                            <AlertTriangle size={10} color={days! < 0 ? c.danger : c.warning} />
-                            <Text className={`text-[10px] font-semibold ${plateBadge.fg}`}>{plateBadge.text}</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ))}
-          </View>
-        )}
-      </ScrollView>
+        }
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 128 }}
+        keyboardShouldPersistTaps="handled"
+        initialNumToRender={8}
+        windowSize={7}
+        maxToRenderPerBatch={6}
+      />
 
       {/* Add equipment — floating action, one-handed thumb reach. */}
       <Fab onPress={openAdd} />

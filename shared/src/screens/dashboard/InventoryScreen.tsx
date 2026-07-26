@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, FlatList } from 'react-native';
 import {
   Search,
   Package,
@@ -80,10 +80,10 @@ export function InventoryScreen({
     : t.lowStockBannerSingle
   ).replace('{{count}}', String(lowStockCount));
 
-  return (
-    <View className="flex-1 bg-surface">
-    <ScrollView contentContainerClassName="px-6 pt-6 pb-44">
-      {/* Header — the "add item" action lives in the bottom-right FAB. */}
+  // Header (title/summary, low-stock banner, search, filters) rides as the
+  // FlatList header so the whole screen scrolls as one but rows virtualize.
+  const header = (
+    <>
       <View className="mb-5">
         <Text className="text-2xl font-bold text-ink">{t.title}</Text>
         <Text className="text-sm text-muted mt-0.5">
@@ -94,23 +94,18 @@ export function InventoryScreen({
         </Text>
       </View>
 
-      {/* Low stock banner */}
       {lowStockCount > 0 ? (
         <View className="flex-row items-center gap-3 bg-orange-500/10 border border-orange-200 rounded-2xl px-5 py-3 mb-4">
           <AlertTriangle size={18} color={c.warning} />
           <Text className="text-sm text-orange-700 flex-1">
             <Text className="font-semibold">{lowStockBannerText}</Text> {t.lowStockBannerSuffix}
-            <Text
-              onPress={() => setFilter('bajo_stock')}
-              className="font-medium text-orange-700"
-            >
+            <Text onPress={() => setFilter('bajo_stock')} className="font-medium text-orange-700">
               {' '}{t.lowStockBannerCta}
             </Text>
           </Text>
         </View>
       ) : null}
 
-      {/* Search — its own full-width line. */}
       <View className="mb-3">
         <Input
           placeholder={t.searchPlaceholder}
@@ -121,7 +116,6 @@ export function InventoryScreen({
         />
       </View>
 
-      {/* Filters — below the search. */}
       <View className="flex-row gap-1 bg-border-soft p-1 rounded-xl self-start mb-4">
         {(['todos', 'bajo_stock'] as const).map(f => (
           <Pressable
@@ -129,91 +123,99 @@ export function InventoryScreen({
             onPress={() => setFilter(f)}
             className={`px-3 py-1.5 rounded-lg ${filter === f ? 'bg-card' : ''}`}
           >
-            <Text
-              className={`text-xs font-semibold ${
-                filter === f ? 'text-ink' : 'text-muted'
-              }`}
-            >
+            <Text className={`text-xs font-semibold ${filter === f ? 'text-ink' : 'text-muted'}`}>
               {f === 'todos' ? t.filters.all : t.filters.lowStock}
             </Text>
           </Pressable>
         ))}
       </View>
+    </>
+  );
 
-      {/* List */}
-      {loading ? (
-        <View className="items-center py-20">
-          <View className="flex-row gap-1">
-            {[0, 1, 2].map(i => (
-              <View key={i} className="w-2 h-2 rounded-full bg-primary" />
-            ))}
+  const renderItem = ({ item }: { item: InventoryItem }) => {
+    const low = item.quantity <= item.lowStockThreshold;
+    const meta = [
+      item.category,
+      item.sku ? t.itemMeta.skuPrefix.replace('{{sku}}', item.sku) : null,
+    ].filter(Boolean).join(' · ');
+    return (
+      <View className="bg-card rounded-2xl border border-border-soft p-4">
+        <View className="flex-row items-start justify-between gap-3">
+          <View className="flex-1 min-w-0">
+            <View className="flex-row items-center gap-1.5">
+              <Text className="text-base font-semibold text-ink shrink" numberOfLines={1}>
+                {item.name}
+              </Text>
+              {low ? <AlertTriangle size={14} color={c.warning} /> : null}
+            </View>
+            {meta ? (
+              <Text className="text-xs text-faint mt-0.5" numberOfLines={1}>{meta}</Text>
+            ) : null}
+          </View>
+          <View className="items-end">
+            <Text className={`text-xl font-bold ${low ? 'text-orange-500' : 'text-ink'}`}>
+              {item.quantity}
+            </Text>
+            <Text className="text-[11px] text-faint">{unitLabel(item.unit)}</Text>
           </View>
         </View>
-      ) : filtered.length === 0 ? (
-        <View className="items-center py-20">
-          <Package size={40} color={c.faint} />
-          <Text className="text-sm text-faint mt-3">
-            {search || filter !== 'todos' ? t.emptyNoMatch : t.emptyAll}
+        <View className="flex-row items-center justify-between mt-3 pt-3 border-t border-border-soft">
+          <Text className="text-xs text-muted">
+            ${item.unitCost.toFixed(2)} · {t.itemMeta.minPrefix.replace('{{min}}', String(item.lowStockThreshold))}
           </Text>
-          {!search && filter === 'todos' ? (
-            <Pressable onPress={onAddItem} className="mt-1">
-              <Text className="text-primary text-sm font-medium">{t.addFirst}</Text>
+          <View className="flex-row items-center gap-1">
+            <Pressable onPress={() => onAdjustItem(item.id)} className="p-2 rounded-lg active:bg-primary/10">
+              <TrendingUp size={16} color={c.primary} />
             </Pressable>
-          ) : null}
+            <Pressable onPress={() => onEditItem(item.id)} className="p-2 rounded-lg active:bg-border-soft">
+              <Pencil size={16} color={c.faint} />
+            </Pressable>
+            <Pressable onPress={() => onDeleteItem(item.id)} className="p-2 rounded-lg active:bg-red-500/10">
+              <Trash2 size={16} color={c.danger} />
+            </Pressable>
+          </View>
         </View>
-      ) : (
-        <View className="gap-3">
-          {filtered.map(item => {
-            const low = item.quantity <= item.lowStockThreshold;
-            const meta = [
-              item.category,
-              item.sku ? t.itemMeta.skuPrefix.replace('{{sku}}', item.sku) : null,
-            ].filter(Boolean).join(' · ');
-            return (
-              <View key={item.id} className="bg-card rounded-2xl border border-border-soft p-4">
-                {/* Name + prominent stock */}
-                <View className="flex-row items-start justify-between gap-3">
-                  <View className="flex-1 min-w-0">
-                    <View className="flex-row items-center gap-1.5">
-                      <Text className="text-base font-semibold text-ink shrink" numberOfLines={1}>
-                        {item.name}
-                      </Text>
-                      {low ? <AlertTriangle size={14} color={c.warning} /> : null}
-                    </View>
-                    {meta ? (
-                      <Text className="text-xs text-faint mt-0.5" numberOfLines={1}>{meta}</Text>
-                    ) : null}
-                  </View>
-                  <View className="items-end">
-                    <Text className={`text-xl font-bold ${low ? 'text-orange-500' : 'text-ink'}`}>
-                      {item.quantity}
-                    </Text>
-                    <Text className="text-[11px] text-faint">{unitLabel(item.unit)}</Text>
-                  </View>
-                </View>
-                {/* Cost + min + actions */}
-                <View className="flex-row items-center justify-between mt-3 pt-3 border-t border-border-soft">
-                  <Text className="text-xs text-muted">
-                    ${item.unitCost.toFixed(2)} · {t.itemMeta.minPrefix.replace('{{min}}', String(item.lowStockThreshold))}
-                  </Text>
-                  <View className="flex-row items-center gap-1">
-                    <Pressable onPress={() => onAdjustItem(item.id)} className="p-2 rounded-lg active:bg-primary/10">
-                      <TrendingUp size={16} color={c.primary} />
-                    </Pressable>
-                    <Pressable onPress={() => onEditItem(item.id)} className="p-2 rounded-lg active:bg-border-soft">
-                      <Pencil size={16} color={c.faint} />
-                    </Pressable>
-                    <Pressable onPress={() => onDeleteItem(item.id)} className="p-2 rounded-lg active:bg-red-500/10">
-                      <Trash2 size={16} color={c.danger} />
-                    </Pressable>
-                  </View>
-                </View>
+      </View>
+    );
+  };
+
+  return (
+    <View className="flex-1 bg-surface">
+      <FlatList
+        data={loading ? [] : filtered}
+        keyExtractor={i => i.id}
+        renderItem={renderItem}
+        ListHeaderComponent={header}
+        ItemSeparatorComponent={() => <View className="h-3" />}
+        ListEmptyComponent={
+          loading ? (
+            <View className="items-center py-20">
+              <View className="flex-row gap-1">
+                {[0, 1, 2].map(i => (
+                  <View key={i} className="w-2 h-2 rounded-full bg-primary" />
+                ))}
               </View>
-            );
-          })}
-        </View>
-      )}
-    </ScrollView>
+            </View>
+          ) : (
+            <View className="items-center py-20">
+              <Package size={40} color={c.faint} />
+              <Text className="text-sm text-faint mt-3">
+                {search || filter !== 'todos' ? t.emptyNoMatch : t.emptyAll}
+              </Text>
+              {!search && filter === 'todos' ? (
+                <Pressable onPress={onAddItem} className="mt-1">
+                  <Text className="text-primary text-sm font-medium">{t.addFirst}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          )
+        }
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 176 }}
+        keyboardShouldPersistTaps="handled"
+        initialNumToRender={15}
+        windowSize={7}
+        maxToRenderPerBatch={10}
+      />
 
       <Fab onPress={onAddItem} />
       {modalsSlot}
