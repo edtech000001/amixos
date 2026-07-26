@@ -81,6 +81,13 @@ export default function FacturasPage() {
   const load = async () => {
     if (!business) return;
     const businessId = business.id;
+    // Flip sent invoices whose due date has passed to 'overdue' before loading,
+    // so the list reflects it (the badge reads the STORED status). One UPDATE;
+    // after the first pass those rows are already 'overdue' and it no-ops. So
+    // overdue marking no longer depends on visiting the dashboard home.
+    const today = new Date().toISOString().split('T')[0];
+    await supabase.from('invoices').update({ status: 'overdue' })
+      .eq('business_id', businessId).eq('status', 'sent').lt('due_date', today);
     const raw = await fetchAllById<RawInvoice>((afterId, pageSize) => {
       let q = supabase.from('invoices')
         .select('id, invoice_number, status, total_amount, due_date, issue_date, created_at, sent_at, line_items, clients(first_name, last_name, company, state), invoice_clients(clients(first_name, last_name, company, state)), jobs(external_ref, title)')
