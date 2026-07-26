@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput, Modal as RNModal } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, FlatList, Modal as RNModal } from 'react-native';
 import {
   Clock,
   ClipboardList,
@@ -240,11 +240,9 @@ export function EmployeesScreen({
     [hourTotals],
   );
 
-  return (
-    <View className="flex-1 bg-surface">
-    <ScrollView className="flex-1" contentContainerClassName={`px-6 pt-6 ${selectionMode ? 'pb-80' : 'pb-44'}`}>
-      {/* Header — "add" is the bottom-right Fab; log-hours stays here as a
-         secondary action. */}
+  // Header (title/summary) + tab switcher — shared across all three tabs.
+  const topBar = (
+    <>
       <View className="flex-row items-center justify-between mb-6 flex-wrap gap-3">
         <View>
           <Text className="text-2xl font-bold text-ink">{t.title}</Text>
@@ -265,7 +263,6 @@ export function EmployeesScreen({
         </Pressable>
       </View>
 
-      {/* Tabs */}
       <View className="flex-row gap-1 bg-border-soft p-1 rounded-xl mb-6 self-start">
         {(['empleados', 'horas', 'historial'] as const).map(tabKey => (
           <Pressable
@@ -273,143 +270,128 @@ export function EmployeesScreen({
             onPress={() => setTab(tabKey)}
             className={`px-4 py-1.5 rounded-lg ${tab === tabKey ? 'bg-card' : ''}`}
           >
-            <Text
-              className={`text-xs font-semibold capitalize ${
-                tab === tabKey ? 'text-ink' : 'text-muted'
-              }`}
-            >
+            <Text className={`text-xs font-semibold capitalize ${tab === tabKey ? 'text-ink' : 'text-muted'}`}>
               {t.tabs[tabKey]}
             </Text>
           </Pressable>
         ))}
       </View>
+    </>
+  );
 
-      {tab === 'empleados' ? (
-        <>
-        <View className="flex-row items-center gap-2 mb-3">
-          <View className="flex-1 flex-row items-center rounded-2xl border border-border bg-card px-3.5">
-            <Search size={16} color={c.faint} />
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder={t.teamSearchPlaceholder}
-              placeholderTextColor={c.faint}
-              autoCapitalize="none"
-              autoCorrect={false}
-              className="flex-1 px-2.5 py-2.5 text-sm text-ink"
-            />
-          </View>
+  // Team-tab list header (search + filter + selection banner) rides above the
+  // virtualized employee rows.
+  const teamHeader = (
+    <>
+      {topBar}
+      <View className="flex-row items-center gap-2 mb-3">
+        <View className="flex-1 flex-row items-center rounded-2xl border border-border bg-card px-3.5">
+          <Search size={16} color={c.faint} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder={t.teamSearchPlaceholder}
+            placeholderTextColor={c.faint}
+            autoCapitalize="none"
+            autoCorrect={false}
+            className="flex-1 px-2.5 py-2.5 text-sm text-ink"
+          />
+        </View>
+        <Pressable
+          onPress={() => setFilterOpen(o => !o)}
+          className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
+            filtersActive || filterOpen ? 'bg-primary/10 border-primary' : 'bg-card border-border'
+          }`}
+        >
+          <SlidersHorizontal size={16} color={filtersActive || filterOpen ? c.primary : c.muted} />
+        </Pressable>
+        {canBulkDelete && employees.length > 0 ? (
           <Pressable
-            onPress={() => setFilterOpen(o => !o)}
+            onPress={() => (selectionMode ? exitSelect() : setSelectMode(true))}
             className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
-              filtersActive || filterOpen ? 'bg-primary/10 border-primary' : 'bg-card border-border'
+              selectionMode ? 'bg-primary/10 border-primary' : 'bg-card border-border'
             }`}
           >
-            <SlidersHorizontal size={16} color={filtersActive || filterOpen ? c.primary : c.muted} />
+            <ListChecks size={16} color={selectionMode ? c.primary : c.muted} />
           </Pressable>
-          {canBulkDelete && employees.length > 0 ? (
-            <Pressable
-              onPress={() => (selectionMode ? exitSelect() : setSelectMode(true))}
-              className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
-                selectionMode ? 'bg-primary/10 border-primary' : 'bg-card border-border'
-              }`}
-            >
-              <ListChecks size={16} color={selectionMode ? c.primary : c.muted} />
+        ) : null}
+      </View>
+
+      {selectionMode ? (
+        <View className="flex-row items-center gap-2 bg-primary/5 border border-primary/20 rounded-xl px-3 py-2.5 mb-3">
+          <Pressable onPress={exitSelect} className="p-1 rounded">
+            <X size={14} color={c.primary} />
+          </Pressable>
+          <Text className="text-sm font-medium text-primary flex-shrink" numberOfLines={1}>{selectedCountLabel}</Text>
+          <View className="flex-1" />
+          {!allSelected && filteredEmployees.length > 0 ? (
+            <Pressable onPress={toggleSelectAll} className="px-2 py-1.5 rounded-lg active:bg-primary/10">
+              <Text className="text-xs font-semibold text-primary">{t.selectAllShort}</Text>
             </Pressable>
           ) : null}
         </View>
+      ) : null}
+    </>
+  );
 
+  // One employee row (first/last rounding recreates the section card look).
+  const renderEmployee = ({ item: e, index }: { item: EmployeeListItem; index: number }) => {
+    const selected = selectedIds.has(e.id);
+    const isFirst = index === 0;
+    const isLast = index === filteredEmployees.length - 1;
+    return (
+      <Pressable
+        onPress={() => rowPress(e.id)}
+        onLongPress={canBulkDelete ? () => enterSelect(e.id) : undefined}
+        delayLongPress={300}
+        className={`flex-row items-start gap-3 px-5 py-4 border-x border-border-soft ${isFirst ? 'rounded-t-2xl border-t' : ''} ${isLast ? 'rounded-b-2xl border-b' : 'border-b'} ${
+          selected ? 'bg-primary/5' : 'bg-card active:bg-surface'
+        }`}
+      >
         {selectionMode ? (
-          <View className="flex-row items-center gap-2 bg-primary/5 border border-primary/20 rounded-xl px-3 py-2.5 mb-3">
-            <Pressable onPress={exitSelect} className="p-1 rounded">
-              <X size={14} color={c.primary} />
-            </Pressable>
-            <Text className="text-sm font-medium text-primary flex-shrink" numberOfLines={1}>{selectedCountLabel}</Text>
-            <View className="flex-1" />
-            {!allSelected && filteredEmployees.length > 0 ? (
-              <Pressable onPress={toggleSelectAll} className="px-2 py-1.5 rounded-lg active:bg-primary/10">
-                <Text className="text-xs font-semibold text-primary">{t.selectAllShort}</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
-        {employees.length === 0 ? (
-          <View className="items-center py-20">
-            <UserCheck size={40} color={c.faint} />
-            <Text className="text-sm text-faint mt-3">{t.emptyEmployees}</Text>
-            <Pressable onPress={onAddEmployee} className="mt-1">
-              <Text className="text-primary text-sm font-medium">{t.addFirst}</Text>
-            </Pressable>
+          <View className={`w-6 h-6 mt-1 rounded-md border items-center justify-center ${
+            selected ? 'bg-primary border-primary' : 'border-border bg-card'
+          }`}>
+            {selected ? <Check size={14} color="#fff" /> : null}
           </View>
         ) : (
-          <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
-            {filteredEmployees.map((e, i) => {
-              const selected = selectedIds.has(e.id);
-              return (
-              <Pressable
-                key={e.id}
-                onPress={() => rowPress(e.id)}
-                onLongPress={canBulkDelete ? () => enterSelect(e.id) : undefined}
-                delayLongPress={300}
-                className={`flex-row items-start gap-3 px-5 py-4 active:bg-surface ${
-                  selected ? 'bg-primary/5' : ''
-                } ${i < filteredEmployees.length - 1 ? 'border-b border-border-soft' : ''}`}
-              >
-                {selectionMode ? (
-                  <View className={`w-6 h-6 mt-1 rounded-md border items-center justify-center ${
-                    selected ? 'bg-primary border-primary' : 'border-border bg-card'
-                  }`}>
-                    {selected ? <Check size={14} color="#fff" /> : null}
-                  </View>
-                ) : (
-                <View
-                  className={`w-9 h-9 rounded-full items-center justify-center ${
-                    e.active ? 'bg-primary/10' : 'bg-border-soft'
-                  }`}
-                >
-                  <Text
-                    className={`text-sm font-semibold ${
-                      e.active ? 'text-primary' : 'text-faint'
-                    }`}
-                  >
-                    {e.firstName.charAt(0)}{e.lastName.charAt(0)}
-                  </Text>
-                </View>
-                )}
-                <View className="min-w-0 flex-1">
-                  <Text className="text-sm font-semibold text-ink" numberOfLines={2}>
-                    {e.firstName} {e.lastName}
-                  </Text>
-                  {(!e.active || e.access?.kind === 'active' || e.access?.kind === 'invited') ? (
-                    <View className="flex-row flex-wrap items-center gap-1.5 mt-1">
-                      {!e.active ? (
-                        <View className="px-2 py-0.5 rounded-full bg-border-soft">
-                          <Text className="text-xs text-faint">{t.inactiveBadge}</Text>
-                        </View>
-                      ) : null}
-                      {e.access?.kind === 'active' ? (
-                        <View className="px-2 py-0.5 rounded-full bg-primary/10">
-                          <Text className="text-xs font-semibold text-primary">{ROLE_LABELS[e.access.role][lang]}</Text>
-                        </View>
-                      ) : e.access?.kind === 'invited' ? (
-                        <View className="px-2 py-0.5 rounded-full bg-amber-100">
-                          <Text className="text-xs font-semibold text-amber-700">{teamT.pendingBadge}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  ) : null}
-                  <Text className="text-xs text-faint mt-1">
-                    {ROLES[e.role] ?? e.role} · {PAY_TYPES[e.payType]} ${e.payRate.toFixed(2)}
-                    {e.phone ? ` · ${e.phone}` : ''}
-                  </Text>
-                </View>
-              </Pressable>
-              );
-            })}
+          <View className={`w-9 h-9 rounded-full items-center justify-center ${e.active ? 'bg-primary/10' : 'bg-border-soft'}`}>
+            <Text className={`text-sm font-semibold ${e.active ? 'text-primary' : 'text-faint'}`}>
+              {e.firstName.charAt(0)}{e.lastName.charAt(0)}
+            </Text>
           </View>
         )}
-        </>
-      ) : tab === 'horas' ? (
+        <View className="min-w-0 flex-1">
+          <Text className="text-sm font-semibold text-ink" numberOfLines={2}>{e.firstName} {e.lastName}</Text>
+          {(!e.active || e.access?.kind === 'active' || e.access?.kind === 'invited') ? (
+            <View className="flex-row flex-wrap items-center gap-1.5 mt-1">
+              {!e.active ? (
+                <View className="px-2 py-0.5 rounded-full bg-border-soft">
+                  <Text className="text-xs text-faint">{t.inactiveBadge}</Text>
+                </View>
+              ) : null}
+              {e.access?.kind === 'active' ? (
+                <View className="px-2 py-0.5 rounded-full bg-primary/10">
+                  <Text className="text-xs font-semibold text-primary">{ROLE_LABELS[e.access.role][lang]}</Text>
+                </View>
+              ) : e.access?.kind === 'invited' ? (
+                <View className="px-2 py-0.5 rounded-full bg-amber-100">
+                  <Text className="text-xs font-semibold text-amber-700">{teamT.pendingBadge}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+          <Text className="text-xs text-faint mt-1">
+            {ROLES[e.role] ?? e.role} · {PAY_TYPES[e.payType]} ${e.payRate.toFixed(2)}
+            {e.phone ? ` · ${e.phone}` : ''}
+          </Text>
+        </View>
+      </Pressable>
+    );
+  };
+
+  // Hours + History tab bodies (small, period-bounded — plain ScrollView).
+  const otherTabBody = tab === 'horas' ? (
         /* Hours tab — per-worker totals for the current pay period. */
         <>
           {payPeriodLabel ? (
@@ -506,10 +488,39 @@ export function EmployeesScreen({
             </View>
           )}
         </>
-      )}
+      );
 
-      {modalsSlot}
-    </ScrollView>
+  return (
+    <View className="flex-1 bg-surface">
+      {tab === 'empleados' ? (
+        <FlatList
+          data={employees.length === 0 ? [] : filteredEmployees}
+          keyExtractor={e => e.id}
+          renderItem={renderEmployee}
+          ListHeaderComponent={teamHeader}
+          ListEmptyComponent={
+            <View className="items-center py-20">
+              <UserCheck size={40} color={c.faint} />
+              <Text className="text-sm text-faint mt-3">{t.emptyEmployees}</Text>
+              <Pressable onPress={onAddEmployee} className="mt-1">
+                <Text className="text-primary text-sm font-medium">{t.addFirst}</Text>
+              </Pressable>
+            </View>
+          }
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: selectionMode ? 320 : 176 }}
+          keyboardShouldPersistTaps="handled"
+          initialNumToRender={15}
+          windowSize={7}
+          maxToRenderPerBatch={10}
+        />
+      ) : (
+        <ScrollView className="flex-1" contentContainerClassName="px-6 pt-6 pb-44" keyboardShouldPersistTaps="handled">
+          {topBar}
+          {otherTabBody}
+          {modalsSlot}
+        </ScrollView>
+      )}
+      {tab === 'empleados' ? modalsSlot : null}
 
     {/* New employee — floating action, bottom-right thumb reach. The Hours
        logged tab has its own inline "add entry" button. Hidden while selecting. */}
