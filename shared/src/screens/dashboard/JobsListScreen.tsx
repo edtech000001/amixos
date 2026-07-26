@@ -247,6 +247,12 @@ export function JobsListScreen({
   canCreateEstimates = true,
   alertThresholds = DEFAULT_JOB_ALERT_THRESHOLDS,
   businessId,
+  serverMode = false,
+  serverCounts,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+  onFiltersChange,
 }: JobsListScreenProps) {
   const { t: full, locale } = useLang();
   const c = useThemeColors();
@@ -263,6 +269,9 @@ export function JobsListScreen({
   // survives navigating into a job + back AND an app refresh; only resets when
   // the user clears it. AsyncStorage is async, so load once then save changes.
   const hydrated = useRef(false);
+  // Re-render trigger so the server-mode filter-report effect fires once the
+  // persisted filters have loaded (hydrated is a ref, which doesn't re-render).
+  const [ready, setReady] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [sortBy, setSortBy] = useState<JobSortKey>('recent');
@@ -317,8 +326,9 @@ export function JobsListScreen({
         setDateFrom(s?.dateFrom ?? null);
         setDateTo(s?.dateTo ?? null);
         hydrated.current = true;
+        setReady(true);
       })
-      .catch(() => { hydrated.current = true; });
+      .catch(() => { hydrated.current = true; setReady(true); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtersKey]);
@@ -384,10 +394,13 @@ export function JobsListScreen({
       search,
     ) && jobInDateRange(j.scheduledDate, j.endDate, dateFrom, dateTo);
 
+  // Server mode: `jobs` is already the search/tab-filtered page(s) — only
+  // sort/group the loaded rows. Client mode: filter the full array.
   const filtered = useMemo(() => {
+    if (serverMode) return jobs;
     return jobs.filter(j => passesSearchDate(j) && matchesTab(j));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobs, search, tabs, dateFrom, dateTo]);
+  }, [jobs, search, tabs, dateFrom, dateTo, serverMode]);
 
   const sections = useMemo(
     () => groupJobs(sortJobs(filtered, sortBy), groupBy, {
@@ -450,7 +463,7 @@ export function JobsListScreen({
   // Counts reflect the active search + date range so the badges tell the user
   // WHERE matches are (e.g. "Invoiced 1"). With no search this is every job,
   // i.e. the plain totals.
-  const counts = useMemo(() => {
+  const computedCounts = useMemo(() => {
     const pool = jobs.filter(passesSearchDate);
     return TAB_KEYS.reduce((acc, k) => {
       acc[k] = k === 'all' ? pool.length : pool.filter(j => jobInTab(j, k as StatusTabKey)).length;
@@ -458,6 +471,22 @@ export function JobsListScreen({
     }, {} as Record<TabKey, number>);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs, search, dateFrom, dateTo]);
+  const counts = serverMode && serverCounts
+    ? (serverCounts as Record<TabKey, number>)
+    : computedCounts;
+
+  // Server mode: report filter changes UP (debounced search) so the wrapper
+  // re-queries; gated on `ready` so the first query uses restored filters.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search), 250);
+    return () => clearTimeout(id);
+  }, [search]);
+  useEffect(() => {
+    if (!serverMode || !onFiltersChange || !ready) return;
+    onFiltersChange({ search: debouncedSearch, tabs, sortBy, groupBy, dateFrom, dateTo });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverMode, ready, debouncedSearch, tabs, sortBy, groupBy, dateFrom, dateTo]);
 
   const pendingValue = jobs.filter(j => j.status === 'sent' && !isExpired(j))
     .reduce((s, j) => s + j.totalAmount, 0);
@@ -842,9 +871,14 @@ export function JobsListScreen({
         <View className="flex-1">
           <Text className="text-2xl font-bold text-ink">{t.title}</Text>
           <Text className="text-sm text-muted mt-0.5">
-            {search.trim()
-              ? t.countFound.replace('{{count}}', String(filtered.length))
-              : t.countTotal.replace('{{count}}', String(jobs.length))}
+            {(() => {
+              const total = serverMode
+                ? ((tabs.length === 1 ? counts[tabs[0]] : counts.all) ?? filtered.length)
+                : (search.trim() ? filtered.length : jobs.length);
+              return search.trim()
+                ? t.countFound.replace('{{count}}', String(total))
+                : t.countTotal.replace('{{count}}', String(total));
+            })()}
             {pendingValue > 0 ? (
               <Text className="text-blue-600 font-medium">
                 {' · '}{t.pendingValue.replace('{{amount}}', fmt(pendingValue))}
@@ -1022,6 +1056,15 @@ export function JobsListScreen({
         initialNumToRender={10}
         windowSize={9}
         maxToRenderPerBatch={8}
+        onEndReached={() => { if (serverMode && hasMore && !loadingMore) onLoadMore?.(); }}
+        onEndReachedThreshold={0.6}
+        ListFooterComponent={serverMode && loadingMore ? (
+          <View className="items-center py-5">
+            <View className="flex-row gap-1">
+              {[0, 1, 2].map(i => <View key={i} className="w-2 h-2 rounded-full bg-primary" />)}
+            </View>
+          </View>
+        ) : null}
         ListEmptyComponent={loading ? (
         <View className="items-center py-20">
           <View className="flex-row gap-1">

@@ -11,7 +11,7 @@ import {
   JobsListScreen,
   type JobListItem,
 } from '@amixos/shared/screens/dashboard/JobsListScreen';
-import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
+import { fetchJobsPage, fetchJobTabCounts, type JobsCursor, type JobsQueryParams } from '@amixos/shared/lib/jobsQuery';
 import { can } from '@amixos/shared/lib/permissions';
 import { normalizeJobAlertThresholds } from '@amixos/shared/lib/jobAlerts';
 import { logAudit } from '@amixos/shared/lib/audit';
@@ -66,13 +66,6 @@ export default function TrabajosTab() {
   const { business, businesses, currentRole, activeLocationId } = useApp();
   const [rawJobs, setRawJobs] = useState<RawJob[]>([]);
   const [loading, setLoading] = useState(true);
-  // The on-focus refresh calls a load() captured on an old render (stale
-  // closure), where rawJobs was still []. Reading the list through this
-  // "latest" ref keeps the empty-list fast paint from re-running on every
-  // return from a detail — which would shrink the full list back to 30 rows
-  // and throw away the scroll position.
-  const rawJobsRef = useRef<RawJob[]>(rawJobs);
-  rawJobsRef.current = rawJobs;
 
   // Only the columns the list actually renders/searches — `*` was hauling
   // notes, custom fields, and every timestamp for hundreds of rows.
@@ -88,62 +81,69 @@ export default function TrabajosTab() {
 
   // Guards against a stale slow load overwriting a newer one (e.g. branch switch).
   const loadSeqRef = useRef(0);
-  const load = async () => {
-    if (!business) return;
-    const businessId = business.id;
+  // ── Server-side pagination (Phase 1) ──────────────────────────────────────
+  // JobsListScreen reports its search/tab/date filters via onFiltersChange; we
+  // fetch one page (newest-first, keyset), load more on scroll, and read counts
+  // from the DB. loadCached serves the last page + counts offline.
+  const COUNT_TABS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated', 'archived'];
+  const [serverCounts, setServerCounts] = useState<Record<string, number>>({});
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const cursorRef = useRef<JobsCursor | null>(null);
+  const paramsRef = useRef<JobsQueryParams | null>(null);
+
+  const runQuery = async (params: JobsQueryParams) => {
     const seq = ++loadSeqRef.current;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const baseQuery = (): any => {
-      let q = supabase.from('jobs').select(JOB_LIST_SELECT).eq('business_id', businessId);
-      if (activeLocationId) q = q.eq('location_id', activeLocationId);
-      return q;
-    };
-
-    // Fast first paint — the newest 30 in one small round-trip, so switching
-    // to Jobs feels instant; the full set replaces it right after.
-    if (rawJobsRef.current.length === 0) {
-      const { data: first } = await baseQuery().order('created_at', { ascending: false }).limit(30);
-      if (seq === loadSeqRef.current && first?.length) {
-        setRawJobs(first as RawJob[]);
-        setLoading(false);
-      }
-    }
-
-    // Cached so the list (and navigation into a job) works offline. fetchAll
-    // throws on error, so loadCached falls back to the last good list. The
-    // active branch is part of the cache key so each branch caches separately.
-    const res = await loadCached(`jobs_list_${businessId}_${activeLocationId ?? 'all'}`, () =>
-      fetchAllById<RawJob>((afterId, pageSize) => {
-        // Keyset by id (the list re-sorts client-side) so each page is a bounded
-        // index scan instead of an ever-growing OFFSET re-scan.
-        let q = baseQuery().order('id', { ascending: true }).limit(pageSize);
-        if (afterId) q = q.gt('id', afterId);
-        return q;
-      }, {
-        pageSize: 400,
-        // Render progressively — merge each page (deduped) into what's shown so
-        // the list grows as it streams instead of blanking, keeping the
-        // newest-first fast-paint rows visible throughout.
-        onPage: (loaded) => {
-          if (seq !== loadSeqRef.current) return;
-          setRawJobs(prev => {
-            const seen = new Set(prev.map(j => j.id));
-            const merged = prev.slice();
-            for (const j of loaded) if (!seen.has(j.id)) merged.push(j);
-            return merged;
-          });
-          setLoading(false);
-        },
-      }));
+    paramsRef.current = params;
+    setLoading(true);
+    cursorRef.current = null;
+    const cacheKey = `jobs_list_${params.businessId}_${params.locationId ?? 'all'}`;
+    const res = await loadCached<{ jobs: RawJob[]; nextCursor: JobsCursor | null; counts: Record<string, number> }>(cacheKey, async () => {
+      const [page, counts] = await Promise.all([
+        fetchJobsPage<RawJob>(supabase, JOB_LIST_SELECT, { ...params, pageSize: 50 }),
+        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search }, COUNT_TABS),
+      ]);
+      return { jobs: page.jobs, nextCursor: page.nextCursor, counts };
+    });
     if (seq !== loadSeqRef.current) return;
-    setRawJobs(res.data ?? []);
+    const d = res.data;
+    setRawJobs(d?.jobs ?? []);
+    // Offline (served from cache) → no further pages to page through.
+    cursorRef.current = res.fromCache ? null : (d?.nextCursor ?? null);
+    setHasMore(!res.fromCache && !!d?.nextCursor);
+    setServerCounts(d?.counts ?? {});
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [business, activeLocationId]);
+  const loadMore = async () => {
+    if (!cursorRef.current || loadingMore || !paramsRef.current) return;
+    const seq = loadSeqRef.current;
+    setLoadingMore(true);
+    try {
+      const page = await fetchJobsPage<RawJob>(supabase, JOB_LIST_SELECT, { ...paramsRef.current, cursor: cursorRef.current, pageSize: 50 });
+      if (seq !== loadSeqRef.current) return;
+      setRawJobs(prev => [...prev, ...page.jobs]);
+      cursorRef.current = page.nextCursor;
+      setHasMore(!!page.nextCursor);
+    } catch { /* offline / error — keep what's loaded */ }
+    finally { setLoadingMore(false); }
+  };
 
-  // Refresh when returning from create/edit so the new/updated job appears.
-  useFocusEffect(useCallback(() => { load(); }, [business?.id, activeLocationId]));
+  const reload = () => {
+    if (paramsRef.current) void runQuery({ ...paramsRef.current, locationId: activeLocationId ?? null });
+  };
+  // Re-query on branch change (location isn't part of the child's filters).
+  useEffect(() => {
+    if (paramsRef.current) void runQuery({ ...paramsRef.current, locationId: activeLocationId ?? null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLocationId]);
+  // Refresh the current query when returning from create/edit.
+  useFocusEffect(useCallback(() => { reload(); }, [activeLocationId]));
+
+  const handleFiltersChange = (f: { search: string; tabs: string[]; dateFrom: string | null; dateTo: string | null }) => {
+    if (!business) return;
+    void runQuery({ businessId: business.id, locationId: activeLocationId ?? null, tabs: f.tabs, search: f.search, dateFrom: f.dateFrom, dateTo: f.dateTo });
+  };
 
   const updateStatus = async (id: string, status: string) => {
     const update: any = { status };
@@ -259,7 +259,7 @@ export default function TrabajosTab() {
                           await supabase.from('jobs').delete().in('id', jobIds.slice(i, i + 50));
                         }
                         void logAudit(supabase, business.id, 'job.deleted', 'job', null, { count: jobIds.length, bulk: true });
-                        await load();
+                        reload();
                         resolve();
                       },
                     },
@@ -277,7 +277,7 @@ export default function TrabajosTab() {
                   .in('id', jobIds.slice(i, i + 50));
               }
               void logAudit(supabase, business.id, archive ? 'job.archived' : 'job.unarchived', 'job', null, { count: jobIds.length, bulk: true });
-              await load();
+              reload();
               resolve();
             };
             if (!archive) { void doIt(); return; }
@@ -297,6 +297,12 @@ export default function TrabajosTab() {
         canCreateEstimates={can.createEstimate(currentRole)}
         alertThresholds={alertThresholds}
         businessId={business?.id}
+        serverMode
+        serverCounts={serverCounts}
+        hasMore={hasMore}
+        loadingMore={loadingMore}
+        onLoadMore={loadMore}
+        onFiltersChange={handleFiltersChange}
       />
     </View>
   );

@@ -135,7 +135,7 @@ export default function TrabajosPage() {
     try {
       const [page, counts] = await Promise.all([
         fetchJobsPage<RawJob>(supabase, JOB_LIST_SELECT, { ...params, pageSize: 50 }),
-        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search }, [...TAB_KEYS]),
+        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search }, [...TAB_KEYS, 'archived']),
       ]);
       if (seq !== loadSeqRef.current) return;
       setRawJobs(page.jobs);
