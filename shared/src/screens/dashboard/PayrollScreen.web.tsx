@@ -803,7 +803,7 @@ export function PayrollScreen({
       {/* Payroll settings modal — frequency / anchor / pay components. */}
       {settingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => void closeSettings()}>
-          <div className="bg-card rounded-2xl w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-card rounded-2xl w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto overscroll-contain" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
               <p className="text-lg font-bold text-ink">{t.settingsTitle}</p>
               <button type="button" onClick={() => void closeSettings()} className="p-1.5 rounded-lg hover:bg-border-soft">
@@ -1140,7 +1140,7 @@ export function PayrollScreen({
           {/* Loans dialog — history, back-dated add, per-entry delete. */}
           {payRow && showLoans ? (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4" onClick={e => { e.stopPropagation(); setShowLoans(false); }}>
-              <div className="bg-card rounded-2xl w-full max-w-md p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="bg-card rounded-2xl w-full max-w-md p-6 max-h-[85vh] overflow-y-auto overscroll-contain" onClick={e => e.stopPropagation()}>
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <p className="text-lg font-bold text-ink">{t.loanHistoryTitle}</p>
@@ -1207,7 +1207,7 @@ export function PayrollScreen({
       {/* Worker hours breakdown */}
       {detailRow && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setDetailRow(null)}>
-          <div className="bg-card rounded-2xl w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-card rounded-2xl w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto overscroll-contain" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
               <div>
                 <p className="text-lg font-bold text-ink">{detailRow.name}</p>

@@ -325,10 +325,14 @@ export function computePayrollRows(opts: {
   for (const job of jobs) {
     if (!inRange(job.scheduled_date, period.startStr, period.endStr)) continue;
     const total = job.total_hours ?? 0;
-    if (total) job.assignmentEmployeeIds.forEach(id => add(workedById, id, total));
+    // Dedupe per job: a worker listed twice on the same job (e.g. a duplicate
+    // job_assignments row from an import) must be credited the hours ONCE —
+    // matching employeeBreakdownInRange, which uses .includes(). Without the
+    // Set, the payroll card double-counts hours and OVERPAYS vs. the breakdown.
+    if (total) new Set(job.assignmentEmployeeIds).forEach(id => add(workedById, id, total));
     const dh = job.driver_hours ?? 0;
     if (dh) {
-      (job.driver_employee_ids ?? []).forEach(id => {
+      new Set(job.driver_employee_ids ?? []).forEach(id => {
         add(drivenById, id, dh);
         add(jobsDrivenById, id, 1);
       });

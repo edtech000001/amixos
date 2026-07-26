@@ -42,7 +42,7 @@ interface PaymentRow {
 export default function NominaRoute() {
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, user, currentRole, activeLocationId } = useApp();
+  const { business, user, currentRole, activeLocationId, refetchBusiness } = useApp();
   const { t, locale } = useLang();
   const dateLocale = t.dashboard.dateLocale;
   const canManage = currentRole === 'owner' || currentRole === 'admin';
@@ -146,7 +146,10 @@ export default function NominaRoute() {
   }, [business, supabase, period.startStr, period.endStr]);
 
   useEffect(() => { void load(); }, [load]);
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
+  // Payroll settings are business-wide (stored on the businesses row). Pull the
+  // latest business on focus so this device shows what another one saved,
+  // instead of the copy it cached at login.
+  useFocusEffect(useCallback(() => { void refetchBusiness(); void load(); }, [load, refetchBusiness]));
 
   // Pay components — hydrated from the business, saved on change.
   // Formula builder palette — numeric/boolean custom fields only, so a text
@@ -176,7 +179,10 @@ export default function NominaRoute() {
   useEffect(() => { setConfig(normalizePayrollConfig(business?.payroll_config)); }, [business?.payroll_config]);
   const onConfigChange = async (c: PayrollConfig) => {
     setConfig(c);
-    if (business) await supabase.from('businesses').update({ payroll_config: c }).eq('id', business.id);
+    if (business) {
+      await supabase.from('businesses').update({ payroll_config: c }).eq('id', business.id);
+      await refetchBusiness();
+    }
   };
 
 
@@ -230,20 +236,29 @@ export default function NominaRoute() {
   const onFrequencyChange = async (f: PayrollFrequency) => {
     setFrequency(f);
     setOffset(0);
-    if (business) await supabase.from('businesses').update({ payroll_frequency: f }).eq('id', business.id);
+    if (business) {
+      await supabase.from('businesses').update({ payroll_frequency: f }).eq('id', business.id);
+      await refetchBusiness();
+    }
   };
 
   const onCustomDaysChange = async (days: number) => {
     setCustomDays(days);
     setOffset(0);
-    if (business) await supabase.from('businesses').update({ payroll_custom_days: days }).eq('id', business.id);
+    if (business) {
+      await supabase.from('businesses').update({ payroll_custom_days: days }).eq('id', business.id);
+      await refetchBusiness();
+    }
   };
 
   const onAnchorChange = async (date: string) => {
     const next = date || null;
     setAnchorDate(next);
     setOffset(0);
-    if (business) await supabase.from('businesses').update({ payroll_anchor_date: next }).eq('id', business.id);
+    if (business) {
+      await supabase.from('businesses').update({ payroll_anchor_date: next }).eq('id', business.id);
+      await refetchBusiness();
+    }
   };
 
   // Each confirm ADDS a payment record (ledger) — partial checks stack up

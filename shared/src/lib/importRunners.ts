@@ -5,7 +5,7 @@
 // identically. (The clients importer predates this and has its own pair of
 // implementations.)
 
-import { fetchAll } from './supabaseFetch';
+import { fetchAll, fetchAllById } from './supabaseFetch';
 import { batchInsert, chunkedInsert, type BatchInsertItem } from './importBatch';
 import { employeeBreakdownInRange, getPayrollPeriod, normalizeFrequency, parsePayrollAnchor, type PayrollJob, type PayrollTimesheet } from './payroll';
 import { fieldRefId, normalizeFormula } from './payrollFormula';
@@ -495,6 +495,25 @@ function parseItemType(raw: string): 'labor' | 'material' | 'equipment' | 'other
   return 'other';
 }
 
+/** Dedupe crew rows so one worker is never assigned to a job twice — even when
+ *  listed under two name spellings that resolve to the same employee (e.g. lead
+ *  = "Noel Ramirez" and crew = "Noel R."). Keeps the FIRST occurrence, so the
+ *  lead (always first) is preserved. Rows with neither an id nor a name pass
+ *  through untouched. This is what stops a re-import / double-listing from
+ *  creating the duplicate job_assignments that double-counted payroll hours. */
+function dedupeAssigns<T extends { employee_id?: string | null; worker_name?: string | null }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const r of rows) {
+    const key = r.employee_id ? `id:${r.employee_id}` : (r.worker_name ? `name:${normalizeName(r.worker_name)}` : '');
+    if (!key) { out.push(r); continue; }
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return out;
+}
+
 export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
   const tr = trOf(ctx);
   const get = getOf(ctx);
@@ -654,7 +673,7 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
       const driversUp = splitNames(get(row, 'driver'));
       if (driversUp.length) {
         up.driver_names = driversUp;
-        up.driver_employee_ids = driversUp.map(n => matchEmployeeId(n, employees)).filter(Boolean) as string[];
+        up.driver_employee_ids = Array.from(new Set(driversUp.map(n => matchEmployeeId(n, employees)).filter(Boolean) as string[]));
       }
       // Pending photo names re-seed the photo step; uploads dedupe by name.
       const photoNamesUp = Array.from(new Set(
@@ -684,7 +703,7 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
           seenUp.add(n2);
           assignsUp.push({ job_id: existing.id, employee_id: matchEmployeeId(name, employees), worker_name: name, is_lead: i === 0 && !!leadUp });
         });
-        if (assignsUp.length) await ctx.supabase.from('job_assignments').insert(assignsUp);
+        if (assignsUp.length) await ctx.supabase.from('job_assignments').insert(dedupeAssigns(assignsUp));
       }
       updated++;
       continue;
@@ -808,7 +827,7 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
       total_amount: parseNum(get(row, 'total_amount')) ?? (items.length ? itemsSubtotal : 0),
       crew_names: allCrew,
       driver_names: driverNames,
-      driver_employee_ids: driverNames.map(n => matchEmployeeId(n, employees)).filter(Boolean) as string[],
+      driver_employee_ids: Array.from(new Set(driverNames.map(n => matchEmployeeId(n, employees)).filter(Boolean) as string[])),
       // Only ACTIVE imported work goes to crews — historical completed/
       // invoiced imports (the bulk of a migration) would flood every field
       // worker's list. Proposals aren't crew-facing either.
@@ -845,7 +864,7 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
     // Queue-time in-file dedup: a later row with the same Project ID now routes
     // to the UPDATE path (existing undefined → skipped), matching the old code.
     if (ref) existingRefs.add(ref);
-    newItems.push({ meta: { label, rowIndex: idx, assigns, items: [...items] }, entry });
+    newItems.push({ meta: { label, rowIndex: idx, assigns: dedupeAssigns(assigns), items: [...items] }, entry });
   }
 
   // Batch-insert the new jobs, then attach their crew + line items by new id.
@@ -1268,21 +1287,31 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
   // the same file stays idempotent.
   const checkKey = (emp: string | null, period: string | null, check: string | null, gross: unknown) =>
     `${emp}|${(period ?? '').slice(0, 10)}|${(check ?? '').trim()}|${Number(gross ?? 0).toFixed(2)}`;
-  const existing = await fetchAll<{ employee_id: string | null; period_start: string | null; check_number: string | null; gross_pay: number | null }>((from, to) =>
-    ctx.supabase.from('payroll_payments').select('employee_id, period_start, check_number, gross_pay').eq('business_id', ctx.businessId).range(from, to));
+  // Keyset (id-cursor) pagination on every "load all" read — OFFSET .range()
+  // re-scans all prior rows per page under RLS and times out once the business
+  // has thousands of jobs/timesheets (see the jobs-list fix). id is added to the
+  // selects purely to drive the cursor.
+  const existing = await fetchAllById<{ id: string; employee_id: string | null; period_start: string | null; check_number: string | null; gross_pay: number | null }>((afterId, pageSize) => {
+    let q = ctx.supabase.from('payroll_payments').select('id, employee_id, period_start, check_number, gross_pay').eq('business_id', ctx.businessId).order('id', { ascending: true }).limit(pageSize);
+    if (afterId) q = q.gt('id', afterId);
+    return q;
+  });
   const existingKeys = new Set(existing.map(e => checkKey(e.employee_id, e.period_start, e.check_number, e.gross_pay)));
   const autoCreatedWorkers: string[] = [];
 
   // Jobs + timesheets fetched ONCE — each imported payment gets a frozen
   // hours-breakdown snapshot for its period (mirrors live mark-paid, 136).
-  const allJobs: PayrollJob[] = (await fetchAll<{
+  const allJobs: PayrollJob[] = (await fetchAllById<{
     id: string; title: string | null; scheduled_date: string | null; total_hours: number | null;
     driver_employee_ids: string[] | null; driver_hours: number | null;
     job_assignments: { employee_id: string | null }[];
-  }>((from, to) =>
-    ctx.supabase.from('jobs')
+  }>((afterId, pageSize) => {
+    let q = ctx.supabase.from('jobs')
       .select('id, title, scheduled_date, total_hours, driver_employee_ids, driver_hours, job_assignments(employee_id)')
-      .eq('business_id', ctx.businessId).not('scheduled_date', 'is', null).range(from, to)))
+      .eq('business_id', ctx.businessId).not('scheduled_date', 'is', null).order('id', { ascending: true }).limit(pageSize);
+    if (afterId) q = q.gt('id', afterId);
+    return q;
+  }))
     .map(j => ({
       id: j.id,
       title: j.title,
@@ -1292,8 +1321,11 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
       driver_hours: j.driver_hours,
       assignmentEmployeeIds: (j.job_assignments ?? []).map(a => a.employee_id).filter((x): x is string => !!x),
     }));
-  const allTimesheets: PayrollTimesheet[] = await fetchAll<{ employee_id: string | null; hours_worked: number | null; work_date: string | null }>((from, to) =>
-    ctx.supabase.from('timesheets').select('employee_id, hours_worked, work_date').eq('business_id', ctx.businessId).range(from, to));
+  const allTimesheets: PayrollTimesheet[] = await fetchAllById<{ id: string; employee_id: string | null; hours_worked: number | null; work_date: string | null }>((afterId, pageSize) => {
+    let q = ctx.supabase.from('timesheets').select('id, employee_id, hours_worked, work_date').eq('business_id', ctx.businessId).order('id', { ascending: true }).limit(pageSize);
+    if (afterId) q = q.gt('id', afterId);
+    return q;
+  });
 
   // Pass A — validate + build payment entries. Missing-worker auto-create stays
   // sequential here (it must resolve an id before the payment is built, and is
