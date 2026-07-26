@@ -12,6 +12,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useLang } from '@/i18n/LangProvider';
 import { createSupabaseClient } from '@/lib/supabase';
+import { RecentImports } from './RecentImports';
 import { logImportRun } from '@amixos/shared/lib/importRunners';
 import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
@@ -351,6 +352,7 @@ export default function ImportClientsModal({ open, businessId, templates, locati
                   <Download size={14}/> {t.importModal.templateBtn}
                 </button>
               </div>
+              <RecentImports businessId={businessId} locale={locale} />
             </>
           )}
 

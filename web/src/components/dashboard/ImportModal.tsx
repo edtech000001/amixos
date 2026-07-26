@@ -447,7 +447,7 @@ export default function ImportModal({
 
               {result.notes.length > 0 && (
                 <div className="w-full bg-blue-500/10 border border-blue-100 rounded-xl px-4 py-3 text-left space-y-1">
-                  {result.notes.map((n, i) => <p key={i} className="text-xs text-blue-800">{n}</p>)}
+                  {result.notes.map((n, i) => <p key={i} className="text-xs text-ink">{n}</p>)}
                 </div>
               )}
 

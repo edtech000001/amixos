@@ -14,6 +14,7 @@ import { ImagePlus, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
+import { RecentImports } from './RecentImports';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { resizeImage } from '@/components/jobs/JobPhotosSection';
@@ -45,7 +46,7 @@ interface Picked {
 export function ImportPhotosModal({ open, businessId, onClose }: Props) {
   const supabase = createSupabaseClient();
   const { user } = useApp();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.dashboard.settings.importHub.photos;
 
   const [pendingJobs, setPendingJobs] = useState<PendingPhotoJob[]>([]);
@@ -260,6 +261,7 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
                 <span className="text-sm font-semibold">{t.chooseBtn}</span>
                 <span className="text-xs">{t.dropHint}</span>
               </button>
+              <RecentImports businessId={businessId} locale={locale} />
             </>
           )
         ) : null}

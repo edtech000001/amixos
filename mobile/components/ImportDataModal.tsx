@@ -610,7 +610,7 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
           {result.notes.length > 0 ? (
             <View className="w-full bg-blue-500/10 border border-blue-100 rounded-xl px-4 py-3">
               {result.notes.map((n, i) => (
-                <Text key={i} className="text-xs text-blue-800">{n}</Text>
+                <Text key={i} className="text-xs text-ink">{n}</Text>
               ))}
             </View>
           ) : null}

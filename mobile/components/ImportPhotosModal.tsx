@@ -8,6 +8,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
+import { RecentImports } from './RecentImports';
 import {
   JOB_PHOTOS_BUCKET,
   MAX_PHOTOS_PER_JOB,
@@ -42,7 +43,7 @@ interface Picked {
 export function ImportPhotosModal({ open, businessId, onClose }: Props) {
   const supabase = createSupabaseClient();
   const { user } = useApp();
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const c = useThemeColors();
   const t = full.dashboard.settings.importHub.photos;
 
@@ -264,6 +265,9 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
                     <ImagePlus size={28} color={c.faint} />
                     <Text className="text-sm font-semibold text-primary">{t.chooseBtn}</Text>
                   </Pressable>
+                  <View className="mt-3">
+                    <RecentImports businessId={businessId} locale={locale} />
+                  </View>
                 </>
               )
             ) : null}

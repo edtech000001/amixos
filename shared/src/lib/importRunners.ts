@@ -151,6 +151,9 @@ export const INVOICE_IMPORT_FIELDS: ImportFieldDef[] = [
   { key: 'customer_phone',   es: 'Teléfono (solo clientes nuevos)', en: 'Phone (new clients only)' },
   { key: 'customer_email',   es: 'Email (solo clientes nuevos)', en: 'Email (new clients only)' },
   { key: 'issue_date',       es: 'Fecha de creación', en: 'Date created' },
+  { key: 'sent_date',        es: 'Fecha de envío', en: 'Sent date',
+    hintEs: 'Cuándo se envió la factura. Vacío = usa la fecha de creación.',
+    hintEn: 'When the invoice was sent. Blank = uses the date created.' },
   { key: 'due_date',         es: 'Fecha de vencimiento', en: 'Due date' },
   { key: 'status',           es: 'Estado (borrador/enviada/pagada)', en: 'Status (draft/sent/paid)',
     hintEs: 'Valores: borrador, enviada, pagada. Vacío u otro valor = enviada (no pagada).',
@@ -1070,15 +1073,17 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
       email_office: get(row, 'customer_email') || null,
     });
 
-  const statusOf = (raw: string): { status: string; sent_at: string | null; paid_at: string | null } => {
+  // Returns the status + whether the invoice is sent/paid. The actual sent_at /
+  // paid_at TIMESTAMPS are resolved by the caller from the row's dates, so a
+  // historical import doesn't stamp every invoice as sent/paid "today".
+  const statusOf = (raw: string): { status: string; sent: boolean; paid: boolean } => {
     const s = normalizeName(raw);
-    const now = new Date().toISOString();
-    if (s.includes('pag') || s.includes('paid')) return { status: 'paid', sent_at: now, paid_at: now };
+    if (s.includes('pag') || s.includes('paid')) return { status: 'paid', sent: true, paid: true };
     // Explicit draft is the only path to draft; everything else (incl. blank)
     // becomes 'sent' — these were issued invoices, and it keeps them
     // rebuild-safe (rebuild only touches drafts, whose jobs have no items).
-    if (s === 'draft' || s.includes('borrador')) return { status: 'draft', sent_at: null, paid_at: null };
-    return { status: 'sent', sent_at: now, paid_at: null };
+    if (s === 'draft' || s.includes('borrador')) return { status: 'draft', sent: false, paid: false };
+    return { status: 'sent', sent: true, paid: false };
   };
 
   // Spreadsheet exports usually carry the invoice number only on the FIRST
@@ -1137,20 +1142,25 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
     const taxRate = parseNum(get(first.row, 'tax_rate').replace('%', '')) ?? 0;
     const { subtotal, tax, total } = computeTotals(lineItems, taxRate, 0);
     const st = statusOf(get(first.row, 'status'));
-    // Payment record: a real payment date beats the "now" stamp statusOf
-    // fabricates, and its presence implies the invoice was paid even when
+    // Payment record: a real payment date implies the invoice was paid even when
     // the status cell is blank.
     const paidTs = parseTimestamp(get(first.row, 'paid_date'));
-    if (paidTs) {
-      st.status = 'paid';
-      st.paid_at = paidTs;
-      st.sent_at = st.sent_at ?? paidTs;
-    }
+    const isPaid = st.paid || !!paidTs;
+    const isSent = st.sent || isPaid;
+    const invStatus = isPaid ? 'paid' : st.status;
     const paymentMethod = get(first.row, 'payment_method');
     // Source-system record timestamps — only set when provided (blank keeps
     // the now() defaults; the updated_at trigger only fires on UPDATE).
     const invCreatedTs = parseTimestamp(get(first.row, 'created_at'));
     const invUpdatedTs = parseTimestamp(get(first.row, 'updated_at'));
+    // Resolve the sent/paid dates. Historical invoices should carry the DATE
+    // THEY WERE ISSUED, not today — so sent_at falls back through: explicit
+    // "Sent date" column → issue date → created timestamp → now (last resort).
+    const issueDate = parseDate(get(first.row, 'issue_date'));
+    const sentDate = parseTimestamp(get(first.row, 'sent_date')) ?? parseDate(get(first.row, 'sent_date'));
+    const nowTs = new Date().toISOString();
+    const sentAt = isSent ? (sentDate ?? issueDate ?? invCreatedTs ?? nowTs) : null;
+    const paidAt = isPaid ? (paidTs ?? sentAt ?? nowTs) : null;
 
     newItems.push({ meta: { label, rowIndex: first.idx, clientId, jobIds: Array.from(linkedJobIds) }, entry: {
       business_id: ctx.businessId,
@@ -1158,12 +1168,12 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
       invoice_number: num,
       external_ref: num,
       type: 'invoice',
-      status: st.status,
+      status: invStatus,
       language: lang,
-      issue_date: parseDate(get(first.row, 'issue_date')),
+      issue_date: issueDate,
       due_date: parseDate(get(first.row, 'due_date')),
-      sent_at: st.sent_at,
-      paid_at: st.paid_at,
+      sent_at: sentAt,
+      paid_at: paidAt,
       payment_method: paymentMethod || null,
       line_items: lineItems,
       subtotal_amount: subtotal,
@@ -1623,7 +1633,7 @@ function exampleRowFor(mode: ImportMode, en: boolean, templates: ImportTemplateF
   if (mode === 'inventory') {
     return [en ? 'Galvanized wire' : 'Alambre galvanizado', 'ALM-12', '250', en ? 'feet' : 'pies', '0.85', en ? 'Materials' : 'Materiales', '50'];
   }
-  return ['257556', 'Proyecto-001', en ? 'Tower work' : 'Trabajo de torre', '1', '2159.50', en ? 'Customer Name' : 'Nombre del cliente', '', 'Portis', 'Kansas', 'KS', '67474', '785-346-4400', 'cliente@email.com', '6/8/2026', '6/22/2026', en ? 'paid' : 'pagada', '7.5', en ? 'Thanks for your business' : 'Gracias por su preferencia', en ? 'Check #1024' : 'Cheque #1024', '6/25/2026', '6/8/2026 10:15', '6/25/2026 3:30 PM'];
+  return ['257556', 'Proyecto-001', en ? 'Tower work' : 'Trabajo de torre', '1', '2159.50', en ? 'Customer Name' : 'Nombre del cliente', '', 'Portis', 'Kansas', 'KS', '67474', '785-346-4400', 'cliente@email.com', '6/8/2026', '6/10/2026', '6/22/2026', en ? 'paid' : 'pagada', '7.5', en ? 'Thanks for your business' : 'Gracias por su preferencia', en ? 'Check #1024' : 'Cheque #1024', '6/25/2026', '6/8/2026 10:15', '6/25/2026 3:30 PM'];
 }
 
 /** Extra example rows (beyond exampleRowFor's first). Invoices show TWO
@@ -1635,7 +1645,7 @@ function extraExampleRowsFor(mode: ImportMode, en: boolean): string[][] {
   const blank = Array(17).fill('') as string[];
   return [
     ['', 'Proyecto-002', en ? 'Pivot teardown' : 'Desarmar pivote', '1', '850', ...blank],
-    ['257557', 'Proyecto-003', en ? 'Tower repair' : 'Reparar torre', '2', '400', en ? 'Mary Jones' : 'María García', en ? 'ABC Irrigation' : 'Riegos ABC', '', '', '', '', '', '', '6/15/2026', '6/29/2026', en ? 'sent' : 'enviada', '0', '', '', '', '', ''],
+    ['257557', 'Proyecto-003', en ? 'Tower repair' : 'Reparar torre', '2', '400', en ? 'Mary Jones' : 'María García', en ? 'ABC Irrigation' : 'Riegos ABC', '', '', '', '', '', '', '6/15/2026', '6/16/2026', '6/29/2026', en ? 'sent' : 'enviada', '0', '', '', '', '', ''],
     ['', 'Proyecto-004', en ? 'Hang tower' : 'Colgar torre', '1', '300', ...blank],
   ];
 }

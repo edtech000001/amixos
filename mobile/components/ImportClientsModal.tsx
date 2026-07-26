@@ -16,6 +16,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { createSupabaseClient } from '@/lib/supabase';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import { RecentImports } from './RecentImports';
 
 export interface ImportClientsModalProps {
   open: boolean;
@@ -625,6 +626,8 @@ export function ImportClientsModal({
               <Text className="text-red-600 text-sm flex-1">{error}</Text>
             </View>
           ) : null}
+
+          <RecentImports businessId={businessId} locale={locale} />
         </View>
       ) : null}
 
