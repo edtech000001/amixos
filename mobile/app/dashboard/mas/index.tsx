@@ -52,6 +52,9 @@ export default function MasMenu() {
       description: entry?.description ?? '',
       icon: m.icon,
       path: `/dashboard/mas/modulos/${m.id}`,
+      // Equipment is role-gated (its own permission); field/viewer-without-view
+      // don't see the card. Other modules stay visible to any member.
+      show: m.id === 'equipment' ? can.viewEquipment(currentRole) : true,
     };
   });
 

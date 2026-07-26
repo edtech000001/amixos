@@ -151,7 +151,7 @@ export default function EquipmentModule() {
   // Equipment maps to the inventory permission per the role matrix. Read-only
   // roles keep view access; add/edit/delete + photo management are gated off
   // (RLS blocks the writes server-side either way).
-  const canEdit = can.editInventory(currentRole);
+  const canEdit = can.editEquipment(currentRole);
   const multiLocation = (locations?.length ?? 0) > 1;
   const { t: full, locale } = useLang();
   const t = full.dashboard.modules.equipment;

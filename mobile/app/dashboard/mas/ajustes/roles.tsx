@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { ChevronLeft, Check, RotateCcw, Lock } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 import { useLang } from '@/lib/i18n/LangProvider';
 import {
   DEFAULT_ROLE_PERMISSIONS,
@@ -49,6 +50,14 @@ export default function RolesScreen() {
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { business, currentRole, roleOverrides, reloadPermissions, locations } = useApp();
+  // Equipment is a module-gated resource — only show its toggle when the
+  // equipment module is active for this business.
+  const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
+  const equipmentActive = enabledModules.some(m => m.id === 'equipment');
+  const resourceKeys = useMemo(
+    () => RESOURCE_KEYS.filter(r => r !== 'equipment' || equipmentActive),
+    [equipmentActive],
+  );
   const multiLocation = (locations?.length ?? 0) > 1;
   const { t: full, locale } = useLang();
   const t = full.dashboard.roles;
@@ -178,7 +187,7 @@ export default function RolesScreen() {
 
           {/* Data access */}
           <Text className="text-xs font-semibold text-faint uppercase mt-6 mb-1">{t.sectionData}</Text>
-          {RESOURCE_KEYS.map(r => {
+          {resourceKeys.map(r => {
             const meta = RESOURCE_ACTIONS[r];
             const rp = draft.resources[r];
             return (

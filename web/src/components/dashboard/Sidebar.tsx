@@ -69,7 +69,11 @@ export function Sidebar() {
   // after the core nav. Coming-soon modules are filtered out even if
   // pre-enabled in the DB — they have nothing real to navigate to.
   const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
-  const liveModules = enabledModules.filter(m => m.status === 'available');
+  // Equipment is role-gated (its own permission); other modules stay visible to
+  // any member where enabled.
+  const liveModules = enabledModules.filter(
+    m => m.status === 'available' && (m.id !== 'equipment' || can.viewEquipment(currentRole)),
+  );
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname.startsWith(href);

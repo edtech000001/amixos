@@ -58,6 +58,63 @@ begin
 end;
 $$;
 
+-- ─── default_role_permissions() — add the 'equipment' resource ────────────────
+-- Extends the 152 version with an 'equipment' key mirroring inventory per role
+-- (field/none). Must stay synced with DEFAULT_ROLE_PERMISSIONS in permissions.ts.
+create or replace function public.default_role_permissions(role text)
+returns jsonb language sql immutable as $$
+  select case role
+    when 'owner' then
+      '{"resources":{"clients":{"view":"all","create":true,"edit":true,"delete":true},"jobs":{"view":"all","create":true,"edit":true,"delete":true},"invoices":{"view":"all","create":true,"edit":true,"delete":true},"employees":{"view":"all","create":true,"edit":true,"delete":true},"calendar":{"view":"all","create":true,"edit":true,"delete":true},"inventory":{"view":"all","create":true,"edit":true,"delete":true},"equipment":{"view":"all","create":true,"edit":true,"delete":true},"reports":{"view":"all","create":false,"edit":false,"delete":false}}}'::jsonb
+    when 'admin' then
+      '{"resources":{"clients":{"view":"all","create":true,"edit":true,"delete":true},"jobs":{"view":"all","create":true,"edit":true,"delete":true},"invoices":{"view":"all","create":true,"edit":true,"delete":true},"employees":{"view":"all","create":true,"edit":true,"delete":true},"calendar":{"view":"all","create":true,"edit":true,"delete":true},"inventory":{"view":"all","create":true,"edit":true,"delete":true},"equipment":{"view":"all","create":true,"edit":true,"delete":true},"reports":{"view":"all","create":false,"edit":false,"delete":false}}}'::jsonb
+    when 'manager' then
+      '{"resources":{"clients":{"view":"all","create":true,"edit":true,"delete":false},"jobs":{"view":"all","create":true,"edit":true,"delete":false},"invoices":{"view":"all","create":true,"edit":true,"delete":false},"employees":{"view":"all","create":true,"edit":true,"delete":false},"calendar":{"view":"all","create":true,"edit":true,"delete":true},"inventory":{"view":"all","create":true,"edit":true,"delete":true},"equipment":{"view":"all","create":true,"edit":true,"delete":true},"reports":{"view":"all","create":false,"edit":false,"delete":false}}}'::jsonb
+    when 'office' then
+      '{"resources":{"clients":{"view":"all","create":true,"edit":true,"delete":false},"jobs":{"view":"all","create":true,"edit":true,"delete":false},"invoices":{"view":"all","create":true,"edit":true,"delete":false},"employees":{"view":"none","create":false,"edit":false,"delete":false},"calendar":{"view":"all","create":true,"edit":true,"delete":true},"inventory":{"view":"all","create":true,"edit":true,"delete":true},"equipment":{"view":"all","create":true,"edit":true,"delete":true},"reports":{"view":"none","create":false,"edit":false,"delete":false}}}'::jsonb
+    when 'field' then
+      '{"resources":{"clients":{"view":"assigned","create":false,"edit":false,"delete":false},"jobs":{"view":"assigned","create":true,"edit":true,"delete":false},"invoices":{"view":"none","create":false,"edit":false,"delete":false},"employees":{"view":"none","create":false,"edit":false,"delete":false},"calendar":{"view":"none","create":false,"edit":false,"delete":false},"inventory":{"view":"none","create":false,"edit":false,"delete":false},"equipment":{"view":"none","create":false,"edit":false,"delete":false},"reports":{"view":"none","create":false,"edit":false,"delete":false}}}'::jsonb
+    when 'viewer' then
+      '{"resources":{"clients":{"view":"all","create":false,"edit":false,"delete":false},"jobs":{"view":"all","create":false,"edit":false,"delete":false},"invoices":{"view":"all","create":false,"edit":false,"delete":false},"employees":{"view":"all","create":false,"edit":false,"delete":false},"calendar":{"view":"all","create":false,"edit":false,"delete":false},"inventory":{"view":"all","create":false,"edit":false,"delete":false},"equipment":{"view":"all","create":false,"edit":false,"delete":false},"reports":{"view":"all","create":false,"edit":false,"delete":false}}}'::jsonb
+    else
+      '{"resources":{"clients":{"view":"none","create":false,"edit":false,"delete":false},"jobs":{"view":"none","create":false,"edit":false,"delete":false},"invoices":{"view":"none","create":false,"edit":false,"delete":false},"employees":{"view":"none","create":false,"edit":false,"delete":false},"calendar":{"view":"none","create":false,"edit":false,"delete":false},"inventory":{"view":"none","create":false,"edit":false,"delete":false},"equipment":{"view":"none","create":false,"edit":false,"delete":false},"reports":{"view":"none","create":false,"edit":false,"delete":false}}}'::jsonb
+  end;
+$$;
+
+-- Re-point member_res / member_view to fall back to the built-in default when a
+-- customized role's stored snapshot lacks the requested key — otherwise a role
+-- customized BEFORE 'equipment' existed would resolve every equipment action to
+-- false (blocking owner-intended access). Fixes forward-compat for any new key.
+create or replace function public.member_res(b_id uuid, res text, act text)
+returns boolean language plpgsql security definer stable as $$
+declare r text; p jsonb; v text;
+begin
+  r := public.member_role(b_id);
+  if r is null then return false; end if;
+  if r = 'owner' then return true; end if;
+  select permissions into p from public.business_roles where business_id = b_id and key = r;
+  if p is null then p := public.default_role_permissions(r); end if;
+  v := p #>> array['resources', res, act];
+  if v is null then v := public.default_role_permissions(r) #>> array['resources', res, act]; end if;
+  return coalesce(v::boolean, false);
+end;
+$$;
+
+create or replace function public.member_view(b_id uuid, res text)
+returns text language plpgsql security definer stable as $$
+declare r text; p jsonb; v text;
+begin
+  r := public.member_role(b_id);
+  if r is null then return 'none'; end if;
+  if r = 'owner' then return 'all'; end if;
+  select permissions into p from public.business_roles where business_id = b_id and key = r;
+  if p is null then p := public.default_role_permissions(r); end if;
+  v := p #>> array['resources', res, 'view'];
+  if v is null then v := public.default_role_permissions(r) #>> array['resources', res, 'view']; end if;
+  return coalesce(v, 'none');
+end;
+$$;
+
 -- ─── client_contacts → follows clients.edit ──────────────────────────────────
 drop policy if exists "office+ write client_contacts" on public.client_contacts;
 drop policy if exists "office+ update client_contacts" on public.client_contacts;
@@ -100,27 +157,40 @@ create policy "invoice_payments insert" on public.invoice_payments for insert
 create policy "invoice_payments delete" on public.invoice_payments for delete
   using (public.member_res(business_id, 'invoices', 'edit'));
 
--- ─── equipment (+ photos) → follows inventory.{create,edit,delete} ────────────
--- NOTE: manager/office gain equipment DELETE, exactly as 152 did for inventory.
+-- ─── equipment (+ photos) → its OWN 'equipment' resource ─────────────────────
+-- Equipment is a distinct role-editor toggle (shown only when the equipment
+-- module is active). Default equipment perms mirror inventory, so un-customized
+-- roles are unchanged vs. the prior office+ policy EXCEPT manager/office gain
+-- delete (as 152 did for inventory). Keys on the 'equipment' resource so the
+-- role editor's Equipment toggle is enforced.
+-- Read now follows equipment.view (was any-member) so field (view=none) can't
+-- see equipment; matches how 152 gated inventory read.
+drop policy if exists "members read equipment" on public.equipment;
+create policy "equipment read" on public.equipment for select
+  using (public.member_view(business_id, 'equipment') <> 'none');
+drop policy if exists "members read equipment photos" on public.equipment_photos;
+create policy "equipment_photos read" on public.equipment_photos for select
+  using (public.member_view(business_id, 'equipment') <> 'none');
+
 drop policy if exists "writers insert equipment" on public.equipment;
 drop policy if exists "writers update equipment" on public.equipment;
 drop policy if exists "admins delete equipment" on public.equipment;
 create policy "equipment insert" on public.equipment for insert
-  with check (public.member_res(business_id, 'inventory', 'create'));
+  with check (public.member_res(business_id, 'equipment', 'create'));
 create policy "equipment update" on public.equipment for update
-  using (public.member_res(business_id, 'inventory', 'edit'));
+  using (public.member_res(business_id, 'equipment', 'edit'));
 create policy "equipment delete" on public.equipment for delete
-  using (public.member_res(business_id, 'inventory', 'delete'));
+  using (public.member_res(business_id, 'equipment', 'delete'));
 
 drop policy if exists "writers insert equipment photos" on public.equipment_photos;
 drop policy if exists "writers update equipment photos" on public.equipment_photos;
 drop policy if exists "writers delete equipment photos" on public.equipment_photos;
 create policy "equipment_photos insert" on public.equipment_photos for insert
-  with check (public.member_res(business_id, 'inventory', 'edit'));
+  with check (public.member_res(business_id, 'equipment', 'edit'));
 create policy "equipment_photos update" on public.equipment_photos for update
-  using (public.member_res(business_id, 'inventory', 'edit'));
+  using (public.member_res(business_id, 'equipment', 'edit'));
 create policy "equipment_photos delete" on public.equipment_photos for delete
-  using (public.member_res(business_id, 'inventory', 'edit'));
+  using (public.member_res(business_id, 'equipment', 'edit'));
 
 -- ─── job_assignments → follows the assignWorkers cap (scoped through job) ─────
 -- Default assignWorkers = owner/admin/manager, so un-customized behavior equals

@@ -13,6 +13,7 @@ import { Check, RotateCcw, Lock } from 'lucide-react';
 import { SettingsNav } from '@/components/dashboard/SettingsNav';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 import { useLang } from '@/i18n/LangProvider';
 import {
   DEFAULT_ROLE_PERMISSIONS,
@@ -43,6 +44,11 @@ export default function RolesSettingsPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { business, currentRole, roleOverrides, reloadPermissions, loading: appLoading, locations } = useApp();
+  // Equipment is a module-gated resource — only show its toggle when the
+  // equipment module is active for this business.
+  const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
+  const equipmentActive = enabledModules.some(m => m.id === 'equipment');
+  const resourceKeys = RESOURCE_KEYS.filter(r => r !== 'equipment' || equipmentActive);
   const multiLocation = (locations?.length ?? 0) > 1;
   const { t: full, locale } = useLang();
   const t = full.dashboard.roles;
@@ -163,7 +169,7 @@ export default function RolesSettingsPage() {
                 </tr>
               </thead>
               <tbody>
-                {RESOURCE_KEYS.map(r => {
+                {resourceKeys.map(r => {
                   const meta = RESOURCE_ACTIONS[r];
                   const rp = draft.resources[r];
                   return (
