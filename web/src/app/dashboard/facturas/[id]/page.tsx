@@ -645,14 +645,31 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
 
   // Generate (once) + persist the public share token, freezing the resolved
   // template config onto the invoice so restyling the default later never
-  // changes an already-shared invoice. Returns the token.
+  // changes an already-SENT invoice.
+  //
+  // While the invoice is still a DRAFT, (re)capture the CURRENT design every
+  // time it's printed/shared/sent — a draft hasn't been delivered, so a stale
+  // earlier snapshot (old theme, no logo-invert) must not stick: the emailed
+  // PDF has to match what the owner sees now. Once sent, the snapshot is frozen
+  // for good so a later restyle can't change a delivered invoice.
   const ensureShareToken = async (): Promise<string> => {
-    if (shareToken) return shareToken;
+    const isDraft = invoice?.status === 'draft';
+    const freezeConfig = isDraft
+      ? resolveConfig(null, business?.invoice_template ?? null) // current live design
+      : (invoiceConfigRaw ?? templateConfig);
+    if (shareToken) {
+      if (isDraft) {
+        await supabase.from('invoices').update({ template_config: freezeConfig }).eq('id', id);
+        setInvoiceConfigRaw(freezeConfig as Record<string, unknown>);
+      }
+      return shareToken;
+    }
     const token = genToken();
     await supabase
       .from('invoices')
-      .update({ share_token: token, template_config: invoiceConfigRaw ?? templateConfig })
+      .update({ share_token: token, template_config: freezeConfig })
       .eq('id', id);
+    setInvoiceConfigRaw(freezeConfig as Record<string, unknown>);
     setShareToken(token);
     return token;
   };
