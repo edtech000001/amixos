@@ -643,8 +643,17 @@ export function resolveConfig(
   invoiceConfig: unknown,
   businessConfig: unknown,
 ): InvoiceTemplateConfig {
-  if (invoiceConfig && typeof invoiceConfig === 'object') return normalizeConfig(invoiceConfig);
-  if (businessConfig && typeof businessConfig === 'object') return normalizeConfig(businessConfig);
+  const biz = businessConfig && typeof businessConfig === 'object' ? normalizeConfig(businessConfig) : null;
+  if (invoiceConfig && typeof invoiceConfig === 'object') {
+    const snap = normalizeConfig(invoiceConfig);
+    // Sharing an invoice freezes its snapshot so restyling the default THEME
+    // later never changes an already-sent invoice. But the TEXT blocks (payment
+    // instructions / footer) are business-wide CONTENT the owner edits centrally
+    // — those should always reflect the current business template, not the value
+    // frozen at share time. So keep the frozen theme, overlay the live text.
+    return biz ? { ...snap, text: biz.text } : snap;
+  }
+  if (biz) return biz;
   return clone(DEFAULT_INVOICE_TEMPLATE);
 }
 
