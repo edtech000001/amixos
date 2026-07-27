@@ -240,9 +240,11 @@ export default function FacturaDetailRoute() {
   }, [invClientId]); // eslint-disable-line react-hooks/exhaustive-deps
   const runAutoprice = async () => {
     if (!priceItems.length) return;
-    const { matched, alreadyPriced } = await autopriceInvoice(supabase, { invoiceId: id, items: priceItems, tierId: clientTierId, qtyField: business?.invoice_qty_field });
+    const { matched, alreadyPriced, unmatched } = await autopriceInvoice(supabase, { invoiceId: id, items: priceItems, tierId: clientTierId, qtyField: business?.invoice_qty_field });
     if (matched) { setShowInvVerify(true); await reloadInvoice(); }
-    else Alert.alert('', alreadyPriced > 0 ? full.dashboard.jobs.detail.autopriceAlreadyPriced : full.dashboard.jobs.detail.autopriceNoMatch);
+    else if (alreadyPriced > 0) Alert.alert('', full.dashboard.jobs.detail.autopriceAlreadyPriced);
+    // Show the exact text we searched so the user sees which word to add a term for.
+    else Alert.alert('', `${full.dashboard.jobs.detail.autopriceNoMatch}${unmatched.length ? `\n\n${unmatched.map(u => `• ${u}`).join('\n')}` : ''}`);
   };
 
   const removeJob = (jobId: string) => {

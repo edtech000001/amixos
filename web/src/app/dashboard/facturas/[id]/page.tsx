@@ -235,9 +235,12 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
 
   const runAutoprice = async () => {
     if (!priceItems.length) return;
-    const { matched, alreadyPriced } = await autopriceInvoice(supabase, { invoiceId: id, items: priceItems, tierId: clientTierId, qtyField: business?.invoice_qty_field });
+    const { matched, alreadyPriced, unmatched } = await autopriceInvoice(supabase, { invoiceId: id, items: priceItems, tierId: clientTierId, qtyField: business?.invoice_qty_field });
     if (matched) { setShowInvVerify(true); await reloadInvoice(); }
-    else void alertMessage({ message: alreadyPriced > 0 ? tj.detail.autopriceAlreadyPriced : tj.detail.autopriceNoMatch });
+    else if (alreadyPriced > 0) void alertMessage({ message: tj.detail.autopriceAlreadyPriced });
+    // Show the exact text we searched so the user can see which word to add a
+    // match term for (and it reveals whether the job's description reached us).
+    else void alertMessage({ message: `${tj.detail.autopriceNoMatch}${unmatched.length ? `\n\n${unmatched.map(u => `• ${u}`).join('\n')}` : ''}` });
   };
 
   const fetchInvoiceRow = async () => {

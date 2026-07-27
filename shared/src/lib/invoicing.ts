@@ -593,14 +593,14 @@ export async function addJobsToInvoice(
 export async function autopriceInvoice(
   supabase: Supa,
   opts: { invoiceId: string; items: PriceSheetItem[]; tierId?: string | null; qtyField?: string | null },
-): Promise<{ matched: number; alreadyPriced: number }> {
-  if (!opts.items.length) return { matched: 0, alreadyPriced: 0 };
+): Promise<{ matched: number; alreadyPriced: number; unmatched: string[] }> {
+  if (!opts.items.length) return { matched: 0, alreadyPriced: 0, unmatched: [] };
   const { data: inv } = await supabase
     .from('invoices')
     .select('id, line_items, tax_rate, discount, client_id')
     .eq('id', opts.invoiceId)
     .single();
-  if (!inv) return { matched: 0, alreadyPriced: 0 };
+  if (!inv) return { matched: 0, alreadyPriced: 0, unmatched: [] };
   const lines = (inv.line_items ?? []) as InvoiceLineItem[];
 
   // Client's state is the fallback for per-state pricing when a job has no
@@ -635,6 +635,9 @@ export async function autopriceInvoice(
 
   let matched = 0;
   let alreadyPriced = 0;
+  // Text we searched for lines that didn't match — surfaced in the "no match"
+  // message so the user can see exactly what to add a match term for.
+  const unmatched: string[] = [];
   const next = lines.map(li => {
     // Don't override a line that already has a price.
     if ((Number(li.rate) || 0) > 0) { alreadyPriced++; return li; }
@@ -642,7 +645,10 @@ export async function autopriceInvoice(
     const ctx = jctx?.context ?? '';
     const matchText = `${li.description ?? ''} ${ctx}`;
     const hit = suggestPriceItem(matchText, opts.items, jctx?.cfText);
-    if (!hit) return li;
+    if (!hit) {
+      if (unmatched.length < 3) unmatched.push(matchText.replace(/\s+/g, ' ').trim().slice(0, 200));
+      return li;
+    }
     const addons = matchingAddons(matchText, opts.items);
     const j = jctx;
     const qty = Number(li.qty) || 0;
@@ -656,12 +662,12 @@ export async function autopriceInvoice(
     matched++;
     return { ...li, qty: priced.quantity, rate: priced.unitPrice, ...(li.job_id ? { edited: true } : {}) };
   });
-  if (!matched) return { matched: 0, alreadyPriced };
+  if (!matched) return { matched: 0, alreadyPriced, unmatched };
 
   const { subtotal, tax, total } = computeTotals(next, inv.tax_rate ?? 0, inv.discount ?? 0);
   await supabase
     .from('invoices')
     .update({ line_items: next, subtotal_amount: subtotal, tax_amount: tax, total_amount: total })
     .eq('id', opts.invoiceId);
-  return { matched, alreadyPriced };
+  return { matched, alreadyPriced, unmatched };
 }
