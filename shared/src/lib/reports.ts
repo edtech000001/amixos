@@ -2,10 +2,12 @@
 // same rows and compute the same metrics. Rendering differs per platform
 // (web: recharts; mobile: native bars), but the math lives here.
 //
-// All fetches paginate via fetchAll — reports must stay accurate past
-// PostgREST's 1000-row default cap.
+// All fetches paginate via fetchAllById (KEYSET, not offset) — reports must stay
+// accurate past PostgREST's 1000-row default cap, and offset .range() re-scans
+// under RLS, which statement-timeouts once a table has thousands of rows (this
+// hung the mobile Reports screen for a business with 4000+ jobs).
 
-import { fetchAll } from './supabaseFetch';
+import { fetchAllById } from './supabaseFetch';
 import { computePayrollRows, normalizePayrollConfig, type PayrollConfig } from './payroll';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -90,23 +92,47 @@ export async function fetchReportsData(
   businessId: string,
   inventoryEnabled: boolean,
 ): Promise<ReportsData> {
+  // Keyset by id: order by id asc, cursor via .gt('id', afterId). Matches the
+  // web reports page. Aggregations don't care about row order, so ordering by id
+  // is fine.
   const [invoices, jobs, clients, timesheets, employees, inventory, locations] = await Promise.all([
-    fetchAll<ReportInvoice>((from, to) =>
-      supabase.from('invoices').select('id, status, total_amount, paid_at, created_at, issue_date, line_items').eq('business_id', businessId).range(from, to)),
-    fetchAll<ReportJob>((from, to) =>
-      supabase.from('jobs').select('id, status, total_amount, created_at, client_id, location_id, scheduled_date, total_hours, driver_employee_ids, driver_hours, custom_fields, job_assignments(employee_id)').eq('business_id', businessId).range(from, to)),
-    fetchAll<ReportClient>((from, to) =>
-      supabase.from('clients').select('id, created_at').eq('business_id', businessId).range(from, to)),
-    fetchAll<ReportTimesheet>((from, to) =>
-      supabase.from('timesheets').select('id, hours_worked, work_date, employee_id, worker_name').eq('business_id', businessId).range(from, to)),
-    fetchAll<ReportEmployee>((from, to) =>
-      supabase.from('employees').select('id, first_name, last_name, pay_rate, pay_type, overtime_eligible, overtime_threshold, overtime_multiplier, custom_fields').eq('business_id', businessId).range(from, to)),
+    fetchAllById<ReportInvoice>((afterId, pageSize) => {
+      let q = supabase.from('invoices').select('id, status, total_amount, paid_at, created_at, issue_date, line_items').eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
+    }),
+    fetchAllById<ReportJob>((afterId, pageSize) => {
+      let q = supabase.from('jobs').select('id, status, total_amount, created_at, client_id, location_id, scheduled_date, total_hours, driver_employee_ids, driver_hours, custom_fields, job_assignments(employee_id)').eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
+    }),
+    fetchAllById<ReportClient>((afterId, pageSize) => {
+      let q = supabase.from('clients').select('id, created_at').eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
+    }),
+    fetchAllById<ReportTimesheet>((afterId, pageSize) => {
+      let q = supabase.from('timesheets').select('id, hours_worked, work_date, employee_id, worker_name').eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
+    }),
+    fetchAllById<ReportEmployee>((afterId, pageSize) => {
+      let q = supabase.from('employees').select('id, first_name, last_name, pay_rate, pay_type, overtime_eligible, overtime_threshold, overtime_multiplier, custom_fields').eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
+    }),
     inventoryEnabled
-      ? fetchAll<ReportInventoryItem>((from, to) =>
-          supabase.from('inventory_items').select('id, quantity, unit_cost').eq('business_id', businessId).range(from, to))
+      ? fetchAllById<ReportInventoryItem>((afterId, pageSize) => {
+          let q = supabase.from('inventory_items').select('id, quantity, unit_cost').eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+          if (afterId) q = q.gt('id', afterId);
+          return q;
+        })
       : Promise.resolve([] as ReportInventoryItem[]),
-    fetchAll<ReportLocation>((from, to) =>
-      supabase.from('locations').select('id, name').eq('business_id', businessId).eq('archived', false).order('created_at', { ascending: true }).range(from, to)),
+    fetchAllById<ReportLocation>((afterId, pageSize) => {
+      let q = supabase.from('locations').select('id, name').eq('business_id', businessId).eq('archived', false).order('id', { ascending: true }).limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
+    }),
   ]);
   return { invoices, jobs, clients, timesheets, employees, inventory, locations };
 }
