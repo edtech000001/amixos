@@ -87,20 +87,23 @@ function Seg<T extends string>({ value, options, onChange }: {
 // and reads like an actual printed sheet.
 const PRESET_CARD_W = 150;
 const PAGE_RATIO = 11 / 8.5;
-function PresetPreview({ vm }: { vm: InvoiceViewModel }) {
-  const scale = PRESET_CARD_W / DOC_W;
+function PresetPreview({ vm, w = PRESET_CARD_W }: { vm: InvoiceViewModel; w?: number }) {
+  const scale = w / DOC_W;
   return (
-    <div style={{ width: PRESET_CARD_W, height: Math.round(PRESET_CARD_W * PAGE_RATIO), overflow: 'hidden', background: '#fff', borderRadius: 6, pointerEvents: 'none', boxShadow: 'inset 0 0 0 1px #f1f5f9' }}>
+    <div style={{ width: w, height: Math.round(w * PAGE_RATIO), overflow: 'hidden', background: '#fff', borderRadius: 6, pointerEvents: 'none', boxShadow: 'inset 0 0 0 1px #f1f5f9' }}>
       <div style={{ width: DOC_W, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
         <InvoiceDocument vm={vm} />
       </div>
     </div>
   );
 }
+// Larger thumbnail for the "Choose a template" picker (4-up, 2×2) so the
+// designs are actually legible.
+const PRESET_CARD_W_LG = 300;
 
 // Full-screen modal browsing every template in a paginated grid (keeps the
 // editor itself uncluttered). Mirrors the mobile theme browser.
-const THEMES_PER_PAGE = 6;
+const THEMES_PER_PAGE = 4;
 function ThemesModal({ open, onClose, currentId, onSelect, value, branding, sample, t }: {
   open: boolean;
   onClose: () => void;
@@ -118,21 +121,21 @@ function ThemesModal({ open, onClose, currentId, onSelect, value, branding, samp
   const ids = INVOICE_PRESET_IDS.slice(safePage * THEMES_PER_PAGE, safePage * THEMES_PER_PAGE + THEMES_PER_PAGE);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-card rounded-2xl shadow-xl w-full max-w-3xl max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-card rounded-2xl shadow-xl w-full max-w-4xl max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-soft">
           <h3 className="font-semibold text-ink">{t.themesTitle}</h3>
           <button type="button" onClick={onClose} className="text-faint hover:text-ink"><X size={20} /></button>
         </div>
         <div className="p-5 overflow-y-auto">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 justify-items-center">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 justify-items-center">
             {ids.map(id => {
               const active = currentId === id;
               const pvm = buildInvoiceViewModel(applyPreset(id, value), sample, branding);
               return (
                 <button key={id} type="button" onClick={() => onSelect(id)}
-                  className={`rounded-xl border p-2 transition ${active ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-border'}`}>
-                  <PresetPreview vm={pvm} />
-                  <span className="block mt-1.5 text-xs font-medium text-ink text-center">{t.presets[id]}{active ? ` · ${t.currentTheme}` : ''}</span>
+                  className={`rounded-xl border p-2.5 transition ${active ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-border'}`}>
+                  <PresetPreview vm={pvm} w={PRESET_CARD_W_LG} />
+                  <span className="block mt-2 text-sm font-medium text-ink text-center">{t.presets[id]}{active ? ` · ${t.currentTheme}` : ''}</span>
                 </button>
               );
             })}
