@@ -220,29 +220,50 @@ export interface PriceMatch {
  * (length and match count) but are different items (genuinely ambiguous → let
  * the user pick). NOT reliable — callers must warn the user to verify.
  */
-export function suggestPriceItem(text: string, items: PriceSheetItem[]): PriceMatch | null {
+export function suggestPriceItem(
+  text: string,
+  items: PriceSheetItem[],
+  /** Higher-signal text (e.g. a job's custom-field VALUES like Project Type) —
+   *  a term matching here beats one that only matches the free-text `text`. Lets
+   *  "Nuevo" (a Project Type) win over an incidental "pivot"/"tower" in the job
+   *  title/notes that would otherwise tie and make autoprice skip the line. */
+  priorityText?: string,
+): PriceMatch | null {
   const hay = norm(text);
   if (!hay.trim()) return null;
-  let best: { item: PriceSheetItem; term: string; len: number; count: number } | null = null;
+  const prio = priorityText ? norm(priorityText) : '';
+  let best: { item: PriceSheetItem; term: string; len: number; count: number; prio: boolean } | null = null;
   let ambiguous = false;
   for (const item of items) {
     if (!item.active || item.isAddon) continue; // add-ons stack separately
     const terms = [item.name, ...item.matchTerms].map(norm).filter(t => t.length >= 2);
-    // This item's longest matching term + how many DISTINCT terms it matched.
+    // This item's longest matching term, how many DISTINCT terms it matched, and
+    // whether any matched term also appears in the priority (custom-field) text.
     let maxLen = 0;
     let longest = '';
+    let prioHit = false;
     const matchedTerms = new Set<string>();
     for (const term of terms) {
       if (!hay.includes(term)) continue;
       matchedTerms.add(term);
+      if (prio && prio.includes(term)) prioHit = true;
       if (term.length > maxLen) { maxLen = term.length; longest = term; }
     }
     if (maxLen === 0) continue; // no match on this item
     const count = matchedTerms.size;
-    if (!best || maxLen > best.len || (maxLen === best.len && count > best.count)) {
-      best = { item, term: longest, len: maxLen, count };
+    // Ranking: a priority (custom-field) match wins first, THEN longest term,
+    // THEN most distinct terms.
+    const better = !best
+      ? true
+      : prioHit !== best.prio
+        ? prioHit
+        : maxLen !== best.len
+          ? maxLen > best.len
+          : count > best.count;
+    if (better) {
+      best = { item, term: longest, len: maxLen, count, prio: prioHit };
       ambiguous = false;
-    } else if (maxLen === best.len && count === best.count && best.item.id !== item.id) {
+    } else if (best && prioHit === best.prio && maxLen === best.len && count === best.count && best.item.id !== item.id) {
       ambiguous = true;
     }
   }

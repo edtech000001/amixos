@@ -614,7 +614,7 @@ export async function autopriceInvoice(
   // Per-line state pricing + qty-from-custom-field: resolve each linked job's
   // state and custom fields in one query.
   const jobIds = Array.from(new Set(lines.map(l => l.job_id).filter(Boolean))) as string[];
-  const jobById = new Map<string, { job_state: string | null; custom_fields: Record<string, unknown> | null; context: string }>();
+  const jobById = new Map<string, { job_state: string | null; custom_fields: Record<string, unknown> | null; context: string; cfText: string }>();
   if (jobIds.length) {
     const { data: jobs } = await supabase.from('jobs').select('id, job_state, custom_fields, title, description, worker_notes, internal_notes').in('id', jobIds);
     for (const j of (jobs ?? []) as { id: string; job_state: string | null; custom_fields: Record<string, unknown> | null; title: string | null; description: string | null; worker_notes: string | null; internal_notes: string | null }[]) {
@@ -626,6 +626,9 @@ export async function autopriceInvoice(
         // + custom field values — so a note like "Zimmatic" disambiguates two
         // "Corner" items even when the line title is just the job name.
         context: `${j.title ?? ''} ${j.description ?? ''} ${j.worker_notes ?? ''} ${j.internal_notes ?? ''} ${cf}`,
+        // Custom-field VALUES (Project Type etc.) — the higher-signal text that
+        // wins ties, so "Nuevo" beats an incidental "pivot"/"tower" in the title.
+        cfText: cf,
       });
     }
   }
@@ -635,12 +638,13 @@ export async function autopriceInvoice(
   const next = lines.map(li => {
     // Don't override a line that already has a price.
     if ((Number(li.rate) || 0) > 0) { alreadyPriced++; return li; }
-    const ctx = li.job_id ? (jobById.get(li.job_id)?.context ?? '') : '';
+    const jctx = li.job_id ? jobById.get(li.job_id) : undefined;
+    const ctx = jctx?.context ?? '';
     const matchText = `${li.description ?? ''} ${ctx}`;
-    const hit = suggestPriceItem(matchText, opts.items);
+    const hit = suggestPriceItem(matchText, opts.items, jctx?.cfText);
     if (!hit) return li;
     const addons = matchingAddons(matchText, opts.items);
-    const j = li.job_id ? jobById.get(li.job_id) : undefined;
+    const j = jctx;
     const qty = Number(li.qty) || 0;
     // Prefer the mapped qty custom field (e.g. "Total ft"), then the line's own
     // qty, then a number pulled from the description.
