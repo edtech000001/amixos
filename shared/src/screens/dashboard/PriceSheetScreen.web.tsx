@@ -51,12 +51,13 @@ interface Draft {
   tierRates: Record<string, string>;
   matchTerms: string;
   isAddon: boolean;
+  addonInline: boolean;
 }
 
 interface PriceTier { id: string; name: string }
 
 const emptyDraft = (): Draft => ({
-  id: null, name: '', category: '', pricingMode: 'per_unit', unitLabel: '', rate: '', stateRates: [], tierRates: {}, matchTerms: '', isAddon: false,
+  id: null, name: '', category: '', pricingMode: 'per_unit', unitLabel: '', rate: '', stateRates: [], tierRates: {}, matchTerms: '', isAddon: false, addonInline: false,
 });
 
 export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }: PriceSheetScreenProps) {
@@ -97,7 +98,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
     if (!silent) setLoading(true);
     const { data } = await supabase
       .from('price_sheet_items')
-      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, is_addon, sort_order, active')
+      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, is_addon, addon_inline, sort_order, active')
       .eq('business_id', businessId)
       .order('sort_order')
       .order('name');
@@ -147,6 +148,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
     tierRates: Object.fromEntries(Object.entries(i.tierRates ?? {}).map(([k, v]) => [k, String(v)])),
     matchTerms: i.matchTerms.join(', '),
     isAddon: i.isAddon,
+    addonInline: i.addonInline,
   });
 
   const openNew = () => setDraft(emptyDraft());
@@ -178,6 +180,9 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
       })(),
       match_terms: draft.matchTerms.trim() || null,
       is_addon: draft.isAddon,
+      // Only a flat add-on can be inline; clear it otherwise so a per-unit or
+      // non-add-on item never carries a stale inline flag.
+      addon_inline: draft.isAddon && draft.pricingMode === 'flat' ? draft.addonInline : false,
     };
     if (draft.id) await supabase.from('price_sheet_items').update(payload).eq('id', draft.id);
     else await supabase.from('price_sheet_items').insert({ ...payload, sort_order: items.length });
@@ -363,6 +368,18 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
                 <span className="block text-[11px] text-faint">{t.addonHint}</span>
               </span>
             </label>
+
+            {/* Flat add-ons only: own line (default) vs folded into the job's line. */}
+            {draft.isAddon && draft.pricingMode === 'flat' ? (
+              <label className="flex items-start gap-2.5 mb-4 ml-6 -mt-2 cursor-pointer rounded-xl border border-border bg-surface/50 p-3">
+                <input type="checkbox" checked={draft.addonInline} onChange={e => setDraft({ ...draft, addonInline: e.target.checked })}
+                  className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary" />
+                <span>
+                  <span className="block text-sm font-semibold text-ink">{t.addonInlineLabel}</span>
+                  <span className="block text-[11px] text-faint">{t.addonInlineHint}</span>
+                </span>
+              </label>
+            ) : null}
 
             <label className="block text-sm font-semibold text-ink mb-1">{t.rateLabel}</label>
             <div className="mb-4 flex items-center rounded-xl border border-border px-3 focus-within:ring-2 focus-within:ring-primary">

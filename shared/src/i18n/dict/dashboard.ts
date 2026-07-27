@@ -1390,6 +1390,8 @@ export type DashboardDict = {
       addonLabel: string;
       addonHint: string;
       addonBadge: string;
+      addonInlineLabel: string;
+      addonInlineHint: string;
       clientTierLabel: string;
       clientTierNone: string;
       generateBtn: string;
@@ -3975,6 +3977,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         addonLabel: 'Es un cargo adicional (add-on)',
         addonHint: 'Se suma al precio base de cualquier línea cuyo texto contenga sus términos (ej. Boombacks +$0.25/pie). No es un precio base por sí solo.',
         addonBadge: 'Add-on',
+        addonInlineLabel: 'Incluir en la línea del trabajo',
+        addonInlineHint: 'En vez de una línea propia, suma este cargo al total de la línea que coincida (tarifa combinada). Útil si prefieres que no aparezca por separado.',
         clientTierLabel: 'Nivel de precio',
         clientTierNone: 'Estándar (base)',
         generateBtn: 'Generar hoja',
@@ -6568,6 +6572,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         addonLabel: 'This is an add-on (surcharge)',
         addonHint: 'Adds on top of the base price for any line whose text contains its terms (e.g. Boombacks +$0.25/ft). Not a base price on its own.',
         addonBadge: 'Add-on',
+        addonInlineLabel: "Bundle into the job's line",
+        addonInlineHint: 'Instead of its own line, fold this fee into the matched line’s total (blended rate). Use it when you’d rather it not show separately.',
         clientTierLabel: 'Price tier',
         clientTierNone: 'Standard (base)',
         generateBtn: 'Generate sheet',

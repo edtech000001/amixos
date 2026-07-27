@@ -224,7 +224,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   useEffect(() => {
     if (!business) return;
     void supabase.from('price_sheet_items')
-      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, is_addon, sort_order, active')
+      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, is_addon, addon_inline, sort_order, active')
       .eq('business_id', business.id).eq('active', true)
       .then(({ data }: { data: PriceSheetRow[] | null }) => setPriceItems((data ?? []).map(rowToPriceSheetItem)));
   }, [business?.id]); // eslint-disable-line react-hooks/exhaustive-deps

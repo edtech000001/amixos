@@ -49,12 +49,13 @@ interface Draft {
   tierRates: Record<string, string>;
   matchTerms: string;
   isAddon: boolean;
+  addonInline: boolean;
 }
 
 interface PriceTier { id: string; name: string }
 
 const emptyDraft = (): Draft => ({
-  id: null, name: '', category: '', pricingMode: 'per_unit', unitLabel: '', rate: '', stateRates: [], tierRates: {}, matchTerms: '', isAddon: false,
+  id: null, name: '', category: '', pricingMode: 'per_unit', unitLabel: '', rate: '', stateRates: [], tierRates: {}, matchTerms: '', isAddon: false, addonInline: false,
 });
 
 export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheetScreenProps) {
@@ -100,7 +101,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     if (!silent) setLoading(true);
     const { data } = await supabase
       .from('price_sheet_items')
-      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, is_addon, sort_order, active')
+      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, is_addon, addon_inline, sort_order, active')
       .eq('business_id', businessId)
       .order('sort_order')
       .order('name');
@@ -147,6 +148,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     tierRates: Object.fromEntries(Object.entries(i.tierRates ?? {}).map(([k, v]) => [k, String(v)])),
     matchTerms: i.matchTerms.join(', '),
     isAddon: i.isAddon,
+    addonInline: i.addonInline,
   });
 
   const openEdit = (i: PriceSheetItem) => setDraft(draftFromItem(i, i.id));
@@ -176,6 +178,8 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
       })(),
       match_terms: draft.matchTerms.trim() || null,
       is_addon: draft.isAddon,
+      // Only a flat add-on can be inline; clear it otherwise.
+      addon_inline: draft.isAddon && draft.pricingMode === 'flat' ? draft.addonInline : false,
     };
     if (draft.id) await supabase.from('price_sheet_items').update(payload).eq('id', draft.id);
     else await supabase.from('price_sheet_items').insert({ ...payload, sort_order: items.length });
@@ -362,6 +366,19 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
                     <Text className="text-[11px] text-faint">{t.addonHint}</Text>
                   </View>
                 </Pressable>
+
+                {/* Flat add-ons only: own line (default) vs folded into the job's line. */}
+                {draft.isAddon && draft.pricingMode === 'flat' ? (
+                  <Pressable onPress={() => setDraftKey('addonInline', !draft.addonInline)} className="flex-row items-start gap-2.5 mb-4 ml-7 rounded-xl border border-border bg-surface p-3">
+                    <View className={`mt-0.5 w-5 h-5 rounded border items-center justify-center ${draft.addonInline ? 'bg-primary border-primary' : 'bg-card border-border'}`}>
+                      {draft.addonInline ? <Check size={14} color="#fff" /> : null}
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-sm font-semibold text-ink">{t.addonInlineLabel}</Text>
+                      <Text className="text-[11px] text-faint">{t.addonInlineHint}</Text>
+                    </View>
+                  </Pressable>
+                ) : null}
 
                 <Text className="text-sm font-semibold text-ink mb-1">{t.rateLabel}</Text>
                 <View className="flex-row items-center rounded-xl border border-border bg-card px-3 mb-4">

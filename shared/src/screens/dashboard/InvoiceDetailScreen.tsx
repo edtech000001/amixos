@@ -48,6 +48,11 @@ export interface InvoiceDetailLineItem {
   rate: number;
   /** Source job (job-backed invoices) — drives the inline Move/Remove. */
   job_id?: string | null;
+  /** A split-off flat add-on line (loading fee, etc.): shows its own name
+   *  rather than the job title, and has no separate Move/Remove of its own. */
+  addon?: boolean;
+  /** Per-unit add-ons folded into this line's rate, as a small indicator. */
+  addonNote?: string | null;
 }
 
 export interface InvoiceDetail {
@@ -402,20 +407,25 @@ export function InvoiceDetailScreen({
             const q = Number(li.qty) || 0;
             const r = Number(li.rate) || 0;
             const jid = li.job_id ?? null;
-            const showActions = editable && canEdit && !!jid && !!onRemoveJob && !seen.has(jid);
+            // Split-off flat add-on lines (e.g. a loading fee) keep the job_id
+            // so they move/remove with the job, but show their own name.
+            const isAddon = !!li.addon;
+            const title = (jid && !isAddon && jobTitles?.[jid]) || li.description;
+            const showActions = editable && canEdit && !!jid && !isAddon && !!onRemoveJob && !seen.has(jid);
             if (jid) seen.add(jid);
             return (
               <View key={idx} className="py-2.5 border-b border-border">
                 <View className="flex-row items-center justify-between">
                   <View className="flex-1 pr-3">
-                    {jid && onJobPress ? (
+                    {jid && onJobPress && !isAddon ? (
                       <Pressable onPress={() => onJobPress(jid)} hitSlop={4}>
-                        <Text className="text-sm font-medium text-primary">{(jid && jobTitles?.[jid]) || li.description}</Text>
+                        <Text className="text-sm font-medium text-primary">{title}</Text>
                       </Pressable>
                     ) : (
-                      <Text className="text-sm text-ink">{(jid && jobTitles?.[jid]) || li.description}</Text>
+                      <Text className={isAddon ? 'text-sm text-muted' : 'text-sm text-ink'}>{isAddon ? `+ ${title}` : title}</Text>
                     )}
                     <Text className="text-xs text-faint mt-0.5">{q} × {fmt(r)}</Text>
+                    {li.addonNote ? <Text className="text-[11px] text-faint mt-0.5">{li.addonNote}</Text> : null}
                   </View>
                   <Text className="text-sm font-semibold text-ink">{fmt(q * r)}</Text>
                 </View>
@@ -435,7 +445,9 @@ export function InvoiceDetailScreen({
                       <Text className="text-xs font-semibold text-red-500">{tInv.jobsSection.removeBtn}</Text>
                     </Pressable>
                   </View>
-                ) : editable && canEdit && !jid && (onEditManualItem || onRemoveManualItem) ? (
+                ) : editable && canEdit && (!jid || isAddon) && (onEditManualItem || onRemoveManualItem) ? (
+                  // Manual lines AND split-off add-on lines (loading fee, etc.):
+                  // per-line Edit/Remove by index so a stray fee can be deleted.
                   <View className="flex-row justify-end gap-4 mt-1.5">
                     {onEditManualItem ? (
                       <Pressable onPress={() => onEditManualItem(idx)} disabled={jobBusy} hitSlop={6}>

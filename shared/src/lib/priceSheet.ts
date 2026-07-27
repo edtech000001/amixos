@@ -28,6 +28,10 @@ export interface PriceSheetItem {
   /** true = a surcharge that STACKS on top of the matched base price during
    *  autoprice (e.g. Boombacks +$0.25/ft), not a base price itself. */
   isAddon: boolean;
+  /** Flat add-ons only: true = fold this surcharge into the matched line's
+   *  total (blended rate); false (default) = give it its own line under the
+   *  job. Ignored for per-unit add-ons (they always raise the base rate). */
+  addonInline: boolean;
   sortOrder: number;
   active: boolean;
 }
@@ -44,6 +48,7 @@ export interface PriceSheetRow {
   tier_rates: Record<string, number> | null;
   match_terms: string | null;
   is_addon?: boolean | null;
+  addon_inline?: boolean | null;
   sort_order: number;
   active: boolean;
 }
@@ -60,6 +65,7 @@ export function rowToPriceSheetItem(r: PriceSheetRow): PriceSheetItem {
     tierRates: normalizeStateRates(r.tier_rates),
     matchTerms: splitMatchTerms(r.match_terms),
     isAddon: r.is_addon === true,
+    addonInline: r.addon_inline === true,
     sortOrder: r.sort_order ?? 0,
     active: r.active !== false,
   };
@@ -126,6 +132,21 @@ export interface AutopricedLine {
    *  items) — preserved so a 205 ft corner keeps its footage. Null otherwise. */
   originalQuantity: number | null;
   amount: number;
+  /** Per-unit add-ons blended into unitPrice, summarized for a UI indicator
+   *  (e.g. "+Polly/Aluminum $0.50/ft"). Null when none applied. */
+  addonNote: string | null;
+  /** Flat add-ons that were NOT folded into the rate — only populated when
+   *  `splitFlatAddons` is on, so the caller can emit each as its own line
+   *  (keeps the base rate clean instead of smearing $600 into $/ft). */
+  flatAddons: { name: string; rate: number }[];
+}
+
+/** "$0.50 / ft" style summary for one applied add-on. */
+function addonLabel(a: PriceSheetItem, rate: number): string {
+  const money = `$${rate.toLocaleString('en-US', { minimumFractionDigits: rate % 1 ? 2 : 0, maximumFractionDigits: 2 })}`;
+  return a.pricingMode === 'flat'
+    ? `+${a.name} ${money}`
+    : `+${a.name} ${money}${a.unitLabel ? `/${a.unitLabel}` : ''}`;
 }
 
 /**
@@ -135,23 +156,51 @@ export interface AutopricedLine {
  *   flat     → bill 1 × rate, and remember the measurement in originalQuantity
  *              (unless it was already 1).
  *
- * `addons` are surcharges that STACK on top: per-unit add-ons raise the rate
- * (base $3.50/ft + Boombacks $0.25/ft = $3.75/ft), flat add-ons add to the
- * total. The billed rate is blended so quantity × unitPrice still equals amount.
+ * `addons` are surcharges that STACK on top. Per-unit add-ons always raise the
+ * rate (base $3.50/ft + Boombacks $0.25/ft = $3.75/ft). Flat add-ons depend on
+ * `splitFlatAddons` + each add-on's `addonInline`:
+ *   • split (own line)  → returned in `flatAddons` for the caller to emit; the
+ *     base line keeps its clean per-unit rate.
+ *   • bundled (inline)  → folded into the total and the line is billed 1 × the
+ *     exact total (never a blended per-unit rate, which would round off).
  */
 export function autopriceLine(
   item: PriceSheetItem,
   measuredQty: number,
   ctx?: RateContext | string | null,
   addons: PriceSheetItem[] = [],
+  opts?: {
+    /** Keep flat add-ons OUT of the rate and return them in `flatAddons` for
+     *  the caller to emit as separate line items (invoice autoprice). Default
+     *  false → flat add-ons blend into the amount, as the job form expects. */
+    splitFlatAddons?: boolean;
+  },
 ): AutopricedLine {
   const baseRate = applicableRate(item, ctx);
   let perUnitAddon = 0;
   let flatAddon = 0;
+  // Notes summarize add-ons FOLDED into this line's rate/total (not the ones
+  // split into their own line) — so the user can see what's baked in.
+  const foldedNotes: string[] = [];
+  const splitFlat: { name: string; rate: number }[] = [];
   for (const a of addons) {
     const r = applicableRate(a, ctx);
-    if (a.pricingMode === 'flat') flatAddon += r; else perUnitAddon += r;
+    if (a.pricingMode === 'flat') {
+      // Own line only when splitting is enabled (invoice autoprice) AND this
+      // add-on isn't marked inline. Inline flat add-ons — and every flat add-on
+      // in the job form (no splitting) — fold into the rate instead.
+      if (opts?.splitFlatAddons && !a.addonInline) {
+        splitFlat.push({ name: a.name, rate: round2(r) });
+      } else {
+        flatAddon += r;
+        foldedNotes.push(addonLabel(a, r)); // bundled → explain the blended rate
+      }
+    } else {
+      perUnitAddon += r;
+      foldedNotes.push(addonLabel(a, r));
+    }
   }
+  const addonNote = foldedNotes.length ? foldedNotes.join(' · ') : null;
 
   if (item.pricingMode === 'flat') {
     const measured = Number.isFinite(measuredQty) && measuredQty > 0 ? measuredQty : null;
@@ -162,16 +211,23 @@ export function autopriceLine(
       unitPrice: amount,
       originalQuantity: measured && measured !== 1 ? measured : null,
       amount,
+      addonNote,
+      flatAddons: splitFlat,
     };
   }
 
   const qty = Number.isFinite(measuredQty) && measuredQty > 0 ? measuredQty : 1;
   const effRate = baseRate + perUnitAddon;
   const amount = round2(qty * effRate + flatAddon);
-  // Clean rate when there's no flat add-on ($3.75); otherwise blend so the line
-  // total is exact.
-  const unitPrice = flatAddon ? round2(amount / qty) : round2(effRate);
-  return { quantity: qty, unitPrice, originalQuantity: null, amount };
+  if (flatAddon > 0) {
+    // A flat add-on is bundled INTO this per-unit line → bill 1 × the exact
+    // total. Blending it into the per-unit rate both looks odd ($4.21/ft) and
+    // rounds the total off (1295 × $4.21 = $5,451.95, losing $4.30 vs the true
+    // $5,456.25). Keep the measurement in originalQuantity for reference.
+    return { quantity: 1, unitPrice: amount, originalQuantity: qty !== 1 ? qty : null, amount, addonNote, flatAddons: splitFlat };
+  }
+  // No flat add-on → clean per-unit rate ($3.75), quantity × rate is exact.
+  return { quantity: qty, unitPrice: round2(effRate), originalQuantity: null, amount, addonNote, flatAddons: splitFlat };
 }
 
 /** All ACTIVE add-on items whose name or a match term appears in `text` — the
