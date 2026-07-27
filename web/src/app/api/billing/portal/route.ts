@@ -11,7 +11,14 @@ export async function POST(req: Request) {
     if (!businessId) return NextResponse.json({ error: 'Missing businessId' }, { status: 400 });
 
     const supabase = createSupabaseServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    // Prefer an explicit Bearer token from the client (it always holds a valid
+    // session) over cookies, which can go stale on this route behind the
+    // middleware token-refresh. Fall back to the cookie session.
+    const authHeader = req.headers.get('authorization');
+    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const { data: { user } } = token
+      ? await supabase.auth.getUser(token)
+      : await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
     const { data: member } = await supabase

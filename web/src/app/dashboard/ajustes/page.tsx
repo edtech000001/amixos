@@ -194,9 +194,15 @@ export default function AjustesPage() {
     setPortalLoading(true);
     setPortalError(null);
     try {
+      // Send the browser session's token so the server verifies auth directly
+      // (cookies can go stale on the API route behind the middleware refresh).
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/billing/portal', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({ businessId: business.id }),
       });
       const data = await res.json().catch(() => ({}));
@@ -3133,7 +3139,18 @@ export default function AjustesPage() {
                   heading = planName
                     ? `Plan ${planName}${periodLabel ? ` · ${periodLabel}` : ''}`
                     : es ? 'Cuenta activa' : 'Active account';
-                  action = 'manage';
+                  // A real paid plan → manage it in the Stripe portal. A comped/
+                  // grandfathered active account has no plan and no Stripe
+                  // customer, so the portal has nothing to open — offer plans so
+                  // they can start a real subscription instead.
+                  if (planKey) {
+                    action = 'manage';
+                  } else {
+                    action = 'plans';
+                    subtitle = es
+                      ? 'Cuenta de cortesía — elige un plan para suscribirte.'
+                      : 'Comped account — choose a plan to subscribe.';
+                  }
                 } else if (status === 'past_due') {
                   heading = es
                     ? 'Pago pendiente — actualiza tu método de pago'

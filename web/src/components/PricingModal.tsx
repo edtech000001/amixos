@@ -47,9 +47,15 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
     setSubscribingKey(plan);
     setSubscribeError(null);
     try {
+      // Send the browser session's token so the server verifies auth directly
+      // (cookies can go stale on the API route behind the middleware refresh).
+      const { data: { session } } = await createSupabaseClient().auth.getSession();
       const res = await fetch('/api/billing/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({ businessId: business.id, plan, period }),
       });
       const data = await res.json().catch(() => ({}));
