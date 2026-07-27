@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -149,7 +149,16 @@ export default function NominaRoute() {
   // Payroll settings are business-wide (stored on the businesses row). Pull the
   // latest business on focus so this device shows what another one saved,
   // instead of the copy it cached at login.
-  useFocusEffect(useCallback(() => { void refetchBusiness(); void load(); }, [load, refetchBusiness]));
+  //
+  // `load` is read through a ref so this focus effect stays STABLE. Depending on
+  // `load` directly looped: refetchBusiness() swaps in a fresh `business` object
+  // → `load` (a useCallback of `business`) gets a new identity → the focus
+  // callback changes → react-navigation re-runs it → refetchBusiness() again …
+  // reloading the whole screen every few seconds. refetchBusiness is a stable
+  // store action.
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  useFocusEffect(useCallback(() => { void refetchBusiness(); void loadRef.current(); }, [refetchBusiness]));
 
   // Pay components — hydrated from the business, saved on change.
   // Formula builder palette — numeric/boolean custom fields only, so a text
