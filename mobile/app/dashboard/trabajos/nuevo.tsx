@@ -48,7 +48,7 @@ import { can } from '@amixos/shared/lib/permissions';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
-import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { clientPickerDisplay } from '@amixos/shared/lib/clientSearch';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { logAudit } from '@amixos/shared/lib/audit';
@@ -322,23 +322,31 @@ export default function NuevoTrabajoRoute() {
       // offline can't blank out the others (which is what killed the whole
       // Promise.all before, leaving clients + employees empty).
       const [clRes, empRes, tplRes, contactRes] = await Promise.all([
+        // Keyset (by id) — offset .range() re-scans under RLS and stalls the
+        // create form once a business has thousands of clients.
         loadCached<Client[]>(`jobform_clients_${business.id}`, () =>
-          fetchAll<Client>((from, to) =>
-            supabase
+          fetchAllById<Client>((afterId, pageSize) => {
+            let q = supabase
               .from('clients')
               .select('id, first_name, last_name, company, city, state')
               .eq('business_id', business.id)
-              .order('first_name')
-              .range(from, to))),
+              .order('id', { ascending: true })
+              .limit(pageSize);
+            if (afterId) q = q.gt('id', afterId);
+            return q;
+          })),
         loadCached<Employee[]>(`jobform_employees_${business.id}`, () =>
-          fetchAll<Employee>((from, to) =>
-            supabase
+          fetchAllById<Employee>((afterId, pageSize) => {
+            let q = supabase
               .from('employees')
               .select('id, first_name, last_name, role, show_in_roster')
               .eq('business_id', business.id)
               .eq('active', true)
-              .order('first_name')
-              .range(from, to))),
+              .order('id', { ascending: true })
+              .limit(pageSize);
+            if (afterId) q = q.gt('id', afterId);
+            return q;
+          })),
         loadCached<FieldTemplate[]>(`jobform_templates_${business.id}`, async () => {
           const { data, error } = await supabase
             .from('job_field_templates')
@@ -350,14 +358,17 @@ export default function NuevoTrabajoRoute() {
         }),
         // Client contacts — so the picker can find an account by a contact's
         // name (primary contact first).
-        loadCached<{ client_id: string; name: string; role: string | null }[]>(`jobform_contacts_${business.id}`, () =>
-          fetchAll<{ client_id: string; name: string; role: string | null }>((from, to) =>
-            supabase
+        loadCached<{ id: string; client_id: string; name: string; role: string | null }[]>(`jobform_contacts_${business.id}`, () =>
+          fetchAllById<{ id: string; client_id: string; name: string; role: string | null }>((afterId, pageSize) => {
+            let q = supabase
               .from('client_contacts')
-              .select('client_id, name, role')
+              .select('id, client_id, name, role')
               .eq('business_id', business.id)
-              .order('is_primary', { ascending: false })
-              .range(from, to))),
+              .order('id', { ascending: true })
+              .limit(pageSize);
+            if (afterId) q = q.gt('id', afterId);
+            return q;
+          })),
       ]);
       if (cancelled) return;
       const cl = clRes.data ?? [];

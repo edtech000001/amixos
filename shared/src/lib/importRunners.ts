@@ -5,7 +5,7 @@
 // identically. (The clients importer predates this and has its own pair of
 // implementations.)
 
-import { fetchAll, fetchAllById } from './supabaseFetch';
+import { fetchAllById } from './supabaseFetch';
 import { batchInsert, chunkedInsert, type BatchInsertItem } from './importBatch';
 import { employeeBreakdownInRange, getPayrollPeriod, normalizeFrequency, parsePayrollAnchor, type PayrollJob, type PayrollTimesheet } from './payroll';
 import { fieldRefId, normalizeFormula } from './payrollFormula';
@@ -413,6 +413,21 @@ export interface ImportRunCtx {
   locations?: { id: string; name: string; is_default?: boolean }[];
 }
 
+// Keyset load-all of a business-scoped table for the dedup preloads. Offset
+// .range() re-scans under RLS and stalls a large import (e.g. a business with
+// thousands of existing jobs/clients re-importing); keyset by id stays fast.
+// `select` MUST include `id`.
+function fetchAllRows<T extends { id: string }>(
+  ctx: ImportRunCtx, table: string, select: string,
+): Promise<T[]> {
+  return fetchAllById<T>((afterId, pageSize) => {
+    let q = ctx.supabase.from(table).select(select).eq('business_id', ctx.businessId)
+      .order('id', { ascending: true }).limit(pageSize);
+    if (afterId) q = q.gt('id', afterId);
+    return q;
+  });
+}
+
 // Case-insensitive branch-name → id matcher built from ctx.locations.
 function branchMatcher(ctx: ImportRunCtx) {
   const byName = new Map<string, string>();
@@ -436,8 +451,7 @@ const getOf = (ctx: ImportRunCtx) => (row: Record<string, string>, key: string) 
 // Match by normalized "first last" or company against existing clients;
 // auto-create on miss and remember it so repeated rows reuse the new client.
 export async function createClientResolver(ctx: ImportRunCtx) {
-  const clients = await fetchAll<{ id: string; first_name: string; last_name: string | null; company: string | null }>((from, to) =>
-    ctx.supabase.from('clients').select('id, first_name, last_name, company').eq('business_id', ctx.businessId).range(from, to));
+  const clients = await fetchAllRows<{ id: string; first_name: string; last_name: string | null; company: string | null }>(ctx, 'clients', 'id, first_name, last_name, company');
   const index = new Map<string, string>();
   clients.forEach(c => {
     index.set(normalizeName(`${c.first_name} ${c.last_name ?? ''}`), c.id);
@@ -524,15 +538,13 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
   const branch = branchMatcher(ctx);
   const unknownJobBranches = new Set<string>();
 
-  const existingJobs = await fetchAll<{
+  const existingJobs = await fetchAllRows<{
     id: string; external_ref: string | null; custom_fields: Record<string, string> | null;
     scheduled_at: string | null; in_progress_at: string | null; completed_at: string | null; invoiced_at: string | null;
-  }>((from, to) =>
-    ctx.supabase.from('jobs').select('id, external_ref, custom_fields, scheduled_at, in_progress_at, completed_at, invoiced_at').eq('business_id', ctx.businessId).range(from, to));
+  }>(ctx, 'jobs', 'id, external_ref, custom_fields, scheduled_at, in_progress_at, completed_at, invoiced_at');
   const existingRefs = new Set(existingJobs.map(j => j.external_ref).filter(Boolean) as string[]);
   const existingByRef = new Map(existingJobs.filter(j => j.external_ref).map(j => [j.external_ref as string, j]));
-  const employees = await fetchAll<EmployeeLite & { email: string | null; user_id: string | null }>((from, to) =>
-    ctx.supabase.from('employees').select('id, first_name, last_name, email, user_id').eq('business_id', ctx.businessId).range(from, to));
+  const employees = await fetchAllRows<EmployeeLite & { email: string | null; user_id: string | null }>(ctx, 'employees', 'id, first_name, last_name, email, user_id');
   // "Agregado por (email)" → the team member's linked account. Only people
   // with an app login can be a creator (created_by → auth.users): employees
   // with a linked account, plus the importing user's own login email (owners
@@ -912,8 +924,7 @@ export async function runEmployeesImport(ctx: ImportRunCtx): Promise<ImportResul
   const failedRows: ImportFailedRow[] = [];
   let skipped = 0;
 
-  const existing = await fetchAll<EmployeeLite>((from, to) =>
-    ctx.supabase.from('employees').select('id, first_name, last_name').eq('business_id', ctx.businessId).range(from, to));
+  const existing = await fetchAllRows<EmployeeLite>(ctx, 'employees', 'id, first_name, last_name');
   const existingNames = new Set(existing.map(e => normalizeName(`${e.first_name} ${e.last_name ?? ''}`)));
 
   // Branch handling (multi-location): a matched Branch cell files the worker to
@@ -1072,12 +1083,10 @@ export async function runInvoicesImport(ctx: ImportRunCtx): Promise<ImportResult
   const branch = branchMatcher(ctx);
   const unknownBranches = new Set<string>();
 
-  const existingInv = await fetchAll<{ external_ref: string | null }>((from, to) =>
-    ctx.supabase.from('invoices').select('external_ref').eq('business_id', ctx.businessId).range(from, to));
+  const existingInv = await fetchAllRows<{ id: string; external_ref: string | null }>(ctx, 'invoices', 'id, external_ref');
   const existingRefs = new Set(existingInv.map(i => i.external_ref).filter(Boolean) as string[]);
 
-  const jobs = await fetchAll<{ id: string; external_ref: string | null; client_id: string | null; title: string | null }>((from, to) =>
-    ctx.supabase.from('jobs').select('id, external_ref, client_id, title').eq('business_id', ctx.businessId).range(from, to));
+  const jobs = await fetchAllRows<{ id: string; external_ref: string | null; client_id: string | null; title: string | null }>(ctx, 'jobs', 'id, external_ref, client_id, title');
   const jobByRef = new Map<string, { id: string; client_id: string | null; title: string | null }>();
   jobs.forEach(j => { if (j.external_ref) jobByRef.set(j.external_ref, { id: j.id, client_id: j.client_id, title: j.title }); });
 
@@ -1275,8 +1284,7 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
   const failedRows: ImportFailedRow[] = [];
   let skipped = 0;
 
-  const employees = await fetchAll<EmployeeLite>((from, to) =>
-    ctx.supabase.from('employees').select('id, first_name, last_name, check_name').eq('business_id', ctx.businessId).range(from, to));
+  const employees = await fetchAllRows<EmployeeLite>(ctx, 'employees', 'id, first_name, last_name, check_name');
   const { data: biz } = await ctx.supabase
     .from('businesses').select('payroll_frequency, payroll_anchor_date, payroll_custom_days').eq('id', ctx.businessId).single();
   const freq = normalizeFrequency(biz?.payroll_frequency);
@@ -1456,11 +1464,9 @@ export async function runEquipmentImport(ctx: ImportRunCtx): Promise<ImportResul
   const failedRows: ImportFailedRow[] = [];
   let skipped = 0;
 
-  const existing = await fetchAll<{ name: string }>((from, to) =>
-    ctx.supabase.from('equipment').select('name').eq('business_id', ctx.businessId).range(from, to));
+  const existing = await fetchAllRows<{ id: string; name: string }>(ctx, 'equipment', 'id, name');
   const existingNames = new Set(existing.map(e => normalizeName(e.name)));
-  const employees = await fetchAll<EmployeeLite>((from, to) =>
-    ctx.supabase.from('employees').select('id, first_name, last_name').eq('business_id', ctx.businessId).range(from, to));
+  const employees = await fetchAllRows<EmployeeLite>(ctx, 'employees', 'id, first_name, last_name');
   const branch = branchMatcher(ctx);
   const unknownBranches = new Set<string>();
 
@@ -1541,8 +1547,7 @@ export async function runInventoryImport(ctx: ImportRunCtx): Promise<ImportResul
   const failedRows: ImportFailedRow[] = [];
   let skipped = 0;
 
-  const existing = await fetchAll<{ name: string; sku: string | null }>((from, to) =>
-    ctx.supabase.from('inventory_items').select('name, sku').eq('business_id', ctx.businessId).range(from, to));
+  const existing = await fetchAllRows<{ id: string; name: string; sku: string | null }>(ctx, 'inventory_items', 'id, name, sku');
   const existingNames = new Set(existing.map(e => normalizeName(e.name)));
   const existingSkus = new Set(existing.map(e => (e.sku ?? '').trim().toLowerCase()).filter(Boolean));
   // Branch → location_id (single per item, like jobs). Blank/unmatched = unfiled.

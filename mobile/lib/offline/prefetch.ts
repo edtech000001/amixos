@@ -12,7 +12,7 @@
 // those on their assigned jobs, so the warmed dataset is kilobytes, not the
 // whole business. Price sheets are intentionally NOT warmed (owner's choice).
 
-import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { createSupabaseClient } from '@/lib/supabase';
 import { writeCached } from './cache';
 import { isOnlineNow } from './network';
@@ -24,7 +24,7 @@ const MIN_INTERVAL_MS = 60_000;
 
 interface RawClient { id: string; first_name: string; last_name: string; company: string | null; city?: string; state?: string }
 interface RawEmployee { id: string; first_name: string; last_name: string; role: string; show_in_roster?: boolean | null }
-interface RawContact { client_id: string; name: string; role: string | null }
+interface RawContact { id: string; client_id: string; name: string; role: string | null }
 
 /**
  * Warm the offline cache for the job form's pickers. No-op when offline or when
@@ -41,23 +41,34 @@ export async function prefetchForOffline(businessId: string): Promise<void> {
 
   // Best-effort and independent: one failing read must not block the others, and
   // a partial warm still beats none. allSettled so nothing rejects the batch.
+  // Keyset (by id) — offset .range() re-scans under RLS and is slow to warm
+  // once a business has thousands of clients/contacts.
   await Promise.allSettled([
-    fetchAll<RawClient>((from, to) =>
-      supabase.from('clients')
+    fetchAllById<RawClient>((afterId, pageSize) => {
+      let q = supabase.from('clients')
         .select('id, first_name, last_name, company, city, state')
-        .eq('business_id', businessId).order('first_name').range(from, to))
+        .eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
+    })
       .then(rows => writeCached(`jobform_clients_${businessId}`, rows)),
 
-    fetchAll<RawEmployee>((from, to) =>
-      supabase.from('employees')
+    fetchAllById<RawEmployee>((afterId, pageSize) => {
+      let q = supabase.from('employees')
         .select('id, first_name, last_name, role, show_in_roster')
-        .eq('business_id', businessId).eq('active', true).order('first_name').range(from, to))
+        .eq('business_id', businessId).eq('active', true).order('id', { ascending: true }).limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
+    })
       .then(rows => writeCached(`jobform_employees_${businessId}`, rows)),
 
-    fetchAll<RawContact>((from, to) =>
-      supabase.from('client_contacts')
-        .select('client_id, name, role')
-        .eq('business_id', businessId).order('is_primary', { ascending: false }).range(from, to))
+    fetchAllById<RawContact>((afterId, pageSize) => {
+      let q = supabase.from('client_contacts')
+        .select('id, client_id, name, role')
+        .eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
+    })
       .then(rows => writeCached(`jobform_contacts_${businessId}`, rows)),
 
     (async () => {

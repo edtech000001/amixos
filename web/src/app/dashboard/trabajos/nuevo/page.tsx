@@ -20,7 +20,7 @@ import { JOB_PHOTOS_BUCKET, MAX_PHOTOS_PER_JOB, jobPhotoPath, jobPhotoFilename }
 import { parseHiddenFields, isJobFieldHidden, jobSectionHasVisibleField, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, type JobSectionKey, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import { useDirty, useUnsavedChanges } from '@/lib/useUnsavedChanges';
-import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { clientPickerDisplay } from '@amixos/shared/lib/clientSearch';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { logAudit } from '@amixos/shared/lib/audit';
@@ -715,18 +715,28 @@ function NuevoTrabajoContent() {
 
     const loadData = async () => {
       const businessId = business.id;
+      // Keyset (by id) — offset .range() re-scans under RLS and stalls the
+      // create form once a business has thousands of clients.
       const [cl, emp, contactRows] = await Promise.all([
-        fetchAll<Client>((from, to) =>
-          supabase.from('clients').select('id, first_name, last_name, company, address, city, state')
-            .eq('business_id', businessId).order('first_name').range(from, to)),
-        fetchAll<Employee>((from, to) =>
-          supabase.from('employees').select('id, first_name, last_name, role, show_in_roster')
-            .eq('business_id', businessId).eq('active', true).order('first_name').range(from, to)),
+        fetchAllById<Client>((afterId, pageSize) => {
+          let q = supabase.from('clients').select('id, first_name, last_name, company, address, city, state')
+            .eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+          if (afterId) q = q.gt('id', afterId);
+          return q;
+        }),
+        fetchAllById<Employee>((afterId, pageSize) => {
+          let q = supabase.from('employees').select('id, first_name, last_name, role, show_in_roster')
+            .eq('business_id', businessId).eq('active', true).order('id', { ascending: true }).limit(pageSize);
+          if (afterId) q = q.gt('id', afterId);
+          return q;
+        }),
         // Client contacts — so the picker can find an account by a contact's name.
-        fetchAll<{ client_id: string; name: string; role: string | null }>((from, to) =>
-          supabase.from('client_contacts').select('client_id, name, role')
-            .eq('business_id', businessId).order('is_primary', { ascending: false }).range(from, to))
-          .catch(() => [] as { client_id: string; name: string; role: string | null }[]),
+        fetchAllById<{ id: string; client_id: string; name: string; role: string | null }>((afterId, pageSize) => {
+          let q = supabase.from('client_contacts').select('id, client_id, name, role')
+            .eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+          if (afterId) q = q.gt('id', afterId);
+          return q;
+        }).catch(() => [] as { id: string; client_id: string; name: string; role: string | null }[]),
       ]);
       const contactsByClient = new Map<string, { name: string; role: string | null }[]>();
       for (const ct of contactRows) {

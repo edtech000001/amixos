@@ -10,7 +10,7 @@ import {
   type DashboardRecentInvoice,
   type DashboardUpcomingJob,
 } from '@amixos/shared/screens/dashboard/DashboardHomeScreen';
-import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { type DashboardLayout } from '@amixos/shared/lib/dashboardWidgets';
 import { isFieldOnly } from '@amixos/shared/lib/permissions';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
@@ -92,12 +92,15 @@ function OwnerDashboardHome() {
           supabase.from('invoices').select('total_amount')
             .eq('business_id', business.id).eq('status', 'paid').gte('paid_at', startMonth),
           // All paid invoices this year (also feeds the monthly chart) — can
-          // exceed 1000 rows for a busy business, so paginate.
-          fetchAll<{ total_amount: number | null; paid_at: string | null }>((from, to) =>
-            supabase.from('invoices').select('total_amount, paid_at')
+          // exceed 1000 rows for a busy business. Keyset (by id) — offset
+          // .range() re-scans under RLS and stalls at scale.
+          fetchAllById<{ id: string; total_amount: number | null; paid_at: string | null }>((afterId, pageSize) => {
+            let q = supabase.from('invoices').select('id, total_amount, paid_at')
               .eq('business_id', business.id).eq('status', 'paid')
-              .gte('paid_at', startYear).range(from, to),
-          ),
+              .gte('paid_at', startYear).order('id', { ascending: true }).limit(pageSize);
+            if (afterId) q = q.gt('id', afterId);
+            return q;
+          }),
           supabase.from('invoices').select('id', { count: 'exact', head: true })
             .eq('business_id', business.id).eq('status', 'sent'),
           supabase.from('invoices').select('id', { count: 'exact', head: true })
