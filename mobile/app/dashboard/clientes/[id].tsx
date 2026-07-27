@@ -93,6 +93,7 @@ interface ClientContact {
   email: string | null;
   notes: string | null;
   is_primary: boolean;
+  cc_on_invoices: boolean;
   created_at: string;
 }
 
@@ -147,6 +148,7 @@ const EMPTY_CONTACT = {
   email: '',
   notes: '',
   is_primary: false,
+  cc_on_invoices: false,
 };
 
 export default function ClienteDetailRoute() {
@@ -443,6 +445,7 @@ export default function ClienteDetailRoute() {
       email: ct.email ?? '',
       notes: ct.notes ?? '',
       is_primary: ct.is_primary,
+      cc_on_invoices: ct.cc_on_invoices,
     });
     setContactModalOpen(true);
   };
@@ -457,6 +460,7 @@ export default function ClienteDetailRoute() {
       email: contactForm.email.trim() || null,
       notes: contactForm.notes.trim() || null,
       is_primary: contactForm.is_primary,
+      cc_on_invoices: contactForm.cc_on_invoices && !!contactForm.email.trim(),
     };
 
     let syncContactId: string | null = null;
@@ -865,6 +869,11 @@ export default function ClienteDetailRoute() {
                         {ct.is_primary ? (
                           <Star size={11} color={c.warning} fill="#F59E0B" />
                         ) : null}
+                        {ct.cc_on_invoices ? (
+                          <View className="px-1.5 py-0.5 rounded-full bg-primary/10">
+                            <Text className="text-[10px] font-semibold text-primary">{td.contactModal.ccBadge}</Text>
+                          </View>
+                        ) : null}
                       </View>
                       {ct.role ? (
                         <Text className="text-xs text-faint mt-0.5">{ct.role}</Text>
@@ -1195,6 +1204,15 @@ export default function ClienteDetailRoute() {
                   <Text className="text-sm text-ink">{td.contactModal.primaryLabel}</Text>
                   <Star size={12} color={c.primary} fill="#4F46E5" />
                 </View>
+              </View>
+              {/* Auto-CC this contact on invoices sent to the client (needs an email). */}
+              <View className="flex-row items-center gap-3 mt-1">
+                <Toggle
+                  value={contactForm.cc_on_invoices}
+                  onValueChange={v => setContactForm(f => ({ ...f, cc_on_invoices: v }))}
+                  disabled={!contactForm.email.trim()}
+                />
+                <Text className={`text-sm ${contactForm.email.trim() ? 'text-ink' : 'text-faint'}`}>{td.contactModal.ccLabel}</Text>
               </View>
             </View>
           </ScrollView>

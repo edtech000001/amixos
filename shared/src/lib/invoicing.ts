@@ -380,7 +380,22 @@ export async function rebuildInvoiceLineItems(
   // re-deriving would silently undo the user's price/qty override.
   const overriddenJobs = new Set(existing.filter(li => li.job_id && li.edited).map(li => li.job_id as string));
   const keptJobLines = jobLines.filter(l => !overriddenJobs.has(l.job_id as string));
-  const overriddenLines = existing.filter(li => li.job_id && overriddenJobs.has(li.job_id));
+  // A job that bills as a SINGLE line: its name IS the job name, so keep the
+  // stored description in sync with the current job title (a rename from the
+  // job side then shows on print/send too). Multi-line/itemized jobs and add-on
+  // lines keep their own descriptions.
+  const jobTitleById = new Map<string, string>((jobs ?? []).map((j: any) => [j.id as string, (j.title ?? '') as string]));
+  const rawOverridden = existing.filter(li => li.job_id && overriddenJobs.has(li.job_id));
+  const singleLineJobs = new Set(
+    Array.from(overriddenJobs).filter(jid => rawOverridden.filter(li => li.job_id === jid && !li.addon).length === 1),
+  );
+  const overriddenLines = rawOverridden.map(li => {
+    if (li.job_id && !li.addon && singleLineJobs.has(li.job_id)) {
+      const title = jobTitleById.get(li.job_id);
+      if (title && title !== li.description) return { ...li, description: title };
+    }
+    return li;
+  });
   const finalJobLines = [...overriddenLines, ...keptJobLines];
   const lineKey = (l: InvoiceLineItem) => `${l.description}|${l.qty}|${l.rate}`;
   const jobLineKeys = new Set(finalJobLines.map(lineKey));
@@ -448,6 +463,21 @@ export async function updateLineItemAt(
     .from('invoices')
     .update({ line_items: next, subtotal_amount: subtotal, tax_amount: tax, total_amount: total })
     .eq('id', opts.invoiceId);
+
+  // When a job bills as a SINGLE line, that line's name IS the job's name — keep
+  // them in sync by renaming the job too, so the change shows everywhere
+  // (dashboard, print, send). Skip add-on lines (their own label) and multi-line
+  // / itemized jobs (one item shouldn't rename the whole job).
+  const target = items[opts.index];
+  const jobLineCount = target?.job_id
+    ? items.filter(li => li.job_id === target.job_id && !li.addon).length
+    : 0;
+  if (target?.job_id && !target.addon && jobLineCount === 1) {
+    const newTitle = opts.description.trim();
+    if (newTitle && newTitle !== (target.description ?? '').trim()) {
+      await supabase.from('jobs').update({ title: newTitle }).eq('id', target.job_id);
+    }
+  }
 }
 
 /** Remove a single line item by index (used for hand-entered/manual lines) and

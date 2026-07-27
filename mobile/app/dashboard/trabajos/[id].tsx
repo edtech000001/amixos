@@ -827,9 +827,9 @@ export default function JobDetailRoute() {
         tax_amount: taxAmount,
         discount,
         total_amount: total,
-        notes: job.estimate_number
-          ? `${t.statuses.proposal}: ${job.estimate_number} — ${job.title}`
-          : `${full.dashboard.sidebar.trabajos}: ${job.title}`,
+        // Leave notes empty — the invoice already links to its job; auto-filling
+        // "Jobs: <title>" here just printed clutter the user didn't ask for.
+        notes: null,
       })
       .select()
       .single();

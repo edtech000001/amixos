@@ -445,6 +445,8 @@ export type DashboardDict = {
         notesLabel: string;
         notesPlaceholder: string;
         primaryLabel: string;
+        ccLabel: string;
+        ccBadge: string;
         addBtn: string;
         confirmDelete: string;
       };
@@ -3054,6 +3056,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
           notesLabel: 'Notas',
           notesPlaceholder: 'Ej. Disponible solo por las mañanas...',
           primaryLabel: 'Contacto principal',
+          ccLabel: 'CC en facturas',
+          ccBadge: 'CC',
           addBtn: 'Agregar contacto',
           confirmDelete: '¿Eliminar este contacto?',
         },
@@ -5649,6 +5653,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
           notesLabel: 'Notes',
           notesPlaceholder: 'E.g. Only available in the mornings...',
           primaryLabel: 'Primary contact',
+          ccLabel: 'CC on invoices',
+          ccBadge: 'CC',
           addBtn: 'Add contact',
           confirmDelete: 'Delete this contact?',
         },

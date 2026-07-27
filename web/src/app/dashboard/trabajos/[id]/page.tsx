@@ -407,7 +407,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       tax_amount: invoiceTaxAmt,
       discount: invoiceDiscount,
       total_amount: invoiceTotal,
-      notes: job.estimate_number ? `${t.statuses.proposal}: ${job.estimate_number} — ${job.title}` : `${full.dashboard.sidebar.trabajos}: ${job.title}`,
+      // Leave notes empty — the invoice already links to its job; auto-filling
+      // "Jobs: <title>" here just printed clutter the user didn't ask for.
+      notes: null,
     }).select().single();
 
     if (!error && invoice) {

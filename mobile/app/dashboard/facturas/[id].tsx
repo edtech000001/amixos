@@ -730,6 +730,23 @@ export default function FacturaDetailRoute() {
     if (!invoice) return;
     const email = invoice.clients[0]?.email ?? '';
     if (!email) { Alert.alert('', tInv.sendNoEmail); return; }
+    // Auto-CC the client's contacts flagged "CC on invoices" (deduped, and
+    // never the To address itself).
+    const clientId = invoice.clients[0]?.id ?? null;
+    let ccList: string[] = [];
+    if (clientId) {
+      const { data: ccRows } = await supabase
+        .from('client_contacts')
+        .select('email')
+        .eq('client_id', clientId)
+        .eq('cc_on_invoices', true)
+        .not('email', 'is', null);
+      ccList = Array.from(new Set(
+        ((ccRows ?? []) as { email: string | null }[])
+          .map(r => (r.email ?? '').trim())
+          .filter(e => e && e.toLowerCase() !== email.toLowerCase()),
+      ));
+    }
     const token = await ensureShareToken();
     const base = WEB_APP_URL;
     const url = `${base}/factura/${token}`;
@@ -790,6 +807,7 @@ export default function FacturaDetailRoute() {
         }
         const result = await MailComposer.composeAsync({
           recipients: [email],
+          ...(ccList.length ? { ccRecipients: ccList } : {}),
           subject,
           body,
           attachments,
@@ -805,7 +823,8 @@ export default function FacturaDetailRoute() {
     }
 
     // Fallback: mailto link (body carries the public link; no attachment).
-    const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const ccParam = ccList.length ? `&cc=${encodeURIComponent(ccList.join(','))}` : '';
+    const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}${ccParam}`;
     try {
       await Linking.openURL(mailto);
       // Only mark sent when a mail composer actually opened — previously a
