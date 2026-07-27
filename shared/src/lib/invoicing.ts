@@ -269,7 +269,7 @@ export async function createInvoicesFromJobs(
   for (const id of opts.jobIds) {
     const j = byId.get(id);
     if (!j) continue;
-    const key = j.client_id ?? ' '; // null client → shared "no client" bucket
+    const key = j.client_id ?? '\u0000'; // null client → shared "no client" bucket
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(j);
   }
 
@@ -286,7 +286,7 @@ export async function createInvoicesFromJobs(
   const created: any[] = [];
 
   for (const [key, groupJobs] of Array.from(groups.entries())) {
-    const clientId = key === ' ' ? null : key;
+    const clientId = key === '\u0000' ? null : key;
     const lineItems: InvoiceLineItem[] = [];
     for (const j of groupJobs) {
       lineItems.push(...lineItemsForJob(j.id, j.title ?? '', allItems, opts.itemTypeLabels, { hideTypes: opts.hideItemTypes, placeholderQty: placeholderQtyFor(j, opts.qtyField) }));
