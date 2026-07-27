@@ -19,6 +19,7 @@ import {
   setFont,
   setDensity,
   setShowLogo,
+  setLogoInvert,
   setLogoSize,
   toggleSection,
   reorderSections,
@@ -811,6 +812,12 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
                 {value.showLogo ? (
                   <Seg<InvoiceLogoSize> value={value.logoSize} onChange={v => change(setLogoSize(value, v))}
                     options={[{ value: 'sm', label: t.logoSizes.sm }, { value: 'md', label: t.logoSizes.md }, { value: 'lg', label: t.logoSizes.lg }]} />
+                ) : null}
+                {value.showLogo ? (
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={value.logoInvert === true} onChange={e => change(setLogoInvert(value, e.target.checked))} />
+                    <span className="text-sm text-muted">{t.invertLogo}</span>
+                  </label>
                 ) : null}
               </div>
             </Field>

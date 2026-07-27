@@ -20,6 +20,7 @@ import {
   setDensity,
   setShowLogo,
   setLogoSize,
+  setLogoInvert,
   toggleSection,
   reorderSections,
   setColumn,
@@ -422,6 +423,14 @@ export function InvoiceDesigner({
                 { value: 'lg', label: t.logoSizes.lg },
               ]}
             />
+          ) : null}
+          {value.showLogo ? (
+            <Pressable onPress={() => onChange(setLogoInvert(value, value.logoInvert !== true))} className="flex-row items-center gap-2">
+              <View className={`w-5 h-5 rounded border items-center justify-center ${value.logoInvert ? 'bg-primary border-primary' : 'border-border bg-card'}`}>
+                {value.logoInvert ? <Text className="text-white text-[10px] font-bold">✓</Text> : null}
+              </View>
+              <Text className="text-sm text-muted">{t.invertLogo}</Text>
+            </Pressable>
           ) : null}
         </View>
       </Field>

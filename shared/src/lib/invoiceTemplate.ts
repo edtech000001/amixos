@@ -241,6 +241,10 @@ export interface InvoiceTemplateConfig {
   density: InvoiceDensity;
   showLogo: boolean;
   logoSize: InvoiceLogoSize;
+  /** Invert the logo's colors (CSS invert filter) — flips a black logo to white
+   *  so a monochrome logo stays visible on a dark header band. Opt-in because it
+   *  also colour-shifts a colored logo. */
+  logoInvert?: boolean;
   sections: InvoiceSection[];
   columns: InvoiceColumns;
   text: InvoiceTextBlocks;
@@ -528,6 +532,7 @@ export function normalizeConfig(raw: unknown): InvoiceTemplateConfig {
     density: r.density === 'compact' ? 'compact' : 'comfortable',
     showLogo: r.showLogo !== false,
     logoSize: r.logoSize === 'sm' || r.logoSize === 'lg' ? r.logoSize : 'md',
+    logoInvert: r.logoInvert === true,
     sections,
     columns: {
       qty: r.columns?.qty !== false,
@@ -795,6 +800,8 @@ export interface InvoiceViewModel {
   header: {
     showLogo: boolean;
     logoUrl: string | null;
+    /** Invert the logo's colors (see InvoiceTemplateConfig.logoInvert). */
+    logoInvert: boolean;
     businessName: string;
     businessLines: string[];
     invoiceTitle: string;
@@ -906,6 +913,7 @@ export function buildInvoiceViewModel(
     header: {
       showLogo: cfg.showLogo && !!branding.logoUrl,
       logoUrl: branding.logoUrl,
+      logoInvert: cfg.logoInvert === true,
       businessName: branding.name,
       businessLines,
       invoiceTitle: labels.invoice,
@@ -1706,6 +1714,9 @@ export function setShowLogo(c: InvoiceTemplateConfig, showLogo: boolean): Invoic
 }
 export function setLogoSize(c: InvoiceTemplateConfig, logoSize: InvoiceLogoSize): InvoiceTemplateConfig {
   return { ...c, logoSize };
+}
+export function setLogoInvert(c: InvoiceTemplateConfig, logoInvert: boolean): InvoiceTemplateConfig {
+  return { ...c, logoInvert };
 }
 export function toggleSection(c: InvoiceTemplateConfig, id: InvoiceSectionId): InvoiceTemplateConfig {
   return {

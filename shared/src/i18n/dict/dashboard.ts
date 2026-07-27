@@ -1627,6 +1627,7 @@ export type DashboardDict = {
         showLogo: string;
         logoSize: string;
         logoSizes: { sm: string; md: string; lg: string };
+        invertLogo: string;
         sections: string;
         sectionNames: {
           header: string; billTo: string; lineItems: string; totals: string;
@@ -4212,6 +4213,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           fonts: { sans: 'Sans serif', helvetica: 'Helvetica', gillsans: 'Gill Sans', futura: 'Futura', avenir: 'Avenir', optima: 'Optima', trebuchet: 'Trebuchet', verdana: 'Verdana', serif: 'Serif (Georgia)', times: 'Times', palatino: 'Palatino', baskerville: 'Baskerville', didot: 'Didot', hoefler: 'Hoefler', typewriter: 'American Typewriter', copperplate: 'Copperplate', mono: 'Monoespaciada', courier: 'Courier' },
           density: 'Densidad',
           densities: { comfortable: 'Cómoda', compact: 'Compacta' },
+          invertLogo: 'Invertir colores del logo',
           showLogo: 'Mostrar logo',
           logoSize: 'Tamaño del logo',
           logoSizes: { sm: 'Pequeño', md: 'Mediano', lg: 'Grande' },
@@ -6801,6 +6803,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           fonts: { sans: 'Sans serif', helvetica: 'Helvetica', gillsans: 'Gill Sans', futura: 'Futura', avenir: 'Avenir', optima: 'Optima', trebuchet: 'Trebuchet', verdana: 'Verdana', serif: 'Serif (Georgia)', times: 'Times', palatino: 'Palatino', baskerville: 'Baskerville', didot: 'Didot', hoefler: 'Hoefler', typewriter: 'American Typewriter', copperplate: 'Copperplate', mono: 'Monospace', courier: 'Courier' },
           density: 'Density',
           densities: { comfortable: 'Comfortable', compact: 'Compact' },
+          invertLogo: 'Invert logo colors',
           showLogo: 'Show logo',
           logoSize: 'Logo size',
           logoSizes: { sm: 'Small', md: 'Medium', lg: 'Large' },

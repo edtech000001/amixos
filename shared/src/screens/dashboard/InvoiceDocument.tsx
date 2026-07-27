@@ -101,9 +101,14 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     </T>
   );
 
+  // RN can't do a CSS invert filter; tintColor is the closest equivalent — it
+  // recolors a monochrome (transparent-background) logo to white so it stays
+  // visible on a dark header. The web/PDF render (what the client sees) does a
+  // true colour invert.
+  const logoTint = h.logoInvert ? { tintColor: '#FFFFFF' as const } : null;
   const Logo = ({ width = 160, scale = 1 }: { width?: number; scale?: number }) =>
     h.showLogo && h.logoUrl ? (
-      <Image source={{ uri: h.logoUrl }} resizeMode="contain" style={{ height: st.logoPx * scale, width, marginBottom: 8 }} />
+      <Image source={{ uri: h.logoUrl }} resizeMode="contain" style={{ height: st.logoPx * scale, width, marginBottom: 8, ...logoTint }} />
     ) : null;
 
   const MetaLines = ({ subtle }: { subtle?: boolean }) => (
@@ -226,7 +231,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
           <View style={{ borderBottomWidth: 1, borderBottomColor: '#E5E7EB', paddingBottom: 12 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <T style={{ textTransform: 'uppercase', color: '#6B7280', fontSize: small, letterSpacing: 1.4, fontWeight: '600' }}>{h.businessName}</T>
-              {h.showLogo && h.logoUrl ? <Image source={{ uri: h.logoUrl }} resizeMode="contain" style={{ height: st.logoPx * 0.7, width: 120 }} /> : null}
+              {h.showLogo && h.logoUrl ? <Image source={{ uri: h.logoUrl }} resizeMode="contain" style={{ height: st.logoPx * 0.7, width: 120, ...logoTint }} /> : null}
             </View>
             <View style={{ width: 32, height: 3, backgroundColor: accent, borderRadius: 2, marginTop: 14, marginBottom: 8 }} />
             <T style={{ fontWeight: '300', fontSize: st.fontPx + 16, color: '#111827', letterSpacing: 0.4 }}>{h.invoiceTitle}</T>
@@ -288,7 +293,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
               <T style={{ color: '#9CA3AF', fontSize: small, marginTop: 6 }}>{h.issueLabel} {h.issueValue}{h.dueValue ? `  ·  ${h.dueLabel} ${h.dueValue}` : ''}</T>
             </View>
             <View style={{ width: 110, height: 110, borderRadius: 55, backgroundColor: tint, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              {h.showLogo && h.logoUrl ? <Image source={{ uri: h.logoUrl }} resizeMode="contain" style={{ height: 40, width: 70, marginBottom: 4 }} /> : null}
+              {h.showLogo && h.logoUrl ? <Image source={{ uri: h.logoUrl }} resizeMode="contain" style={{ height: 40, width: 70, marginBottom: 4, ...logoTint }} /> : null}
               <T style={{ textTransform: 'uppercase', letterSpacing: 1, color: '#6B7280', fontSize: st.fontPx - 3, textAlign: 'center', paddingHorizontal: 8 }}>{h.businessName}</T>
             </View>
           </View>
@@ -302,7 +307,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
               <MetaLines />
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              {h.showLogo && h.logoUrl ? <Image source={{ uri: h.logoUrl }} resizeMode="contain" style={{ height: st.logoPx, width: 140, marginBottom: 6 }} /> : null}
+              {h.showLogo && h.logoUrl ? <Image source={{ uri: h.logoUrl }} resizeMode="contain" style={{ height: st.logoPx, width: 140, marginBottom: 6, ...logoTint }} /> : null}
               <T style={{ fontWeight: '700', fontSize: st.fontPx + 4, color: '#111827' }}>{h.businessName}</T>
               {h.businessLines.map((l, i) => (
                 <T key={i} style={{ color: '#6B7280', fontSize: small, marginTop: 2 }}>{l}</T>
@@ -463,7 +468,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     const renderEl = (el: InvoiceElement): ReactNode => {
       if (el.kind === 'logo') {
         return vm.header.logoUrl ? (
-          <Image source={{ uri: vm.header.logoUrl }} resizeMode="contain" style={{ width: '100%', height: '100%' }} />
+          <Image source={{ uri: vm.header.logoUrl }} resizeMode="contain" style={{ width: '100%', height: '100%', ...(vm.header.logoInvert ? { tintColor: '#FFFFFF' as const } : null) }} />
         ) : null;
       }
       if (el.kind === 'shape') return <ShapeGlyph el={el} accent={accent} />;
