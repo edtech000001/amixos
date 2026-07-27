@@ -75,7 +75,6 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     <div style={{ textAlign: align }}>
       <div className="font-bold uppercase" style={{ color: accent, letterSpacing: '0.08em', fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</div>
       <div className="font-semibold" style={{ marginTop: 2 }}>{h.invoiceNumber}</div>
-      <div className="uppercase text-muted" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em' }}>{h.statusLabel}</div>
       {metaLines()}
     </div>
   );
@@ -109,7 +108,6 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
               <div style={{ display: 'inline-block', background: accent, color: onAcc, borderRadius: 8, padding: '8px 12px' }}>
                 <div className="font-bold uppercase" style={{ letterSpacing: '0.08em', fontSize: st.fontPx + 4, color: onAcc }}>{h.invoiceTitle}</div>
                 <div className="font-semibold" style={{ fontSize: st.fontPx, color: onAcc, marginTop: 1 }}>{h.invoiceNumber}</div>
-                <div className="uppercase" style={{ fontSize: st.fontPx - 3, letterSpacing: '0.04em', color: subtleOnAcc, marginTop: 2 }}>{h.statusLabel}</div>
               </div>
               <div style={{ marginTop: 8 }}>{metaLines()}</div>
             </div>
@@ -128,7 +126,6 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             <div className="text-right">
               <div className="font-bold uppercase" style={{ color: onAcc, letterSpacing: '0.08em', fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</div>
               <div className="font-semibold" style={{ marginTop: 2, color: onAcc }}>{h.invoiceNumber}</div>
-              <div className="uppercase" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em', color: subtleOnAcc }}>{h.statusLabel}</div>
               {metaLines(true)}
             </div>
           </div>
@@ -142,7 +139,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
               <div key={i} className="text-muted" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
             ))}
             <div className="font-bold uppercase" style={{ color: accent, letterSpacing: '0.12em', fontSize: st.fontPx + 8, marginTop: 12 }}>{h.invoiceTitle}</div>
-            <div className="font-semibold text-muted" style={{ fontSize: small, marginTop: 2 }}>{h.invoiceNumber} · {h.statusLabel}</div>
+            <div className="font-semibold text-muted" style={{ fontSize: small, marginTop: 2 }}>{h.invoiceNumber}</div>
             <div className="flex justify-center gap-4" style={{ marginTop: 2 }}>{metaLines()}</div>
           </div>
         );
@@ -159,7 +156,6 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             <div className="flex-1" style={{ paddingTop: 4 }}>
               <div className="font-bold uppercase" style={{ color: accent, letterSpacing: '0.08em', fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</div>
               <div className="font-semibold" style={{ marginTop: 2 }}>{h.invoiceNumber}</div>
-              <div className="uppercase text-muted" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em' }}>{h.statusLabel}</div>
               {metaLines()}
             </div>
           </div>
@@ -174,7 +170,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             <div style={{ width: 32, height: 3, background: accent, borderRadius: 2, margin: '14px 0 8px' }} />
             <div style={{ fontWeight: 300, fontSize: st.fontPx + 16, color: '#111827', letterSpacing: '0.02em' }}>{h.invoiceTitle}</div>
             <div className="text-muted" style={{ fontSize: small, marginTop: 6 }}>
-              {h.invoiceNumber} · {h.statusLabel} · {h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}
+              {h.invoiceNumber} · {h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}
             </div>
           </div>
         );
@@ -185,7 +181,6 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             <div className="text-right">
               <div style={{ fontWeight: 800, textTransform: 'uppercase', color: accent, letterSpacing: '0.01em', fontSize: st.fontPx + 30, lineHeight: 1 }}>{h.invoiceTitle}</div>
               <div className="font-semibold" style={{ marginTop: 6 }}>{h.invoiceNumber}</div>
-              <div className="uppercase text-muted" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em' }}>{h.statusLabel}</div>
               {metaLines()}
             </div>
           </div>
@@ -199,7 +194,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             </div>
             <div style={{ height: 2, background: '#e5e7eb', margin: '12px 0 8px' }} />
             <div className="flex justify-between gap-4 text-muted" style={{ fontSize: small }}>
-              <span>{h.invoiceNumber} · {h.statusLabel}</span>
+              <span>{h.invoiceNumber}</span>
               <span>{h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}</span>
             </div>
           </div>
@@ -217,7 +212,6 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             <div className="text-right">
               <div style={{ textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 800, fontSize: st.fontPx + 12, color: onAcc }}>{h.invoiceTitle}</div>
               <div className="font-semibold" style={{ marginTop: 4, color: onAcc }}>{h.invoiceNumber}</div>
-              <div className="uppercase" style={{ fontSize: st.fontPx - 3, marginTop: 3, letterSpacing: '0.04em', color: subtleOnAcc }}>{h.statusLabel}</div>
               {metaLines(true)}
             </div>
           </div>
@@ -227,7 +221,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
           <div className="flex justify-between gap-6 items-center pb-4" style={{ borderBottom: '1px solid #e5e7eb' }}>
             <div>
               <div style={{ textTransform: 'uppercase', letterSpacing: '0.16em', fontWeight: 400, fontSize: st.fontPx + 18, color: '#111827' }}>{h.invoiceTitle}</div>
-              <div className="text-muted" style={{ fontSize: small, marginTop: 4 }}>{h.invoiceNumber} · {h.statusLabel}</div>
+              <div className="text-muted" style={{ fontSize: small, marginTop: 4 }}>{h.invoiceNumber}</div>
               <div className="text-faint" style={{ fontSize: small, marginTop: 6 }}>{h.issueLabel} {h.issueValue}{h.dueValue ? `  ·  ${h.dueLabel} ${h.dueValue}` : ''}</div>
             </div>
             <div style={{ width: 122, height: 122, borderRadius: '50%', background: tint, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', flex: '0 0 auto' }}>
@@ -244,7 +238,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
           <div className="flex justify-between gap-6 items-start">
             <div>
               <div style={{ textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700, fontSize: st.fontPx + 14, color: accent }}>{h.invoiceTitle}</div>
-              <div className="font-semibold text-muted" style={{ fontSize: small, marginTop: 4 }}>{h.invoiceNumber} · {h.statusLabel}</div>
+              <div className="font-semibold text-muted" style={{ fontSize: small, marginTop: 4 }}>{h.invoiceNumber}</div>
               {metaLines()}
             </div>
             <div className="text-right">
@@ -262,7 +256,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} center invert={h.logoInvert} /> : null}
             <div style={{ background: accent, color: onAcc, textTransform: 'uppercase', letterSpacing: '0.3em', fontWeight: 700, fontSize: st.fontPx + 6, padding: '10px 0', margin: '8px 0' }}>{h.invoiceTitle}</div>
             <div className="text-muted" style={{ fontSize: small }}>
-              {h.invoiceNumber} · {h.statusLabel} · {h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}
+              {h.invoiceNumber} · {h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}
             </div>
           </div>
         );
@@ -279,7 +273,6 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             <div className="text-right">
               <div className="font-bold uppercase" style={{ color: accent, letterSpacing: '0.08em', fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</div>
               <div className="font-semibold" style={{ marginTop: 2 }}>{h.invoiceNumber}</div>
-              <div className="uppercase text-muted" style={{ fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: '0.04em' }}>{h.statusLabel}</div>
               {metaLines()}
             </div>
           </div>
@@ -448,12 +441,19 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
           </div>
         ))}
       </div>
-      {vm.footerBar && vm.footerContact.length ? (
-        <div style={{ position: 'relative', zIndex: 1, marginTop: gap, marginLeft: st.pad, marginRight: st.pad, marginBottom: st.pad, background: accent, color: onAcc, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 16px', borderRadius: 8, fontSize: small }}>
-          {vm.footerContact.flatMap((l, i) => {
-            const node = <span key={`t${i}`} style={{ fontWeight: i === 0 ? 700 : 400 }}>{l}</span>;
-            return i === 0 ? [node] : [<span key={`s${i}`} style={{ color: subtleOnAcc }}>·</span>, node];
-          })}
+      {vm.footerBar && (vm.footer || vm.footerContact.length) ? (
+        // Full-bleed strip flush to the bottom edge. Shows the footer text/tagline
+        // when set (the business-contact line it used to hold is redundant with the
+        // header); otherwise falls back to the business contact.
+        <div style={{ position: 'relative', zIndex: 1, marginTop: gap, background: accent, color: onAcc, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 8, padding: `13px ${st.pad}px`, fontSize: small, whiteSpace: 'pre-wrap', textAlign: 'center' }}>
+          {vm.footer ? (
+            <span>{vm.footer}</span>
+          ) : (
+            vm.footerContact.flatMap((l, i) => {
+              const node = <span key={`t${i}`} style={{ fontWeight: i === 0 ? 700 : 400 }}>{l}</span>;
+              return i === 0 ? [node] : [<span key={`s${i}`} style={{ color: subtleOnAcc }}>·</span>, node];
+            })
+          )}
         </div>
       ) : null}
     </div>

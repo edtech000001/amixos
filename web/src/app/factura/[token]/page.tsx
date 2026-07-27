@@ -20,6 +20,10 @@ interface RawClient {
   last_name: string;
   email: string | null;
   phone_cell: string | null;
+  company: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
 }
 interface RawBusiness {
   name: string;
@@ -144,6 +148,10 @@ export default function PublicInvoicePage({ params }: { params: { token: string 
       lastName: c.last_name,
       email: c.email,
       phoneCell: c.phone_cell,
+      company: c.company,
+      address: c.address,
+      city: c.city,
+      state: c.state,
     })),
     customFields,
   };

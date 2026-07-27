@@ -738,6 +738,10 @@ export interface InvoiceDocClient {
   lastName: string;
   email: string | null;
   phoneCell: string | null;
+  company?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
 }
 export interface InvoiceDocLineItem {
   description: string;
@@ -853,10 +857,16 @@ export function buildInvoiceViewModel(
     .map(s => s.trim())
     .filter(Boolean);
 
-  const billTo = invoice.clients.map(c => ({
-    name: `${c.firstName} ${c.lastName}`.trim(),
-    lines: [c.email ?? '', c.phoneCell ?? ''].map(s => s.trim()).filter(Boolean),
-  }));
+  const billTo = invoice.clients.map(c => {
+    const cityState = [c.city ?? '', c.state ?? ''].map(s => s.trim()).filter(Boolean).join(', ');
+    return {
+      name: `${c.firstName} ${c.lastName}`.trim(),
+      // Company + address + phone + email — whatever the client record lists.
+      lines: [c.company ?? '', c.address ?? '', cityState, c.phoneCell ?? '', c.email ?? '']
+        .map(s => s.trim())
+        .filter(Boolean),
+    };
+  });
 
   const items = invoice.lineItems.map(l => {
     const qty = Number(l.qty) || 0;
@@ -884,7 +894,10 @@ export function buildInvoiceViewModel(
     customFields: customFields.length > 0,
     notes: !!notes,
     paymentInstructions: !!paymentInstructions,
-    footer: !!footer,
+    // With a footer BAR, the tagline moves INTO the bar (the business-contact
+    // strip it replaces is redundant with the header), so it's dropped from the
+    // body sections. Without a bar it stays a normal body section.
+    footer: !!footer && cfg.footerBar !== true,
   };
   const visible = cfg.sections.filter(s => s.show && hasData[s.id]);
   const sections = visible.map(s => s.id);
@@ -1865,7 +1878,7 @@ export const SAMPLE_INVOICE: InvoiceDocData = {
   totalAmount: 626.4,
   notes: 'Gracias por su preferencia.',
   language: 'es',
-  clients: [{ firstName: 'Juan', lastName: 'Pérez', email: 'juan@example.com', phoneCell: '(555) 123-4567' }],
+  clients: [{ firstName: 'Juan', lastName: 'Pérez', email: 'juan@example.com', phoneCell: '(555) 123-4567', company: 'Pérez Construction', address: '742 Evergreen Ter', city: 'Bellevue', state: 'NE' }],
   customFields: [
     { label: 'Orden de compra', value: 'PO-10234' },
     { label: 'Términos', value: 'Neto 30' },

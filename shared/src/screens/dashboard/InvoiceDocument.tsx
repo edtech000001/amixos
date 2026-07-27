@@ -137,7 +137,6 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     <View style={{ alignItems: align }}>
       <T style={{ fontWeight: '700', textTransform: 'uppercase', color: accent, letterSpacing: 1, fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</T>
       <T style={{ fontWeight: '600', marginTop: 2, color: '#111827' }}>{h.invoiceNumber}</T>
-      <T style={{ textTransform: 'uppercase', color: '#6B7280', fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: 0.4 }}>{h.statusLabel}</T>
       <MetaLines />
     </View>
   );
@@ -171,7 +170,6 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
               <View style={{ backgroundColor: accent, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 }}>
                 <T style={{ fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, fontSize: st.fontPx + 4, color: onAcc }}>{h.invoiceTitle}</T>
                 <T style={{ fontWeight: '600', fontSize: st.fontPx, color: onAcc, marginTop: 1 }}>{h.invoiceNumber}</T>
-                <T style={{ textTransform: 'uppercase', fontSize: st.fontPx - 3, letterSpacing: 0.4, color: subtleOnAcc, marginTop: 2 }}>{h.statusLabel}</T>
               </View>
               <View style={{ marginTop: 8, alignItems: 'flex-end' }}><MetaLines /></View>
             </View>
@@ -190,7 +188,6 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             <View style={{ alignItems: 'flex-end' }}>
               <T style={{ fontWeight: '700', textTransform: 'uppercase', color: onAcc, letterSpacing: 1, fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</T>
               <T style={{ fontWeight: '600', marginTop: 2, color: onAcc }}>{h.invoiceNumber}</T>
-              <T style={{ textTransform: 'uppercase', color: subtleOnAcc, fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: 0.4 }}>{h.statusLabel}</T>
               <MetaLines subtle />
             </View>
           </View>
@@ -204,7 +201,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
               <T key={i} style={{ color: '#6B7280', fontSize: small, marginTop: 2, textAlign: 'center' }}>{l}</T>
             ))}
             <T style={{ fontWeight: '700', textTransform: 'uppercase', color: accent, letterSpacing: 1.4, fontSize: st.fontPx + 8, marginTop: 12, textAlign: 'center' }}>{h.invoiceTitle}</T>
-            <T style={{ fontWeight: '600', color: '#6B7280', fontSize: small, marginTop: 2, textAlign: 'center' }}>{h.invoiceNumber} · {h.statusLabel}</T>
+            <T style={{ fontWeight: '600', color: '#6B7280', fontSize: small, marginTop: 2, textAlign: 'center' }}>{h.invoiceNumber}</T>
             <View style={{ flexDirection: 'row', gap: 16, marginTop: 2 }}><MetaLines /></View>
           </View>
         );
@@ -221,7 +218,6 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             <View style={{ flex: 1, paddingTop: 4 }}>
               <T style={{ fontWeight: '700', textTransform: 'uppercase', color: accent, letterSpacing: 1, fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</T>
               <T style={{ fontWeight: '600', marginTop: 2, color: '#111827' }}>{h.invoiceNumber}</T>
-              <T style={{ textTransform: 'uppercase', color: '#6B7280', fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: 0.4 }}>{h.statusLabel}</T>
               <MetaLines />
             </View>
           </View>
@@ -236,7 +232,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             <View style={{ width: 32, height: 3, backgroundColor: accent, borderRadius: 2, marginTop: 14, marginBottom: 8 }} />
             <T style={{ fontWeight: '300', fontSize: st.fontPx + 16, color: '#111827', letterSpacing: 0.4 }}>{h.invoiceTitle}</T>
             <T style={{ color: '#6B7280', fontSize: small, marginTop: 6 }}>
-              {h.invoiceNumber} · {h.statusLabel} · {h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}
+              {h.invoiceNumber} · {h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}
             </T>
           </View>
         );
@@ -247,7 +243,6 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
               <T style={{ fontWeight: '800', textTransform: 'uppercase', color: accent, fontSize: st.fontPx + 30 }}>{h.invoiceTitle}</T>
               <T style={{ fontWeight: '600', marginTop: 6, color: '#111827' }}>{h.invoiceNumber}</T>
-              <T style={{ textTransform: 'uppercase', color: '#6B7280', fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: 0.4 }}>{h.statusLabel}</T>
               <MetaLines />
             </View>
           </View>
@@ -261,7 +256,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             </View>
             <View style={{ height: 2, backgroundColor: '#E5E7EB', marginTop: 12, marginBottom: 8 }} />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
-              <T style={{ color: '#6B7280', fontSize: small }}>{h.invoiceNumber} · {h.statusLabel}</T>
+              <T style={{ color: '#6B7280', fontSize: small }}>{h.invoiceNumber}</T>
               <T style={{ color: '#6B7280', fontSize: small }}>{h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}</T>
             </View>
           </View>
@@ -279,7 +274,6 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             <View style={{ alignItems: 'flex-end' }}>
               <T style={{ textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: '800', fontSize: st.fontPx + 12, color: onAcc }}>{h.invoiceTitle}</T>
               <T style={{ fontWeight: '600', marginTop: 4, color: onAcc }}>{h.invoiceNumber}</T>
-              <T style={{ textTransform: 'uppercase', color: subtleOnAcc, fontSize: st.fontPx - 3, marginTop: 3, letterSpacing: 0.4 }}>{h.statusLabel}</T>
               <MetaLines subtle />
             </View>
           </View>
@@ -289,7 +283,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#E5E7EB', paddingBottom: 12 }}>
             <View style={{ flex: 1 }}>
               <T style={{ textTransform: 'uppercase', letterSpacing: 2, fontWeight: '400', fontSize: st.fontPx + 18, color: '#111827' }}>{h.invoiceTitle}</T>
-              <T style={{ color: '#6B7280', fontSize: small, marginTop: 4 }}>{h.invoiceNumber} · {h.statusLabel}</T>
+              <T style={{ color: '#6B7280', fontSize: small, marginTop: 4 }}>{h.invoiceNumber}</T>
               <T style={{ color: '#9CA3AF', fontSize: small, marginTop: 6 }}>{h.issueLabel} {h.issueValue}{h.dueValue ? `  ·  ${h.dueLabel} ${h.dueValue}` : ''}</T>
             </View>
             <View style={{ width: 110, height: 110, borderRadius: 55, backgroundColor: tint, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -303,7 +297,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start' }}>
             <View style={{ flex: 1 }}>
               <T style={{ textTransform: 'uppercase', letterSpacing: 1.4, fontWeight: '700', fontSize: st.fontPx + 14, color: accent }}>{h.invoiceTitle}</T>
-              <T style={{ fontWeight: '600', color: '#6B7280', fontSize: small, marginTop: 4 }}>{h.invoiceNumber} · {h.statusLabel}</T>
+              <T style={{ fontWeight: '600', color: '#6B7280', fontSize: small, marginTop: 4 }}>{h.invoiceNumber}</T>
               <MetaLines />
             </View>
             <View style={{ alignItems: 'flex-end' }}>
@@ -323,7 +317,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
               <T style={{ color: onAcc, textTransform: 'uppercase', letterSpacing: 4, fontWeight: '700', fontSize: st.fontPx + 6, textAlign: 'center' }}>{h.invoiceTitle}</T>
             </View>
             <T style={{ color: '#6B7280', fontSize: small, textAlign: 'center' }}>
-              {h.invoiceNumber} · {h.statusLabel} · {h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}
+              {h.invoiceNumber} · {h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}
             </T>
           </View>
         );
@@ -340,7 +334,6 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             <View style={{ alignItems: 'flex-end' }}>
               <T style={{ fontWeight: '700', textTransform: 'uppercase', color: accent, letterSpacing: 1, fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</T>
               <T style={{ fontWeight: '600', marginTop: 2, color: '#111827' }}>{h.invoiceNumber}</T>
-              <T style={{ textTransform: 'uppercase', color: '#6B7280', fontSize: st.fontPx - 3, marginTop: 4, letterSpacing: 0.4 }}>{h.statusLabel}</T>
               <MetaLines />
             </View>
           </View>
@@ -553,13 +546,19 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
           </Fragment>
         ))}
       </View>
-      {vm.footerBar && vm.footerContact.length ? (
-        <View style={{ zIndex: 1, marginTop: gap, marginHorizontal: st.pad, marginBottom: st.pad, backgroundColor: accent, borderRadius: 8, paddingVertical: 12, paddingHorizontal: 16, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
-          {vm.footerContact.map((l, i) => (
-            <T key={i} style={{ color: i === 0 ? onAcc : subtleOnAcc, fontWeight: i === 0 ? '700' : '400', fontSize: small }}>
-              {i > 0 ? '   ·   ' : ''}{l}
-            </T>
-          ))}
+      {vm.footerBar && (vm.footer || vm.footerContact.length) ? (
+        // Full-bleed strip flush to the bottom edge. Shows the tagline when set
+        // (the business-contact line it replaces is redundant with the header).
+        <View style={{ zIndex: 1, marginTop: gap, backgroundColor: accent, paddingVertical: 13, paddingHorizontal: st.pad, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
+          {vm.footer ? (
+            <T style={{ color: onAcc, fontSize: small, textAlign: 'center' }}>{vm.footer}</T>
+          ) : (
+            vm.footerContact.map((l, i) => (
+              <T key={i} style={{ color: i === 0 ? onAcc : subtleOnAcc, fontWeight: i === 0 ? '700' : '400', fontSize: small }}>
+                {i > 0 ? '   ·   ' : ''}{l}
+              </T>
+            ))
+          )}
         </View>
       ) : null}
     </View>
