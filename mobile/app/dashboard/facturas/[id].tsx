@@ -23,7 +23,7 @@ import { DatePicker, Select } from '@amixos/shared/ui';
 import type { InvoiceLang } from '@amixos/shared';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
-import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, autopriceInvoice } from '@amixos/shared/lib/invoicing';
+import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, autopriceInvoice, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
 import { rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
@@ -238,13 +238,29 @@ export default function FacturaDetailRoute() {
     void supabase.from('clients').select('price_tier_id').eq('id', invClientId).single()
       .then(({ data }: { data: { price_tier_id: string | null } | null }) => setClientTierId(data?.price_tier_id ?? null));
   }, [invClientId]); // eslint-disable-line react-hooks/exhaustive-deps
-  const runAutoprice = async () => {
+  // Walk the tied lines one at a time (a native picker per line), collecting the
+  // chosen price-item ids, then re-run autoprice with those picks.
+  const promptAmbiguous = (list: AutopriceAmbiguous[], collected: Record<number, string>) => {
+    if (!list.length) { void runAutoprice(collected); return; }
+    const [head, ...rest] = list;
+    Alert.alert(
+      full.dashboard.jobs.detail.autopricePickTitle,
+      `${head.description}\n\n${full.dashboard.jobs.detail.autopricePickSubtitle}`,
+      [
+        ...head.options.map(o => ({ text: o.name, onPress: () => promptAmbiguous(rest, { ...collected, [head.index]: o.id }) })),
+        { text: full.common.buttons.cancel, style: 'cancel' as const },
+      ],
+    );
+  };
+  const runAutoprice = async (picks?: Record<number, string>) => {
     if (!priceItems.length) return;
-    const { matched, alreadyPriced, unmatched } = await autopriceInvoice(supabase, { invoiceId: id, items: priceItems, tierId: clientTierId, qtyField: business?.invoice_qty_field });
-    if (matched) { setShowInvVerify(true); await reloadInvoice(); }
-    else if (alreadyPriced > 0) Alert.alert('', full.dashboard.jobs.detail.autopriceAlreadyPriced);
+    const res = await autopriceInvoice(supabase, { invoiceId: id, items: priceItems, tierId: clientTierId, qtyField: business?.invoice_qty_field, picks });
+    if (res.matched) { setShowInvVerify(true); await reloadInvoice(); }
+    if (res.ambiguous.length) { promptAmbiguous(res.ambiguous, picks ?? {}); return; }
+    if (res.matched) return;
+    if (res.alreadyPriced > 0) Alert.alert('', full.dashboard.jobs.detail.autopriceAlreadyPriced);
     // Show the exact text we searched so the user sees which word to add a term for.
-    else Alert.alert('', `${full.dashboard.jobs.detail.autopriceNoMatch}\n\n(${priceItems.length} price items loaded)${unmatched.length ? `\n${unmatched.map(u => `• ${u}`).join('\n')}` : ''}`);
+    else Alert.alert('', `${full.dashboard.jobs.detail.autopriceNoMatch}\n\n(${priceItems.length} price items loaded)${res.unmatched.length ? `\n${res.unmatched.map(u => `• ${u}`).join('\n')}` : ''}`);
   };
 
   const removeJob = (jobId: string) => {

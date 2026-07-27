@@ -769,6 +769,9 @@ export type DashboardDict = {
       autopriceVerify: string;
       autopriceNoMatch: string;
       autopriceAlreadyPriced: string;
+      autopricePickTitle: string;
+      autopricePickSubtitle: string;
+      autopricePickApply: string;
       measuredNote: string;
       tax: string;
       discount: string;
@@ -3363,6 +3366,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         autopriceVerify: 'Precios calculados automáticamente — por favor verifica cada línea, no siempre es exacto.',
         autopriceNoMatch: 'Ninguna línea coincidió con un precio. Agrega términos de coincidencia (ej. "torre", "reparación") a los precios en la Lista de precios.',
         autopriceAlreadyPriced: 'Las líneas que ya tienen un precio no se cambian con Autoprecio. Borra el precio de una línea si quieres recalcularla.',
+        autopricePickTitle: 'Elige un precio',
+        autopricePickSubtitle: 'Estas líneas coinciden con más de un precio. Elige el correcto para cada una.',
+        autopricePickApply: 'Aplicar precios',
         measuredNote: 'medido {{qty}}',
         tax: 'Impuesto ({{rate}}%)',
         discount: 'Descuento',
@@ -5953,6 +5959,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         autopriceVerify: 'Prices were auto-calculated — please double-check each line, it is not always exact.',
         autopriceNoMatch: 'No lines matched a price. Add match terms (e.g. "tower", "repair") to your items in the Price sheet.',
         autopriceAlreadyPriced: 'Lines that already have a price are left unchanged by Autoprice. Clear a line\'s price if you want it recalculated.',
+        autopricePickTitle: 'Choose a price',
+        autopricePickSubtitle: 'These lines match more than one price. Pick the right one for each.',
+        autopricePickApply: 'Apply prices',
         measuredNote: 'measured {{qty}}',
         tax: 'Tax ({{rate}}%)',
         discount: 'Discount',

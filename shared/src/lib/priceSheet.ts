@@ -220,28 +220,19 @@ export interface PriceMatch {
  * (length and match count) but are different items (genuinely ambiguous → let
  * the user pick). NOT reliable — callers must warn the user to verify.
  */
-export function suggestPriceItem(
-  text: string,
-  items: PriceSheetItem[],
-  /** Higher-signal text (e.g. a job's custom-field VALUES like Project Type) —
-   *  a term matching here beats one that only matches the free-text `text`. Lets
-   *  "Nuevo" (a Project Type) win over an incidental "pivot"/"tower" in the job
-   *  title/notes that would otherwise tie and make autoprice skip the line. */
-  priorityText?: string,
-): PriceMatch | null {
+interface ScoredItem { item: PriceSheetItem; term: string; len: number; count: number; prio: boolean }
+
+/** Score every ACTIVE base item that matches `text`, ranked by:
+ *  1. a priority (custom-field) match, 2. longest matching term, 3. most terms. */
+function scoreItems(text: string, items: PriceSheetItem[], priorityText?: string): ScoredItem[] {
   const hay = norm(text);
-  if (!hay.trim()) return null;
+  if (!hay.trim()) return [];
   const prio = priorityText ? norm(priorityText) : '';
-  let best: { item: PriceSheetItem; term: string; len: number; count: number; prio: boolean } | null = null;
-  let ambiguous = false;
+  const scored: ScoredItem[] = [];
   for (const item of items) {
     if (!item.active || item.isAddon) continue; // add-ons stack separately
     const terms = [item.name, ...item.matchTerms].map(norm).filter(t => t.length >= 2);
-    // This item's longest matching term, how many DISTINCT terms it matched, and
-    // whether any matched term also appears in the priority (custom-field) text.
-    let maxLen = 0;
-    let longest = '';
-    let prioHit = false;
+    let maxLen = 0; let longest = ''; let prioHit = false;
     const matchedTerms = new Set<string>();
     for (const term of terms) {
       if (!hay.includes(term)) continue;
@@ -249,25 +240,52 @@ export function suggestPriceItem(
       if (prio && prio.includes(term)) prioHit = true;
       if (term.length > maxLen) { maxLen = term.length; longest = term; }
     }
-    if (maxLen === 0) continue; // no match on this item
-    const count = matchedTerms.size;
-    // Ranking: a priority (custom-field) match wins first, THEN longest term,
-    // THEN most distinct terms.
-    const better = !best
-      ? true
-      : prioHit !== best.prio
-        ? prioHit
-        : maxLen !== best.len
-          ? maxLen > best.len
-          : count > best.count;
-    if (better) {
-      best = { item, term: longest, len: maxLen, count, prio: prioHit };
-      ambiguous = false;
-    } else if (best && prioHit === best.prio && maxLen === best.len && count === best.count && best.item.id !== item.id) {
-      ambiguous = true;
-    }
+    if (maxLen === 0) continue;
+    scored.push({ item, term: longest, len: maxLen, count: matchedTerms.size, prio: prioHit });
   }
-  return ambiguous || !best ? null : { item: best.item, term: best.term };
+  return scored;
+}
+
+/** Rank tuple (higher wins on each, left-to-right): priority, term length, term count. */
+const scoreRank = (s: ScoredItem): [number, number, number] => [s.prio ? 1 : 0, s.len, s.count];
+
+export interface PriceSuggestion {
+  /** The single best item, or null when nothing matched OR 2+ items tie for top. */
+  pick: PriceMatch | null;
+  /** The 2+ equally-top items when it's a tie (empty otherwise) — offer these to
+   *  the user to pick from instead of skipping the line. */
+  tied: PriceSheetItem[];
+}
+
+/** Like suggestPriceItem, but also surfaces the tied candidates when the top
+ *  match is ambiguous — so the caller can ask the user which price to use. */
+export function suggestPriceItemDetailed(
+  text: string,
+  items: PriceSheetItem[],
+  /** Higher-signal text (e.g. a job's custom-field VALUES like Project Type). */
+  priorityText?: string,
+): PriceSuggestion {
+  const scored = scoreItems(text, items, priorityText);
+  if (!scored.length) return { pick: null, tied: [] };
+  scored.sort((a, b) => {
+    const ra = scoreRank(a); const rb = scoreRank(b);
+    for (let i = 0; i < 3; i++) { if (ra[i] !== rb[i]) return rb[i] - ra[i]; }
+    return 0;
+  });
+  const top = scored[0];
+  const tiedTop = scored.filter(s => s.prio === top.prio && s.len === top.len && s.count === top.count);
+  if (tiedTop.length === 1) return { pick: { item: top.item, term: top.term }, tied: [] };
+  return { pick: null, tied: tiedTop.map(s => s.item) };
+}
+
+/** Best-effort single match — null when nothing matches OR it's an ambiguous tie
+ *  (callers that want to resolve the tie use suggestPriceItemDetailed). */
+export function suggestPriceItem(
+  text: string,
+  items: PriceSheetItem[],
+  priorityText?: string,
+): PriceMatch | null {
+  return suggestPriceItemDetailed(text, items, priorityText).pick;
 }
 
 /** Diagnostic: every ACTIVE base item whose name/term appears in `text`, with

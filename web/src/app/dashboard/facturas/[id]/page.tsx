@@ -22,7 +22,7 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { can } from '@amixos/shared/lib/permissions';
 import { resolveConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
-import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, autopriceInvoice } from '@amixos/shared/lib/invoicing';
+import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, autopriceInvoice, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
 import { rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
@@ -144,6 +144,9 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const [priceItems, setPriceItems] = useState<PriceSheetItem[]>([]);
   const [clientTierId, setClientTierId] = useState<string | null>(null);
   const [showInvVerify, setShowInvVerify] = useState(false);
+  // Autoprice tie picker: lines that matched 2+ prices, + the user's choices.
+  const [ambiguous, setAmbiguous] = useState<AutopriceAmbiguous[] | null>(null);
+  const [linePicks, setLinePicks] = useState<Record<number, string>>({});
   const [previewJobId, setPreviewJobId] = useState<string | null>(null);
   const [jobBusy, setJobBusy] = useState(false);
   const [moveJobId, setMoveJobId] = useState<string | null>(null);
@@ -233,14 +236,18 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       .then(({ data }: { data: { price_tier_id: string | null } | null }) => setClientTierId(data?.price_tier_id ?? null));
   }, [invClientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const runAutoprice = async () => {
+  const runAutoprice = async (picks?: Record<number, string>) => {
     if (!priceItems.length) return;
-    const { matched, alreadyPriced, unmatched } = await autopriceInvoice(supabase, { invoiceId: id, items: priceItems, tierId: clientTierId, qtyField: business?.invoice_qty_field });
-    if (matched) { setShowInvVerify(true); await reloadInvoice(); }
-    else if (alreadyPriced > 0) void alertMessage({ message: tj.detail.autopriceAlreadyPriced });
+    const res = await autopriceInvoice(supabase, { invoiceId: id, items: priceItems, tierId: clientTierId, qtyField: business?.invoice_qty_field, picks });
+    if (res.matched) { setShowInvVerify(true); await reloadInvoice(); }
+    // Lines that tied between 2+ prices → let the user pick which one.
+    if (res.ambiguous.length) { setAmbiguous(res.ambiguous); setLinePicks({}); return; }
+    setAmbiguous(null);
+    if (res.matched) return;
+    if (res.alreadyPriced > 0) void alertMessage({ message: tj.detail.autopriceAlreadyPriced });
     // Show the exact text we searched so the user can see which word to add a
     // match term for (and it reveals whether the job's description reached us).
-    else void alertMessage({ message: `${tj.detail.autopriceNoMatch}\n\n(${priceItems.length} price items loaded)${unmatched.length ? `\n${unmatched.map(u => `• ${u}`).join('\n')}` : ''}` });
+    else void alertMessage({ message: `${tj.detail.autopriceNoMatch}\n\n(${priceItems.length} price items loaded)${res.unmatched.length ? `\n${res.unmatched.map(u => `• ${u}`).join('\n')}` : ''}` });
   };
 
   const fetchInvoiceRow = async () => {
@@ -754,6 +761,40 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         onClose={() => setPreviewJobId(null)}
         onOpenFull={(jid) => { setPreviewJobId(null); router.push(`/dashboard/trabajos/${jid}?from=invoice&invoice=${id}`); }}
       />
+
+      {/* Autoprice tie picker — a line matched 2+ prices; the user picks one. */}
+      <Modal open={!!ambiguous} onClose={() => setAmbiguous(null)} title={tj.detail.autopricePickTitle} size="sm">
+        {ambiguous ? (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-muted">{tj.detail.autopricePickSubtitle}</p>
+            {ambiguous.map(a => (
+              <div key={a.index}>
+                <p className="text-sm font-semibold text-ink mb-1.5">{a.description}</p>
+                <div className="flex flex-col gap-1.5">
+                  {a.options.map(o => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => setLinePicks(p => ({ ...p, [a.index]: o.id }))}
+                      className={`text-left px-3 py-2.5 rounded-xl text-sm border transition-colors ${
+                        linePicks[a.index] === o.id ? 'bg-primary/10 border-primary text-primary font-semibold' : 'border-border text-ink hover:bg-surface'
+                      }`}
+                    >
+                      {o.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <div className="flex gap-3 pt-1">
+              <Button variant="secondary" onClick={() => setAmbiguous(null)} fullWidth>{tc.buttons.cancel}</Button>
+              <Button onClick={() => { const picks = linePicks; setAmbiguous(null); void runAutoprice(picks); }} disabled={Object.keys(linePicks).length < ambiguous.length} fullWidth>
+                {tj.detail.autopricePickApply}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
 
       {/* Move-to-another-invoice picker */}
       <Modal open={moveJobId !== null} onClose={() => setMoveJobId(null)} title={tInv.jobsSection.moveTitle} size="sm">

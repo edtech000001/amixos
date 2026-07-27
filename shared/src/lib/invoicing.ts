@@ -12,7 +12,7 @@
 // the same PostgREST query builder, so one implementation serves both.
 
 import { invoiceDefaultLanguage, nextInvoiceNumber } from './invoiceTemplate';
-import { type PriceSheetItem, suggestPriceItem, extractQuantity, autopriceLine, matchingAddons, diagnosePriceMatches } from './priceSheet';
+import { type PriceSheetItem, suggestPriceItemDetailed, extractQuantity, autopriceLine, matchingAddons, diagnosePriceMatches } from './priceSheet';
 import { US_STATE_NAME_TO_ABBR } from './usStates';
 
 /** Normalize a state to its 2-letter code ("Kansas" → "KS", "ks" → "KS") so it
@@ -590,17 +590,32 @@ export async function addJobsToInvoice(
  * line descriptions exist (job titles, imported names, manual items). Returns
  * how many lines were priced. Best-effort — the UI warns the user to verify.
  */
+export interface AutopriceAmbiguous {
+  /** Index into the invoice's line_items — stable, used to apply the user's pick. */
+  index: number;
+  description: string;
+  /** The tied price items — the user picks one. */
+  options: { id: string; name: string }[];
+}
 export async function autopriceInvoice(
   supabase: Supa,
-  opts: { invoiceId: string; items: PriceSheetItem[]; tierId?: string | null; qtyField?: string | null },
-): Promise<{ matched: number; alreadyPriced: number; unmatched: string[] }> {
-  if (!opts.items.length) return { matched: 0, alreadyPriced: 0, unmatched: [] };
+  opts: {
+    invoiceId: string;
+    items: PriceSheetItem[];
+    tierId?: string | null;
+    qtyField?: string | null;
+    /** Resolve an ambiguous line (line index → chosen price-item id) — from the
+     *  tie picker. Lines with a pick are priced with that item. */
+    picks?: Record<number, string>;
+  },
+): Promise<{ matched: number; alreadyPriced: number; unmatched: string[]; ambiguous: AutopriceAmbiguous[] }> {
+  if (!opts.items.length) return { matched: 0, alreadyPriced: 0, unmatched: [], ambiguous: [] };
   const { data: inv } = await supabase
     .from('invoices')
     .select('id, line_items, tax_rate, discount, client_id')
     .eq('id', opts.invoiceId)
     .single();
-  if (!inv) return { matched: 0, alreadyPriced: 0, unmatched: [] };
+  if (!inv) return { matched: 0, alreadyPriced: 0, unmatched: [], ambiguous: [] };
   const lines = (inv.line_items ?? []) as InvoiceLineItem[];
 
   // Client's state is the fallback for per-state pricing when a job has no
@@ -638,42 +653,65 @@ export async function autopriceInvoice(
   // Text we searched for lines that didn't match — surfaced in the "no match"
   // message so the user can see exactly what to add a match term for.
   const unmatched: string[] = [];
-  const next = lines.map(li => {
+  // Lines that tied between 2+ price items — the caller shows a picker.
+  const ambiguous: AutopriceAmbiguous[] = [];
+  const picks = opts.picks ?? {};
+
+  // Price one line with a chosen item (shared by auto-match + user pick).
+  const priceWith = (
+    li: InvoiceLineItem,
+    item: PriceSheetItem,
+    jctx: { job_state: string | null; custom_fields: Record<string, unknown> | null } | undefined,
+    matchText: string,
+  ): InvoiceLineItem => {
+    const addons = matchingAddons(matchText, opts.items);
+    const qty = Number(li.qty) || 0;
+    // Prefer the mapped qty custom field (e.g. "Total ft"), then the line's own
+    // qty, then a number pulled from the description.
+    const fromField = placeholderQtyFor({ custom_fields: jctx?.custom_fields ?? null }, opts.qtyField);
+    const measured = fromField ?? (qty > 1 ? qty : (extractQuantity(li.description ?? '') ?? 1));
+    // Job's own state (normalized), else the client's state.
+    const state = normStateCode(jctx?.job_state) ?? normStateCode(clientState);
+    const priced = autopriceLine(item, measured, { state, tierId: opts.tierId }, addons);
+    return { ...li, qty: priced.quantity, rate: priced.unitPrice, ...(li.job_id ? { edited: true } : {}) };
+  };
+
+  const next = lines.map((li, index) => {
     // Don't override a line that already has a price.
     if ((Number(li.rate) || 0) > 0) { alreadyPriced++; return li; }
     const jctx = li.job_id ? jobById.get(li.job_id) : undefined;
     const ctx = jctx?.context ?? '';
     const matchText = `${li.description ?? ''} ${ctx}`;
-    const hit = suggestPriceItem(matchText, opts.items, jctx?.cfText);
-    if (!hit) {
-      if (unmatched.length < 3) {
-        const cands = diagnosePriceMatches(matchText, opts.items, jctx?.cfText);
-        const candStr = cands.length
-          ? cands.map(c => `${c.name} [${c.term}${c.prio ? '★' : ''}]`).join(', ')
-          : '(no price-item term found in this text)';
-        unmatched.push(`${(li.description ?? '').replace(/\s+/g, ' ').trim().slice(0, 60)} → ${candStr}`);
-      }
+    const sug = suggestPriceItemDetailed(matchText, opts.items, jctx?.cfText);
+    // Unique match → price it.
+    if (sug.pick) { matched++; return priceWith(li, sug.pick.item, jctx, matchText); }
+    // Ambiguous tie → use the user's pick if we have one, else offer the options.
+    if (sug.tied.length > 1) {
+      const chosen = picks[index] ? sug.tied.find(t => t.id === picks[index]) : undefined;
+      if (chosen) { matched++; return priceWith(li, chosen, jctx, matchText); }
+      ambiguous.push({
+        index,
+        description: (li.description ?? '').replace(/\s+/g, ' ').trim().slice(0, 80),
+        options: sug.tied.map(t => ({ id: t.id, name: t.name })),
+      });
       return li;
     }
-    const addons = matchingAddons(matchText, opts.items);
-    const j = jctx;
-    const qty = Number(li.qty) || 0;
-    // Prefer the mapped qty custom field (e.g. "Total ft"), then the line's own
-    // qty, then a number pulled from the description.
-    const fromField = placeholderQtyFor({ custom_fields: j?.custom_fields ?? null }, opts.qtyField);
-    const measured = fromField ?? (qty > 1 ? qty : (extractQuantity(li.description ?? '') ?? 1));
-    // Job's own state (normalized), else the client's state.
-    const state = normStateCode(j?.job_state) ?? normStateCode(clientState);
-    const priced = autopriceLine(hit.item, measured, { state, tierId: opts.tierId }, addons);
-    matched++;
-    return { ...li, qty: priced.quantity, rate: priced.unitPrice, ...(li.job_id ? { edited: true } : {}) };
+    // No match at all → diagnostic text so the user can see what to add a term for.
+    if (unmatched.length < 3) {
+      const cands = diagnosePriceMatches(matchText, opts.items, jctx?.cfText);
+      const candStr = cands.length
+        ? cands.map(c => `${c.name} [${c.term}${c.prio ? '★' : ''}]`).join(', ')
+        : '(no price-item term found in this text)';
+      unmatched.push(`${(li.description ?? '').replace(/\s+/g, ' ').trim().slice(0, 60)} → ${candStr}`);
+    }
+    return li;
   });
-  if (!matched) return { matched: 0, alreadyPriced, unmatched };
+  if (!matched) return { matched: 0, alreadyPriced, unmatched, ambiguous };
 
   const { subtotal, tax, total } = computeTotals(next, inv.tax_rate ?? 0, inv.discount ?? 0);
   await supabase
     .from('invoices')
     .update({ line_items: next, subtotal_amount: subtotal, tax_amount: tax, total_amount: total })
     .eq('id', opts.invoiceId);
-  return { matched, alreadyPriced, unmatched };
+  return { matched, alreadyPriced, unmatched, ambiguous };
 }
