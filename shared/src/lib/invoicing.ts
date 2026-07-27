@@ -12,7 +12,7 @@
 // the same PostgREST query builder, so one implementation serves both.
 
 import { invoiceDefaultLanguage, nextInvoiceNumber } from './invoiceTemplate';
-import { type PriceSheetItem, suggestPriceItem, extractQuantity, autopriceLine, matchingAddons } from './priceSheet';
+import { type PriceSheetItem, suggestPriceItem, extractQuantity, autopriceLine, matchingAddons, diagnosePriceMatches } from './priceSheet';
 import { US_STATE_NAME_TO_ABBR } from './usStates';
 
 /** Normalize a state to its 2-letter code ("Kansas" → "KS", "ks" → "KS") so it
@@ -646,7 +646,13 @@ export async function autopriceInvoice(
     const matchText = `${li.description ?? ''} ${ctx}`;
     const hit = suggestPriceItem(matchText, opts.items, jctx?.cfText);
     if (!hit) {
-      if (unmatched.length < 3) unmatched.push(matchText.replace(/\s+/g, ' ').trim().slice(0, 200));
+      if (unmatched.length < 3) {
+        const cands = diagnosePriceMatches(matchText, opts.items, jctx?.cfText);
+        const candStr = cands.length
+          ? cands.map(c => `${c.name} [${c.term}${c.prio ? '★' : ''}]`).join(', ')
+          : '(no price-item term found in this text)';
+        unmatched.push(`${(li.description ?? '').replace(/\s+/g, ' ').trim().slice(0, 60)} → ${candStr}`);
+      }
       return li;
     }
     const addons = matchingAddons(matchText, opts.items);

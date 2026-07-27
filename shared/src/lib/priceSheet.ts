@@ -270,6 +270,31 @@ export function suggestPriceItem(
   return ambiguous || !best ? null : { item: best.item, term: best.term };
 }
 
+/** Diagnostic: every ACTIVE base item whose name/term appears in `text`, with
+ *  the matched term and whether it hit the priority text. Powers the "why no
+ *  match" popup — reveals a tie (2+ equal matches) vs the item not being loaded. */
+export function diagnosePriceMatches(
+  text: string,
+  items: PriceSheetItem[],
+  priorityText?: string,
+): { name: string; term: string; prio: boolean }[] {
+  const hay = norm(text);
+  const prio = priorityText ? norm(priorityText) : '';
+  const out: { name: string; term: string; prio: boolean }[] = [];
+  for (const item of items) {
+    if (!item.active || item.isAddon) continue;
+    const terms = [item.name, ...item.matchTerms].map(norm).filter(t => t.length >= 2);
+    let maxLen = 0; let longest = ''; let prioHit = false;
+    for (const term of terms) {
+      if (!hay.includes(term)) continue;
+      if (prio && prio.includes(term)) prioHit = true;
+      if (term.length > maxLen) { maxLen = term.length; longest = term; }
+    }
+    if (maxLen > 0) out.push({ name: item.name, term: longest, prio: prioHit });
+  }
+  return out;
+}
+
 /** Pull a measured quantity out of free text ("1200 ft", "6-180ft", "205'").
  *  Prefers a number adjacent to a unit; else the largest standalone number. */
 export function extractQuantity(text: string): number | null {

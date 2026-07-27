@@ -240,7 +240,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     else if (alreadyPriced > 0) void alertMessage({ message: tj.detail.autopriceAlreadyPriced });
     // Show the exact text we searched so the user can see which word to add a
     // match term for (and it reveals whether the job's description reached us).
-    else void alertMessage({ message: `${tj.detail.autopriceNoMatch}${unmatched.length ? `\n\n${unmatched.map(u => `• ${u}`).join('\n')}` : ''}` });
+    else void alertMessage({ message: `${tj.detail.autopriceNoMatch}\n\n(${priceItems.length} price items loaded)${unmatched.length ? `\n${unmatched.map(u => `• ${u}`).join('\n')}` : ''}` });
   };
 
   const fetchInvoiceRow = async () => {
