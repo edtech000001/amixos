@@ -286,16 +286,15 @@ export default function ReconcileModal({ open, businessId, locale, onClose }: Pr
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5">{t('Otras líneas posibles', 'Other possible lines')}</p>
               <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
-                {[current.line!, ...current.alternatives].map(l => {
-                  const active = lineKey(l) === lineKey(currentLine);
-                  return (
-                    <button key={lineKey(l)} onClick={() => setPickedLineKey(lineKey(l))}
-                      className={`text-left px-3 py-2 rounded-xl text-sm ${active ? 'bg-primary/10 text-primary' : 'hover:bg-surface text-ink'}`}>
-                      <span className="block truncate">{l.description}</span>
-                      <span className="block text-xs text-faint">#{l.invoiceNumber} · {l.qty} × {money(l.rate)} = {money(l.amount)}{l.issueDate ? ` · ${fmtDate(l.issueDate)}` : ''}</span>
-                    </button>
-                  );
-                })}
+                {/* Only the OTHER lines — the currently-matched one is already
+                    shown in the Invoice line card above, so don't repeat it. */}
+                {[current.line!, ...current.alternatives].filter(l => lineKey(l) !== lineKey(currentLine)).map(l => (
+                  <button key={lineKey(l)} onClick={() => setPickedLineKey(lineKey(l))}
+                    className="text-left px-3 py-2 rounded-xl text-sm hover:bg-surface text-ink border border-transparent hover:border-primary/30">
+                    <span className="block truncate">{l.description}</span>
+                    <span className="block text-xs text-faint">#{l.invoiceNumber} · {l.qty} × {money(l.rate)} = {money(l.amount)}{l.issueDate ? ` · ${fmtDate(l.issueDate)}` : ''}</span>
+                  </button>
+                ))}
               </div>
             </div>
           )}
