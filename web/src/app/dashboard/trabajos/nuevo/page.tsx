@@ -169,6 +169,16 @@ function NuevoTrabajoContent() {
   // hours, notes, photos etc. start blank for the new visit.
   const teamOnly = !!duplicateId && searchParams.get('copy') === 'team';
   const sourceId = editId ?? duplicateId;
+  // Origin (from/invoice/worker) passed in so that returning to the job detail
+  // after save/cancel keeps its own back target (e.g. the invoice we came from).
+  const backCtx = (() => {
+    const f = searchParams.get('from');
+    if (!f) return '';
+    const parts = [`from=${f}`];
+    const inv = searchParams.get('invoice'); if (inv) parts.push(`invoice=${inv}`);
+    const w = searchParams.get('worker'); if (w) parts.push(`worker=${w}`);
+    return `?${parts.join('&')}`;
+  })();
   const isProposal = searchParams.get('modo') === 'propuesta';
   // Defense in depth: a role that can create jobs but not estimates
   // (e.g. field crew) must not deep-link into proposal mode. Drop to a plain
@@ -1328,7 +1338,7 @@ function NuevoTrabajoContent() {
 
         if (!editId && pendingPhotos.length) await uploadPendingPhotos(finalJobId);
 
-        router.push(`/dashboard/trabajos/${finalJobId}`);
+        router.push(`/dashboard/trabajos/${finalJobId}${backCtx}`);
       } else {
         const jobData: any = {
           client_id: clientId || null,
@@ -1446,7 +1456,7 @@ function NuevoTrabajoContent() {
 
         if (!editId && pendingPhotos.length) await uploadPendingPhotos(finalJobId);
 
-        router.push(`/dashboard/trabajos/${finalJobId}`);
+        router.push(`/dashboard/trabajos/${finalJobId}${backCtx}`);
       }
     } catch (e: any) {
       setError(e.message || t.errorSaveGeneric);
@@ -1491,8 +1501,8 @@ function NuevoTrabajoContent() {
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <Link
-          href={sourceId ? `/dashboard/trabajos/${sourceId}` : '/dashboard/trabajos'}
-          onClick={e => { e.preventDefault(); confirmDiscard(() => router.push(sourceId ? `/dashboard/trabajos/${sourceId}` : '/dashboard/trabajos')); }}
+          href={sourceId ? `/dashboard/trabajos/${sourceId}${backCtx}` : '/dashboard/trabajos'}
+          onClick={e => { e.preventDefault(); confirmDiscard(() => router.push(sourceId ? `/dashboard/trabajos/${sourceId}${backCtx}` : '/dashboard/trabajos')); }}
           className="p-2 rounded-xl hover:bg-border-soft transition-colors"
         >
           <ArrowLeft size={18} className="text-muted"/>
@@ -2064,8 +2074,8 @@ function NuevoTrabajoContent() {
         {/* Actions */}
         <div className="flex gap-3 pb-6">
           <Link
-            href={editId ? `/dashboard/trabajos/${editId}` : '/dashboard/trabajos'}
-            onClick={e => { e.preventDefault(); confirmDiscard(() => router.push(editId ? `/dashboard/trabajos/${editId}` : '/dashboard/trabajos')); }}
+            href={editId ? `/dashboard/trabajos/${editId}${backCtx}` : '/dashboard/trabajos'}
+            onClick={e => { e.preventDefault(); confirmDiscard(() => router.push(editId ? `/dashboard/trabajos/${editId}${backCtx}` : '/dashboard/trabajos')); }}
             className="flex-1"
           >
             <Button variant="secondary" fullWidth>{tc.buttons.cancel}</Button>

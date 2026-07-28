@@ -141,7 +141,7 @@ export default function FacturaDetailRoute() {
   const [moveJobId, setMoveJobId] = useState<string | null>(null);
   const [moveTargets, setMoveTargets] = useState<{ id: string; invoice_number: string }[]>([]);
   const [addOpen, setAddOpen] = useState(false);
-  const [addCandidates, setAddCandidates] = useState<{ id: string; title: string; scheduled_date: string | null; client_id: string | null; clientName: string }[]>([]);
+  const [addCandidates, setAddCandidates] = useState<{ id: string; title: string; externalRef: string | null; scheduled_date: string | null; client_id: string | null; clientName: string }[]>([]);
   const [addSearch, setAddSearch] = useState('');
   // When set, the job picker links this line index to a job (vs adding lines).
   const [linkIndex, setLinkIndex] = useState<number | null>(null);
@@ -342,11 +342,14 @@ export default function FacturaDetailRoute() {
   // searching spans ALL clients by title, sorted same-client first. Capped 50.
   const loadAddCandidates = async (term: string) => {
     let q = supabase
-      .from('jobs').select('id, title, scheduled_date, client_id, clients(first_name, last_name, company)')
+      .from('jobs').select('id, title, external_ref, scheduled_date, client_id, clients(first_name, last_name, company)')
       .eq('business_id', business!.id).eq('status', 'completed').is('invoice_id', null);
     const t = term.trim();
-    if (t) q = q.ilike('title', `%${t}%`);
-    else if (invClientId) q = q.eq('client_id', invClientId);
+    if (t) {
+      // Match the job title OR the imported Project ID (external_ref).
+      const safe = t.replace(/[,()*]/g, ' ').trim();
+      q = q.or(`title.ilike.*${safe}*,external_ref.ilike.*${safe}*`);
+    } else if (invClientId) q = q.eq('client_id', invClientId);
     const { data } = await q.order('scheduled_date', { ascending: false }).limit(50);
     // Supabase types the embedded relation as an array on mobile — normalize.
     const rows = ((data ?? []) as any[]).map(j => {
@@ -354,6 +357,7 @@ export default function FacturaDetailRoute() {
       return {
         id: j.id as string,
         title: j.title as string,
+        externalRef: (j.external_ref ?? null) as string | null,
         scheduled_date: (j.scheduled_date ?? null) as string | null,
         client_id: (j.client_id ?? null) as string | null,
         clientName: (cl?.company || `${cl?.first_name ?? ''} ${cl?.last_name ?? ''}`.trim()) || '',
@@ -1063,6 +1067,8 @@ export default function FacturaDetailRoute() {
                       <View className="flex-1">
                         <Text className="text-sm text-ink" numberOfLines={1}>{j.title}</Text>
                         <Text className="text-xs text-faint mt-0.5" numberOfLines={1}>
+                          {j.externalRef ? <Text className="font-mono">{j.externalRef}</Text> : null}
+                          {j.externalRef && (otherClient || j.scheduled_date) ? ' · ' : ''}
                           {otherClient ? <Text className="text-amber-500 font-medium">{j.clientName}</Text> : null}
                           {otherClient && j.scheduled_date ? ' · ' : ''}
                           {j.scheduled_date ? formatDateLong(j.scheduled_date, full.dashboard.dateLocale) : ''}

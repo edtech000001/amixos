@@ -155,7 +155,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   // When set, the job picker is in "link" mode for this line index (associate an
   // imported/manual line with a job) instead of adding new job lines.
   const [linkIndex, setLinkIndex] = useState<number | null>(null);
-  const [addCandidates, setAddCandidates] = useState<{ id: string; title: string; scheduled_date: string | null; client_id: string | null; clientName: string }[]>([]);
+  const [addCandidates, setAddCandidates] = useState<{ id: string; title: string; externalRef: string | null; scheduled_date: string | null; client_id: string | null; clientName: string }[]>([]);
   const [addSearch, setAddSearch] = useState('');
   const [addPicked, setAddPicked] = useState<Set<string>>(new Set());
   const [manualDesc, setManualDesc] = useState('');
@@ -330,17 +330,22 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const loadAddCandidates = async (term: string) => {
     let q = supabase
       .from('jobs')
-      .select('id, title, scheduled_date, client_id, clients(first_name, last_name, company)')
+      .select('id, title, external_ref, scheduled_date, client_id, clients(first_name, last_name, company)')
       .eq('business_id', business!.id)
       .eq('status', 'completed')
       .is('invoice_id', null);
     const t = term.trim();
-    if (t) q = q.ilike('title', `%${t}%`);
-    else if (invClientId) q = q.eq('client_id', invClientId);
+    if (t) {
+      // Match the job title OR the imported Project ID (external_ref, e.g.
+      // "Proyecto-614e1cef"). Strip chars that would break PostgREST's or-filter.
+      const safe = t.replace(/[,()*]/g, ' ').trim();
+      q = q.or(`title.ilike.*${safe}*,external_ref.ilike.*${safe}*`);
+    } else if (invClientId) q = q.eq('client_id', invClientId);
     const { data } = await q.order('scheduled_date', { ascending: false }).limit(50);
-    const rows = ((data ?? []) as { id: string; title: string; scheduled_date: string | null; client_id: string | null; clients: { first_name: string | null; last_name: string | null; company: string | null } | null }[]).map(j => ({
+    const rows = ((data ?? []) as { id: string; title: string; external_ref: string | null; scheduled_date: string | null; client_id: string | null; clients: { first_name: string | null; last_name: string | null; company: string | null } | null }[]).map(j => ({
       id: j.id,
       title: j.title,
+      externalRef: j.external_ref,
       scheduled_date: j.scheduled_date,
       client_id: j.client_id,
       clientName: (j.clients?.company || `${j.clients?.first_name ?? ''} ${j.clients?.last_name ?? ''}`.trim()) || '',
@@ -983,6 +988,8 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                       <span className="flex-1 min-w-0">
                         <span className="block truncate text-ink">{j.title}</span>
                         <span className="block text-xs text-faint truncate">
+                          {j.externalRef ? <span className="font-mono">{j.externalRef}</span> : null}
+                          {j.externalRef && (otherClient || j.scheduled_date) ? ' · ' : ''}
                           {otherClient ? <span className="text-amber-500 font-medium">{j.clientName}</span> : null}
                           {otherClient && j.scheduled_date ? ' · ' : ''}
                           {j.scheduled_date ? formatDateLong(j.scheduled_date, full.dashboard.dateLocale) : ''}

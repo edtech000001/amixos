@@ -755,6 +755,16 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       : backSearch?.get('from') === 'nomina'
         ? `/dashboard/reportes/nomina${backSearch.get('worker') ? `?worker=${backSearch.get('worker')}` : ''}`
         : '/dashboard/trabajos';
+  // Carry the origin (from/invoice/worker) through the Edit form so returning
+  // here keeps the same back target instead of falling back to the jobs list.
+  const backCtx = (() => {
+    const f = backSearch?.get('from');
+    if (!f) return '';
+    const parts = [`from=${f}`];
+    const inv = backSearch?.get('invoice'); if (inv) parts.push(`invoice=${inv}`);
+    const w = backSearch?.get('worker'); if (w) parts.push(`worker=${w}`);
+    return `&${parts.join('&')}`;
+  })();
 
   return (
     <div className="p-6">
@@ -873,7 +883,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               </div>
             )}
             {can.editJobMetadata(currentRole) && (
-              <Link href={`/dashboard/trabajos/nuevo?edit=${job.id}`}
+              <Link href={`/dashboard/trabajos/nuevo?edit=${job.id}${backCtx}`}
                 className="p-2 rounded-xl text-muted hover:text-primary hover:bg-primary/5 transition-colors"
                 title={td.editTooltip}>
                 <Pencil size={16}/>
