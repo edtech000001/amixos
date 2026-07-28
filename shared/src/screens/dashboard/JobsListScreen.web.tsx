@@ -155,6 +155,8 @@ export interface JobsListScreenProps {
   /** Archive/unarchive the selection (jobs.archived_at). archive=false on the
    *  Archivados tab (restore). Caller owns confirmation + the update. */
   onBulkArchive?: (jobIds: string[], archive: boolean) => Promise<void> | void;
+  /** Reassign the selected jobs to a different client (opens a picker). */
+  onBulkChangeClient?: (jobIds: string[]) => Promise<void> | void;
   onViewInvoice: (invoiceId: string) => void;
   /** Role gates (role editor): hide the invoice actions when the member
    *  can't create / view invoices (e.g. field crew). Default allowed. */
@@ -241,6 +243,7 @@ export function JobsListScreen({
   onCreateInvoice,
   onBulkDelete,
   onBulkArchive,
+  onBulkChangeClient,
   onViewInvoice,
   canCreateInvoice = true,
   canViewInvoice = true,
@@ -1136,7 +1139,7 @@ export function JobsListScreen({
 
       {/* Sticky batch-invoice action bar */}
       {selectMode ? (
-        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-white/95 backdrop-blur px-6 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-card/95 backdrop-blur px-6 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted">
               {t.batchInvoice.selectedCount.replace('{{count}}', String(selectedJobs.length))}
@@ -1153,6 +1156,15 @@ export function JobsListScreen({
             <button onClick={exitSelect} className="px-4 py-2 rounded-xl text-sm font-semibold text-muted hover:bg-border-soft">
               {t.batchInvoice.cancel}
             </button>
+            {onBulkChangeClient ? (
+              <button
+                onClick={() => { if (selectedJobs.length) void onBulkChangeClient(selectedJobs.map(j => j.id)); }}
+                disabled={selectedJobs.length === 0}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-card border border-border text-ink hover:bg-surface disabled:opacity-40"
+              >
+                <Users size={15} /> {t.bulkMoveClient}{selectedJobs.length > 0 ? ` · ${selectedJobs.length}` : ''}
+              </button>
+            ) : null}
             {onBulkArchive ? (
               <button
                 onClick={runBulkArchive}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, View, Text, Pressable, TextInput, ScrollView, Modal as RNModal } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -88,6 +88,10 @@ export default function TrabajosTab() {
   // from the DB. loadCached serves the last page + counts offline.
   const COUNT_TABS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated', 'archived'];
   const [serverCounts, setServerCounts] = useState<Record<string, number>>({});
+  const [moveClientIds, setMoveClientIds] = useState<string[] | null>(null);
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientResults, setClientResults] = useState<{ id: string; name: string }[]>([]);
+  const [movingClient, setMovingClient] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const cursorRef = useRef<JobsCursor | null>(null);
@@ -215,6 +219,34 @@ export default function TrabajosTab() {
     else void runQuery(p, loadAllRef.current);
   };
   const reload = () => reRun(activeLocationId ?? null);
+
+  // Bulk "move to client" — search clients + reassign the selected jobs.
+  const loadMoveClients = async (term: string) => {
+    if (!business) return;
+    let q = supabase.from('clients').select('id, first_name, last_name, company').eq('business_id', business.id);
+    const s = term.trim().replace(/[,()*]/g, ' ').trim();
+    if (s) q = q.or(`first_name.ilike.*${s}*,last_name.ilike.*${s}*,company.ilike.*${s}*`);
+    const { data } = await q.order('last_name').limit(30);
+    setClientResults(((data ?? []) as { id: string; first_name: string | null; last_name: string | null; company: string | null }[])
+      .map(c => ({ id: c.id, name: (c.company || `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim()) || '—' })));
+  };
+  useEffect(() => {
+    if (moveClientIds === null) return;
+    const h = setTimeout(() => { void loadMoveClients(clientSearch); }, 250);
+    return () => clearTimeout(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientSearch, moveClientIds]);
+  const doMoveClient = async (clientId: string) => {
+    if (!moveClientIds?.length || !business) return;
+    setMovingClient(true);
+    for (let i = 0; i < moveClientIds.length; i += 50) {
+      await supabase.from('jobs').update({ client_id: clientId }).in('id', moveClientIds.slice(i, i + 50));
+    }
+    void logAudit(supabase, business.id, 'job.updated', 'job', null, { count: moveClientIds.length, bulk: true, field: 'client_id' });
+    setMovingClient(false);
+    setMoveClientIds(null);
+    reload();
+  };
   // Re-query on branch change (location isn't part of the child's filters).
   useEffect(() => {
     reRun(activeLocationId ?? null);
@@ -377,6 +409,7 @@ export default function TrabajosTab() {
             ]);
           })
         }
+        onBulkChangeClient={can.editJobMetadata(currentRole) ? (ids => { setMoveClientIds(ids); setClientSearch(''); void loadMoveClients(''); }) : undefined}
         onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}
         onNewJob={() => router.push('/dashboard/trabajos/nuevo' as never)}
         onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta' as never)}
@@ -393,6 +426,33 @@ export default function TrabajosTab() {
         onLoadMore={loadMore}
         onFiltersChange={handleFiltersChange}
       />
+
+      {/* Bulk move-to-client picker */}
+      <RNModal visible={moveClientIds !== null} transparent animationType="slide" onRequestClose={() => setMoveClientIds(null)}>
+        <Pressable className="flex-1 bg-black/40 justify-end" onPress={() => setMoveClientIds(null)}>
+          <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-8" onPress={() => {}}>
+            <Text className="text-lg font-bold text-ink mb-3">
+              {locale === 'es' ? `Mover ${moveClientIds?.length ?? 0} trabajo(s) a…` : `Move ${moveClientIds?.length ?? 0} job(s) to…`}
+            </Text>
+            <TextInput
+              value={clientSearch}
+              onChangeText={setClientSearch}
+              placeholder={locale === 'es' ? 'Buscar cliente…' : 'Search a client…'}
+              placeholderTextColor="#6B7280"
+              className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink mb-2"
+            />
+            <ScrollView style={{ maxHeight: 320 }}>
+              {clientResults.length === 0 ? (
+                <Text className="text-sm text-faint px-1 py-2">{locale === 'es' ? 'Sin resultados.' : 'No results.'}</Text>
+              ) : clientResults.map(cl => (
+                <Pressable key={cl.id} disabled={movingClient} onPress={() => void doMoveClient(cl.id)} className="px-3 py-3 rounded-xl active:bg-surface">
+                  <Text className="text-sm text-ink">{cl.name}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </RNModal>
     </View>
   );
 }

@@ -21,6 +21,7 @@ import { confirm } from '@amixos/shared/ui/confirmBus';
 import { useLang } from '@/i18n/LangProvider';
 import { useScrollRestore, saveScrollAnchor } from '@/lib/useScrollRestore';
 import ImportModal from '@/components/dashboard/ImportModal';
+import { Modal } from '@/components/ui/Modal';
 
 interface RawJob {
   id: string;
@@ -73,6 +74,11 @@ export default function TrabajosPage() {
   const [loading, setLoading] = useState(true);
   const [initialTab, setInitialTab] = useState<TabKey>('all');
   const [importOpen, setImportOpen] = useState(false);
+  // Bulk "move to client": the selected job ids + client-picker state.
+  const [moveClientIds, setMoveClientIds] = useState<string[] | null>(null);
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientResults, setClientResults] = useState<{ id: string; name: string }[]>([]);
+  const [movingClient, setMovingClient] = useState(false);
   const [jobTemplates, setJobTemplates] = useState<{ field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }[]>([]);
 
   // Coming back from a job detail lands at the top otherwise — restore the
@@ -267,6 +273,34 @@ export default function TrabajosPage() {
     else void runQuery(p, loadAllRef.current);
   };
   const reload = () => reRun(activeLocationId ?? null);
+
+  // Bulk "move to client" — search clients + reassign the selected jobs.
+  const loadMoveClients = async (term: string) => {
+    if (!business) return;
+    let q = supabase.from('clients').select('id, first_name, last_name, company').eq('business_id', business.id);
+    const s = term.trim().replace(/[,()*]/g, ' ').trim();
+    if (s) q = q.or(`first_name.ilike.*${s}*,last_name.ilike.*${s}*,company.ilike.*${s}*`);
+    const { data } = await q.order('last_name').limit(30);
+    setClientResults(((data ?? []) as { id: string; first_name: string | null; last_name: string | null; company: string | null }[])
+      .map(c => ({ id: c.id, name: (c.company || `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim()) || '—' })));
+  };
+  useEffect(() => {
+    if (moveClientIds === null) return;
+    const h = setTimeout(() => { void loadMoveClients(clientSearch); }, 250);
+    return () => clearTimeout(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientSearch, moveClientIds]);
+  const doMoveClient = async (clientId: string) => {
+    if (!moveClientIds?.length || !business) return;
+    setMovingClient(true);
+    for (let i = 0; i < moveClientIds.length; i += 50) {
+      await supabase.from('jobs').update({ client_id: clientId }).in('id', moveClientIds.slice(i, i + 50));
+    }
+    void logAudit(supabase, business.id, 'job.updated', 'job', null, { count: moveClientIds.length, bulk: true, field: 'client_id' });
+    setMovingClient(false);
+    setMoveClientIds(null);
+    reload();
+  };
   useEffect(() => {
     reRun(activeLocationId ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -416,6 +450,7 @@ export default function TrabajosPage() {
         void logAudit(supabase, business.id, archive ? 'job.archived' : 'job.unarchived', 'job', null, { count: jobIds.length, bulk: true });
         reload();
       }}
+      onBulkChangeClient={can.editJobMetadata(currentRole) ? (ids => { setMoveClientIds(ids); setClientSearch(''); void loadMoveClients(''); }) : undefined}
       onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}
       onNewJob={() => router.push('/dashboard/trabajos/nuevo')}
       onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta')}
@@ -432,6 +467,29 @@ export default function TrabajosPage() {
       onLoadMore={loadMore}
       onFiltersChange={handleFiltersChange}
     />
+
+    {/* Bulk move-to-client picker */}
+    <Modal open={moveClientIds !== null} onClose={() => setMoveClientIds(null)} title={locale === 'es' ? `Mover ${moveClientIds?.length ?? 0} trabajo(s) a…` : `Move ${moveClientIds?.length ?? 0} job(s) to…`} size="sm">
+      <div className="flex flex-col gap-3">
+        <input
+          value={clientSearch}
+          onChange={e => setClientSearch(e.target.value)}
+          placeholder={locale === 'es' ? 'Buscar cliente…' : 'Search a client…'}
+          autoFocus
+          className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+        />
+        <div className="flex flex-col gap-1 max-h-72 overflow-y-auto">
+          {clientResults.length === 0 ? (
+            <p className="text-sm text-faint px-1 py-2">{locale === 'es' ? 'Sin resultados.' : 'No results.'}</p>
+          ) : clientResults.map(cl => (
+            <button key={cl.id} disabled={movingClient} onClick={() => void doMoveClient(cl.id)}
+              className="text-left px-3 py-2.5 rounded-xl text-sm text-ink hover:bg-surface disabled:opacity-50">
+              {cl.name}
+            </button>
+          ))}
+        </div>
+      </div>
+    </Modal>
     </>
   );
 }

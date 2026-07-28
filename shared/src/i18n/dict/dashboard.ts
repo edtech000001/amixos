@@ -577,6 +577,7 @@ export type DashboardDict = {
     bulkDelete: string;
     bulkArchive: string;
     bulkUnarchive: string;
+    bulkMoveClient: string;
     confirmArchiveBulk: string;
     archivedBadge: string;
     confirmDeleteBulk: string;
@@ -3192,6 +3193,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       bulkDelete: 'Eliminar',
       bulkArchive: 'Archivar',
       bulkUnarchive: 'Desarchivar',
+      bulkMoveClient: 'Mover a cliente',
       confirmArchiveBulk: '¿Archivar {{count}} trabajo(s)? Se ocultan de las listas pero siguen contando en reportes y horas.',
       archivedBadge: 'Archivado',
       confirmDeleteBulk: '¿Eliminar {{count}} trabajo(s) permanentemente? Se borrarán también sus fotos, líneas y asignaciones.',
@@ -5794,6 +5796,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       bulkDelete: 'Delete',
       bulkArchive: 'Archive',
       bulkUnarchive: 'Unarchive',
+      bulkMoveClient: 'Move to client',
       confirmArchiveBulk: 'Archive {{count}} job(s)? They are hidden from lists but still count in reports and hours.',
       archivedBadge: 'Archived',
       confirmDeleteBulk: 'Delete {{count}} job(s) permanently? Their photos, line items, and assignments will be removed too.',

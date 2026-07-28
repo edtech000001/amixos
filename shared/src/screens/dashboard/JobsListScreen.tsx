@@ -138,6 +138,8 @@ export interface JobsListScreenProps {
   /** Archive/unarchive the selection (jobs.archived_at). archive=false on the
    *  Archivados tab (restore). Caller owns confirmation + the update. */
   onBulkArchive?: (jobIds: string[], archive: boolean) => Promise<void> | void;
+  /** Reassign the selected jobs to a different client (opens a picker). */
+  onBulkChangeClient?: (jobIds: string[]) => Promise<void> | void;
   onViewInvoice: (invoiceId: string) => void;
   /** Role gates (role editor): hide the invoice actions when the member
    *  can't create / view invoices (e.g. field crew). Default allowed. */
@@ -238,6 +240,7 @@ export function JobsListScreen({
   onCreateInvoice,
   onBulkDelete,
   onBulkArchive,
+  onBulkChangeClient,
   onViewInvoice,
   canCreateInvoice: canInvoicePerm = true,
   canViewInvoice: canViewInvoicePerm = true,
@@ -1237,6 +1240,23 @@ export function JobsListScreen({
           <View className="absolute bottom-48 right-5 bg-primary/10 px-3 py-1.5 rounded-full" style={{ elevation: 4 }}>
             <Text className="text-xs font-medium text-primary">{t.batchInvoice.multiClientHint.replace('{{count}}', String(invoiceClientCount))}</Text>
           </View>
+        ) : null}
+        {/* Bulk move-to-client pill — top of the left stack. */}
+        {onBulkChangeClient ? (
+          <Pressable
+            onPress={() => { if (selectedJobs.length) void onBulkChangeClient(selectedJobs.map(j => j.id)); }}
+            disabled={selectedJobs.length === 0}
+            className="absolute bottom-64 left-5 flex-row items-center gap-2 px-5 h-12 rounded-full"
+            style={{
+              backgroundColor: selectedJobs.length === 0 ? '#D1D5DB' : '#2563EB',
+              elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+            }}
+          >
+            <Users size={18} color="#FFFFFF" />
+            <Text className="text-white font-semibold">
+              {`${t.bulkMoveClient}${selectedJobs.length > 0 ? ` · ${selectedJobs.length}` : ''}`}
+            </Text>
+          </Pressable>
         ) : null}
         {/* Bulk-archive pill — stacked above delete on the left. */}
         {onBulkArchive ? (
