@@ -1570,7 +1570,7 @@ function NuevoTrabajoContent() {
                 <Users size={15} className="text-primary"/>
                 <p className="text-xs font-semibold text-faint uppercase tracking-wide">{t.workersHeading}</p>
               </div>
-              {employees.length > 0 && canAssign && (
+              {employees.length > 0 && canAssign && business?.crew_finder_enabled !== false && (
                 <button type="button" onClick={() => setCrewFinderOpen(true)}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors">
                   <Navigation size={13} /> {full.dashboard.crewFinder.openButton}

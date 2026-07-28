@@ -276,10 +276,15 @@ export type DashboardDict = {
       addBtn: string;
       removeBtn: string;
       moveBtn: string;
+      clearPricesBtn: string;
+      clearPricesConfirm: string;
+      linkBtn: string;
+      linkTitle: string;
       moveTitle: string;
       moveEmpty: string;
       addTitle: string;
       addEmpty: string;
+      addSearchPlaceholder: string;
       addConfirm: string;
       manualHeading: string;
       manualDescPlaceholder: string;
@@ -2886,10 +2891,15 @@ export const dashboard: Record<Locale, DashboardDict> = {
         addBtn: 'Agregar trabajo',
         removeBtn: 'Quitar',
         moveBtn: 'Mover',
+        clearPricesBtn: 'Borrar precios',
+        clearPricesConfirm: '¿Borrar todos los precios de esta factura? Las líneas vuelven a $0 para que puedas volver a usar Autoprecio.',
+        linkBtn: 'Vincular',
+        linkTitle: 'Vincular a un trabajo',
         moveTitle: 'Mover a otra factura',
         moveEmpty: 'No hay otras facturas en borrador para este cliente.',
         addTitle: 'Agregar a la factura',
-        addEmpty: 'No hay trabajos completados sin facturar para este cliente.',
+        addEmpty: 'No hay trabajos completados sin facturar. Busca para ver los de otros clientes.',
+        addSearchPlaceholder: 'Buscar trabajo (cualquier cliente)…',
         addConfirm: 'Agregar',
         manualHeading: 'Concepto manual',
         manualDescPlaceholder: 'Descripción (ej. Viaje)',
@@ -5483,10 +5493,15 @@ export const dashboard: Record<Locale, DashboardDict> = {
         addBtn: 'Add job',
         removeBtn: 'Remove',
         moveBtn: 'Move',
+        clearPricesBtn: 'Clear prices',
+        clearPricesConfirm: 'Clear all prices on this invoice? Lines reset to $0 so you can re-run Autoprice.',
+        linkBtn: 'Link',
+        linkTitle: 'Link to a job',
         moveTitle: 'Move to another invoice',
         moveEmpty: 'No other draft invoices for this client.',
         addTitle: 'Add to invoice',
-        addEmpty: 'No un-invoiced completed jobs for this client.',
+        addEmpty: 'No un-invoiced completed jobs. Search to find other clients’.',
+        addSearchPlaceholder: 'Search a job (any client)…',
         addConfirm: 'Add',
         manualHeading: 'Custom item',
         manualDescPlaceholder: 'Description (e.g. Travel)',

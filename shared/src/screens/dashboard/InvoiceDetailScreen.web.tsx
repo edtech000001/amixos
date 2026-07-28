@@ -13,6 +13,7 @@ import {
   CheckCircle,
   Send,
   DollarSign,
+  Eraser,
   Calendar,
   FileText,
   Pencil,
@@ -122,6 +123,9 @@ export interface InvoiceDetailScreenProps {
   /** Autoprice: fill in unpriced ($0) lines from the price sheet. Button hidden
    *  when not provided (e.g. no price-sheet items or a sent/paid invoice). */
   onAutoprice?: () => void;
+  /** Reset all lines to unpriced ($0) so Autoprice can re-run clean (e.g. after
+   *  fixing a state price). Shown next to Autoprice. */
+  onClearPrices?: () => void;
   /** Show the amber "please verify pricing" note after an autoprice run. */
   autopriceVerify?: boolean;
   // Inline job management — Move / Remove on each job-backed line, Add job below.
@@ -132,6 +136,8 @@ export interface InvoiceDetailScreenProps {
   onRemoveManualItem?: (index: number) => void;
   /** Edit a hand-entered (manual) line item by its index. */
   onEditManualItem?: (index: number) => void;
+  /** Link an imported/manual line (no job) to an existing job. */
+  onLinkLine?: (index: number) => void;
   /** Open a job's detail (line-item title becomes a link). */
   onJobPress?: (jobId: string) => void;
   jobBusy?: boolean;
@@ -192,9 +198,11 @@ export function InvoiceDetailScreen({
   onRemoveJob,
   onAddJob,
   onAutoprice,
+  onClearPrices,
   autopriceVerify,
   onRemoveManualItem,
   onEditManualItem,
+  onLinkLine,
   onJobPress,
   jobBusy,
   onSendInvoice,
@@ -294,6 +302,11 @@ export function InvoiceDetailScreen({
           {onAutoprice && canEdit ? (
             <button type="button" onClick={onAutoprice} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-surface text-sm font-semibold text-primary transition-colors mr-1">
               <DollarSign size={15} /> {ui.dashboard.jobs.detail.autopriceBtn}
+            </button>
+          ) : null}
+          {onClearPrices && canEdit ? (
+            <button type="button" onClick={onClearPrices} title={tInv.jobsSection.clearPricesBtn} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-surface text-sm font-semibold text-muted transition-colors mr-1">
+              <Eraser size={15} /> {tInv.jobsSection.clearPricesBtn}
             </button>
           ) : null}
           {onShareLink ? (
@@ -437,6 +450,13 @@ export function InvoiceDetailScreen({
                     {li.addonNote ? <p className="text-[11px] text-faint mt-0.5">{li.addonNote}</p> : null}
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
+                    {/* Link is safe on ANY status (no total change) — so imported
+                        paid/sent invoices can be tied to a job without unlocking. */}
+                    {onLinkLine && canEdit && !jid && !isAddon ? (
+                      <button onClick={() => onLinkLine(idx)} disabled={jobBusy} className="text-xs font-semibold text-muted hover:text-primary disabled:opacity-40">
+                        {tInv.jobsSection.linkBtn}
+                      </button>
+                    ) : null}
                     {showActions ? (
                       <>
                         {onEditManualItem ? (

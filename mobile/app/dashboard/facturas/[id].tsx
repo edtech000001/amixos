@@ -23,7 +23,7 @@ import { DatePicker, Select } from '@amixos/shared/ui';
 import type { InvoiceLang } from '@amixos/shared';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
-import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, autopriceInvoice, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
+import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
 import { rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
@@ -141,7 +141,10 @@ export default function FacturaDetailRoute() {
   const [moveJobId, setMoveJobId] = useState<string | null>(null);
   const [moveTargets, setMoveTargets] = useState<{ id: string; invoice_number: string }[]>([]);
   const [addOpen, setAddOpen] = useState(false);
-  const [addCandidates, setAddCandidates] = useState<{ id: string; title: string; scheduled_date: string | null }[]>([]);
+  const [addCandidates, setAddCandidates] = useState<{ id: string; title: string; scheduled_date: string | null; client_id: string | null; clientName: string }[]>([]);
+  const [addSearch, setAddSearch] = useState('');
+  // When set, the job picker links this line index to a job (vs adding lines).
+  const [linkIndex, setLinkIndex] = useState<number | null>(null);
   const [addPicked, setAddPicked] = useState<Set<string>>(new Set());
   const [manualDesc, setManualDesc] = useState('');
   const [manualQty, setManualQty] = useState('1');
@@ -252,6 +255,20 @@ export default function FacturaDetailRoute() {
       ],
     );
   };
+  // Reset every line to unpriced ($0) so Autoprice can re-run clean — e.g. after
+  // adding a state-specific price.
+  const clearPrices = () => {
+    confirm({
+      title: jobsT.clearPricesConfirm,
+      confirmText: jobsT.clearPricesBtn,
+      destructive: true,
+      onConfirm: () => void (async () => {
+        await rebuildInvoiceLineItems(supabase, { invoiceId: id, itemTypeLabels, hideItemTypes: business?.job_item_types_enabled === false, qtyField: business?.invoice_qty_field, force: true });
+        await reloadInvoice();
+      })(),
+    });
+  };
+
   const runAutoprice = async (picks?: Record<number, string>) => {
     if (!priceItems.length) return;
     const res = await autopriceInvoice(supabase, { invoiceId: id, items: priceItems, tierId: clientTierId, qtyField: business?.invoice_qty_field, picks });
@@ -321,16 +338,69 @@ export default function FacturaDetailRoute() {
     setJobBusy(false);
   };
 
+  // Addable jobs (completed + not yet invoiced). No search → this client only;
+  // searching spans ALL clients by title, sorted same-client first. Capped 50.
+  const loadAddCandidates = async (term: string) => {
+    let q = supabase
+      .from('jobs').select('id, title, scheduled_date, client_id, clients(first_name, last_name, company)')
+      .eq('business_id', business!.id).eq('status', 'completed').is('invoice_id', null);
+    const t = term.trim();
+    if (t) q = q.ilike('title', `%${t}%`);
+    else if (invClientId) q = q.eq('client_id', invClientId);
+    const { data } = await q.order('scheduled_date', { ascending: false }).limit(50);
+    // Supabase types the embedded relation as an array on mobile — normalize.
+    const rows = ((data ?? []) as any[]).map(j => {
+      const cl = Array.isArray(j.clients) ? j.clients[0] : j.clients;
+      return {
+        id: j.id as string,
+        title: j.title as string,
+        scheduled_date: (j.scheduled_date ?? null) as string | null,
+        client_id: (j.client_id ?? null) as string | null,
+        clientName: (cl?.company || `${cl?.first_name ?? ''} ${cl?.last_name ?? ''}`.trim()) || '',
+      };
+    });
+    rows.sort((a, b) => (a.client_id === invClientId ? 0 : 1) - (b.client_id === invClientId ? 0 : 1));
+    setAddCandidates(rows);
+  };
+
   const openAdd = async () => {
-    const { data } = await supabase
-      .from('jobs').select('id, title, scheduled_date')
-      .eq('business_id', business!.id).eq('client_id', invClientId).eq('status', 'completed').is('invoice_id', null);
-    setAddCandidates((data ?? []) as { id: string; title: string; scheduled_date: string | null }[]);
+    setLinkIndex(null);
+    setAddSearch('');
+    await loadAddCandidates('');
     setAddPicked(new Set());
     setAddOpen(true);
   };
 
+  // Link an imported/manual line (by index) to an existing job.
+  const openLink = async (index: number) => {
+    setLinkIndex(index);
+    setAddSearch('');
+    await loadAddCandidates('');
+    setAddPicked(new Set());
+    setAddOpen(true);
+  };
+
+  const closeAdd = () => { setAddOpen(false); setLinkIndex(null); };
+
+  useEffect(() => {
+    if (!addOpen) return;
+    const h = setTimeout(() => { void loadAddCandidates(addSearch); }, 250);
+    return () => clearTimeout(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addSearch, addOpen]);
+
   const doAdd = async () => {
+    // Link mode: associate the chosen job with the target line, don't add lines.
+    if (linkIndex !== null) {
+      const jobId = Array.from(addPicked)[0];
+      if (!jobId) { closeAdd(); return; }
+      setJobBusy(true);
+      await linkLineToJob(supabase, { invoiceId: id, index: linkIndex, jobId });
+      closeAdd();
+      await reloadInvoice();
+      setJobBusy(false);
+      return;
+    }
     const desc = manualDesc.trim();
     const rate = parseFloat(manualRate) || 0;
     const hasManual = !!desc && rate !== 0;
@@ -859,12 +929,14 @@ export default function FacturaDetailRoute() {
         onEdit={invoice && canEdit ? () => router.push(`/dashboard/facturas/nueva?edit=${id}` as never) : undefined}
         onDelete={invoice && canDelete ? confirmDelete : undefined}
         onAutoprice={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? runAutoprice : undefined}
+        onClearPrices={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? clearPrices : undefined}
         autopriceVerify={showInvVerify}
         onMoveJob={canEdit ? openMove : undefined}
         onRemoveJob={canEdit ? removeJob : undefined}
         onAddJob={canEdit ? openAdd : undefined}
         onRemoveManualItem={canEdit ? removeManual : undefined}
         onEditManualItem={canEdit ? editManual : undefined}
+        onLinkLine={canEdit ? openLink : undefined}
         onJobPress={(jobId) => setPreviewJobId(jobId)}
         jobBusy={jobBusy}
         onSendInvoice={canEdit ? sendInvoice : undefined}
@@ -908,18 +980,19 @@ export default function FacturaDetailRoute() {
       </RNModal>
 
       {/* Add-completed-jobs picker */}
-      <RNModal visible={addOpen} transparent animationType="fade" onRequestClose={() => setAddOpen(false)}>
+      <RNModal visible={addOpen} transparent animationType="fade" onRequestClose={closeAdd}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <Pressable onPress={() => setAddOpen(false)} className="flex-1 bg-black/40 justify-end">
+        <Pressable onPress={closeAdd} className="flex-1 bg-black/40 justify-end">
           <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
             <View className="flex-row items-center justify-between mb-3">
-              <Text className="text-lg font-bold text-ink">{jobsT.addTitle}</Text>
-              <Pressable onPress={() => setAddOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+              <Text className="text-lg font-bold text-ink">{linkIndex !== null ? jobsT.linkTitle : jobsT.addTitle}</Text>
+              <Pressable onPress={closeAdd} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
                 <X size={22} color={c.faint} />
               </Pressable>
             </View>
 
-            {/* Manual line item */}
+            {/* Manual line item — hidden in link mode (associating a line). */}
+            {linkIndex === null ? (<>
             <Text className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-2">{jobsT.manualHeading}</Text>
             <TextInput
               value={manualDesc}
@@ -957,19 +1030,31 @@ export default function FacturaDetailRoute() {
                 />
               </View>
             </View>
+            </>) : null}
 
-            {/* Completed jobs */}
+            {/* Completed jobs — searchable across clients, same client first. */}
             <Text className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-2">{jobsT.jobsHeading}</Text>
+            <TextInput
+              value={addSearch}
+              onChangeText={setAddSearch}
+              placeholder={jobsT.addSearchPlaceholder}
+              placeholderTextColor={c.faint}
+              className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink mb-2"
+            />
             {addCandidates.length === 0 ? (
               <Text className="text-sm text-faint pb-2">{jobsT.addEmpty}</Text>
             ) : (
               <ScrollView style={{ maxHeight: 280 }}>
                 {addCandidates.map(j => {
                   const picked = addPicked.has(j.id);
+                  const otherClient = j.client_id !== invClientId && !!j.clientName;
                   return (
                     <Pressable
                       key={j.id}
-                      onPress={() => setAddPicked(prev => { const n = new Set(prev); n.has(j.id) ? n.delete(j.id) : n.add(j.id); return n; })}
+                      onPress={() => setAddPicked(prev => {
+                        if (linkIndex !== null) return new Set(prev.has(j.id) ? [] : [j.id]);
+                        const n = new Set(prev); n.has(j.id) ? n.delete(j.id) : n.add(j.id); return n;
+                      })}
                       className={`flex-row items-center gap-3 px-2 py-3 rounded-xl ${picked ? 'bg-primary/10' : ''}`}
                     >
                       <View className={`w-5 h-5 rounded-md border items-center justify-center ${picked ? 'bg-primary border-primary' : 'border-border'}`}>
@@ -977,9 +1062,11 @@ export default function FacturaDetailRoute() {
                       </View>
                       <View className="flex-1">
                         <Text className="text-sm text-ink" numberOfLines={1}>{j.title}</Text>
-                        {j.scheduled_date ? (
-                          <Text className="text-xs text-faint mt-0.5">{formatDateLong(j.scheduled_date, full.dashboard.dateLocale)}</Text>
-                        ) : null}
+                        <Text className="text-xs text-faint mt-0.5" numberOfLines={1}>
+                          {otherClient ? <Text className="text-amber-500 font-medium">{j.clientName}</Text> : null}
+                          {otherClient && j.scheduled_date ? ' · ' : ''}
+                          {j.scheduled_date ? formatDateLong(j.scheduled_date, full.dashboard.dateLocale) : ''}
+                        </Text>
                       </View>
                     </Pressable>
                   );
@@ -987,7 +1074,7 @@ export default function FacturaDetailRoute() {
               </ScrollView>
             )}
             <Pressable onPress={doAdd} disabled={jobBusy} className="mt-4 py-3.5 rounded-2xl bg-primary items-center active:opacity-90">
-              <Text className="text-sm font-semibold text-white">{jobsT.addConfirm}</Text>
+              <Text className="text-sm font-semibold text-white">{linkIndex !== null ? jobsT.linkBtn : jobsT.addConfirm}</Text>
             </Pressable>
           </Pressable>
         </Pressable>

@@ -8,6 +8,7 @@ import {
   CheckCircle,
   Send,
   DollarSign,
+  Eraser,
   Calendar,
   FileText,
   Pencil,
@@ -119,6 +120,8 @@ export interface InvoiceDetailScreenProps {
   /** Autoprice: fill in unpriced ($0) lines from the price sheet. Hidden when
    *  not provided (no price-sheet items or a sent/paid invoice). */
   onAutoprice?: () => void;
+  /** Reset all lines to unpriced ($0) so Autoprice can re-run clean. */
+  onClearPrices?: () => void;
   /** Show the amber "please verify pricing" note after an autoprice run. */
   autopriceVerify?: boolean;
   /** Optional content rendered at the bottom of the scroll (e.g. jobs-on-invoice management). */
@@ -132,6 +135,8 @@ export interface InvoiceDetailScreenProps {
   onRemoveManualItem?: (index: number) => void;
   /** Edit a hand-entered (manual) line item by its index. */
   onEditManualItem?: (index: number) => void;
+  /** Link an imported/manual line (no job) to an existing job. */
+  onLinkLine?: (index: number) => void;
   /** Open a job's detail (line-item title becomes tappable). */
   onJobPress?: (jobId: string) => void;
   jobBusy?: boolean;
@@ -187,6 +192,7 @@ export function InvoiceDetailScreen({
   onPrint,
   onShareLink,
   onAutoprice,
+  onClearPrices,
   autopriceVerify,
   onEdit,
   onDelete,
@@ -196,6 +202,7 @@ export function InvoiceDetailScreen({
   onAddJob,
   onRemoveManualItem,
   onEditManualItem,
+  onLinkLine,
   onJobPress,
   jobBusy,
   onSendInvoice,
@@ -300,6 +307,9 @@ export function InvoiceDetailScreen({
         <View className="flex-row items-center gap-0.5 shrink-0">
           {onAutoprice && canEdit ? (
             <Pressable onPress={onAutoprice} className="p-2 rounded-xl bg-primary/10 active:opacity-80 mr-0.5" accessibilityLabel={ui.dashboard.jobs.detail.autopriceBtn}><DollarSign size={18} color={c.primary} /></Pressable>
+          ) : null}
+          {onClearPrices && canEdit ? (
+            <Pressable onPress={onClearPrices} className="p-2 rounded-xl active:bg-border-soft mr-0.5" accessibilityLabel={tInv.jobsSection.clearPricesBtn}><Eraser size={18} color={c.muted} /></Pressable>
           ) : null}
           {onShareLink ? (
             <Pressable onPress={onShareLink} className="p-2 rounded-xl active:bg-border-soft"><Link2 size={18} color={c.muted} /></Pressable>
@@ -445,16 +455,22 @@ export function InvoiceDetailScreen({
                       <Text className="text-xs font-semibold text-red-500">{tInv.jobsSection.removeBtn}</Text>
                     </Pressable>
                   </View>
-                ) : editable && canEdit && (!jid || isAddon) && (onEditManualItem || onRemoveManualItem) ? (
-                  // Manual lines AND split-off add-on lines (loading fee, etc.):
-                  // per-line Edit/Remove by index so a stray fee can be deleted.
+                ) : canEdit && (!jid || isAddon) && ((onLinkLine && !jid && !isAddon) || (editable && (onEditManualItem || onRemoveManualItem))) ? (
+                  // Manual lines AND split-off add-on lines. Link is safe on ANY
+                  // status (no total change) so imported paid/sent invoices can be
+                  // tied to a job; Edit/Remove stay draft-only.
                   <View className="flex-row justify-end gap-4 mt-1.5">
-                    {onEditManualItem ? (
+                    {onLinkLine && !jid && !isAddon ? (
+                      <Pressable onPress={() => onLinkLine(idx)} disabled={jobBusy} hitSlop={6}>
+                        <Text className="text-xs font-semibold text-muted">{tInv.jobsSection.linkBtn}</Text>
+                      </Pressable>
+                    ) : null}
+                    {editable && onEditManualItem ? (
                       <Pressable onPress={() => onEditManualItem(idx)} disabled={jobBusy} hitSlop={6}>
                         <Text className="text-xs font-semibold text-muted">{ui.common.buttons.edit}</Text>
                       </Pressable>
                     ) : null}
-                    {onRemoveManualItem ? (
+                    {editable && onRemoveManualItem ? (
                       <Pressable onPress={() => onRemoveManualItem(idx)} disabled={jobBusy} hitSlop={6}>
                         <Text className="text-xs font-semibold text-red-500">{tInv.jobsSection.removeBtn}</Text>
                       </Pressable>

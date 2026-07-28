@@ -347,7 +347,10 @@ export async function createInvoicesFromJobs(
  *  actually changed. */
 export async function rebuildInvoiceLineItems(
   supabase: Supa,
-  opts: { invoiceId: string; itemTypeLabels: Record<string, string>; hideItemTypes?: boolean; qtyField?: string | null },
+  // `force` re-derives EVERY job line fresh (ignoring hand-edits/auto-prices) —
+  // used by "Clear prices" to reset the invoice to unpriced ($0) so Autoprice
+  // can run clean. Normal calls preserve edited/priced lines.
+  opts: { invoiceId: string; itemTypeLabels: Record<string, string>; hideItemTypes?: boolean; qtyField?: string | null; force?: boolean },
 ): Promise<{ changed: boolean }> {
   const { data: inv } = await supabase
     .from('invoices')
@@ -378,7 +381,9 @@ export async function rebuildInvoiceLineItems(
   }
   // A job whose lines were hand-edited on the invoice keeps them verbatim —
   // re-deriving would silently undo the user's price/qty override.
-  const overriddenJobs = new Set(existing.filter(li => li.job_id && li.edited).map(li => li.job_id as string));
+  // force → treat NO job as overridden, so every job line is re-derived fresh
+  // at $0 (clears auto-prices, edits, and add-on lines).
+  const overriddenJobs = new Set(opts.force ? [] : existing.filter(li => li.job_id && li.edited).map(li => li.job_id as string));
   const keptJobLines = jobLines.filter(l => !overriddenJobs.has(l.job_id as string));
   // A job that bills as a SINGLE line: its name IS the job name, so keep the
   // stored description in sync with the current job title (a rename from the
@@ -592,9 +597,9 @@ export async function addJobsToInvoice(
 
   const { data: jobs } = await supabase.from('jobs').select('id, client_id, title, custom_fields').in('id', opts.jobIds);
   if (!jobs?.length) return { ok: false };
-  if (jobs.some((j: any) => (j.client_id ?? null) !== (opts.invoice.client_id ?? null))) {
-    return { ok: false };
-  }
+  // NOTE: jobs from a DIFFERENT client are allowed — the add-job picker lets you
+  // consolidate another client's completed job onto this invoice on purpose (it
+  // flags the other client's name). The invoice's own Bill-To is unchanged.
   const titleById = new Map<string, string>(jobs.map((j: any) => [j.id, j.title ?? '']));
   const jobById = new Map<string, any>(jobs.map((j: any) => [j.id, j]));
 
@@ -619,6 +624,30 @@ export async function addJobsToInvoice(
     .update({ status: 'invoiced', invoice_id: opts.invoice.id, invoiced_at: nowIso })
     .in('id', opts.jobIds);
 
+  return { ok: true };
+}
+
+/**
+ * Link an existing (imported/manual) invoice line — one with no job_id — to a
+ * job, WITHOUT changing its imported description/qty/rate. Sets the line's
+ * job_id + edited (so the draft rebuild keeps it verbatim and never re-derives
+ * the job into duplicate lines), and marks the job invoiced on this invoice so
+ * it's tied together and not re-offered in the add-job picker.
+ */
+export async function linkLineToJob(
+  supabase: Supa,
+  opts: { invoiceId: string; index: number; jobId: string },
+): Promise<{ ok: boolean }> {
+  const { data: inv } = await supabase.from('invoices').select('id, line_items').eq('id', opts.invoiceId).single();
+  if (!inv) return { ok: false };
+  const items = (inv.line_items ?? []) as InvoiceLineItem[];
+  if (opts.index < 0 || opts.index >= items.length) return { ok: false };
+  const next = items.map((li, i) => (i === opts.index ? { ...li, job_id: opts.jobId, edited: true } : li));
+  await supabase.from('invoices').update({ line_items: next }).eq('id', opts.invoiceId);
+  await supabase
+    .from('jobs')
+    .update({ status: 'invoiced', invoice_id: opts.invoiceId, invoiced_at: new Date().toISOString() })
+    .eq('id', opts.jobId);
   return { ok: true };
 }
 

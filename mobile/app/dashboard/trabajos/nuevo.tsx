@@ -995,8 +995,9 @@ export default function NuevoTrabajoRoute() {
         <Fragment key={k}>
           {employees.length > 0 && (canAssign || restrictedCreator) ? (
             <>
-              {/* Crew Finder — dispatcher tool; managers+ only. */}
-              {canAssign ? (
+              {/* Crew Finder — dispatcher tool; managers+ only. Hidden when the
+                 business turned "Suggest crew" off in Settings > Jobs. */}
+              {canAssign && business?.crew_finder_enabled !== false ? (
               <Pressable
                 onPress={() => setCrewFinderOpen(true)}
                 className="mb-4 flex-row items-center justify-center gap-1.5 rounded-2xl border border-primary/30 bg-primary/5 py-3"

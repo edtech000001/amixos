@@ -1919,6 +1919,62 @@ export function JobItemTypesSection() {
   );
 }
 
+// "Suggest crew" (Crew Finder) button toggle — off for companies that just
+// assign their own team (mirrors the web Ajustes → Trabajos toggle).
+export function CrewFinderSection() {
+  const supabase = createSupabaseClient();
+  const { business, refetchBusiness } = useApp();
+  const c = useThemeColors();
+
+  const initial = business?.crew_finder_enabled !== false;
+  const [value, setValue] = useState<boolean>(initial);
+  const [saved, setSaved] = useState<boolean>(initial);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
+
+  useEffect(() => {
+    if (business) {
+      const fresh = business.crew_finder_enabled !== false;
+      setValue(fresh);
+      setSaved(fresh);
+    }
+  }, [business]);
+
+  const save = async () => {
+    if (!business) return;
+    setSaving(true);
+    setMsg(null);
+    const { error } = await supabase
+      .from('businesses')
+      .update({ crew_finder_enabled: value })
+      .eq('id', business.id);
+    setSaving(false);
+    setMsg({ text: error ? 'No se pudo guardar' : 'Guardado', isError: !!error });
+    if (!error) {
+      setSaved(value);
+      await refetchBusiness();
+    }
+  };
+
+  const dirty = value !== saved;
+  useSettingsSaveAction({ dirty, saving, onSave: save });
+
+  return (
+    <View className="gap-3">
+      <SectionHeader
+        icon={<Sliders size={18} color={c.primary} />}
+        title="Sugerir cuadrilla"
+        subtitle="Muestra un botón “Sugerir cuadrilla” en el formulario de trabajo que ordena a tu equipo por cercanía al trabajo y quién está libre ese día. Desactívalo si solo asignas a tu propio equipo."
+      />
+      <View className="bg-card rounded-2xl border border-border-soft px-4 py-3 flex-row items-center">
+        <Text className="flex-1 text-sm text-ink">Mostrar botón</Text>
+        <Toggle value={value} onValueChange={setValue} />
+      </View>
+      <StatusMsg msg={msg} />
+    </View>
+  );
+}
+
 // Auto-privatize jobs when invoiced (businesses.job_private_on_invoice,
 // migration 117 — a DB trigger flips published_to_crew=false on every
 // invoicing path). Mirrors the web Ajustes → Trabajos toggle.

@@ -22,7 +22,7 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { can } from '@amixos/shared/lib/permissions';
 import { resolveConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
-import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, autopriceInvoice, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
+import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
 import { rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
@@ -152,7 +152,11 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const [moveJobId, setMoveJobId] = useState<string | null>(null);
   const [moveTargets, setMoveTargets] = useState<{ id: string; invoice_number: string }[]>([]);
   const [addOpen, setAddOpen] = useState(false);
-  const [addCandidates, setAddCandidates] = useState<{ id: string; title: string; scheduled_date: string | null }[]>([]);
+  // When set, the job picker is in "link" mode for this line index (associate an
+  // imported/manual line with a job) instead of adding new job lines.
+  const [linkIndex, setLinkIndex] = useState<number | null>(null);
+  const [addCandidates, setAddCandidates] = useState<{ id: string; title: string; scheduled_date: string | null; client_id: string | null; clientName: string }[]>([]);
+  const [addSearch, setAddSearch] = useState('');
   const [addPicked, setAddPicked] = useState<Set<string>>(new Set());
   const [manualDesc, setManualDesc] = useState('');
   const [manualQty, setManualQty] = useState('1');
@@ -236,6 +240,15 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       .then(({ data }: { data: { price_tier_id: string | null } | null }) => setClientTierId(data?.price_tier_id ?? null));
   }, [invClientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Reset every line to unpriced ($0) so Autoprice can re-run clean — e.g. after
+  // adding a state-specific price. Autoprice skips already-priced lines, so this
+  // is the "clear the units first" step.
+  const clearPrices = async () => {
+    if (!(await confirm({ message: tInv.jobsSection.clearPricesConfirm, destructive: true }))) return;
+    await rebuildInvoiceLineItems(supabase, { invoiceId: id, itemTypeLabels, hideItemTypes: business?.job_item_types_enabled === false, qtyField: business?.invoice_qty_field, force: true });
+    await reloadInvoice();
+  };
+
   const runAutoprice = async (picks?: Record<number, string>) => {
     if (!priceItems.length) return;
     const res = await autopriceInvoice(supabase, { invoiceId: id, items: priceItems, tierId: clientTierId, qtyField: business?.invoice_qty_field, picks });
@@ -310,20 +323,73 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     setJobBusy(false);
   };
 
-  const openAdd = async () => {
-    const { data } = await supabase
+  // Load addable jobs (completed + not yet on an invoice). With no search, show
+  // this invoice's client only (the common case). When searching, span ALL
+  // clients by title so any job is findable — sorted same-client first, then
+  // most recent. Capped at 50 to stay light.
+  const loadAddCandidates = async (term: string) => {
+    let q = supabase
       .from('jobs')
-      .select('id, title, scheduled_date')
+      .select('id, title, scheduled_date, client_id, clients(first_name, last_name, company)')
       .eq('business_id', business!.id)
-      .eq('client_id', invClientId)
       .eq('status', 'completed')
       .is('invoice_id', null);
-    setAddCandidates((data ?? []) as { id: string; title: string; scheduled_date: string | null }[]);
+    const t = term.trim();
+    if (t) q = q.ilike('title', `%${t}%`);
+    else if (invClientId) q = q.eq('client_id', invClientId);
+    const { data } = await q.order('scheduled_date', { ascending: false }).limit(50);
+    const rows = ((data ?? []) as { id: string; title: string; scheduled_date: string | null; client_id: string | null; clients: { first_name: string | null; last_name: string | null; company: string | null } | null }[]).map(j => ({
+      id: j.id,
+      title: j.title,
+      scheduled_date: j.scheduled_date,
+      client_id: j.client_id,
+      clientName: (j.clients?.company || `${j.clients?.first_name ?? ''} ${j.clients?.last_name ?? ''}`.trim()) || '',
+    }));
+    // Same-client first (stable sort keeps the date-desc order within a group).
+    rows.sort((a, b) => (a.client_id === invClientId ? 0 : 1) - (b.client_id === invClientId ? 0 : 1));
+    setAddCandidates(rows);
+  };
+
+  const openAdd = async () => {
+    setLinkIndex(null);
+    setAddSearch('');
+    await loadAddCandidates('');
     setAddPicked(new Set());
     setAddOpen(true);
   };
 
+  // Link an imported/manual line (by index) to an existing job — opens the same
+  // job picker in single-select "link" mode.
+  const openLink = async (index: number) => {
+    setLinkIndex(index);
+    setAddSearch('');
+    await loadAddCandidates('');
+    setAddPicked(new Set());
+    setAddOpen(true);
+  };
+
+  const closeAdd = () => { setAddOpen(false); setLinkIndex(null); };
+
+  // Re-query as the search term changes (debounced) while the picker is open.
+  useEffect(() => {
+    if (!addOpen) return;
+    const h = setTimeout(() => { void loadAddCandidates(addSearch); }, 250);
+    return () => clearTimeout(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addSearch, addOpen]);
+
   const doAdd = async () => {
+    // Link mode: associate the chosen job with the target line, don't add lines.
+    if (linkIndex !== null) {
+      const jobId = Array.from(addPicked)[0];
+      if (!jobId) { closeAdd(); return; }
+      setJobBusy(true);
+      await linkLineToJob(supabase, { invoiceId: id, index: linkIndex, jobId });
+      closeAdd();
+      await reloadInvoice();
+      setJobBusy(false);
+      return;
+    }
     const desc = manualDesc.trim();
     const rate = parseFloat(manualRate) || 0;
     const hasManual = !!desc && rate !== 0;
@@ -772,12 +838,14 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         onEdit={invoice && canEdit ? () => router.push(`/dashboard/facturas/nueva?edit=${id}`) : undefined}
         onDelete={invoice && canDelete ? () => setDeleteOpen(true) : undefined}
         onAutoprice={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? runAutoprice : undefined}
+        onClearPrices={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? clearPrices : undefined}
         autopriceVerify={showInvVerify}
         onMoveJob={canEdit ? openMove : undefined}
         onRemoveJob={canEdit ? removeJob : undefined}
         onAddJob={canEdit ? openAdd : undefined}
         onRemoveManualItem={canEdit ? removeManual : undefined}
         onEditManualItem={canEdit ? editManual : undefined}
+        onLinkLine={canEdit ? openLink : undefined}
         onJobPress={(jobId) => setPreviewJobId(jobId)}
         jobBusy={jobBusy}
         onSendInvoice={canEdit ? sendInvoice : undefined}
@@ -847,9 +915,10 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       </Modal>
 
       {/* Add to invoice — manual item + completed jobs */}
-      <Modal open={addOpen} onClose={() => setAddOpen(false)} title={tInv.jobsSection.addTitle} size="sm">
+      <Modal open={addOpen} onClose={closeAdd} title={linkIndex !== null ? tInv.jobsSection.linkTitle : tInv.jobsSection.addTitle} size="sm">
         <div className="flex flex-col gap-5">
-          {/* Manual line item */}
+          {/* Manual line item — hidden in link mode (we're associating a line). */}
+          {linkIndex === null ? (
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-2">{tInv.jobsSection.manualHeading}</p>
             <div className="flex flex-col gap-2">
@@ -880,20 +949,32 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
               </div>
             </div>
           </div>
+          ) : null}
 
-          {/* Completed jobs */}
+          {/* Completed jobs — searchable across clients, same client first. */}
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-2">{tInv.jobsSection.jobsHeading}</p>
+            <input
+              value={addSearch}
+              onChange={e => setAddSearch(e.target.value)}
+              placeholder={tInv.jobsSection.addSearchPlaceholder}
+              className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+            />
             {addCandidates.length === 0 ? (
               <p className="text-sm text-faint">{tInv.jobsSection.addEmpty}</p>
             ) : (
               <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">
                 {addCandidates.map(j => {
                   const picked = addPicked.has(j.id);
+                  const otherClient = j.client_id !== invClientId && !!j.clientName;
                   return (
                     <button
                       key={j.id}
-                      onClick={() => setAddPicked(prev => { const n = new Set(prev); n.has(j.id) ? n.delete(j.id) : n.add(j.id); return n; })}
+                      onClick={() => setAddPicked(prev => {
+                        // Link mode: single-select (one job per line). Add mode: toggle.
+                        if (linkIndex !== null) return new Set(prev.has(j.id) ? [] : [j.id]);
+                        const n = new Set(prev); n.has(j.id) ? n.delete(j.id) : n.add(j.id); return n;
+                      })}
                       className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm text-left ${picked ? 'bg-primary/10' : 'hover:bg-surface'}`}
                     >
                       <span className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${picked ? 'bg-primary border-primary text-white' : 'border-border'}`}>
@@ -901,9 +982,11 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                       </span>
                       <span className="flex-1 min-w-0">
                         <span className="block truncate text-ink">{j.title}</span>
-                        {j.scheduled_date ? (
-                          <span className="block text-xs text-faint">{formatDateLong(j.scheduled_date, full.dashboard.dateLocale)}</span>
-                        ) : null}
+                        <span className="block text-xs text-faint truncate">
+                          {otherClient ? <span className="text-amber-500 font-medium">{j.clientName}</span> : null}
+                          {otherClient && j.scheduled_date ? ' · ' : ''}
+                          {j.scheduled_date ? formatDateLong(j.scheduled_date, full.dashboard.dateLocale) : ''}
+                        </span>
                       </span>
                     </button>
                   );
@@ -912,7 +995,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
             )}
           </div>
 
-          <Button onClick={doAdd} loading={jobBusy} fullWidth>{tInv.jobsSection.addConfirm}</Button>
+          <Button onClick={doAdd} loading={jobBusy} fullWidth>{linkIndex !== null ? tInv.jobsSection.linkBtn : tInv.jobsSection.addConfirm}</Button>
         </div>
       </Modal>
 

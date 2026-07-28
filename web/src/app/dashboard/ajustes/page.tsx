@@ -1759,6 +1759,10 @@ export default function AjustesPage() {
   const [privateOnInvoice, setPrivateOnInvoice] = useState<boolean>(business?.job_private_on_invoice === true);
   const [savingPrivateOnInvoice, setSavingPrivateOnInvoice] = useState(false);
 
+  // "Suggest crew" (Crew Finder) button toggle. Saves on flip.
+  const [crewFinderOn, setCrewFinderOn] = useState<boolean>(business?.crew_finder_enabled !== false);
+  const [savingCrewFinder, setSavingCrewFinder] = useState(false);
+
   useEffect(() => {
     if (business) {
       const cm = business.job_crew_mode ?? true;
@@ -1766,6 +1770,7 @@ export default function AjustesPage() {
       setDbCrewMode(cm);
       setItemTypesOn(business.job_item_types_enabled !== false);
       setPrivateOnInvoice(business.job_private_on_invoice === true);
+      setCrewFinderOn(business.crew_finder_enabled !== false);
       const h = parseHiddenFields(business.job_field_hidden);
       setJobHidden(h);
       setDbJobHidden(h);
@@ -1788,6 +1793,15 @@ export default function AjustesPage() {
       .update({ job_item_types_enabled: value }).eq('id', business.id);
     if (!error) await refetchBusiness(); else setItemTypesOn(!value);
     setSavingItemTypes(false);
+  };
+
+  const saveCrewFinder = async (value: boolean) => {
+    if (!business) return;
+    setCrewFinderOn(value); setSavingCrewFinder(true);
+    const { error } = await supabase.from('businesses')
+      .update({ crew_finder_enabled: value }).eq('id', business.id);
+    if (!error) await refetchBusiness(); else setCrewFinderOn(!value);
+    setSavingCrewFinder(false);
   };
 
   const savePrivateOnInvoice = async (value: boolean) => {
@@ -2687,6 +2701,21 @@ export default function AjustesPage() {
                     </p>
                   </div>
                   <Toggle checked={itemTypesOn} onChange={() => saveItemTypes(!itemTypesOn)} disabled={savingItemTypes} />
+                </div>
+              </div>
+
+              {/* Suggest crew (Crew Finder) toggle. */}
+              <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h2 className="text-base font-semibold text-ink">{locale === 'en' ? 'Suggest crew' : 'Sugerir cuadrilla'}</h2>
+                    <p className="text-xs text-faint mt-1">
+                      {locale === 'en'
+                        ? 'Shows a “Suggest crew” button on the job form that ranks your team by distance to the job and who’s free that day. Turn off if you just assign your own team.'
+                        : 'Muestra un botón “Sugerir cuadrilla” en el formulario de trabajo que ordena a tu equipo por cercanía al trabajo y quién está libre ese día. Desactívalo si solo asignas a tu propio equipo.'}
+                    </p>
+                  </div>
+                  <Toggle checked={crewFinderOn} onChange={() => saveCrewFinder(!crewFinderOn)} disabled={savingCrewFinder} />
                 </div>
               </div>
 
