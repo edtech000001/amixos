@@ -22,6 +22,7 @@ import { useLang } from '@/i18n/LangProvider';
 import { useScrollRestore, saveScrollAnchor } from '@/lib/useScrollRestore';
 import ImportModal from '@/components/dashboard/ImportModal';
 import { Modal } from '@/components/ui/Modal';
+import { clientPickerDisplay } from '@amixos/shared/lib/clientSearch';
 
 interface RawJob {
   id: string;
@@ -77,7 +78,7 @@ export default function TrabajosPage() {
   // Bulk "move to client": the selected job ids + client-picker state.
   const [moveClientIds, setMoveClientIds] = useState<string[] | null>(null);
   const [clientSearch, setClientSearch] = useState('');
-  const [clientResults, setClientResults] = useState<{ id: string; name: string }[]>([]);
+  const [clientResults, setClientResults] = useState<{ id: string; top: string; sub: string | null }[]>([]);
   const [movingClient, setMovingClient] = useState(false);
   const [jobTemplates, setJobTemplates] = useState<{ field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }[]>([]);
 
@@ -282,7 +283,7 @@ export default function TrabajosPage() {
     if (s) q = q.or(`first_name.ilike.*${s}*,last_name.ilike.*${s}*,company.ilike.*${s}*`);
     const { data } = await q.order('last_name').limit(30);
     setClientResults(((data ?? []) as { id: string; first_name: string | null; last_name: string | null; company: string | null }[])
-      .map(c => ({ id: c.id, name: (c.company || `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim()) || '—' })));
+      .map(c => ({ id: c.id, ...clientPickerDisplay(c) })));
   };
   useEffect(() => {
     if (moveClientIds === null) return;
@@ -478,13 +479,15 @@ export default function TrabajosPage() {
           autoFocus
           className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
         />
-        <div className="flex flex-col gap-1 max-h-72 overflow-y-auto">
+        {/* Fixed height so the modal doesn't resize as results change. */}
+        <div className="flex flex-col gap-1 h-80 overflow-y-auto">
           {clientResults.length === 0 ? (
             <p className="text-sm text-faint px-1 py-2">{locale === 'es' ? 'Sin resultados.' : 'No results.'}</p>
           ) : clientResults.map(cl => (
             <button key={cl.id} disabled={movingClient} onClick={() => void doMoveClient(cl.id)}
-              className="text-left px-3 py-2.5 rounded-xl text-sm text-ink hover:bg-surface disabled:opacity-50">
-              {cl.name}
+              className="text-left px-3 py-2.5 rounded-xl text-sm hover:bg-surface disabled:opacity-50 shrink-0">
+              <span className="font-medium text-ink">{cl.top}</span>
+              {cl.sub ? <span className="text-faint"> · {cl.sub}</span> : null}
             </button>
           ))}
         </div>

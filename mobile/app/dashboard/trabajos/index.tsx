@@ -16,6 +16,7 @@ import { usStateName } from '@amixos/shared/lib/usStates';
 import { can } from '@amixos/shared/lib/permissions';
 import { normalizeJobAlertThresholds } from '@amixos/shared/lib/jobAlerts';
 import { logAudit } from '@amixos/shared/lib/audit';
+import { clientPickerDisplay } from '@amixos/shared/lib/clientSearch';
 import { createInvoicesFromJobs } from '@amixos/shared/lib/invoicing';
 import { useLang } from '@/lib/i18n/LangProvider';
 
@@ -90,7 +91,7 @@ export default function TrabajosTab() {
   const [serverCounts, setServerCounts] = useState<Record<string, number>>({});
   const [moveClientIds, setMoveClientIds] = useState<string[] | null>(null);
   const [clientSearch, setClientSearch] = useState('');
-  const [clientResults, setClientResults] = useState<{ id: string; name: string }[]>([]);
+  const [clientResults, setClientResults] = useState<{ id: string; top: string; sub: string | null }[]>([]);
   const [movingClient, setMovingClient] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -228,7 +229,7 @@ export default function TrabajosTab() {
     if (s) q = q.or(`first_name.ilike.*${s}*,last_name.ilike.*${s}*,company.ilike.*${s}*`);
     const { data } = await q.order('last_name').limit(30);
     setClientResults(((data ?? []) as { id: string; first_name: string | null; last_name: string | null; company: string | null }[])
-      .map(c => ({ id: c.id, name: (c.company || `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim()) || '—' })));
+      .map(c => ({ id: c.id, ...clientPickerDisplay(c) })));
   };
   useEffect(() => {
     if (moveClientIds === null) return;
@@ -441,12 +442,13 @@ export default function TrabajosTab() {
               placeholderTextColor="#6B7280"
               className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink mb-2"
             />
-            <ScrollView style={{ maxHeight: 320 }}>
+            {/* Fixed height so the sheet doesn't resize as results change. */}
+            <ScrollView style={{ height: 320 }}>
               {clientResults.length === 0 ? (
                 <Text className="text-sm text-faint px-1 py-2">{locale === 'es' ? 'Sin resultados.' : 'No results.'}</Text>
               ) : clientResults.map(cl => (
                 <Pressable key={cl.id} disabled={movingClient} onPress={() => void doMoveClient(cl.id)} className="px-3 py-3 rounded-xl active:bg-surface">
-                  <Text className="text-sm text-ink">{cl.name}</Text>
+                  <Text className="text-sm text-ink"><Text className="font-medium">{cl.top}</Text>{cl.sub ? <Text className="text-faint">{`  ·  ${cl.sub}`}</Text> : null}</Text>
                 </Pressable>
               ))}
             </ScrollView>
