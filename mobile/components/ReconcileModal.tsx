@@ -276,7 +276,7 @@ export function ReconcileModal({ open, businessId, onClose }: Props) {
                     return (
                       <Pressable key={lineKey(l)} onPress={() => setPickedLineKey(lineKey(l))} className={`px-3 py-2.5 rounded-xl mb-1 ${active ? 'bg-primary/10' : ''}`}>
                         <Text className={`text-sm ${active ? 'text-primary' : 'text-ink'}`} numberOfLines={1}>{l.description}</Text>
-                        <Text className="text-xs text-faint">#{l.invoiceNumber} · {l.qty} × {money(l.rate)} = {money(l.amount)}</Text>
+                        <Text className="text-xs text-faint">#{l.invoiceNumber} · {l.qty} × {money(l.rate)} = {money(l.amount)}{l.issueDate ? ` · ${fmtDate(l.issueDate)}` : ''}</Text>
                       </Pressable>
                     );
                   })}

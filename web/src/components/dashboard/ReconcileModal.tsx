@@ -292,7 +292,7 @@ export default function ReconcileModal({ open, businessId, locale, onClose }: Pr
                     <button key={lineKey(l)} onClick={() => setPickedLineKey(lineKey(l))}
                       className={`text-left px-3 py-2 rounded-xl text-sm ${active ? 'bg-primary/10 text-primary' : 'hover:bg-surface text-ink'}`}>
                       <span className="block truncate">{l.description}</span>
-                      <span className="block text-xs text-faint">#{l.invoiceNumber} · {l.qty} × {money(l.rate)} = {money(l.amount)}</span>
+                      <span className="block text-xs text-faint">#{l.invoiceNumber} · {l.qty} × {money(l.rate)} = {money(l.amount)}{l.issueDate ? ` · ${fmtDate(l.issueDate)}` : ''}</span>
                     </button>
                   );
                 })}
