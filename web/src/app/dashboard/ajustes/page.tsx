@@ -76,6 +76,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Toggle } from '@/components/ui/Toggle';
 import { SettingsNav, type SettingsTab } from '@/components/dashboard/SettingsNav';
 import ImportModal from '@/components/dashboard/ImportModal';
+import ReconcileModal from '@/components/dashboard/ReconcileModal';
 import { formulaComponentTemplates } from '@amixos/shared/lib/importRunners';
 import ImportClientsModal from '@/components/dashboard/ImportClientsModal';
 import { ImportPhotosModal } from '@/components/dashboard/ImportPhotosModal';
@@ -597,6 +598,7 @@ export default function AjustesPage() {
   // Every step opens its wizard IN PLACE — the user never leaves the hub
   // while migrating. Configs load when the tab opens.
   const [hubImport, setHubImport] = useState<null | 'clients' | 'jobs' | 'employees' | 'invoices' | 'photos' | 'payroll' | 'equipment' | 'inventory'>(null);
+  const [reconcileOpen, setReconcileOpen] = useState(false);
   const [hubJobTemplates, setHubJobTemplates] = useState<{ field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }[]>([]);
   const [hubEmpTemplates, setHubEmpTemplates] = useState<{ field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }[]>([]);
   const [hubClientTemplates, setHubClientTemplates] = useState<{ field_key: string; field_label: string }[]>([]);
@@ -3737,6 +3739,20 @@ export default function AjustesPage() {
                 })}
               </div>
 
+              {/* Post-import cleanup: reconcile orphaned jobs with unlinked
+                 invoice lines (when the Project ID was missing on import). */}
+              <div className="border-t border-border-soft pt-5">
+                <button type="button" onClick={() => setReconcileOpen(true)}
+                  className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 flex items-center gap-3 hover:bg-surface transition-colors w-full">
+                  <div className="w-9 h-9 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">↔</div>
+                  <div className="flex-1 min-w-0 text-left">
+                    <p className="text-sm font-semibold text-ink">{locale === 'en' ? 'Reconcile jobs ↔ invoices' : 'Reconciliar trabajos ↔ facturas'}</p>
+                    <p className="text-xs text-muted mt-0.5">{locale === 'en' ? 'Link completed jobs to unlinked invoice lines by name — a fix-up when the Project ID was missing on import.' : 'Vincula trabajos completados con líneas de factura sin vincular por nombre — arregla cuando faltó el Project ID al importar.'}</p>
+                  </div>
+                  <span className="text-xl text-faint">›</span>
+                </button>
+              </div>
+
             </div>
           )}
 
@@ -3757,6 +3773,14 @@ export default function AjustesPage() {
               open
               businessId={business.id}
               onClose={() => setHubImport(null)}
+            />
+          )}
+          {reconcileOpen && business && (
+            <ReconcileModal
+              open
+              businessId={business.id}
+              locale={locale as 'es' | 'en'}
+              onClose={() => setReconcileOpen(false)}
             />
           )}
           {hubImport && hubImport !== 'clients' && hubImport !== 'photos' && business && (

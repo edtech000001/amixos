@@ -8,6 +8,7 @@ import { SettingsPageWrapper } from '@/components/SettingsPageWrapper';
 import { ImportClientsModal } from '@/components/ImportClientsModal';
 import { ImportDataModal } from '@/components/ImportDataModal';
 import { ImportPhotosModal } from '@/components/ImportPhotosModal';
+import { ReconcileModal } from '@/components/ReconcileModal';
 
 // Ajustes → Importar datos: guided migration hub. The four importers as
 // ORDERED steps, because the order matters — jobs match clients + team by
@@ -23,6 +24,7 @@ export default function ImportarDatosPage() {
   const supabase = createSupabaseClient();
 
   const [openStep, setOpenStep] = useState<StepKey | null>(null);
+  const [reconcileOpen, setReconcileOpen] = useState(false);
   // Client custom-field templates — the clients import modal needs them.
   const [clientTemplates, setClientTemplates] = useState<{ field_key: string; field_label: string }[]>([]);
   useEffect(() => {
@@ -77,6 +79,23 @@ export default function ImportarDatosPage() {
           </Pressable>
         ))}
       </View>
+
+      {/* Post-import cleanup: reconcile orphaned jobs with unlinked invoice lines. */}
+      <Pressable
+        onPress={() => setReconcileOpen(true)}
+        className="mt-4 bg-card rounded-2xl border border-border-soft flex-row items-center gap-3 px-4 py-4 active:bg-surface"
+      >
+        <View className="w-9 h-9 rounded-full bg-emerald-500/10 items-center justify-center">
+          <Text className="text-base font-bold text-emerald-500">↔</Text>
+        </View>
+        <View className="flex-1">
+          <Text className="text-sm font-semibold text-ink">{locale === 'es' ? 'Reconciliar trabajos ↔ facturas' : 'Reconcile jobs ↔ invoices'}</Text>
+          <Text className="text-xs text-muted mt-0.5">{locale === 'es' ? 'Vincula trabajos completados con líneas de factura sin vincular por nombre.' : 'Link completed jobs to unlinked invoice lines by name.'}</Text>
+        </View>
+        <Text className="text-xl text-faint">›</Text>
+      </Pressable>
+
+      <ReconcileModal open={reconcileOpen} businessId={business.id} onClose={() => setReconcileOpen(false)} />
 
       <ImportClientsModal
         open={openStep === 'clients'}
