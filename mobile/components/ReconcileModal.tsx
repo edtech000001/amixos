@@ -9,6 +9,7 @@ import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { linkLineToJob } from '@amixos/shared/lib/invoicing';
 import {
   buildReconcileProposals,
+  sortLinesByDateNear,
   type OrphanJob,
   type UnlinkedLine,
   type ReconcileProposal,
@@ -271,8 +272,8 @@ export function ReconcileModal({ open, businessId, onClose }: Props) {
               {current.alternatives.length > 0 && (
                 <View>
                   <Text className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5">{t('Otras líneas posibles', 'Other possible lines')}</Text>
-                  {/* Only the OTHER lines — the matched one is already in the card above. */}
-                  {[current.line!, ...current.alternatives].filter(l => lineKey(l) !== lineKey(currentLine)).map(l => (
+                  {/* Only the OTHER lines, ordered by closest invoice date to the job. */}
+                  {sortLinesByDateNear([current.line!, ...current.alternatives].filter(l => lineKey(l) !== lineKey(currentLine)), current.job.scheduledDate).map(l => (
                     <Pressable key={lineKey(l)} onPress={() => setPickedLineKey(lineKey(l))} className="px-3 py-2.5 rounded-xl mb-1 border border-border-soft">
                       <Text className="text-sm text-ink" numberOfLines={1}>{l.description}</Text>
                       <Text className="text-xs text-faint">#{l.invoiceNumber} · {l.qty} × {money(l.rate)} = {money(l.amount)}{l.issueDate ? ` · ${fmtDate(l.issueDate)}` : ''}</Text>

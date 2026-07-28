@@ -39,6 +39,11 @@ export interface ReconcileProposal {
   alternatives: UnlinkedLine[];
 }
 
+/** Order lines by closest invoice date to a reference date (the job's date). */
+export function sortLinesByDateNear(lines: UnlinkedLine[], nearDate: string | null): UnlinkedLine[] {
+  return [...lines].sort((a, b) => dateDist(a.issueDate, nearDate) - dateDist(b.issueDate, nearDate));
+}
+
 export function normalizeName(s: string): string {
   return (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
@@ -61,6 +66,16 @@ export function matchScore(a: string, b: string): number {
 const FUZZY_THRESHOLD = 0.45;
 const lineKey = (l: UnlinkedLine) => `${l.invoiceId}#${l.index}`;
 
+/** Absolute distance (ms) between two date strings; Infinity if either missing.
+ *  Used to prefer the invoice dated closest to the job. */
+function dateDist(a: string | null, b: string | null): number {
+  if (!a || !b) return Number.POSITIVE_INFINITY;
+  const ta = Date.parse(a);
+  const tb = Date.parse(b);
+  if (!Number.isFinite(ta) || !Number.isFinite(tb)) return Number.POSITIVE_INFINITY;
+  return Math.abs(ta - tb);
+}
+
 /**
  * Build one proposal per job. A proposal is 'exact' only when there's exactly
  * ONE line on the same client whose normalized description equals the job title
@@ -78,11 +93,14 @@ export function buildReconcileProposals(jobs: OrphanJob[], lines: UnlinkedLine[]
   return jobs.map(job => {
     const pool = byClient.get(job.clientId ?? '') ?? [];
     const jn = normalizeName(job.title);
-    const exact = pool.filter(l => normalizeName(l.description) === jn);
+    // Closest invoice date to the job's date first (the invoice almost always
+    // falls near the work). Used to order candidates + break score ties.
+    const byDate = (a: UnlinkedLine, b: UnlinkedLine) => dateDist(a.issueDate, job.scheduledDate) - dateDist(b.issueDate, job.scheduledDate);
+    const exact = pool.filter(l => normalizeName(l.description) === jn).sort(byDate);
     const scored = pool
       .map(l => ({ l, score: matchScore(jn, normalizeName(l.description)) }))
       .filter(x => x.score >= FUZZY_THRESHOLD)
-      .sort((a, b) => b.score - a.score);
+      .sort((a, b) => (b.score !== a.score ? b.score - a.score : byDate(a.l, b.l)));
 
     if (exact.length === 1) {
       const primary = exact[0];
@@ -90,8 +108,8 @@ export function buildReconcileProposals(jobs: OrphanJob[], lines: UnlinkedLine[]
       return { job, line: primary, confidence: 'exact', alternatives };
     }
     if (exact.length > 1) {
-      // Same name on multiple lines → can't be sure which; review.
-      return { job, line: exact[0], confidence: 'fuzzy', alternatives: exact.slice(1).concat(scored.map(s => s.l)).slice(0, 6) };
+      // Same name on multiple lines → can't be sure which; review. Closest date first.
+      return { job, line: exact[0], confidence: 'fuzzy', alternatives: exact.slice(1).concat(scored.map(s => s.l).filter(l => !exact.some(e => lineKey(e) === lineKey(l)))).slice(0, 6) };
     }
     if (scored.length) {
       return { job, line: scored[0].l, confidence: 'fuzzy', alternatives: scored.slice(1).map(s => s.l).slice(0, 6) };

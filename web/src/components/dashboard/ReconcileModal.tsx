@@ -10,6 +10,7 @@ import { linkLineToJob } from '@amixos/shared/lib/invoicing';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import {
   buildReconcileProposals,
+  sortLinesByDateNear,
   type OrphanJob,
   type UnlinkedLine,
   type ReconcileProposal,
@@ -286,9 +287,9 @@ export default function ReconcileModal({ open, businessId, locale, onClose }: Pr
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5">{t('Otras líneas posibles', 'Other possible lines')}</p>
               <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
-                {/* Only the OTHER lines — the currently-matched one is already
-                    shown in the Invoice line card above, so don't repeat it. */}
-                {[current.line!, ...current.alternatives].filter(l => lineKey(l) !== lineKey(currentLine)).map(l => (
+                {/* Only the OTHER lines (the matched one is in the card above),
+                    ordered by closest invoice date to the job's date. */}
+                {sortLinesByDateNear([current.line!, ...current.alternatives].filter(l => lineKey(l) !== lineKey(currentLine)), current.job.scheduledDate).map(l => (
                   <button key={lineKey(l)} onClick={() => setPickedLineKey(lineKey(l))}
                     className="text-left px-3 py-2 rounded-xl text-sm hover:bg-surface text-ink border border-transparent hover:border-primary/30">
                     <span className="block truncate">{l.description}</span>
