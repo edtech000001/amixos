@@ -21,6 +21,8 @@ export interface UnlinkedLine {
   /** Index of this line within its invoice's line_items array. */
   index: number;
   description: string;
+  qty: number;
+  rate: number;
   amount: number;
   clientId: string | null;
   issueDate: string | null;

@@ -7,6 +7,7 @@ import { Toggle } from '@/components/ui/Toggle';
 import { createSupabaseClient } from '@/lib/supabase';
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { linkLineToJob } from '@amixos/shared/lib/invoicing';
+import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import {
   buildReconcileProposals,
   type OrphanJob,
@@ -53,6 +54,8 @@ export default function ReconcileModal({ open, businessId, locale, onClose }: Pr
   const [busy, setBusy] = useState(false);
   // Per-step: which alternative line the user chose (else the proposal's primary).
   const [pickedLineKey, setPickedLineKey] = useState<string | null>(null);
+  // Job preview sheet (tap the job card to see full details for disambiguation).
+  const [previewJobId, setPreviewJobId] = useState<string | null>(null);
 
   const lineKey = (l: UnlinkedLine) => `${l.invoiceId}#${l.index}`;
   const money = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -104,12 +107,16 @@ export default function ReconcileModal({ open, businessId, locale, onClose }: Pr
       const items = (Array.isArray(inv.line_items) ? inv.line_items : []) as { description?: string; qty?: number; rate?: number; job_id?: string | null }[];
       items.forEach((li, index) => {
         if (li.job_id) return;
+        const qty = Number(li.qty) || 0;
+        const rate = Number(li.rate) || 0;
         lines.push({
           invoiceId: inv.id,
           invoiceNumber: inv.invoice_number ?? '',
           index,
           description: li.description ?? '',
-          amount: (Number(li.qty) || 0) * (Number(li.rate) || 0),
+          qty,
+          rate,
+          amount: qty * rate,
           clientId: inv.client_id,
           issueDate: inv.issue_date,
         });
@@ -254,20 +261,23 @@ export default function ReconcileModal({ open, businessId, locale, onClose }: Pr
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-card rounded-2xl border border-border-soft p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-faint mb-1">{t('Trabajo', 'Job')}</p>
-              <p className="text-sm font-semibold text-ink">{current.job.title}</p>
+            <button type="button" onClick={() => setPreviewJobId(current.job.id)}
+              className="bg-card rounded-2xl border border-border-soft p-4 text-left hover:border-primary/40 hover:bg-surface transition-colors">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-faint mb-1">{t('Trabajo', 'Job')} ›</p>
+              <p className="text-sm font-semibold text-primary">{current.job.title}</p>
               {current.job.externalRef ? <p className="text-xs font-mono text-faint mt-0.5">{current.job.externalRef}</p> : null}
               <p className="text-xs text-muted mt-1">{current.job.clientName}</p>
               {current.job.scheduledDate ? <p className="text-xs text-faint mt-0.5">{fmtDate(current.job.scheduledDate)}</p> : null}
-            </div>
+            </button>
             <div className="bg-card rounded-2xl border border-border-soft p-4">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-faint mb-1">{t('Línea de factura', 'Invoice line')}</p>
               <p className="text-sm font-semibold text-ink">{currentLine.description}</p>
               <p className="text-xs font-mono text-faint mt-0.5">#{currentLine.invoiceNumber}</p>
               {/* Same client as the job (matched by client) — show it for visual parity. */}
               <p className="text-xs text-muted mt-1">{current.job.clientName}</p>
-              <p className="text-xs text-muted mt-1">{money(currentLine.amount)}</p>
+              <p className="text-xs text-muted mt-1">
+                {currentLine.qty} × {money(currentLine.rate)} = <span className="font-semibold text-ink">{money(currentLine.amount)}</span>
+              </p>
               {currentLine.issueDate ? <p className="text-xs text-faint mt-0.5">{fmtDate(currentLine.issueDate)}</p> : null}
             </div>
           </div>
@@ -282,7 +292,7 @@ export default function ReconcileModal({ open, businessId, locale, onClose }: Pr
                     <button key={lineKey(l)} onClick={() => setPickedLineKey(lineKey(l))}
                       className={`text-left px-3 py-2 rounded-xl text-sm ${active ? 'bg-primary/10 text-primary' : 'hover:bg-surface text-ink'}`}>
                       <span className="block truncate">{l.description}</span>
-                      <span className="block text-xs text-faint">#{l.invoiceNumber} · {money(l.amount)}</span>
+                      <span className="block text-xs text-faint">#{l.invoiceNumber} · {l.qty} × {money(l.rate)} = {money(l.amount)}</span>
                     </button>
                   );
                 })}
@@ -308,6 +318,16 @@ export default function ReconcileModal({ open, businessId, locale, onClose }: Pr
           <Button onClick={onClose} fullWidth>{t('Listo', 'Done')}</Button>
         </div>
       )}
+
+      {/* Tap the job card → full job details for disambiguation. Opens over the
+          reconcile modal; "open full" goes to the job in a new tab so the
+          reconcile queue isn't disturbed. */}
+      <JobPreviewSheet
+        supabase={supabase}
+        jobId={previewJobId}
+        onClose={() => setPreviewJobId(null)}
+        onOpenFull={(jid) => { setPreviewJobId(null); window.open(`/dashboard/trabajos/${jid}`, '_blank'); }}
+      />
     </Modal>
   );
 }

@@ -100,12 +100,16 @@ export function ReconcileModal({ open, businessId, onClose }: Props) {
       const items = (Array.isArray(inv.line_items) ? inv.line_items : []) as { description?: string; qty?: number; rate?: number; job_id?: string | null }[];
       items.forEach((li, index) => {
         if (li.job_id) return;
+        const qty = Number(li.qty) || 0;
+        const rate = Number(li.rate) || 0;
         lines.push({
           invoiceId: inv.id,
           invoiceNumber: inv.invoice_number ?? '',
           index,
           description: li.description ?? '',
-          amount: (Number(li.qty) || 0) * (Number(li.rate) || 0),
+          qty,
+          rate,
+          amount: qty * rate,
           clientId: inv.client_id,
           issueDate: inv.issue_date,
         });
@@ -258,7 +262,8 @@ export function ReconcileModal({ open, businessId, onClose }: Props) {
                   <Text className="text-sm font-semibold text-ink">{currentLine.description}</Text>
                   <Text className="text-xs font-mono text-faint mt-0.5">#{currentLine.invoiceNumber}</Text>
                   <Text className="text-xs text-muted mt-1">{current.job.clientName}</Text>
-                  <Text className="text-xs text-muted mt-1">{money(currentLine.amount)}</Text>
+                  <Text className="text-xs text-muted mt-1">{currentLine.qty} × {money(currentLine.rate)}</Text>
+                  <Text className="text-xs font-semibold text-ink mt-0.5">{money(currentLine.amount)}</Text>
                   {currentLine.issueDate ? <Text className="text-xs text-faint mt-0.5">{fmtDate(currentLine.issueDate)}</Text> : null}
                 </Card>
               </View>
@@ -271,7 +276,7 @@ export function ReconcileModal({ open, businessId, onClose }: Props) {
                     return (
                       <Pressable key={lineKey(l)} onPress={() => setPickedLineKey(lineKey(l))} className={`px-3 py-2.5 rounded-xl mb-1 ${active ? 'bg-primary/10' : ''}`}>
                         <Text className={`text-sm ${active ? 'text-primary' : 'text-ink'}`} numberOfLines={1}>{l.description}</Text>
-                        <Text className="text-xs text-faint">#{l.invoiceNumber} · {money(l.amount)}</Text>
+                        <Text className="text-xs text-faint">#{l.invoiceNumber} · {l.qty} × {money(l.rate)} = {money(l.amount)}</Text>
                       </Pressable>
                     );
                   })}
