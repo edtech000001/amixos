@@ -3,6 +3,7 @@ import { Alert, Share, View, Text, Pressable, ScrollView, Modal as RNModal, Link
 import { X } from 'lucide-react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -39,6 +40,22 @@ const PAY_METHODS = ['cash', 'check', 'card', 'transfer', 'zelle', 'cashapp', 'v
 type PayMethodKey = (typeof PAY_METHODS)[number];
 
 const genToken = () => secureShareToken();
+
+// Render the invoice HTML to a PDF whose file name is the invoice number
+// (e.g. INV-258643.pdf), so the shared / emailed attachment isn't the random
+// temp name expo-print assigns. Falls back to the temp uri if the copy fails.
+async function renderInvoicePdf(html: string, invoiceNumber: string): Promise<string> {
+  const { uri } = await Print.printToFileAsync({ html });
+  const safe = (invoiceNumber || 'invoice').replace(/[^\w.-]+/g, '_');
+  const dest = `${FileSystem.cacheDirectory}${safe}.pdf`;
+  try {
+    await FileSystem.deleteAsync(dest, { idempotent: true });
+    await FileSystem.copyAsync({ from: uri, to: dest });
+    return dest;
+  } catch {
+    return uri;
+  }
+}
 
 interface RawClient {
   id: string;
@@ -783,7 +800,7 @@ export default function FacturaDetailRoute() {
   const exportPdf = async () => {
     if (!invoice) return;
     const vm = buildInvoiceViewModel(templateConfig, invoice, branding);
-    const { uri } = await Print.printToFileAsync({ html: buildInvoiceHtml(vm) });
+    const uri = await renderInvoicePdf(buildInvoiceHtml(vm), invoice.invoiceNumber);
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
     }
@@ -876,7 +893,7 @@ export default function FacturaDetailRoute() {
         let attachments: string[] = [];
         if (includePdf) {
           const vm = buildInvoiceViewModel(templateConfig, invoice, branding);
-          const { uri } = await Print.printToFileAsync({ html: buildInvoiceHtml(vm) });
+          const uri = await renderInvoicePdf(buildInvoiceHtml(vm), invoice.invoiceNumber);
           attachments = [uri];
         }
         const result = await MailComposer.composeAsync({

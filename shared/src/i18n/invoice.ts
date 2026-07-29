@@ -42,6 +42,14 @@ const labels = {
 
   // Invoice title
   invoice:        { es: 'Factura',               en: 'Invoice' },
+
+  // Estimate / proposal mode (same theme engine, different labels)
+  estimate:       { es: 'Presupuesto',           en: 'Estimate' },
+  validUntil:     { es: 'Válido hasta',          en: 'Valid until' },
+  description:    { es: 'Descripción',            en: 'Description' },
+  terms:          { es: 'Términos y condiciones', en: 'Terms & Conditions' },
+  preparedBy:     { es: 'Preparado por',          en: 'Prepared by' },
+  approval:       { es: 'Aprobación',             en: 'Approval' },
 } as const;
 
 export type InvoiceLabelKey = keyof typeof labels;

@@ -24,6 +24,7 @@ interface RawClient {
   address: string | null;
   city: string | null;
   state: string | null;
+  zip_code: string | null;
 }
 interface RawBusiness {
   name: string;
@@ -91,6 +92,17 @@ export default function PublicInvoicePage({ params }: { params: { token: string 
     void load();
   }, [token]);
 
+  // The browser uses document.title as the default "Save as PDF" filename, so
+  // name the tab after the invoice number (e.g. INV-258643 → INV-258643.pdf)
+  // instead of the site title. Restore the previous title on unmount.
+  useEffect(() => {
+    const num = (raw?.invoice_number ?? '').trim();
+    if (!num) return;
+    const prev = document.title;
+    document.title = num;
+    return () => { document.title = prev; };
+  }, [raw]);
+
   useEffect(() => {
     if (!loading && raw && autoPrint) {
       const id = setTimeout(() => window.print(), 500);
@@ -152,6 +164,7 @@ export default function PublicInvoicePage({ params }: { params: { token: string 
       address: c.address,
       city: c.city,
       state: c.state,
+      zip: c.zip_code,
     })),
     customFields,
   };
@@ -176,7 +189,11 @@ export default function PublicInvoicePage({ params }: { params: { token: string 
 
   return (
     <div className="min-h-screen bg-gray-50 print:bg-white">
-      <div className="max-w-3xl mx-auto py-10 px-6 print:py-0 print:px-0">
+      {/* Full-bleed on print: drop the @page margin and the on-screen max width
+          so the letter-ratio page fills the sheet edge-to-edge — otherwise the
+          corner decoration stops short of the paper's bottom-right corner. */}
+      <style>{'@media print{@page{margin:0}}'}</style>
+      <div className="max-w-3xl mx-auto py-10 px-6 print:py-0 print:px-0 print:max-w-none">
         <div className="bg-white rounded-2xl print:rounded-none border border-gray-100 print:border-0 shadow-sm print:shadow-none overflow-hidden">
           <InvoiceDocument vm={vm} />
         </div>

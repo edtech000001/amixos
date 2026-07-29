@@ -10,6 +10,7 @@ import { useLang } from '../../i18n';
 import { formatDateLong, daysOverdue, daysSince } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
+import { INVOICES_FILTERS_KEY, parseInvoicesFilters } from '../../lib/invoicesFilters';
 
 export interface InvoiceListItem {
   id: string;
@@ -117,20 +118,34 @@ export function InvoicesListScreen({
   // jobs list, so leaving the page keeps the chosen grouping.
   const groupStoreKey = businessId ? `amixos.invoicesGroupBy.v1.${businessId}` : 'amixos.invoicesGroupBy.v1';
   const [groupBy, setGroupByState] = useState<GroupKey>('none');
-  // Gate the server-mode filter report until after the group-by restore, so the
-  // first query uses the saved grouping, not the pre-restore default.
+  // Status + date filters persist per device+business (like the jobs list) so
+  // leaving the page and coming back keeps them, not just the search/grouping.
+  const filtersKey = businessId ? `${INVOICES_FILTERS_KEY}.${businessId}` : INVOICES_FILTERS_KEY;
+  // Gate the server-mode filter report + the persist write until after the
+  // restore, so the first query uses the saved filters and we don't clobber
+  // stored values with the pre-restore defaults.
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
     // Restored after mount — reading localStorage during initial render
     // would mismatch the server-rendered HTML.
     const saved = typeof window !== 'undefined' ? window.localStorage.getItem(groupStoreKey) : null;
     if (saved === 'status' || saved === 'company' || saved === 'state' || saved === 'none') setGroupByState(saved);
+    const f = parseInvoicesFilters(typeof window !== 'undefined' ? window.localStorage.getItem(filtersKey) : null);
+    setStatuses(Array.isArray(f?.statuses) ? f!.statuses.filter((k): k is StatusKey => (STATUS_KEYS as readonly string[]).includes(k)) : []);
+    setDateFrom(f?.dateFrom ?? null);
+    setDateTo(f?.dateTo ?? null);
     setHydrated(true);
-  }, [groupStoreKey]);
+    // Re-run when the business changes so filters are scoped per company.
+  }, [groupStoreKey, filtersKey]);
   const setGroupBy = (g: GroupKey) => {
     setGroupByState(g);
     try { window.localStorage.setItem(groupStoreKey, g); } catch { /* private mode */ }
   };
+  // Persist status + date filters on change (after the restore).
+  useEffect(() => {
+    if (!hydrated) return;
+    try { window.localStorage.setItem(filtersKey, JSON.stringify({ statuses, dateFrom, dateTo })); } catch { /* private mode */ }
+  }, [hydrated, filtersKey, statuses, dateFrom, dateTo]);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
 
   const statusLabels: Record<StatusKey, string> = {

@@ -90,13 +90,18 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
   const onAcc = onAccentColor(accent);
   const subtleOnAcc = onAcc === '#FFFFFF' ? 'rgba(255,255,255,0.82)' : 'rgba(17,24,39,0.68)';
   const tint = withAlpha(accent, 0.1);
+  // Theme 9 (hero) fills a diagonal corner behind the sender + Bill To block,
+  // so darken its otherwise-grey address text to near-black for legibility.
+  const isHero = vm.archetype === 'hero';
+  const addrColor = isHero ? '#111827' : '#6B7280';
+  const showBillTo = vm.sections.includes('billTo');
   // Every Text gets the chosen family (RN doesn't inherit font through View).
   const T = ({ style, children, ...rest }: { style?: TextStyle; children: ReactNode; numberOfLines?: number }) => (
     <Text style={[{ fontFamily: ff }, style]} {...rest}>{children}</Text>
   );
 
-  const SectLabel = ({ children }: { children: ReactNode }) => (
-    <T style={{ fontSize: st.fontPx - 3, letterSpacing: 0.5, textTransform: 'uppercase', color: '#9CA3AF', fontWeight: '600', marginBottom: 6 }}>
+  const SectLabel = ({ children, color }: { children: ReactNode; color?: string }) => (
+    <T style={{ fontSize: st.fontPx - 3, letterSpacing: 0.5, textTransform: 'uppercase', color: color ?? '#9CA3AF', fontWeight: '600', marginBottom: 6 }}>
       {children}
     </T>
   );
@@ -106,9 +111,12 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
   // visible on a dark header. The web/PDF render (what the client sees) does a
   // true colour invert.
   const logoTint = h.logoInvert ? { tintColor: '#FFFFFF' as const } : null;
-  const Logo = ({ width = 160, scale = 1 }: { width?: number; scale?: number }) =>
+  // Width grows with the (slider-driven) logo height so a wide logo isn't
+  // pinned at a fixed box — mirrors the PDF's max-width scaling. Callers can
+  // still pass an explicit width for tight layouts.
+  const Logo = ({ width, scale = 1 }: { width?: number; scale?: number }) =>
     h.showLogo && h.logoUrl ? (
-      <Image source={{ uri: h.logoUrl }} resizeMode="contain" style={{ height: st.logoPx * scale, width, marginBottom: 8, ...logoTint }} />
+      <Image source={{ uri: h.logoUrl }} resizeMode="contain" style={{ height: st.logoPx * scale, width: width ?? Math.max(160, Math.round(st.logoPx * 2.4)), marginBottom: 8, ...logoTint }} />
     ) : null;
 
   const MetaLines = ({ subtle }: { subtle?: boolean }) => (
@@ -129,7 +137,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
       <Logo />
       <T style={{ fontWeight: '700', fontSize: st.fontPx + 4, color: '#111827' }}>{h.businessName}</T>
       {h.businessLines.map((l, i) => (
-        <T key={i} style={{ color: '#6B7280', fontSize: small, marginTop: 2 }}>{l}</T>
+        <T key={i} style={{ color: addrColor, fontSize: small, marginTop: 2 }}>{l}</T>
       ))}
     </View>
   );
@@ -138,6 +146,20 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
       <T style={{ fontWeight: '700', textTransform: 'uppercase', color: accent, letterSpacing: 1, fontSize: st.fontPx + 6 }}>{h.invoiceTitle}</T>
       <T style={{ fontWeight: '600', marginTop: 2, color: '#111827' }}>{h.invoiceNumber}</T>
       <MetaLines />
+    </View>
+  );
+  // Theme 9 Bill To, tucked into the header's right column (right-aligned).
+  const HeroBillTo = () => (
+    <View style={{ marginTop: gap, alignItems: 'flex-end' }}>
+      <SectLabel color="#374151">{vm.labels.billTo}</SectLabel>
+      {vm.billTo.map((c, i) => (
+        <View key={i} style={{ marginTop: i > 0 ? 6 : 0, alignItems: 'flex-end' }}>
+          <T style={{ fontWeight: '600', color: '#111827' }}>{c.name}</T>
+          {c.lines.map((l, j) => (
+            <T key={j} style={{ color: addrColor, fontSize: small, textAlign: 'right' }}>{l}</T>
+          ))}
+        </View>
+      ))}
     </View>
   );
 
@@ -244,6 +266,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
               <T style={{ fontWeight: '800', textTransform: 'uppercase', color: accent, fontSize: st.fontPx + 30 }}>{h.invoiceTitle}</T>
               <T style={{ fontWeight: '600', marginTop: 6, color: '#111827' }}>{h.invoiceNumber}</T>
               <MetaLines />
+              {showBillTo && vm.billTo.length ? <HeroBillTo /> : null}
             </View>
           </View>
         );
@@ -352,12 +375,12 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     header: renderHeader,
     billTo: () => (
       <View>
-        <SectLabel>{vm.labels.billTo}</SectLabel>
+        <SectLabel color={isHero ? '#374151' : undefined}>{vm.labels.billTo}</SectLabel>
         {vm.billTo.map((c, i) => (
           <View key={i} style={{ marginTop: i > 0 ? 6 : 0 }}>
             <T style={{ fontWeight: '600', color: '#111827' }}>{c.name}</T>
             {c.lines.map((l, j) => (
-              <T key={j} style={{ color: '#6B7280', fontSize: small }}>{l}</T>
+              <T key={j} style={{ color: addrColor, fontSize: small }}>{l}</T>
             ))}
           </View>
         ))}
@@ -519,6 +542,48 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
   const deco = decorationRender(vm.decoration, accent);
   const fullPage = vm.decoration !== 'none' || vm.footerBar || vm.pageTint;
   const minHeight = fullPage && pageW > 0 ? pageW * (11 / 8.5) : undefined;
+  // Closing sections (payment instructions + tagline) anchor to the bottom on
+  // full-page themes — the tail wrapper's auto top margin eats the gap between
+  // the total and the page edge (RN Views are flex columns by default).
+  const TAIL_SECTIONS: InvoiceSectionId[] = ['paymentInstructions', 'footer'];
+  // Hero moves Bill To into the header, so drop the standalone row for it.
+  const flowSections = isHero ? vm.sections.filter(id => id !== 'billTo') : vm.sections;
+  const mainIds = flowSections.filter(id => !TAIL_SECTIONS.includes(id));
+  const tailIds = flowSections.filter(id => TAIL_SECTIONS.includes(id));
+
+  // Estimate-only blocks: description under Bill To (or the header when hero
+  // relocated Bill To), terms + approval/signature at the bottom.
+  const est = vm.estimate;
+  const estAnchor: InvoiceSectionId = mainIds.includes('billTo') ? 'billTo' : 'header';
+  const estDesc = est?.description ? (
+    <View>
+      <SectLabel>{est.labels.description}</SectLabel>
+      <T style={{ color: '#4B5563', fontSize: small }}>{est.description}</T>
+    </View>
+  ) : null;
+  const estBottom = est && (est.terms || est.preparedBy || est.signature) ? (
+    <View style={{ gap }}>
+      {est.terms ? (
+        <View>
+          <SectLabel>{est.labels.terms}</SectLabel>
+          <T style={{ color: '#4B5563', fontSize: small }}>{est.terms}</T>
+        </View>
+      ) : null}
+      {est.preparedBy || est.signature ? (
+        <View style={{ borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingTop: 10 }}>
+          <SectLabel color={accent}>{est.labels.approval}</SectLabel>
+          {est.preparedBy ? <T style={{ color: '#6B7280', fontSize: small }}>{`${est.labels.preparedBy}: ${est.preparedBy}`}</T> : null}
+          {est.signature ? (
+            <Fragment>
+              <Image source={{ uri: est.signature.image }} resizeMode="contain" style={{ height: 56, width: 240, marginTop: 6, marginBottom: 2 }} />
+              <T style={{ color: '#6B7280', fontSize: small }}>{est.signature.line}</T>
+            </Fragment>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  ) : null;
+  const hasTail = tailIds.length > 0 || !!estBottom;
   return (
     <View
       onLayout={fullPage ? e => setPageW(e.nativeEvent.layout.width) : undefined}
@@ -540,11 +605,27 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
         </View>
       ) : null}
       <View style={{ paddingTop: st.pad + deco.padTop, paddingBottom: st.pad + deco.padBottom, paddingHorizontal: st.pad, zIndex: 1, ...(fullPage ? { flex: 1 } : null) }}>
-        {vm.sections.map((id, i) => (
-          <Fragment key={id}>
-            <View style={{ marginBottom: i < vm.sections.length - 1 ? gap : 0 }}>{renderers[id]()}</View>
-          </Fragment>
-        ))}
+        {mainIds.map((id, i) => {
+          const isLastMain = i === mainIds.length - 1;
+          const injectDesc = id === estAnchor && !!estDesc;
+          const lastOverall = !hasTail && isLastMain && !injectDesc;
+          return (
+            <Fragment key={id}>
+              <View style={{ marginBottom: lastOverall ? 0 : gap }}>{renderers[id]()}</View>
+              {injectDesc ? <View style={{ marginBottom: !hasTail && isLastMain ? 0 : gap }}>{estDesc}</View> : null}
+            </Fragment>
+          );
+        })}
+        {hasTail ? (
+          <View style={fullPage ? { marginTop: 'auto' } : undefined}>
+            {tailIds.map((id, i) => (
+              <Fragment key={id}>
+                <View style={{ marginBottom: (i < tailIds.length - 1 || !!estBottom) ? gap : 0 }}>{renderers[id]()}</View>
+              </Fragment>
+            ))}
+            {estBottom}
+          </View>
+        ) : null}
       </View>
       {vm.footerBar && (vm.footer || vm.footerContact.length) ? (
         // Full-bleed strip flush to the bottom edge. Shows the tagline when set

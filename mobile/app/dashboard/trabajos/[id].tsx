@@ -56,10 +56,9 @@ import { jobShortCode } from '@amixos/shared/lib/jobRef';
 import { secureShareToken } from '@amixos/shared/lib/shareToken';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { removeJobFromInvoice, placeholderQtyFor } from '@amixos/shared/lib/invoicing';
-import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
+import { invoiceDefaultLanguage, nextInvoiceNumber, resolveConfig, buildInvoiceViewModel, buildInvoiceHtml, type InvoiceBranding, type InvoiceDocData } from '@amixos/shared/lib/invoiceTemplate';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { memberNameMap } from '@amixos/shared/lib/memberNames';
-import { buildProposalHtml } from '@amixos/shared/lib/proposalHtml';
 import { can } from '@amixos/shared/lib/permissions';
 import { rowToPriceSheetItem, autopriceLine, suggestPriceItem, matchingAddons, extractQuantity, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { formatDateLong, formatDateTimeLong, formatStamp, formatNumberGrouped, formatTime12h, todayLocalISO } from '@amixos/shared/lib/format';
@@ -646,26 +645,38 @@ export default function JobDetailRoute() {
   const downloadPdf = async () => {
     if (!job || !business) return;
     const tp = full.proposal;
-    const fmtD = (d: string | null) => (d ? formatDateLong(d, tp.dateLocale) : null);
     const itemSum = items.reduce((s, i) => s + i.total, 0);
-    const biz = business as { name: string; logo_url?: string | null; city?: string | null; state?: string | null };
-    const html = buildProposalHtml({
-      business: { name: biz.name, logoUrl: biz.logo_url ?? null, city: biz.city ?? null, state: biz.state ?? null },
-      estimateNumber: job.estimate_number ?? '',
-      clientName: job.clients ? `${job.clients.first_name} ${job.clients.last_name}` : null,
-      clientCompany: job.clients?.company ?? null,
-      issueDate: fmtD(job.issue_date),
-      expiryDate: fmtD(job.expiry_date),
-      scheduledDate: fmtD(job.scheduled_date),
-      description: job.description,
-      notes: job.notes,
-      items: items.map((i) => ({ description: i.description, quantity: i.quantity, unitPrice: i.unit_price, total: i.total })),
-      subtotal: job.subtotal_amount > 0 ? job.subtotal_amount : itemSum,
+    // Render the estimate through the invoice theme engine (same look as invoices).
+    const biz = business as {
+      name: string; logo_url?: string | null; city?: string | null; state?: string | null;
+      address?: string | null; postal_code?: string | null; tax_id?: string | null;
+      license_number?: string | null; email?: string | null; phone?: string | null; website?: string | null;
+    };
+    const branding: InvoiceBranding = {
+      name: biz.name, logoUrl: biz.logo_url ?? null, city: biz.city ?? null, state: biz.state ?? null,
+      address: biz.address ?? null, postalCode: biz.postal_code ?? null, taxId: biz.tax_id ?? null,
+      licenseNumber: biz.license_number ?? null, email: biz.email ?? null, phone: biz.phone ?? null, website: biz.website ?? null,
+    };
+    const docData: InvoiceDocData = {
+      invoiceNumber: job.estimate_number ?? '',
+      status: 'draft',
+      issueDate: job.issue_date ?? '',
+      dueDate: job.expiry_date ?? null,
+      lineItems: items.map(i => ({ description: i.description, qty: i.quantity, rate: i.unit_price })),
+      subtotalAmount: job.subtotal_amount > 0 ? job.subtotal_amount : itemSum,
       taxRate: job.tax_rate ?? 0,
       taxAmount: job.tax_amount ?? 0,
-      discount: job.discount ?? 0,
-      total: job.total_amount > 0 ? job.total_amount : itemSum,
-      signature: job.client_signature
+      totalAmount: job.total_amount > 0 ? job.total_amount : itemSum,
+      notes: null,
+      language: invoiceDefaultLanguage(business.invoice_template, locale),
+      clients: job.clients
+        ? [{ firstName: job.clients.first_name, lastName: job.clients.last_name, email: null, phoneCell: null, company: job.clients.company ?? null }]
+        : [],
+      docType: 'estimate',
+      estimateDescription: job.description,
+      estimateTerms: job.notes,
+      estimatePreparedBy: job.created_by ? nameById[job.created_by] ?? null : null,
+      estimateSignature: job.client_signature
         ? {
             image: job.client_signature,
             line: tp.signedByLine
@@ -673,9 +684,8 @@ export default function JobDetailRoute() {
               .replace('{{date}}', job.client_responded_at ? formatDateTimeLong(job.client_responded_at, dateLoc) : ''),
           }
         : null,
-      preparedBy: job.created_by ? nameById[job.created_by] ?? null : null,
-      t: tp,
-    });
+    };
+    const html = buildInvoiceHtml(buildInvoiceViewModel(resolveConfig(null, business.invoice_template), docData, branding));
     try {
       const { uri } = await Print.printToFileAsync({ html });
       if (await Sharing.isAvailableAsync()) {

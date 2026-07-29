@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { SignaturePad } from '@/components/SignaturePad';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/i18n/LangProvider';
-import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
+import { formatDateTimeLong } from '@amixos/shared/lib/format';
+import { InvoiceDocument } from '@amixos/shared/screens/dashboard/InvoiceDocument';
+import { resolveConfig, buildInvoiceViewModel, invoiceDefaultLanguage, type InvoiceBranding, type InvoiceDocData } from '@amixos/shared/lib/invoiceTemplate';
 
 interface ProposalData {
   id: string;
@@ -27,8 +29,17 @@ interface ProposalData {
   client_signed_name: string | null;
   client_signature: string | null;
   created_by_name: string | null;
-  clients: { first_name: string; last_name: string; company: string | null } | null;
-  businesses: { name: string; logo_url: string | null; city: string; state: string } | null;
+  clients: {
+    first_name: string; last_name: string; company: string | null;
+    email: string | null; phone_cell: string | null;
+    address: string | null; city: string | null; state: string | null; zip_code: string | null;
+  } | null;
+  businesses: {
+    name: string; logo_url: string | null; city: string | null; state: string | null;
+    address: string | null; postal_code: string | null; tax_id: string | null;
+    license_number: string | null; email: string | null; phone: string | null;
+    website: string | null; invoice_template: unknown;
+  } | null;
 }
 
 interface JobItem {
@@ -39,13 +50,9 @@ interface JobItem {
   total: number;
 }
 
-function fmtMoney(n: number) {
-  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 export default function PublicProposalPage({ params }: { params: { token: string } }) {
   const { token } = params;
-  const { t: full } = useLang();
+  const { t: full, locale } = useLang();
   const t = full.proposal;
   const searchParams = useSearchParams();
   const autoPrint = searchParams.get('print') === '1';
@@ -122,6 +129,67 @@ export default function PublicProposalPage({ params }: { params: { token: string
     }
   }, [loading, proposal, autoPrint]);
 
+  // Name the tab (and the "Save as PDF" default filename) after the estimate #.
+  useEffect(() => {
+    const num = (proposal?.estimate_number ?? '').trim();
+    if (!num) return;
+    const prev = document.title;
+    document.title = num;
+    return () => { document.title = prev; };
+  }, [proposal]);
+
+  // Build the themed estimate document (same engine as invoices). Estimate mode
+  // sets the title to "Estimate", treats the expiry as "valid until", and shows
+  // the description / terms / approval-signature blocks.
+  const vm = useMemo(() => {
+    if (!proposal) return null;
+    const biz = proposal.businesses;
+    const client = proposal.clients;
+    const itemSum = items.reduce((s, i) => s + i.total, 0);
+    const accepted = ['accepted', 'scheduled', 'in_progress', 'completed', 'invoiced'].includes(proposal.status);
+    const branding: InvoiceBranding = {
+      name: biz?.name ?? t.defaultBizName,
+      logoUrl: biz?.logo_url ?? null,
+      city: biz?.city ?? null, state: biz?.state ?? null,
+      address: biz?.address ?? null, postalCode: biz?.postal_code ?? null,
+      taxId: biz?.tax_id ?? null, licenseNumber: biz?.license_number ?? null,
+      email: biz?.email ?? null, phone: biz?.phone ?? null, website: biz?.website ?? null,
+    };
+    const docData: InvoiceDocData = {
+      invoiceNumber: proposal.estimate_number ?? '',
+      status: 'draft',
+      issueDate: proposal.issue_date ?? '',
+      dueDate: proposal.expiry_date ?? null,
+      lineItems: items.map(i => ({ description: i.description, qty: i.quantity, rate: i.unit_price })),
+      subtotalAmount: proposal.subtotal_amount > 0 ? proposal.subtotal_amount : itemSum,
+      taxRate: proposal.tax_rate ?? 0,
+      taxAmount: proposal.tax_amount ?? 0,
+      totalAmount: proposal.total_amount > 0 ? proposal.total_amount : itemSum,
+      notes: null,
+      language: invoiceDefaultLanguage(biz?.invoice_template, locale),
+      clients: client
+        ? [{
+            firstName: client.first_name, lastName: client.last_name, company: client.company ?? null,
+            email: client.email ?? null, phoneCell: client.phone_cell ?? null,
+            address: client.address ?? null, city: client.city ?? null, state: client.state ?? null, zip: client.zip_code ?? null,
+          }]
+        : [],
+      docType: 'estimate',
+      estimateDescription: proposal.description,
+      estimateTerms: proposal.notes,
+      estimatePreparedBy: proposal.created_by_name,
+      estimateSignature: accepted && proposal.client_signature
+        ? {
+            image: proposal.client_signature,
+            line: t.signedByLine
+              .replace('{{name}}', proposal.client_signed_name ?? '')
+              .replace('{{date}}', proposal.client_responded_at ? formatDateTimeLong(proposal.client_responded_at, t.dateLocale) : ''),
+          }
+        : null,
+    };
+    return buildInvoiceViewModel(resolveConfig(null, biz?.invoice_template ?? null), docData, branding);
+  }, [proposal, items, locale, t]);
+
   if (loading) return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: `${i*0.15}s` }}/>)}</div>
@@ -137,13 +205,6 @@ export default function PublicProposalPage({ params }: { params: { token: string
     </div>
   );
 
-  const biz = proposal.businesses;
-  const client = proposal.clients;
-  const clientName = client ? `${client.first_name} ${client.last_name}` : null;
-  const hasFinancials = proposal.tax_rate > 0 || proposal.discount > 0;
-
-  const fmtDateLong = (d: string) => formatDateLong(d, t.dateLocale);
-
   const isAccepted = ['accepted', 'scheduled', 'in_progress', 'completed', 'invoiced'].includes(proposal.status);
   const isDeclined = proposal.status === 'declined';
   const isExpired = !!proposal.expiry_date && new Date(proposal.expiry_date) < new Date();
@@ -151,156 +212,13 @@ export default function PublicProposalPage({ params }: { params: { token: string
 
   return (
     <div className="min-h-screen bg-gray-50 print:bg-white">
-      <div className="max-w-3xl mx-auto py-10 px-6 print:py-0 print:px-0">
-        {/* Header */}
-        <div className="bg-white rounded-2xl print:rounded-none border border-gray-100 print:border-0 shadow-sm print:shadow-none p-8 mb-6 print:mb-4">
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              {biz?.logo_url && (
-                <img src={biz.logo_url} alt={biz.name} className="h-12 mb-3 object-contain"/>
-              )}
-              <h2 className="text-lg font-bold text-gray-900">{biz?.name ?? t.defaultBizName}</h2>
-              {biz && <p className="text-sm text-gray-500">{biz.city}, {biz.state}</p>}
-            </div>
-            <div className="text-right">
-              <p className="text-xs font-mono text-gray-400 mb-1">{proposal.estimate_number}</p>
-              <h1 className="text-xl font-bold text-gray-900">{t.proposalLabel}</h1>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-6 border-t border-gray-100 pt-5">
-            <div>
-              <p className="text-xs text-gray-400 mb-1">{t.client}</p>
-              <p className="text-sm font-semibold text-gray-900">
-                {clientName ?? t.noClient}
-                {client?.company && <span className="text-gray-400 font-normal"> · {client.company}</span>}
-              </p>
-              {proposal.created_by_name && (
-                <div className="mt-3">
-                  <p className="text-xs text-gray-400 mb-1">{t.preparedBy}</p>
-                  <p className="text-sm font-medium text-gray-900">{proposal.created_by_name}</p>
-                </div>
-              )}
-            </div>
-            <div className="text-right">
-              {proposal.issue_date && (
-                <div className="mb-2">
-                  <p className="text-xs text-gray-400">{t.issueDate}</p>
-                  <p className="text-sm font-medium text-gray-900">{fmtDateLong(proposal.issue_date)}</p>
-                </div>
-              )}
-              {proposal.expiry_date && (
-                <div className="mb-2">
-                  <p className="text-xs text-gray-400">{t.validUntil}</p>
-                  <p className="text-sm font-medium text-gray-900">{fmtDateLong(proposal.expiry_date)}</p>
-                </div>
-              )}
-              {proposal.scheduled_date && (
-                <div>
-                  <p className="text-xs text-gray-400">{t.scheduledDate}</p>
-                  <p className="text-sm font-medium text-gray-900">{fmtDateLong(proposal.scheduled_date)}</p>
-                </div>
-              )}
-            </div>
-          </div>
+      {/* Full-bleed on print so the theme decoration reaches the sheet edges. */}
+      <style>{'@media print{@page{margin:0}}'}</style>
+      <div className="max-w-3xl mx-auto py-10 px-6 print:py-0 print:px-0 print:max-w-none">
+        {/* Themed estimate document — same engine/theme as invoices. */}
+        <div className="bg-white rounded-2xl print:rounded-none border border-gray-100 print:border-0 shadow-sm print:shadow-none overflow-hidden mb-6 print:mb-0">
+          {vm ? <InvoiceDocument vm={vm} /> : null}
         </div>
-
-        {/* Description */}
-        {proposal.description && (
-          <div className="bg-white rounded-2xl print:rounded-none border border-gray-100 print:border-0 print:border-b shadow-sm print:shadow-none p-6 mb-6 print:mb-4">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.description}</p>
-            <p className="text-sm text-gray-700 leading-relaxed">{proposal.description}</p>
-          </div>
-        )}
-
-        {/* Line items */}
-        <div className="bg-white rounded-2xl print:rounded-none border border-gray-100 print:border-0 shadow-sm print:shadow-none overflow-hidden mb-6 print:mb-4">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="text-sm font-semibold text-gray-900">{t.services}</h2>
-          </div>
-
-          {items.length > 0 ? (
-            <>
-              <div className="grid grid-cols-[1fr_60px_80px_90px] text-xs font-semibold text-gray-400 uppercase tracking-wide px-6 py-2 border-b border-gray-50">
-                <span>{t.colDescription}</span>
-                <span className="text-center">{t.colQuantity}</span>
-                <span className="text-right">{t.colUnitPrice}</span>
-                <span className="text-right">{t.colTotal}</span>
-              </div>
-              <div className="divide-y divide-gray-50">
-                {items.map(item => (
-                  <div key={item.id} className="grid grid-cols-[1fr_60px_80px_90px] items-center px-6 py-3">
-                    <span className="text-sm text-gray-900">{item.description}</span>
-                    <span className="text-sm text-center text-gray-600">{item.quantity}</span>
-                    <span className="text-sm text-right text-gray-600">${fmtMoney(item.unit_price)}</span>
-                    <span className="text-sm text-right font-semibold text-gray-900">${fmtMoney(item.total)}</span>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="px-6 py-8 text-center text-gray-400 text-sm">{t.noItems}</div>
-          )}
-
-          {/* Totals */}
-          <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
-            <div className="w-56 flex flex-col gap-1.5">
-              {hasFinancials ? (
-                <>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">{t.subtotal}</span>
-                    <span>${fmtMoney(proposal.subtotal_amount)}</span>
-                  </div>
-                  {proposal.tax_rate > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">{t.tax} ({proposal.tax_rate}%)</span>
-                      <span>${fmtMoney(proposal.tax_amount)}</span>
-                    </div>
-                  )}
-                  {proposal.discount > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">{t.discount}</span>
-                      <span className="text-emerald-600">-${fmtMoney(proposal.discount)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-base font-bold pt-2 border-t border-gray-100">
-                    <span>{t.total}</span>
-                    <span>${fmtMoney(proposal.total_amount)}</span>
-                  </div>
-                </>
-              ) : (
-                <div className="flex justify-between text-base font-bold">
-                  <span>{t.total}</span>
-                  <span>${fmtMoney(proposal.total_amount)}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Notes for client */}
-        {proposal.notes && (
-          <div className="bg-white rounded-2xl print:rounded-none border border-gray-100 print:border-0 shadow-sm print:shadow-none p-6 mb-6 print:mb-4">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{t.termsTitle}</p>
-            <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{proposal.notes}</p>
-          </div>
-        )}
-
-        {/* Client approval — signed proof (kept visible in print as record) */}
-        {isAccepted && proposal.client_signature && (
-          <div className="bg-white rounded-2xl print:rounded-none border border-emerald-200 print:border-0 print:border-t shadow-sm print:shadow-none p-6 mb-6 print:mb-4">
-            <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-3">{t.signatureTitle}</p>
-            <div className="bg-gray-50 print:bg-white rounded-xl border border-gray-100 p-3 mb-2 inline-block">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={proposal.client_signature} alt="" className="h-16 object-contain"/>
-            </div>
-            <p className="text-sm text-gray-600">
-              {t.signedByLine
-                .replace('{{name}}', proposal.client_signed_name ?? '')
-                .replace('{{date}}', proposal.client_responded_at ? formatDateTimeLong(proposal.client_responded_at, t.dateLocale) : '')}
-            </p>
-          </div>
-        )}
 
         {/* Accepted (no signature on file — accepted manually by the business) */}
         {isAccepted && !proposal.client_signature && (

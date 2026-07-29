@@ -3,6 +3,8 @@
 export const dynamic = 'force-dynamic';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -87,6 +89,16 @@ export default function TiendaPage() {
 
   return (
     <div className="p-6">
+      {/* Explicit way out — the store has no settings rail, so give it the same
+          back affordance the module-detail pages use (the global sidebar alone
+          left users feeling stuck here). */}
+      <Link
+        href="/dashboard"
+        className="inline-flex items-center gap-2 text-sm text-muted hover:text-ink mb-4"
+      >
+        <ArrowLeft size={16} />
+        {full.common.buttons.back}
+      </Link>
       <div className="bg-card rounded-2xl border border-border-soft">
         <AddonStoreScreen
           enabledIds={enabledIds}

@@ -45,6 +45,27 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
   const h = vm.header;
   const small = st.fontPx - 2;
   const gap = st.density === 'compact' ? 14 : 22;
+  // Theme 9 (hero) fills a diagonal corner behind the sender + Bill To block,
+  // so its grey address text reads poorly — darken it to near-black there.
+  const isHero = vm.archetype === 'hero';
+  const addrColor = isHero ? '#111827' : undefined;
+  // Theme 9 tucks Bill To into the header's right column (right-aligned, under
+  // the dates) instead of a full-width row, to save vertical space.
+  const showBillTo = vm.sections.includes('billTo');
+  const heroBillTo =
+    isHero && showBillTo && vm.billTo.length ? (
+      <div style={{ marginTop: gap }}>
+        <SectLabel st={st} color="#374151">{vm.labels.billTo}</SectLabel>
+        {vm.billTo.map((c, i) => (
+          <div key={i} style={{ marginTop: i > 0 ? 6 : 0 }}>
+            <div className="font-semibold">{c.name}</div>
+            {c.lines.map((l, j) => (
+              <div key={j} className="text-muted" style={{ fontSize: small, color: addrColor }}>{l}</div>
+            ))}
+          </div>
+        ))}
+      </div>
+    ) : null;
   const onAcc = onAccentColor(accent);
   const subtleOnAcc = onAcc === '#FFFFFF' ? 'rgba(255,255,255,0.82)' : 'rgba(17,24,39,0.68)';
   const tint = withAlpha(accent, 0.1);
@@ -67,7 +88,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
       {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} invert={h.logoInvert} /> : null}
       <div className="font-bold" style={{ fontSize: st.fontPx + 4 }}>{h.businessName}</div>
       {h.businessLines.map((l, i) => (
-        <div key={i} className="text-muted" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
+        <div key={i} className="text-muted" style={{ fontSize: small, marginTop: 2, color: addrColor }}>{l}</div>
       ))}
     </div>
   );
@@ -182,6 +203,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
               <div style={{ fontWeight: 800, textTransform: 'uppercase', color: accent, letterSpacing: '0.01em', fontSize: st.fontPx + 30, lineHeight: 1 }}>{h.invoiceTitle}</div>
               <div className="font-semibold" style={{ marginTop: 6 }}>{h.invoiceNumber}</div>
               {metaLines()}
+              {heroBillTo}
             </div>
           </div>
         );
@@ -298,12 +320,12 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
     header: renderHeader,
     billTo: () => (
       <div>
-        <SectLabel st={st}>{vm.labels.billTo}</SectLabel>
+        <SectLabel st={st} color={isHero ? '#374151' : undefined}>{vm.labels.billTo}</SectLabel>
         {vm.billTo.map((c, i) => (
           <div key={i} className={i > 0 ? 'mt-1.5' : ''}>
             <div className="font-semibold">{c.name}</div>
             {c.lines.map((l, j) => (
-              <div key={j} className="text-muted" style={{ fontSize: small }}>{l}</div>
+              <div key={j} className="text-muted" style={{ fontSize: small, color: addrColor }}>{l}</div>
             ))}
           </div>
         ))}
@@ -426,6 +448,49 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
 
   const deco = decorationRender(vm.decoration, accent);
   const fullPage = vm.decoration !== 'none' || vm.footerBar || vm.pageTint;
+  // Closing sections anchor to the page bottom on full-page themes (mirrors the
+  // PDF): main sections flow from the top, the tail is pushed down via auto
+  // margin so the footer sits at the bottom edge instead of under the total.
+  const TAIL_SECTIONS: InvoiceSectionId[] = ['paymentInstructions', 'footer'];
+  // Hero moves Bill To into the header, so drop the standalone row for it.
+  const flowSections = isHero ? vm.sections.filter(id => id !== 'billTo') : vm.sections;
+  const mainIds = flowSections.filter(id => !TAIL_SECTIONS.includes(id));
+  const tailIds = flowSections.filter(id => TAIL_SECTIONS.includes(id));
+
+  // Estimate-only blocks: description under Bill To (or the header when hero
+  // relocated Bill To), terms + approval/signature at the bottom.
+  const est = vm.estimate;
+  const estAnchor: InvoiceSectionId = mainIds.includes('billTo') ? 'billTo' : 'header';
+  const estDesc = est?.description ? (
+    <div style={{ breakInside: 'avoid' }}>
+      <SectLabel st={st}>{est.labels.description}</SectLabel>
+      <div className="text-muted whitespace-pre-wrap" style={{ fontSize: small, lineHeight: 1.5 }}>{est.description}</div>
+    </div>
+  ) : null;
+  const estBottom = est && (est.terms || est.preparedBy || est.signature) ? (
+    <div className="flex flex-col" style={{ gap }}>
+      {est.terms ? (
+        <div style={{ breakInside: 'avoid' }}>
+          <SectLabel st={st}>{est.labels.terms}</SectLabel>
+          <div className="text-muted whitespace-pre-wrap" style={{ fontSize: small, lineHeight: 1.5 }}>{est.terms}</div>
+        </div>
+      ) : null}
+      {est.preparedBy || est.signature ? (
+        <div style={{ breakInside: 'avoid', borderTop: '1px solid #e5e7eb', paddingTop: 10 }}>
+          <SectLabel st={st} color={accent}>{est.labels.approval}</SectLabel>
+          {est.preparedBy ? <div className="text-muted" style={{ fontSize: small }}>{est.labels.preparedBy}: {est.preparedBy}</div> : null}
+          {est.signature ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={est.signature.image} alt="" style={{ maxHeight: 56, maxWidth: 240, objectFit: 'contain', margin: '6px 0 2px', display: 'block' }} />
+              <div className="text-muted" style={{ fontSize: small }}>{est.signature.line}</div>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  ) : null;
+  const hasTail = tailIds.length > 0 || !!estBottom;
   return (
     <div
       className="text-ink"
@@ -434,12 +499,28 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
       {deco.full ? <DecoSvg spec={deco.full} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} /> : null}
       {deco.topBand ? <DecoSvg spec={deco.topBand.spec} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: deco.topBand.height }} /> : null}
       {deco.bottomBand ? <DecoSvg spec={deco.bottomBand.spec} style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: deco.bottomBand.height }} /> : null}
-      <div style={{ position: 'relative', zIndex: 1, padding: `${st.pad + deco.padTop}px ${st.pad}px ${st.pad + deco.padBottom}px`, ...(fullPage ? { flex: '1 0 auto' } : null) }}>
-        {vm.sections.map((id, i) => (
-          <div key={id} style={{ marginBottom: i < vm.sections.length - 1 ? gap : 0 }}>
-            {renderers[id]()}
+      <div style={{ position: 'relative', zIndex: 1, padding: `${st.pad + deco.padTop}px ${st.pad}px ${st.pad + deco.padBottom}px`, ...(fullPage ? { flex: '1 0 auto', display: 'flex', flexDirection: 'column' } : null) }}>
+        {(() => {
+          const nodes: ReactNode[] = [];
+          mainIds.forEach((id, i) => {
+            const isLastMain = i === mainIds.length - 1;
+            const injectDesc = id === estAnchor && !!estDesc;
+            const lastOverall = !hasTail && isLastMain && !injectDesc;
+            nodes.push(<div key={id} style={{ marginBottom: lastOverall ? 0 : gap }}>{renderers[id]()}</div>);
+            if (injectDesc) nodes.push(<div key="est-desc" style={{ marginBottom: !hasTail && isLastMain ? 0 : gap }}>{estDesc}</div>);
+          });
+          return nodes;
+        })()}
+        {hasTail ? (
+          <div style={fullPage ? { marginTop: 'auto' } : undefined}>
+            {tailIds.map((id, i) => (
+              <div key={id} style={{ marginBottom: (i < tailIds.length - 1 || !!estBottom) ? gap : 0 }}>
+                {renderers[id]()}
+              </div>
+            ))}
+            {estBottom}
           </div>
-        ))}
+        ) : null}
       </div>
       {vm.footerBar && (vm.footer || vm.footerContact.length) ? (
         // Full-bleed strip flush to the bottom edge. Shows the footer text/tagline
@@ -474,11 +555,11 @@ function DecoSvg({ spec, style }: { spec: DecoSpec; style: CSSProperties }) {
   );
 }
 
-function SectLabel({ children, st }: { children: ReactNode; st: InvoiceViewModel['style'] }) {
+function SectLabel({ children, st, color }: { children: ReactNode; st: InvoiceViewModel['style']; color?: string }) {
   return (
     <div
       className="uppercase text-faint font-semibold mb-1.5"
-      style={{ fontSize: st.fontPx - 3, letterSpacing: '0.05em' }}
+      style={{ fontSize: st.fontPx - 3, letterSpacing: '0.05em', color }}
     >
       {children}
     </div>

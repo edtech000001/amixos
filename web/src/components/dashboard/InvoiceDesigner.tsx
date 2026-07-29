@@ -20,7 +20,10 @@ import {
   setDensity,
   setShowLogo,
   setLogoInvert,
-  setLogoSize,
+  setLogoPx,
+  effectiveLogoPx,
+  LOGO_PX_MIN,
+  LOGO_PX_MAX,
   toggleSection,
   reorderSections,
   setColumn,
@@ -49,7 +52,6 @@ import {
   type InvoiceBranding,
   type InvoiceFont,
   type InvoiceDensity,
-  type InvoiceLogoSize,
   type InvoiceColumns,
   type InvoiceTextBlocks,
   type InvoiceLayoutMode,
@@ -810,8 +812,19 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
                   <span className="text-sm text-muted">{t.showLogo}</span>
                 </label>
                 {value.showLogo ? (
-                  <Seg<InvoiceLogoSize> value={value.logoSize} onChange={v => change(setLogoSize(value, v))}
-                    options={[{ value: 'sm', label: t.logoSizes.sm }, { value: 'md', label: t.logoSizes.md }, { value: 'lg', label: t.logoSizes.lg }]} />
+                  <label className="flex items-center gap-2">
+                    <span className="text-sm text-muted">{t.logoSize}</span>
+                    <input
+                      type="range"
+                      min={LOGO_PX_MIN}
+                      max={LOGO_PX_MAX}
+                      step={2}
+                      value={effectiveLogoPx(value)}
+                      onChange={e => change(setLogoPx(value, Number(e.target.value)))}
+                      className="w-40 accent-primary cursor-pointer"
+                    />
+                    <span className="text-xs text-muted tabular-nums w-9 text-right">{effectiveLogoPx(value)}px</span>
+                  </label>
                 ) : null}
                 {value.showLogo ? (
                   <label className="flex items-center gap-2 cursor-pointer">

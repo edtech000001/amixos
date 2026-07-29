@@ -19,7 +19,10 @@ import {
   setFont,
   setDensity,
   setShowLogo,
-  setLogoSize,
+  setLogoPx,
+  effectiveLogoPx,
+  LOGO_PX_MIN,
+  LOGO_PX_MAX,
   setLogoInvert,
   toggleSection,
   reorderSections,
@@ -37,7 +40,6 @@ import {
   type InvoiceBranding,
   type InvoiceFont,
   type InvoiceDensity,
-  type InvoiceLogoSize,
   type InvoiceColumns,
   type InvoiceTextBlocks,
   type InvoiceLayoutMode,
@@ -131,6 +133,47 @@ function Spectrum({ gid, stops, value, onChange }: { gid: string; stops: string[
       <View
         pointerEvents="none"
         style={{ position: 'absolute', top: 4, left: Math.max(2, Math.min(w - 24, value * w - 11)), width: 22, height: 22, borderRadius: 11, borderWidth: 3, borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 2, elevation: 2 }}
+      />
+    </View>
+  );
+}
+
+// Compact touch slider (integer values in [min,max]). Mirrors Spectrum's
+// measure-once + PanResponder pattern; used for the logo-size control.
+function Slider({ value, min, max, onChange, color, track }: {
+  value: number; min: number; max: number; onChange: (v: number) => void; color: string; track: string;
+}) {
+  const [w, setW] = useState(0);
+  const wRef = useRef(0);
+  const cb = useRef(onChange);
+  cb.current = onChange;
+  const handle = (x: number) => {
+    const width = wRef.current;
+    if (width > 0) {
+      const t = Math.max(0, Math.min(1, x / width));
+      cb.current(Math.round(min + t * (max - min)));
+    }
+  };
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: e => handle(e.nativeEvent.locationX),
+      onPanResponderMove: e => handle(e.nativeEvent.locationX),
+    }),
+  ).current;
+  const frac = max > min ? (Math.max(min, Math.min(max, value)) - min) / (max - min) : 0;
+  return (
+    <View
+      {...pan.panHandlers}
+      onLayout={e => { wRef.current = e.nativeEvent.layout.width; setW(e.nativeEvent.layout.width); }}
+      style={{ height: 30, justifyContent: 'center' }}
+    >
+      <View style={{ height: 4, borderRadius: 2, backgroundColor: track }} />
+      <View pointerEvents="none" style={{ position: 'absolute', top: 13, left: 0, width: Math.max(0, frac * w), height: 4, borderRadius: 2, backgroundColor: color }} />
+      <View
+        pointerEvents="none"
+        style={{ position: 'absolute', top: 4, left: Math.max(0, Math.min(w - 22, frac * w - 11)), width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff', borderWidth: 3, borderColor: color, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 2, elevation: 2 }}
       />
     </View>
   );
@@ -414,15 +457,20 @@ export function InvoiceDesigner({
             <Text className="text-sm text-muted">{t.showLogo}</Text>
           </Pressable>
           {value.showLogo ? (
-            <Seg<InvoiceLogoSize>
-              value={value.logoSize}
-              onChange={v => onChange(setLogoSize(value, v))}
-              options={[
-                { value: 'sm', label: t.logoSizes.sm },
-                { value: 'md', label: t.logoSizes.md },
-                { value: 'lg', label: t.logoSizes.lg },
-              ]}
-            />
+            <View className="flex-row items-center gap-3">
+              <Text className="text-sm text-muted">{t.logoSize}</Text>
+              <View className="flex-1">
+                <Slider
+                  value={effectiveLogoPx(value)}
+                  min={LOGO_PX_MIN}
+                  max={LOGO_PX_MAX}
+                  onChange={px => onChange(setLogoPx(value, px))}
+                  color={c.primary}
+                  track={c.border}
+                />
+              </View>
+              <Text className="text-xs text-muted w-10 text-right">{effectiveLogoPx(value)}px</Text>
+            </View>
           ) : null}
           {value.showLogo ? (
             <Pressable onPress={() => onChange(setLogoInvert(value, value.logoInvert !== true))} className="flex-row items-center gap-2">

@@ -379,11 +379,16 @@ export async function rebuildInvoiceLineItems(
   for (const j of (jobs ?? []) as any[]) {
     jobLines.push(...lineItemsForJob(j.id, j.title ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels, { hideTypes: opts.hideItemTypes, placeholderQty: placeholderQtyFor(j, opts.qtyField) }));
   }
-  // A job whose lines were hand-edited on the invoice keeps them verbatim —
-  // re-deriving would silently undo the user's price/qty override.
+  // A job whose lines were hand-edited OR already carry a price on the invoice
+  // keeps them verbatim — re-deriving from the (often unpriced) job_items would
+  // silently zero the user's price. This matters for imported invoices whose
+  // lines were priced at import time but never flagged `edited`: unsending them
+  // (sent → draft) used to wipe every unit price on the next rebuild.
   // force → treat NO job as overridden, so every job line is re-derived fresh
   // at $0 (clears auto-prices, edits, and add-on lines).
-  const overriddenJobs = new Set(opts.force ? [] : existing.filter(li => li.job_id && li.edited).map(li => li.job_id as string));
+  const overriddenJobs = new Set(
+    opts.force ? [] : existing.filter(li => li.job_id && (li.edited || Number(li.rate) > 0)).map(li => li.job_id as string),
+  );
   const keptJobLines = jobLines.filter(l => !overriddenJobs.has(l.job_id as string));
   // A job that bills as a SINGLE line: its name IS the job name, so keep the
   // stored description in sync with the current job title (a rename from the

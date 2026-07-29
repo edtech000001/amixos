@@ -241,6 +241,10 @@ export interface InvoiceTemplateConfig {
   density: InvoiceDensity;
   showLogo: boolean;
   logoSize: InvoiceLogoSize;
+  /** Exact logo max-height in px. When set it overrides the `logoSize` preset,
+   *  letting the slider push the logo bigger (or smaller) than Small/Med/Large.
+   *  null/absent = fall back to the `logoSize` bucket. */
+  logoPx?: number | null;
   /** Invert the logo's colors (CSS invert filter) — flips a black logo to white
    *  so a monochrome logo stays visible on a dark header band. Opt-in because it
    *  also colour-shifts a colored logo. */
@@ -532,6 +536,7 @@ export function normalizeConfig(raw: unknown): InvoiceTemplateConfig {
     density: r.density === 'compact' ? 'compact' : 'comfortable',
     showLogo: r.showLogo !== false,
     logoSize: r.logoSize === 'sm' || r.logoSize === 'lg' ? r.logoSize : 'md',
+    logoPx: typeof r.logoPx === 'number' && isFinite(r.logoPx) ? clampLogoPx(r.logoPx) : null,
     logoInvert: r.logoInvert === true,
     sections,
     columns: {
@@ -726,6 +731,21 @@ export const RN_FONTS: Record<InvoiceFont, { ios: string; android: string } | nu
 
 const LOGO_PX: Record<InvoiceLogoSize, number> = { sm: 36, md: 52, lg: 72 };
 
+// Slider bounds for the exact logo height. Min is a touch under Small; max is
+// well past Large so a business can make its logo the visual anchor.
+export const LOGO_PX_MIN = 24;
+export const LOGO_PX_MAX = 200;
+
+export function clampLogoPx(px: number): number {
+  return Math.max(LOGO_PX_MIN, Math.min(LOGO_PX_MAX, Math.round(px)));
+}
+
+/** The logo max-height actually used: the exact `logoPx` override when set,
+ *  otherwise the Small/Med/Large bucket. */
+export function effectiveLogoPx(config: InvoiceTemplateConfig): number {
+  return config.logoPx != null ? clampLogoPx(config.logoPx) : LOGO_PX[config.logoSize];
+}
+
 export function styleTokens(config: InvoiceTemplateConfig): StyleTokens {
   const compact = config.density === 'compact';
   return {
@@ -735,7 +755,7 @@ export function styleTokens(config: InvoiceTemplateConfig): StyleTokens {
     density: config.density,
     pad: compact ? 16 : 24,
     fontPx: compact ? 12 : 14,
-    logoPx: LOGO_PX[config.logoSize],
+    logoPx: effectiveLogoPx(config),
   };
 }
 
@@ -751,6 +771,7 @@ export interface InvoiceDocClient {
   address?: string | null;
   city?: string | null;
   state?: string | null;
+  zip?: string | null;
 }
 export interface InvoiceDocLineItem {
   description: string;
@@ -771,6 +792,14 @@ export interface InvoiceDocData {
   language: InvoiceLang;
   clients: InvoiceDocClient[];
   customFields?: { label: string; value: string; key?: string }[];
+  /** 'estimate' renders a proposal through the invoice theme engine. In that
+   *  mode the title becomes "Estimate", `dueDate` is treated as the "valid
+   *  until" date, and the estimate-only fields below are shown. */
+  docType?: 'invoice' | 'estimate';
+  estimateDescription?: string | null;
+  estimateTerms?: string | null;
+  estimatePreparedBy?: string | null;
+  estimateSignature?: { image: string; line: string } | null;
 }
 
 /** Business branding used in the invoice header. */
@@ -834,6 +863,18 @@ export interface InvoiceViewModel {
   notes: string | null;
   paymentInstructions: string | null;
   footer: string | null;
+  /** 'invoice' (default) or 'estimate'. Estimate reuses the entire theme with
+   *  different header labels + a few estimate-only blocks (below). */
+  docType: 'invoice' | 'estimate';
+  /** Estimate-only content, null for invoices. Description renders under Bill To
+   *  (before items); terms + signature render at the bottom. */
+  estimate: {
+    description: string | null;
+    terms: string | null;
+    preparedBy: string | null;
+    signature: { image: string; line: string } | null;
+    labels: { description: string; terms: string; preparedBy: string; approval: string };
+  } | null;
 }
 
 function fmtMoney(n: number): string {
@@ -855,8 +896,9 @@ export function buildInvoiceViewModel(
   const fmtDate = (iso: string) => formatDateLong(iso, dateLoc);
 
   const businessLines = [
-    [branding.city, branding.state].filter(Boolean).join(', '),
+    // Street address first, then city/state — standard mailing-address order.
     branding.address ?? '',
+    [branding.city, branding.state].filter(Boolean).join(', '),
     branding.phone ?? '',
     branding.email ?? '',
     branding.website ?? '',
@@ -867,11 +909,17 @@ export function buildInvoiceViewModel(
     .filter(Boolean);
 
   const billTo = invoice.clients.map(c => {
-    const cityState = [c.city ?? '', c.state ?? ''].map(s => s.trim()).filter(Boolean).join(', ');
+    // "City, ST ZIP" — US mailing format; each part optional.
+    const cityStateZip = [
+      [c.city ?? '', c.state ?? ''].map(s => s.trim()).filter(Boolean).join(', '),
+      (c.zip ?? '').trim(),
+    ]
+      .filter(Boolean)
+      .join(' ');
     return {
       name: `${c.firstName} ${c.lastName}`.trim(),
       // Company + address + phone + email — whatever the client record lists.
-      lines: [c.company ?? '', c.address ?? '', cityState, c.phoneCell ?? '', c.email ?? '']
+      lines: [c.company ?? '', c.address ?? '', cityStateZip, c.phoneCell ?? '', c.email ?? '']
         .map(s => s.trim())
         .filter(Boolean),
     };
@@ -893,6 +941,25 @@ export function buildInvoiceViewModel(
   const paymentInstructions = cfg.text.paymentInstructions?.trim() || null;
   const footer = cfg.text.footer?.trim() || null;
   const notes = invoice.notes?.trim() || null;
+
+  // Estimate mode reuses the whole theme; only the header labels change and a
+  // few estimate-only blocks (description / terms / approval) are carried on
+  // the vm for the renderers to place.
+  const isEstimate = invoice.docType === 'estimate';
+  const estimate = isEstimate
+    ? {
+        description: invoice.estimateDescription?.trim() || null,
+        terms: invoice.estimateTerms?.trim() || null,
+        preparedBy: invoice.estimatePreparedBy?.trim() || null,
+        signature: invoice.estimateSignature ?? null,
+        labels: {
+          description: labels.description,
+          terms: labels.terms,
+          preparedBy: labels.preparedBy,
+          approval: labels.approval,
+        },
+      }
+    : null;
 
   // Drop sections with no data so empty blocks don't print.
   const hasData: Record<InvoiceSectionId, boolean> = {
@@ -938,12 +1005,14 @@ export function buildInvoiceViewModel(
       logoInvert: cfg.logoInvert === true,
       businessName: branding.name,
       businessLines,
-      invoiceTitle: labels.invoice,
+      invoiceTitle: isEstimate ? labels.estimate : labels.invoice,
       invoiceNumber: invoice.invoiceNumber,
-      statusLabel: (labels as Record<string, string>)[invoice.status] ?? invoice.status,
+      // Estimates have no invoice-style status badge; blank it out.
+      statusLabel: isEstimate ? '' : ((labels as Record<string, string>)[invoice.status] ?? invoice.status),
       issueLabel: labels.issueDate,
       issueValue: fmtDate(invoice.issueDate),
-      dueLabel: labels.dueDate,
+      // In estimate mode the "due date" slot becomes "valid until".
+      dueLabel: isEstimate ? labels.validUntil : labels.dueDate,
       dueValue: invoice.dueDate ? fmtDate(invoice.dueDate) : null,
       headerNote,
     },
@@ -960,6 +1029,8 @@ export function buildInvoiceViewModel(
     notes,
     paymentInstructions,
     footer,
+    docType: isEstimate ? 'estimate' : 'invoice',
+    estimate,
   };
 }
 
@@ -1187,6 +1258,24 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     h.showLogo && h.logoUrl ? `<img class="${cls}" src="${escapeHtml(h.logoUrl)}" alt="">` : '';
   const bizLines = (cls: string) =>
     h.businessLines.map(l => `<div class="${cls}">${escapeHtml(l)}</div>`).join('');
+
+  // Theme 9 (hero) tucks Bill To into the header's right column (under the
+  // dates) instead of a full-width row, so it doesn't eat vertical space.
+  const isHero = vm.archetype === 'hero';
+  const showBillTo = vm.sections.includes('billTo');
+  const heroBillToHtml =
+    isHero && showBillTo && vm.billTo.length
+      ? `<div class="inv-billto inv-hero-billto">
+          <div class="inv-sectlabel">${escapeHtml(L.billTo)}</div>
+          ${vm.billTo
+            .map(
+              c => `<div class="inv-client"><div class="inv-clientname">${escapeHtml(c.name)}</div>${c.lines
+                .map(l => `<div class="inv-bizline">${escapeHtml(l)}</div>`)
+                .join('')}</div>`,
+            )
+            .join('')}
+        </div>`
+      : '';
   const meta = (cls: string) => `
     <div class="inv-metaline ${cls}"><span>${escapeHtml(h.issueLabel)}:</span> ${escapeHtml(h.issueValue)}</div>
     ${h.dueValue ? `<div class="inv-metaline ${cls}"><span>${escapeHtml(h.dueLabel)}:</span> ${escapeHtml(h.dueValue)}</div>` : ''}`;
@@ -1307,6 +1396,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
         <div class="inv-number">${escapeHtml(h.invoiceNumber)}</div>
         <div class="inv-status">${escapeHtml(h.statusLabel)}</div>
         ${meta('')}
+        ${heroBillToHtml}
       </div>
     </div>`;
       case 'wordmark':
@@ -1460,6 +1550,31 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     : '';
   const footerHtml = vm.footer ? `<div class="inv-footer">${br(vm.footer)}</div>` : '';
 
+  // Estimate-only blocks: description (renders under Bill To), and terms +
+  // approval/signature (render at the bottom). Empty when not an estimate.
+  const est = vm.estimate;
+  const estDescHtml = est?.description
+    ? `<div class="inv-block"><div class="inv-sectlabel">${escapeHtml(est.labels.description)}</div><div class="inv-text">${br(est.description)}</div></div>`
+    : '';
+  const estBottomHtml = est
+    ? [
+        est.terms
+          ? `<div class="inv-block"><div class="inv-sectlabel">${escapeHtml(est.labels.terms)}</div><div class="inv-text">${br(est.terms)}</div></div>`
+          : '',
+        est.preparedBy || est.signature
+          ? `<div class="inv-block inv-approval"><div class="inv-sectlabel">${escapeHtml(est.labels.approval)}</div>${
+              est.preparedBy ? `<div class="inv-text">${escapeHtml(est.labels.preparedBy)}: ${escapeHtml(est.preparedBy)}</div>` : ''
+            }${
+              est.signature
+                ? `<img class="inv-sig" src="${escapeHtml(est.signature.image)}" alt=""><div class="inv-text">${escapeHtml(est.signature.line)}</div>`
+                : ''
+            }</div>`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
+    : '';
+
   const sectionHtml: Record<InvoiceSectionId, string> = {
     header: headerHtml,
     billTo: billToHtml,
@@ -1511,13 +1626,37 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     return `<div class="inv-el-text">${br(resolveFieldValue(vm, el.field as InvoiceFieldKey))}</div>`;
   };
 
+  // Closing sections (payment instructions + tagline) are grouped into a tail
+  // wrapper so full-page themes can anchor them to the bottom edge (margin-top:
+  // auto), instead of letting them float right under the total with dead space
+  // below. On non-full themes the wrapper is inert (no extra space to consume).
+  const TAIL_SECTIONS: InvoiceSectionId[] = ['paymentInstructions', 'footer'];
+
   // Freeform draws the theme decomposed into positioned elements; flow stacks
   // the structured sections.
   const body = freeform
     ? `<div class="inv-canvas">${vm.elements
         .map(el => `<div class="inv-abs" style="left:${el.x}%;top:${el.y}%;width:${el.w}%;height:${el.h}%;${elStyleCss(el)}">${elInner(el)}</div>`)
         .join('')}</div>`
-    : vm.sections.map(id => sectionHtml[id]).join('\n');
+    : (() => {
+        // Hero renders Bill To inside the header's right column, so drop the
+        // standalone row here to avoid showing it twice.
+        const flowSections = isHero ? vm.sections.filter(id => id !== 'billTo') : vm.sections;
+        // Estimate description renders right after Bill To (or the header when
+        // hero moved Bill To into it); terms + approval go into the tail.
+        const anchorId: InvoiceSectionId = flowSections.includes('billTo') ? 'billTo' : 'header';
+        const mainStr = flowSections
+          .filter(id => !TAIL_SECTIONS.includes(id))
+          .map(id => (id === anchorId ? `${sectionHtml[id]}\n${estDescHtml}` : sectionHtml[id]))
+          .join('\n');
+        const tailStr = [
+          ...flowSections.filter(id => TAIL_SECTIONS.includes(id)).map(id => sectionHtml[id]),
+          estBottomHtml,
+        ]
+          .filter(s => s.trim())
+          .join('\n');
+        return tailStr ? `${mainStr}\n<div class="inv-doc-tail">${tailStr}</div>` : mainStr;
+      })();
 
   const gap = st.density === 'compact' ? 14 : 22;
   const cellPad = st.density === 'compact' ? '6px 8px' : '9px 8px';
@@ -1547,7 +1686,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
   // of one letter page so the flourishes anchor to the page edges and the footer
   // strip sits at the bottom — like a real printed sheet.
   const fullPage = !freeform && (vm.decoration !== 'none' || vm.footerBar || vm.pageTint);
-  const pageCls = `inv-page${vm.pageTint ? ' tinted' : ''}${fullPage ? ' full' : ''}`;
+  const pageCls = `inv-page arch-${vm.archetype}${vm.pageTint ? ' tinted' : ''}${fullPage ? ' full' : ''}`;
 
   return `<!DOCTYPE html>
 <html>
@@ -1565,7 +1704,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     .inv-el-logo { max-width: 100%; max-height: 100%; object-fit: contain; }
     .inv-el-text { white-space: pre-wrap; line-height: 1.35; }
     .inv-header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid ${accent}; padding-bottom: ${gap}px; }
-    .inv-logo { max-height: ${logoMax}px; max-width: 220px; object-fit: contain; margin-bottom: 8px; display: block; }
+    .inv-logo { max-height: ${logoMax}px; max-width: ${Math.max(220, logoMax * 3)}px; object-fit: contain; margin-bottom: 8px; display: block; }
     .inv-bizname { font-weight: 700; font-size: ${st.fontPx + 4}px; }
     .inv-bizline { color: #6b7280; font-size: ${st.fontPx - 2}px; margin-top: 2px; }
     .inv-meta { text-align: right; }
@@ -1586,7 +1725,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     .inv-band .onacc-sub span { color: ${subtleOnAcc}; }
     /* — centered archetype — */
     .inv-centered { text-align: center; padding-bottom: ${gap}px; border-bottom: 2px solid ${accent}; }
-    .inv-logo-c { max-height: ${logoMax}px; max-width: 220px; object-fit: contain; margin: 0 auto 8px; display: block; }
+    .inv-logo-c { max-height: ${logoMax}px; max-width: ${Math.max(220, logoMax * 3)}px; object-fit: contain; margin: 0 auto 8px; display: block; }
     .inv-title-c { text-transform: uppercase; letter-spacing: 0.12em; color: ${accent}; font-weight: 700; font-size: ${st.fontPx + 8}px; margin-top: 12px; }
     .inv-meta-c .inv-metaline { display: inline-block; margin: 4px 8px 0; }
     /* — sidebar archetype — */
@@ -1597,7 +1736,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     .inv-minimal { padding-bottom: ${gap}px; border-bottom: 1px solid #e5e7eb; }
     .inv-min-top { display: flex; justify-content: space-between; align-items: center; }
     .inv-min-biz { text-transform: uppercase; letter-spacing: 0.12em; color: #6b7280; font-size: ${st.fontPx - 1}px; font-weight: 600; }
-    .inv-logo-min { max-height: ${Math.round(logoMax * 0.7)}px; max-width: 160px; object-fit: contain; }
+    .inv-logo-min { max-height: ${Math.round(logoMax * 0.7)}px; max-width: ${Math.max(160, Math.round(logoMax * 2))}px; object-fit: contain; }
     .inv-accent-rule { width: 32px; height: 3px; background: ${accent}; border-radius: 2px; margin: 14px 0 8px; }
     .inv-title-min { font-weight: 300; font-size: ${st.fontPx + 16}px; color: #111827; letter-spacing: 0.02em; }
     .inv-min-meta { color: #6b7280; font-size: ${st.fontPx - 2}px; margin-top: 6px; }
@@ -1620,6 +1759,12 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     .inv-hero { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
     .inv-hero-right { text-align: right; }
     .inv-hero-word { font-weight: 800; text-transform: uppercase; letter-spacing: 0.01em; color: ${accent}; font-size: ${st.fontPx + 30}px; line-height: 1; }
+    /* Theme 9 (hero) has a filled diagonal corner behind the sender + Bill To
+       block, so the default grey address text reads poorly there — darken it. */
+    .arch-hero .inv-bizline { color: #111827; }
+    .arch-hero .inv-billto .inv-sectlabel { color: #374151; }
+    .inv-hero-billto { margin-top: ${gap}px; }
+    .inv-hero-billto .inv-client + .inv-client { margin-top: 6px; }
     /* — wordmark archetype — */
     .inv-wordmark-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
     .inv-wordmark-word { font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: ${accent}; font-size: ${st.fontPx + 16}px; }
@@ -1653,7 +1798,12 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     /* — page / decoration / footer bar — */
     .inv-page { position: relative; overflow: hidden; }
     .inv-page.full { display: flex; flex-direction: column; aspect-ratio: 8.5 / 11; }
-    .inv-page.full .inv-doc { flex: 1 0 auto; }
+    .inv-page.full .inv-doc { flex: 1 0 auto; display: flex; flex-direction: column; }
+    /* Anchor the closing footer group (payment instructions + tagline) to the
+       bottom of the page on full-page themes — the auto top margin eats the
+       empty space between the total and the page edge. */
+    .inv-page.full .inv-doc-tail { margin-top: auto; }
+    .inv-doc-tail > * { margin-bottom: ${gap}px; }
     .inv-page.tinted { background: ${withAlpha(st.accent, 0.06)}; }
     .inv-deco { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
     .inv-deco-top { position: absolute; top: 0; left: 0; width: 100%; z-index: 0; pointer-events: none; }
@@ -1688,6 +1838,9 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     .inv-cfrow span:first-child { color: #6b7280; }
     .inv-text { font-size: ${st.fontPx - 1}px; color: #4b5563; white-space: pre-wrap; line-height: 1.5; }
     .inv-footer { border-top: 1px solid #e5e7eb; padding-top: 10px; color: #9ca3af; font-size: ${st.fontPx - 2}px; text-align: center; white-space: pre-wrap; }
+    .inv-approval { border-top: 1px solid #e5e7eb; padding-top: 10px; }
+    .inv-approval .inv-sectlabel { color: ${accent}; }
+    .inv-sig { max-height: 56px; max-width: 240px; object-fit: contain; margin: 6px 0 2px; display: block; }
   </style>
 </head>
 <body><div class="${pageCls}">${decoHtml}<div class="inv-doc"${docPad}>${body}</div>${footerBarHtml}</div></body>
@@ -1700,7 +1853,12 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
  *  preserves the business's chosen default invoice language across switches. */
 export function applyPreset(presetId: InvoicePresetId, current?: InvoiceTemplateConfig): InvoiceTemplateConfig {
   const next = clone(INVOICE_PRESETS[presetId] ?? DEFAULT_INVOICE_TEMPLATE);
-  if (current) next.defaultLanguage = current.defaultLanguage;
+  if (current) {
+    next.defaultLanguage = current.defaultLanguage;
+    // Header note, payment instructions, and footer are business CONTENT the
+    // owner writes once — switching themes changes styling, not what it says.
+    next.text = { ...current.text };
+  }
   return next;
 }
 
@@ -1736,6 +1894,9 @@ export function setShowLogo(c: InvoiceTemplateConfig, showLogo: boolean): Invoic
 }
 export function setLogoSize(c: InvoiceTemplateConfig, logoSize: InvoiceLogoSize): InvoiceTemplateConfig {
   return { ...c, logoSize };
+}
+export function setLogoPx(c: InvoiceTemplateConfig, px: number): InvoiceTemplateConfig {
+  return { ...c, logoPx: clampLogoPx(px) };
 }
 export function setLogoInvert(c: InvoiceTemplateConfig, logoInvert: boolean): InvoiceTemplateConfig {
   return { ...c, logoInvert };

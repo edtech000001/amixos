@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, Pressable, ScrollView, SectionList, Modal as RNModal } from 'react-native';
 import { FileText, Search, Calendar, Layers, XCircle, List, Building2, MapPin, Check, ListChecks, Trash2, X, DollarSign } from 'lucide-react-native';
@@ -9,6 +9,7 @@ import { Fab } from '../../ui/Fab';
 import { formatDateLong, daysOverdue, daysSince } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
+import { INVOICES_FILTERS_KEY, parseInvoicesFilters } from '../../lib/invoicesFilters';
 import { useThemeColors } from '../../theme';
 
 export interface InvoiceListItem {
@@ -145,6 +146,30 @@ export function InvoicesListScreen({
     void AsyncStorage.setItem(groupStoreKey, g).catch(() => {});
   };
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
+
+  // Status + date filters persist per device+business (like the jobs list) so
+  // navigating into an invoice and back keeps them, not just the search/group.
+  const filtersKey = businessId ? `${INVOICES_FILTERS_KEY}.${businessId}` : INVOICES_FILTERS_KEY;
+  const filtersHydrated = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    filtersHydrated.current = false; // gate persist until this business's filters load
+    AsyncStorage.getItem(filtersKey)
+      .then(raw => {
+        if (cancelled) return;
+        const f = parseInvoicesFilters(raw);
+        setStatuses(Array.isArray(f?.statuses) ? f!.statuses.filter((k): k is StatusKey => (STATUS_KEYS as readonly string[]).includes(k)) : []);
+        setDateFrom(f?.dateFrom ?? null);
+        setDateTo(f?.dateTo ?? null);
+        filtersHydrated.current = true;
+      })
+      .catch(() => { filtersHydrated.current = true; });
+    return () => { cancelled = true; };
+  }, [filtersKey]);
+  useEffect(() => {
+    if (!filtersHydrated.current) return;
+    void AsyncStorage.setItem(filtersKey, JSON.stringify({ statuses, dateFrom, dateTo })).catch(() => {});
+  }, [filtersKey, statuses, dateFrom, dateTo]);
 
   const statusLabels: Record<StatusKey, string> = {
     draft: t.filters.drafts,
