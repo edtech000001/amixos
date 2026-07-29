@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView, Image } from 'react-native';
 import {
   ArrowLeft,
   ChevronDown,
@@ -91,6 +91,10 @@ export interface InvoicePaymentRow {
   method: string | null;
   /** ISO date (YYYY-MM-DD). */
   paidOn: string;
+  /** Storage path of an optional payment photo (e.g. a check picture). */
+  photoPath?: string | null;
+  /** Signed URL for the photo, resolved by the caller for display. */
+  photoUrl?: string | null;
 }
 
 export interface InvoiceDetailScreenProps {
@@ -150,6 +154,8 @@ export interface InvoiceDetailScreenProps {
   onEditPayment?: (payment: InvoicePaymentRow) => void;
   /** Delete a recorded payment (caller confirms + reverts status if needed). */
   onDeletePayment?: (payment: InvoicePaymentRow) => void;
+  /** View a payment's photo full-size (thumbnail tapped in the ledger). */
+  onViewPaymentPhoto?: (url: string) => void;
   /** Revert a paid invoice to sent (caller confirms + clears payments). */
   onUndoPaid?: () => void;
   /** Open a client's detail (the billed name becomes a link). */
@@ -210,6 +216,7 @@ export function InvoiceDetailScreen({
   onRecordPayment,
   onEditPayment,
   onDeletePayment,
+  onViewPaymentPhoto,
   onUndoPaid,
   onClientPress,
   jobTitles,
@@ -535,6 +542,11 @@ export function InvoiceDetailScreen({
                     {p.method ?? '—'} · {formatDate(p.paidOn)}
                   </Text>
                   <View className="flex-row items-center gap-2">
+                    {p.photoUrl && onViewPaymentPhoto ? (
+                      <Pressable onPress={() => onViewPaymentPhoto(p.photoUrl!)} hitSlop={6} className="active:opacity-60">
+                        <Image source={{ uri: p.photoUrl }} style={{ width: 22, height: 22, borderRadius: 4 }} />
+                      </Pressable>
+                    ) : null}
                     <Text className="text-sm text-emerald-700">−{fmt(p.amount)}</Text>
                     {onEditPayment && canEdit ? (
                       <Pressable onPress={() => onEditPayment(p)} disabled={updating} className="p-1 active:opacity-60" hitSlop={8}>

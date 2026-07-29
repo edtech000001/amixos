@@ -22,6 +22,8 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { can } from '@amixos/shared/lib/permissions';
 import { resolveConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
+import { signedUrl } from '@amixos/shared/lib/storageUrls';
+import { INVOICE_PAYMENT_BUCKET, paymentPhotoPath } from '@amixos/shared/lib/invoicePayments';
 import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
 import { rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
@@ -129,6 +131,16 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   // Set → the payment sheet edits this row instead of inserting a new one.
   const [payEditId, setPayEditId] = useState<string | null>(null);
   const [undoPaidOpen, setUndoPaidOpen] = useState(false);
+  // Optional payment photo (e.g. a check picture). `payPhotoFile` = a newly
+  // chosen file (pending upload); `payPhotoPath` = the stored path when editing;
+  // `payPhotoExistingUrl` = the signed URL to preview it. Viewer = tapped photo.
+  const [payPhotoFile, setPayPhotoFile] = useState<File | null>(null);
+  const [payPhotoPath, setPayPhotoPath] = useState<string | null>(null);
+  const [payPhotoExistingUrl, setPayPhotoExistingUrl] = useState<string | null>(null);
+  // True once an existing photo is removed — otherwise we OMIT photo_path so
+  // payments still record where migration 174 hasn't been applied yet.
+  const [payPhotoRemoved, setPayPhotoRemoved] = useState(false);
+  const [viewPhotoUrl, setViewPhotoUrl] = useState<string | null>(null);
 
   // ── Jobs attached to this invoice (Phase 2 management) ──────────────
   const tj = full.dashboard.jobs;
@@ -425,12 +437,15 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const loadPayments = async () => {
     const { data } = await supabase
       .from('invoice_payments')
-      .select('id, amount, method, paid_on')
+      .select('id, amount, method, paid_on, photo_path')
       .eq('invoice_id', id)
       .order('paid_on')
       .order('created_at');
-    setPayments(((data ?? []) as { id: string; amount: number; method: string | null; paid_on: string }[])
-      .map(r => ({ id: r.id, amount: r.amount, method: r.method, paidOn: r.paid_on })));
+    const rows = (data ?? []) as { id: string; amount: number; method: string | null; paid_on: string; photo_path: string | null }[];
+    const signed = await Promise.all(
+      rows.map(r => (r.photo_path ? signedUrl(supabase, r.photo_path).catch(() => null) : Promise.resolve(null))),
+    );
+    setPayments(rows.map((r, i) => ({ id: r.id, amount: r.amount, method: r.method, paidOn: r.paid_on, photoPath: r.photo_path, photoUrl: signed[i] })));
   };
 
   const mapInvoice = (raw: RawInvoice, tpls: InvoiceFieldTemplate[]): InvoiceDetail => {
@@ -551,6 +566,10 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     setPayMethodKey('cash');
     setPayMethodOther('');
     setPayDate(new Date().toISOString().slice(0, 10));
+    setPayPhotoFile(null);
+    setPayPhotoPath(null);
+    setPayPhotoExistingUrl(null);
+    setPayPhotoRemoved(false);
     setPayOpen(true);
   };
 
@@ -561,6 +580,10 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     setPayMethodKey(key ?? (p.method ? 'other' : 'cash'));
     setPayMethodOther(key || !p.method ? '' : p.method);
     setPayDate(p.paidOn);
+    setPayPhotoFile(null);
+    setPayPhotoPath(p.photoPath ?? null);
+    setPayPhotoExistingUrl(p.photoUrl ?? null);
+    setPayPhotoRemoved(false);
     setPayOpen(true);
   };
 
@@ -592,9 +615,22 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     if (!amount || amount <= 0) return;
     setPayBusy(true);
     const method = paymentMethodLabel() || null;
+    // Upload a newly-chosen photo; keep the existing path otherwise.
+    let photoPath: string | null = payPhotoPath;
+    if (payPhotoFile) {
+      try {
+        const uid = crypto.randomUUID();
+        const path = paymentPhotoPath(business.id, uid);
+        const { error: upErr } = await supabase.storage.from(INVOICE_PAYMENT_BUCKET).upload(path, payPhotoFile, { upsert: false, contentType: payPhotoFile.type || 'image/jpeg' });
+        if (!upErr) photoPath = path;
+      } catch { /* keep going without the photo */ }
+    }
+    // Only touch photo_path when a photo was added or removed this session, so
+    // payments still save where migration 174 isn't applied yet.
+    const writePhoto = !!payPhotoFile || payPhotoRemoved;
     if (payEditId) {
       const { error } = await supabase.from('invoice_payments')
-        .update({ amount, method, paid_on: payDate || new Date().toISOString().slice(0, 10) })
+        .update({ amount, method, paid_on: payDate || new Date().toISOString().slice(0, 10), ...(writePhoto ? { photo_path: photoPath } : {}) })
         .eq('id', payEditId);
       if (error) { setPayBusy(false); return; }
       await syncInvoiceToPayments(payments.map(p => p.id === payEditId ? { ...p, amount, method, paidOn: payDate } : p));
@@ -613,6 +649,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       amount,
       method,
       paid_on: payDate || new Date().toISOString().slice(0, 10),
+      ...(writePhoto ? { photo_path: photoPath } : {}),
     });
     if (error) { setPayBusy(false); return; }
     const next = [...payments, { id: 'tmp', amount, method, paidOn: payDate }];
@@ -858,6 +895,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         onRecordPayment={canEdit ? openRecordPayment : undefined}
         onEditPayment={canEdit ? openEditPayment : undefined}
         onDeletePayment={canEdit ? setDelPayment : undefined}
+        onViewPaymentPhoto={setViewPhotoUrl}
         onUndoPaid={canEdit ? () => setUndoPaidOpen(true) : undefined}
         onClientPress={(clientId) => router.push(`/dashboard/clientes/${clientId}?from=invoice&invoice=${id}`)}
         jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
@@ -1096,11 +1134,41 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
               className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
             />
           </div>
+          {/* Optional payment photo (e.g. a picture of the check). */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-ink">{tInv.payments.photoLabel}</label>
+            {payPhotoFile || payPhotoExistingUrl ? (
+              <div className="flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={payPhotoFile ? URL.createObjectURL(payPhotoFile) : payPhotoExistingUrl!} alt="" className="w-14 h-14 rounded-lg object-cover border border-border" />
+                <label className="text-sm text-primary font-semibold cursor-pointer hover:underline">
+                  {tInv.payments.changePhoto}
+                  <input type="file" accept="image/*" className="hidden" onChange={e => setPayPhotoFile(e.target.files?.[0] ?? null)} />
+                </label>
+                <button type="button" onClick={() => { setPayPhotoFile(null); setPayPhotoPath(null); setPayPhotoExistingUrl(null); setPayPhotoRemoved(true); }} className="text-sm text-red-600 font-semibold hover:underline">
+                  {tInv.payments.removePhoto}
+                </button>
+              </div>
+            ) : (
+              <label className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-surface px-3 py-2.5 text-sm text-muted font-medium cursor-pointer hover:bg-border-soft">
+                {tInv.payments.addPhoto}
+                <input type="file" accept="image/*" className="hidden" onChange={e => setPayPhotoFile(e.target.files?.[0] ?? null)} />
+              </label>
+            )}
+          </div>
           <Button onClick={submitPayment} loading={payBusy} disabled={!parseFloat(payAmount)} fullWidth>
             {payEditId ? tc.buttons.save : tInv.payments.recordBtn}
           </Button>
         </div>
       </Modal>
+
+      {/* Payment photo viewer (lightbox) */}
+      {viewPhotoUrl ? (
+        <div onClick={() => setViewPhotoUrl(null)} className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 cursor-zoom-out">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={viewPhotoUrl} alt="" className="max-w-full max-h-full object-contain" />
+        </div>
+      ) : null}
 
       {/* Delete a recorded payment */}
       <Modal open={delPayment !== null} onClose={() => setDelPayment(null)} title={tInv.payments.title} size="sm">

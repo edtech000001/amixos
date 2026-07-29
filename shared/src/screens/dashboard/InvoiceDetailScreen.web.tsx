@@ -94,6 +94,10 @@ export interface InvoicePaymentRow {
   method: string | null;
   /** ISO date (YYYY-MM-DD). */
   paidOn: string;
+  /** Storage path of an optional payment photo (e.g. a check picture). */
+  photoPath?: string | null;
+  /** Signed URL for the photo, resolved by the caller for display. */
+  photoUrl?: string | null;
 }
 
 export interface InvoiceDetailScreenProps {
@@ -149,6 +153,8 @@ export interface InvoiceDetailScreenProps {
   onRecordPayment?: () => void;
   /** Edit a recorded payment (opens the record sheet pre-filled). */
   onEditPayment?: (payment: InvoicePaymentRow) => void;
+  /** View a payment's photo full-size (thumbnail clicked in the ledger). */
+  onViewPaymentPhoto?: (url: string) => void;
   /** Delete a recorded payment (caller confirms + reverts status if needed). */
   onDeletePayment?: (payment: InvoicePaymentRow) => void;
   /** Revert a paid invoice to sent (caller confirms + clears payments). */
@@ -210,6 +216,7 @@ export function InvoiceDetailScreen({
   onRecordPayment,
   onEditPayment,
   onDeletePayment,
+  onViewPaymentPhoto,
   onUndoPaid,
   onClientPress,
   jobTitles,
@@ -547,6 +554,10 @@ export function InvoiceDetailScreen({
                       {p.method ?? '—'} · {formatDate(p.paidOn)}
                     </span>
                     <span className="flex items-center gap-2">
+                      {p.photoUrl && onViewPaymentPhoto ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.photoUrl} alt="" onClick={() => onViewPaymentPhoto(p.photoUrl!)} className="w-6 h-6 rounded object-cover cursor-pointer border border-border" />
+                      ) : null}
                       <span className="text-sm text-emerald-700">−{fmt(p.amount)}</span>
                       {onEditPayment && canEdit ? (
                         <button

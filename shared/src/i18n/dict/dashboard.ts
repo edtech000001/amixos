@@ -255,6 +255,10 @@ export type DashboardDict = {
       undoPaid: string;
       undoPaidConfirm: string;
       otherPlaceholder: string;
+      addPhoto: string;
+      changePhoto: string;
+      removePhoto: string;
+      photoLabel: string;
       methods: { cash: string; check: string; card: string; transfer: string; zelle: string; cashapp: string; venmo: string; paypal: string; moneyOrder: string; other: string };
     };
     sendInvoice: string;
@@ -2873,6 +2877,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         undoPaid: 'Marcar no pagada',
         undoPaidConfirm: 'La factura volverá a enviada y se eliminarán los pagos registrados.',
         otherPlaceholder: 'Especificar…',
+        addPhoto: 'Agregar foto (ej. cheque)',
+        changePhoto: 'Cambiar foto',
+        removePhoto: 'Quitar foto',
+        photoLabel: 'Foto del pago',
         methods: { cash: 'Efectivo', check: 'Cheque', card: 'Tarjeta', transfer: 'Transferencia', zelle: 'Zelle', cashapp: 'Cash App', venmo: 'Venmo', paypal: 'PayPal', moneyOrder: 'Giro postal (money order)', other: 'Otro' },
       },
       sendInvoice: 'Enviar factura',
@@ -5476,6 +5484,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         undoPaid: 'Mark unpaid',
         undoPaidConfirm: 'The invoice will go back to sent and its recorded payments will be removed.',
         otherPlaceholder: 'Specify…',
+        addPhoto: 'Add photo (e.g. check)',
+        changePhoto: 'Change photo',
+        removePhoto: 'Remove photo',
+        photoLabel: 'Payment photo',
         methods: { cash: 'Cash', check: 'Check', card: 'Card', transfer: 'Bank transfer', zelle: 'Zelle', cashapp: 'Cash App', venmo: 'Venmo', paypal: 'PayPal', moneyOrder: 'Money order', other: 'Other' },
       },
       sendInvoice: 'Send invoice',
