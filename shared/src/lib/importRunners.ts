@@ -285,6 +285,9 @@ export const EQUIPMENT_IMPORT_FIELDS: ImportFieldDef[] = [
   { key: 'insurance_policy_number', es: 'Número de póliza', en: 'Policy number' },
   { key: 'insurance_expiration',    es: 'Vencimiento del seguro', en: 'Insurance expiration' },
   { key: 'notes',                   es: 'Notas', en: 'Notes' },
+  { key: 'photos',                  es: 'Fotos (nombres de archivo)', en: 'Photos (file names)',
+    hintEs: 'Nombres separados por ; — las fotos se suben después en "Importar fotos de equipo".',
+    hintEn: 'Names separated by ; — the photos upload later in "Import equipment photos".' },
 ];
 
 export const INVENTORY_IMPORT_FIELDS: ImportFieldDef[] = [
@@ -694,7 +697,7 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
       if (photoNamesUp.length) up.import_photo_names = photoNamesUp;
       // Custom fields merge — CSV wins per field, unmentioned fields survive.
       const cfUp: Record<string, string> = {};
-      ctx.templates.forEach(t => { const v = get(row, `custom:${t.field_key}`); if (v) cfUp[t.field_key] = v; });
+      ctx.templates.forEach(t => { const v = get(row, `custom:${t.field_key}`); if (v) cfUp[t.field_key] = t.field_type === 'boolean' ? (parseYesNo(v) ? 'true' : 'false') : v; });
       if (Object.keys(cfUp).length) {
         const merged = { ...(existing.custom_fields ?? {}), ...cfUp };
         if (JSON.stringify(merged) !== JSON.stringify(existing.custom_fields ?? {})) up.custom_fields = merged;
@@ -761,7 +764,7 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
     const allCrew = [...(leadName ? [leadName] : []), ...crewNames];
 
     const customFields: Record<string, string> = {};
-    ctx.templates.forEach(t => { const v = get(row, `custom:${t.field_key}`); if (v) customFields[t.field_key] = v; });
+    ctx.templates.forEach(t => { const v = get(row, `custom:${t.field_key}`); if (v) customFields[t.field_key] = t.field_type === 'boolean' ? (parseYesNo(v) ? 'true' : 'false') : v; });
 
     const scheduledDate = parseDate(get(row, 'scheduled_date'));
     const endDate = parseDate(get(row, 'end_date'));
@@ -989,7 +992,7 @@ export async function runEmployeesImport(ctx: ImportRunCtx): Promise<ImportResul
     existingNames.add(fullKey);
 
     const customFields: Record<string, string> = {};
-    ctx.templates.forEach(t => { const v = get(row, `custom:${t.field_key}`); if (v) customFields[t.field_key] = v; });
+    ctx.templates.forEach(t => { const v = get(row, `custom:${t.field_key}`); if (v) customFields[t.field_key] = t.field_type === 'boolean' ? (parseYesNo(v) ? 'true' : 'false') : v; });
 
     const rawPayType = get(row, 'pay_type');
     const accessR = accessRole(get(row, 'access_role'));
@@ -1508,6 +1511,12 @@ export async function runEquipmentImport(ctx: ImportRunCtx): Promise<ImportResul
       insurance_policy_number: get(row, 'insurance_policy_number') || null,
       insurance_expiration: parseDate(get(row, 'insurance_expiration')),
       notes: get(row, 'notes') || null,
+      // Pending photo names — the "Import equipment photos" step matches dropped
+      // files against these and uploads them to equipment_photos.
+      import_photo_names: (() => {
+        const names = Array.from(new Set(get(row, 'photos').split(/[;,]/).map(n => n.trim()).filter(Boolean)));
+        return names.length ? names : null;
+      })(),
       created_by: ctx.userId,
       ...(branch.multi ? (() => {
         const bn = get(row, 'branch'); const id = branch.match(bn);
