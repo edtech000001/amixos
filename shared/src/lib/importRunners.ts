@@ -716,10 +716,9 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
           const n2 = normalizeName(name);
           if (seenUp.has(n2)) return;
           seenUp.add(n2);
-          // First crew member is the lead — the explicit lead_name is prepended
-          // to index 0, but even a crew-only column (no lead column) gets its
-          // first person as lead so a lead is always selected.
-          assignsUp.push({ job_id: existing.id, employee_id: matchEmployeeId(name, employees), worker_name: name, is_lead: i === 0 });
+          // Lead comes from the Lead column only (prepended to index 0); the
+          // Workers column never designates a lead.
+          assignsUp.push({ job_id: existing.id, employee_id: matchEmployeeId(name, employees), worker_name: name, is_lead: i === 0 && !!leadUp });
         });
         if (assignsUp.length) await ctx.supabase.from('job_assignments').insert(dedupeAssigns(assignsUp));
       }
@@ -877,9 +876,9 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
       const n = normalizeName(name);
       if (seen.has(n)) return;
       seen.add(n);
-      // First crew member is the lead (see the update path) — always selects a
-      // lead even when only a crew column (no separate lead column) is imported.
-      assigns.push({ employee_id: matchEmployeeId(name, employees), worker_name: name, is_lead: i === 0 });
+      // Lead comes from the Lead column only (prepended to index 0); the
+      // Workers column never designates a lead.
+      assigns.push({ employee_id: matchEmployeeId(name, employees), worker_name: name, is_lead: i === 0 && !!leadName });
     });
     // Queue-time in-file dedup: a later row with the same Project ID now routes
     // to the UPDATE path (existing undefined → skipped), matching the old code.
