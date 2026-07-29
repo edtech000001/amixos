@@ -1710,7 +1710,12 @@ export default function NuevoTrabajoRoute() {
   // from a hidden tab screen often lands on the very first tab (home) rather
   // than the trabajos list. Navigate explicitly to the right destination.
   const goBack = () => {
-    if (sourceId) {
+    if (sourceId && router.canGoBack()) {
+      // Pop back to the detail/screen we came from (it refetches on focus)
+      // instead of replacing — replace stacked a duplicate detail, so pressing
+      // Back on the detail returned to the detail again instead of the list.
+      router.back();
+    } else if (sourceId) {
       router.replace(`/dashboard/trabajos/${sourceId}` as never);
     } else {
       router.replace('/dashboard/trabajos' as never);
