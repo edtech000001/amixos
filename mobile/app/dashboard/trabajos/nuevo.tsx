@@ -1689,6 +1689,12 @@ export default function NuevoTrabajoRoute() {
         void prependCached(`jobs_list_${business.id}`, optimisticJobRow);
         void writeCached(`job_${jobId}`, optimisticJobRow);
         router.replace('/dashboard/trabajos' as never);
+      } else if (editId && router.canGoBack()) {
+        // Editing: pop the edit screen back to the ORIGINAL job detail (it
+        // refetches on focus and keeps its own from/invoice params) instead of
+        // replacing — replace stacked a duplicate detail, so the detail's Back
+        // button returned to the detail again rather than the list.
+        router.back();
       } else {
         router.replace(`/dashboard/trabajos/${jobId}` as never);
       }

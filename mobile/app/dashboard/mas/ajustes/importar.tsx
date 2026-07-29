@@ -9,6 +9,7 @@ import { ImportClientsModal } from '@/components/ImportClientsModal';
 import { ImportDataModal } from '@/components/ImportDataModal';
 import { ImportPhotosModal } from '@/components/ImportPhotosModal';
 import { ReconcileModal } from '@/components/ReconcileModal';
+import { ImportEquipmentPhotosModal } from '@/components/ImportEquipmentPhotosModal';
 
 // Ajustes → Importar datos: guided migration hub. The four importers as
 // ORDERED steps, because the order matters — jobs match clients + team by
@@ -25,6 +26,7 @@ export default function ImportarDatosPage() {
 
   const [openStep, setOpenStep] = useState<StepKey | null>(null);
   const [reconcileOpen, setReconcileOpen] = useState(false);
+  const [equipPhotosOpen, setEquipPhotosOpen] = useState(false);
   // Client custom-field templates — the clients import modal needs them.
   const [clientTemplates, setClientTemplates] = useState<{ field_key: string; field_label: string }[]>([]);
   useEffect(() => {
@@ -95,7 +97,22 @@ export default function ImportarDatosPage() {
         <Text className="text-xl text-faint">›</Text>
       </Pressable>
 
+      <Pressable
+        onPress={() => setEquipPhotosOpen(true)}
+        className="mt-3 bg-card rounded-2xl border border-border-soft flex-row items-center gap-3 px-4 py-4 active:bg-surface"
+      >
+        <View className="w-9 h-9 rounded-full bg-primary/10 items-center justify-center">
+          <Text className="text-base">🖼️</Text>
+        </View>
+        <View className="flex-1">
+          <Text className="text-sm font-semibold text-ink">{locale === 'es' ? 'Importar fotos de equipo' : 'Import equipment photos'}</Text>
+          <Text className="text-xs text-muted mt-0.5">{locale === 'es' ? 'Empareja fotos con el equipo por los nombres de archivo de la columna "Fotos".' : 'Match photos to equipment by the file names in the "Photos" column.'}</Text>
+        </View>
+        <Text className="text-xl text-faint">›</Text>
+      </Pressable>
+
       <ReconcileModal open={reconcileOpen} businessId={business.id} onClose={() => setReconcileOpen(false)} />
+      <ImportEquipmentPhotosModal open={equipPhotosOpen} businessId={business.id} onClose={() => setEquipPhotosOpen(false)} />
 
       <ImportClientsModal
         open={openStep === 'clients'}
