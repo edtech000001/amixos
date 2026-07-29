@@ -361,7 +361,7 @@ export function EmployeesScreen({
         ) : (
           <View className={`w-9 h-9 rounded-full items-center justify-center ${e.active ? 'bg-primary/10' : 'bg-border-soft'}`}>
             <Text className={`text-sm font-semibold ${e.active ? 'text-primary' : 'text-faint'}`}>
-              {e.firstName.charAt(0)}{e.lastName.charAt(0)}
+              {(e.firstName || '').charAt(0)}{(e.lastName || '').charAt(0)}
             </Text>
           </View>
         )}

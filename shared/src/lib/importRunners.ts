@@ -1731,11 +1731,15 @@ export function autoMapHeaders(
   fields: { key: string; es: string; en: string }[],
   headers: string[],
 ): Record<string, string> {
+  // Drop parentheticals first — a verbose label like "Crew notes (visible to
+  // workers)" otherwise CONTAINS "workers", so a CSV "Workers" column would
+  // wrongly auto-map to worker_notes via candidate.includes(header).
+  const stripParen = (s: string) => s.replace(/\([^)]*\)/g, ' ');
   const norm = (s: string) =>
-    s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+    stripParen(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
   const auto: Record<string, string> = {};
   fields.forEach(f => {
-    const candidates = [norm(f.es), norm(f.en), norm(f.key.replace('custom:', ''))];
+    const candidates = [norm(f.es), norm(f.en), norm(f.key.replace('custom:', ''))].filter(Boolean);
     const match = headers.find(h => {
       const hN = norm(h);
       return candidates.some(c => hN === c || hN.includes(c) || c.includes(hN));

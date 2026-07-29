@@ -424,13 +424,14 @@ const ClientRow = memo(function ClientRow({
       >
         <span className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
           <span className="text-primary text-sm font-bold">
-            {c.firstName.charAt(0).toUpperCase()}{c.lastName.charAt(0).toUpperCase()}
+            {(c.firstName || c.company || '?').charAt(0).toUpperCase()}{(c.lastName || '').charAt(0).toUpperCase()}
           </span>
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold text-ink truncate">
-            {c.firstName} {c.lastName}
-            {c.company ? <span className="text-faint font-normal"> · {c.company}</span> : null}
+            {(c.firstName || c.lastName)
+              ? <>{c.firstName} {c.lastName}{c.company ? <span className="text-faint font-normal"> · {c.company}</span> : null}</>
+              : (c.company || '—')}
           </span>
           {/* Compact meta under the name only when the columns are hidden. */}
           <span className="md:hidden flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">

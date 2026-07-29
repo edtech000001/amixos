@@ -1136,7 +1136,9 @@ export default function NuevoTrabajoRoute() {
       );
     }
     if (k === 'worker_notes') {
-      if (isProposal || fHidden('worker_notes')) return null;
+      // Show it if hidden BUT already has content (e.g. imported) so it's
+      // always editable — otherwise stray worker notes can't be cleared.
+      if (isProposal || (fHidden('worker_notes') && !workerNotes.trim())) return null;
       return (
         <View key={k} className="mt-4">
           <Text className="text-sm font-semibold text-ink mb-2">

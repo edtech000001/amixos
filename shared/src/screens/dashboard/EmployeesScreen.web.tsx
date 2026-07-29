@@ -513,7 +513,7 @@ export function EmployeesScreen({
                   }`}
                 >
                   <span className={`text-sm font-semibold ${e.active ? 'text-primary' : 'text-faint'}`}>
-                    {e.firstName.charAt(0)}{e.lastName.charAt(0)}
+                    {(e.firstName || '').charAt(0)}{(e.lastName || '').charAt(0)}
                   </span>
                 </div>
                 )}

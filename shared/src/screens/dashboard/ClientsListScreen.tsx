@@ -820,16 +820,15 @@ const ClientRow = memo(function ClientRow({
         ) : null}
         <View className="w-10 h-10 rounded-full bg-primary/10 items-center justify-center">
           <Text className="text-primary text-sm font-bold">
-            {c.firstName.charAt(0).toUpperCase()}
-            {c.lastName.charAt(0).toUpperCase()}
+            {(c.firstName || c.company || '?').charAt(0).toUpperCase()}
+            {(c.lastName || '').charAt(0).toUpperCase()}
           </Text>
         </View>
         <View className="min-w-0 flex-1">
           <Text className="text-sm font-semibold text-ink" numberOfLines={1}>
-            {c.firstName} {c.lastName}
-            {c.company ? (
-              <Text className="text-faint font-normal"> · {c.company}</Text>
-            ) : null}
+            {(c.firstName || c.lastName) ? (
+              <>{c.firstName} {c.lastName}{c.company ? <Text className="text-faint font-normal"> · {c.company}</Text> : null}</>
+            ) : (c.company || '—')}
           </Text>
           <View className="flex-row flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
             {c.phoneDisplay ? (

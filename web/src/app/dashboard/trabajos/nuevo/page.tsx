@@ -267,6 +267,7 @@ function NuevoTrabajoContent() {
   const [totalHours, setTotalHours] = useState('');
   const [description, setDescription] = useState('');
   const [internalNotes, setInternalNotes] = useState('');
+  const [workerNotes, setWorkerNotes] = useState('');
   const [items, setItems] = useState<LineItem[]>([]);
   const [assignedEmployees, setAssignedEmployees] = useState<string[]>([]);
   const [manualWorkers, setManualWorkers] = useState<string[]>(['']);
@@ -668,6 +669,20 @@ function NuevoTrabajoContent() {
       );
     }
     // ── Notes section key ──
+    if (k === 'worker_notes') {
+      if (isEditProposal) return null; // proposals don't carry crew notes
+      // Show when it has content even if the field is hidden, so imported/stray
+      // worker notes can always be edited or cleared.
+      if (fHidden('worker_notes') && !workerNotes.trim()) return null;
+      return (
+        <div key={k} className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-ink">{jrl('worker_notes', t.workerNoteLabel)}</label>
+          <textarea rows={3} placeholder={t.workerNotePlaceholder}
+            value={workerNotes} onChange={e => setWorkerNotes(e.target.value)}
+            className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
+        </div>
+      );
+    }
     if (k === 'internal_notes') {
       if (restrictedCreator) return null; // office-only note
       if (!isEditProposal && fHidden('internal_notes')) return null;
@@ -801,6 +816,7 @@ function NuevoTrabajoContent() {
           setDriverHours(job.driver_hours != null ? String(job.driver_hours) : '');
           setDescription(job.description || '');
           setInternalNotes(job.internal_notes || '');
+          setWorkerNotes(job.worker_notes || '');
           // Prefill custom field values (coerce each to a string for the inputs).
           if (job.custom_fields && typeof job.custom_fields === 'object') {
             const cf: Record<string, string> = {};
@@ -1283,6 +1299,7 @@ function NuevoTrabajoContent() {
           description: description.trim() || null,
           notes: clientNotes.trim() || null,
           internal_notes: internalNotes.trim() || null,
+          worker_notes: workerNotes.trim() || null,
           // Location is shown on estimates too — persist it (mirrors the job path).
           job_address: address.trim() || null,
           job_city: city.trim() || null,
@@ -1361,6 +1378,7 @@ function NuevoTrabajoContent() {
           driver_employee_ids: driverEmployeeIds,
           driver_hours: driverEmployeeIds.length && driverHours.trim() ? parseFloat(driverHours) : null,
           internal_notes: internalNotes.trim() || null,
+          worker_notes: workerNotes.trim() || null,
           total_amount: subtotal,
           published_to_crew: restrictedCreator ? true : publishedToCrew,
           custom_fields: customFields,
