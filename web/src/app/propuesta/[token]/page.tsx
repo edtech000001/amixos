@@ -213,7 +213,7 @@ export default function PublicProposalPage({ params }: { params: { token: string
   return (
     <div className="min-h-screen bg-gray-50 print:bg-white">
       {/* Full-bleed on print so the theme decoration reaches the sheet edges. */}
-      <style>{'@media print{@page{margin:0}.inv-doc-page{aspect-ratio:auto!important;overflow:visible!important;display:block!important}}'}</style>
+      <style>{'@media print{@page{margin:10mm}.inv-doc-page{aspect-ratio:auto!important;overflow:visible!important;display:block!important;min-height:0!important}.inv-doc-page>*{flex:0 0 auto!important}}'}</style>
       <div className="max-w-3xl mx-auto py-10 px-6 print:py-0 print:px-0 print:max-w-none">
         {/* Themed estimate document — same engine/theme as invoices. */}
         <div className="bg-white rounded-2xl print:rounded-none border border-gray-100 print:border-0 shadow-sm print:shadow-none overflow-hidden mb-6 print:mb-0">
