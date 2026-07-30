@@ -614,8 +614,11 @@ export function invoiceDefaultLanguage(rawConfig: unknown, localeFallback?: stri
 
 /** Auto-number prefix by language: INV- (English) / FAC- (Spanish). Used as the
  *  default invoice number; a user-entered custom number overrides it. */
-export function invoiceNumberPrefix(lang: InvoiceLang): string {
-  return lang === 'en' ? 'INV' : 'FAC';
+// The invoice-number prefix is ALWAYS "INV" — the number is a stable identifier
+// and must not change when the invoice's language toggles (es ⇄ en). `lang` is
+// kept in the signature for call-site compatibility but no longer branches.
+export function invoiceNumberPrefix(_lang: InvoiceLang): string {
+  return 'INV';
 }
 
 /** Fallback starting invoice number when a business hasn't set one (and for
