@@ -31,7 +31,7 @@ import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { Input } from '../../ui/Input';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
-import { buildDateRangePresets } from '../../lib/dateRangePresets';
+import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
 import { Fab } from '../../ui/Fab';
 import { formatDateLong, formatTime12h } from '../../lib/format';
 import { formatProjectDuration } from '../../lib/duration';
@@ -1321,7 +1321,7 @@ export function JobsListScreen({
       toLabel={t.dateFilter.to}
       clearLabel={t.dateFilter.clear}
       applyLabel={t.dateFilter.apply}
-      presets={buildDateRangePresets(t.dateFilter)}
+      presets={buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets)}
     />
     </View>
   );

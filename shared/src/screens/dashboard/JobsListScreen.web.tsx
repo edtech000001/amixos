@@ -61,6 +61,7 @@ import {
   parseJobsFilters,
   type JobsFilters,
 } from '../../lib/jobsFilters';
+import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
 
 export interface JobListItem {
   id: string;
@@ -321,6 +322,10 @@ export function JobsListScreen({
 
   const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy, dateFrom, dateTo });
   const dateActive = !!dateFrom || !!dateTo;
+  // Quick date-range chips (This week / Last month / …) — same set as payroll,
+  // minus the pay-period ones (jobs aren't tied to a pay schedule).
+  const dateRangePresets = buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets);
+  const applyDatePreset = (from: string, to: string) => { setDateFrom(from); setDateTo(to); };
   const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setGroupBy('none'); setDateFrom(null); setDateTo(null); };
 
   const tabLabels: Record<TabKey, string> = {
@@ -809,10 +814,26 @@ export function JobsListScreen({
           {dateMenuOpen ? (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setDateMenuOpen(false)} />
-              <div className="absolute right-0 top-full mt-2 z-20 w-72 bg-card rounded-2xl border border-border-soft shadow-lg p-4">
+              <div className="absolute right-0 top-full mt-2 z-20 w-80 bg-card rounded-2xl border border-border-soft shadow-lg p-4">
                 <p className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-2">
                   {t.dateFilter.title}
                 </p>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {dateRangePresets.map(p => {
+                    const active = dateFrom === p.from && dateTo === p.to;
+                    return (
+                      <button
+                        key={p.label}
+                        onClick={() => applyDatePreset(p.from, p.to)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                          active ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
                 <label className="block text-xs font-medium text-muted mb-1">{t.dateFilter.from}</label>
                 <input
                   type="date"
