@@ -2,11 +2,12 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/i18n/LangProvider';
 import { InvoiceDocument } from '@amixos/shared/screens/dashboard/InvoiceDocument';
+import { installPrintFooterPin } from '@/lib/pinPrintFooter';
 import {
   resolveConfig,
   buildInvoiceViewModel,
@@ -110,6 +111,10 @@ export default function PublicInvoicePage({ params }: { params: { token: string 
     }
   }, [loading, raw, autoPrint]);
 
+  // Pin the footer to the bottom of the last printed page (@page margin = 10mm).
+  const printRootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => installPrintFooterPin(() => printRootRef.current, 10), []);
+
   if (loading)
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -194,7 +199,7 @@ export default function PublicInvoicePage({ params }: { params: { token: string 
           corner decoration stops short of the paper's bottom-right corner. */}
       <style>{'@media print{@page{margin:10mm}.inv-doc-page{aspect-ratio:auto!important;overflow:visible!important;display:block!important}.inv-doc-page>*{flex:0 0 auto!important}}'}</style>
       <div className="max-w-3xl mx-auto py-10 px-6 print:py-0 print:px-0 print:max-w-none">
-        <div className="bg-white rounded-2xl print:rounded-none border border-gray-100 print:border-0 shadow-sm print:shadow-none overflow-hidden">
+        <div ref={printRootRef} className="bg-white rounded-2xl print:rounded-none border border-gray-100 print:border-0 shadow-sm print:shadow-none overflow-hidden">
           <InvoiceDocument vm={vm} />
         </div>
         <div className="text-center print:hidden mt-8">

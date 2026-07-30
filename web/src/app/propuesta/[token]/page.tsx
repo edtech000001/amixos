@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { SignaturePad } from '@/components/SignaturePad';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/i18n/LangProvider';
 import { formatDateTimeLong } from '@amixos/shared/lib/format';
 import { InvoiceDocument } from '@amixos/shared/screens/dashboard/InvoiceDocument';
+import { installPrintFooterPin } from '@/lib/pinPrintFooter';
 import { resolveConfig, buildInvoiceViewModel, invoiceDefaultLanguage, type InvoiceBranding, type InvoiceDocData } from '@amixos/shared/lib/invoiceTemplate';
 
 interface ProposalData {
@@ -129,6 +130,10 @@ export default function PublicProposalPage({ params }: { params: { token: string
     }
   }, [loading, proposal, autoPrint]);
 
+  // Pin the footer to the bottom of the last printed page (@page margin = 10mm).
+  const printRootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => installPrintFooterPin(() => printRootRef.current, 10), []);
+
   // Name the tab (and the "Save as PDF" default filename) after the estimate #.
   useEffect(() => {
     const num = (proposal?.estimate_number ?? '').trim();
@@ -216,7 +221,7 @@ export default function PublicProposalPage({ params }: { params: { token: string
       <style>{'@media print{@page{margin:10mm}.inv-doc-page{aspect-ratio:auto!important;overflow:visible!important;display:block!important}.inv-doc-page>*{flex:0 0 auto!important}}'}</style>
       <div className="max-w-3xl mx-auto py-10 px-6 print:py-0 print:px-0 print:max-w-none">
         {/* Themed estimate document — same engine/theme as invoices. */}
-        <div className="bg-white rounded-2xl print:rounded-none border border-gray-100 print:border-0 shadow-sm print:shadow-none overflow-hidden mb-6 print:mb-0">
+        <div ref={printRootRef} className="bg-white rounded-2xl print:rounded-none border border-gray-100 print:border-0 shadow-sm print:shadow-none overflow-hidden mb-6 print:mb-0">
           {vm ? <InvoiceDocument vm={vm} /> : null}
         </div>
 

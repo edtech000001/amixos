@@ -512,7 +512,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
           return nodes;
         })()}
         {hasTail ? (
-          <div style={fullPage ? { marginTop: 'auto' } : undefined}>
+          <div className="inv-doc-tail" style={fullPage ? { marginTop: 'auto' } : undefined}>
             {tailIds.map((id, i) => (
               <div key={id} style={{ marginBottom: (i < tailIds.length - 1 || !!estBottom) ? gap : 0 }}>
                 {renderers[id]()}
