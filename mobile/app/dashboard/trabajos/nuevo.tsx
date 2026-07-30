@@ -1197,10 +1197,12 @@ export default function NuevoTrabajoRoute() {
     return (c.contacts ?? []).find((ct) => ct.name.toLowerCase().includes(q) || (ct.role ?? '').toLowerCase().includes(q)) ?? null;
   };
 
+  // Accent-insensitive: "juan" should match "Jùan" (strip diacritics both sides).
+  const deaccent = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const filterEmployees = (list: Employee[], query: string) => {
-    const q = query.trim().toLowerCase();
+    const q = deaccent(query.trim());
     if (!q) return list;
-    return list.filter((e) => `${e.first_name} ${e.last_name}`.toLowerCase().includes(q));
+    return list.filter((e) => deaccent(`${e.first_name} ${e.last_name}`).includes(q));
   };
   const filteredLeadEmployees = useMemo(
     () => filterEmployees(employees, leadSearch),

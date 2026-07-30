@@ -992,10 +992,12 @@ function NuevoTrabajoContent() {
 
   const selectedClient = clients.find(c => c.id === clientId);
 
+  // Accent-insensitive: "juan" should match "Jùan" (strip diacritics both sides).
+  const deaccent = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const filterEmployeesByName = (list: typeof employees, query: string) => {
-    const q = query.trim().toLowerCase();
+    const q = deaccent(query.trim());
     if (!q) return list;
-    return list.filter(e => `${e.first_name} ${e.last_name}`.toLowerCase().includes(q));
+    return list.filter(e => deaccent(`${e.first_name} ${e.last_name}`).includes(q));
   };
   const filteredLeadEmployees = filterEmployeesByName(employees, leadSearch);
   // Crew picker excludes the current lead — the lead is always part of the
