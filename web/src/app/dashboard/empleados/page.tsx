@@ -171,6 +171,9 @@ export default function EmpleadosPage() {
   // Ajustes → Ubicaciones per hire). Defaults to the active branch on open.
   const [empHomeLocation, setEmpHomeLocation] = useState<string>('');
   const [tsForm, setTsForm] = useState(EMPTY_TS);
+  // Multi-select workers when LOGGING new hours (one row inserted per worker).
+  // Editing an existing entry stays single (tsForm.employee_id).
+  const [tsEmpIds, setTsEmpIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   // App-access controls inside the person modal (invite/role/revoke).
@@ -695,24 +698,25 @@ export default function EmpleadosPage() {
 
   const saveTimesheet = async () => {
     // Hours are always logged against a registered employee — no free-text name.
-    if (!tsForm.employee_id) { setError(t.timesheetModal.errorEmployeeRequired); return; }
+    // Edit → the one row's worker; new log → every selected worker (one row each).
+    const saveIds = tsForm.id ? (tsForm.employee_id ? [tsForm.employee_id] : []) : tsEmpIds;
+    if (saveIds.length === 0) { setError(t.timesheetModal.errorEmployeeRequired); return; }
     if (!tsForm.hours_worked) { setError(t.timesheetModal.errorHoursRequired); return; }
-    const emp = employees.find(e => e.id === tsForm.employee_id);
-    const name = emp ? `${emp.first_name} ${emp.last_name}` : '';
+    const nameOf = (id: string) => { const emp = employees.find(e => e.id === id); return emp ? `${emp.first_name} ${emp.last_name}` : ''; };
     setSaving(true); setError('');
-    const payload = {
-      employee_id: tsForm.employee_id || null,
-      worker_name: name,
+    const base = {
       work_date: tsForm.work_date,
       hours_worked: tsForm.hours_worked,
       job_description: tsForm.job_description || null,
     };
     if (tsForm.id) {
-      await supabase.from('timesheets').update(payload).eq('id', tsForm.id);
+      await supabase.from('timesheets').update({ ...base, employee_id: tsForm.employee_id || null, worker_name: nameOf(tsForm.employee_id) }).eq('id', tsForm.id);
     } else {
-      await supabase.from('timesheets').insert({ ...payload, business_id: business!.id, status: 'completed' });
+      await supabase.from('timesheets').insert(
+        saveIds.map(id => ({ ...base, employee_id: id || null, worker_name: nameOf(id), business_id: business!.id, status: 'completed' })),
+      );
     }
-    await loadTimesheets(); await loadHourTotals(); setSaving(false); setTsModal(false); setTsForm(EMPTY_TS);
+    await loadTimesheets(); await loadHourTotals(); setSaving(false); setTsModal(false); setTsForm(EMPTY_TS); setTsEmpIds([]);
   };
 
   const editTimesheet = (id: string) => {
@@ -726,6 +730,7 @@ export default function EmpleadosPage() {
       hours_worked: ts.hours_worked ?? 0,
       job_description: ts.job_description ?? '',
     });
+    setTsEmpIds([]);
     setError('');
     setTsModal(true);
   };
@@ -1183,10 +1188,30 @@ export default function EmpleadosPage() {
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-ink">{t.timesheetModal.employeeLabel}</label>
-            <select value={tsForm.employee_id} onChange={e => setTsForm(f => ({ ...f, employee_id: e.target.value }))} className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
-              <option value="">{t.timesheetModal.selectEmployee}</option>
-              {employees.filter(e => e.active).map(e => <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>)}
-            </select>
+            {tsForm.id ? (
+              <select value={tsForm.employee_id} onChange={e => setTsForm(f => ({ ...f, employee_id: e.target.value }))} className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
+                <option value="">{t.timesheetModal.selectEmployee}</option>
+                {employees.filter(e => e.active).map(e => <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>)}
+              </select>
+            ) : (
+              // Multi-select: log the same hours to several workers at once.
+              <div className="max-h-44 overflow-y-auto rounded-xl border border-border bg-card divide-y divide-border-soft">
+                {employees.filter(e => e.active).map(e => {
+                  const checked = tsEmpIds.includes(e.id);
+                  return (
+                    <label key={e.id} className="flex items-center gap-2.5 px-3.5 py-2.5 cursor-pointer hover:bg-surface">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => setTsEmpIds(prev => checked ? prev.filter(x => x !== e.id) : [...prev, e.id])}
+                        className="accent-primary w-4 h-4"
+                      />
+                      <span className="text-sm text-ink">{e.first_name} {e.last_name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Input label={t.timesheetModal.dateLabel} type="date" value={tsForm.work_date} onChange={e => setTsForm(f => ({ ...f, work_date: e.target.value }))} />
@@ -1218,7 +1243,7 @@ export default function EmpleadosPage() {
       onAddEmployee={canCreateEmployee ? openAddEmp : undefined}
       onEditEmployee={openEditEmpById}
       onToggleActive={toggleActive}
-      onLogHours={canLogHours ? () => { setTsForm(EMPTY_TS); setError(''); setTsModal(true); } : undefined}
+      onLogHours={canLogHours ? () => { setTsForm(EMPTY_TS); setTsEmpIds([]); setError(''); setTsModal(true); } : undefined}
       onEditTimesheet={canEditEmployee ? editTimesheet : undefined}
       onDeleteTimesheet={canEditEmployee ? deleteTimesheet : undefined}
       onBulkDelete={can.deleteEmployee(currentRole) ? bulkDeleteEmployees : undefined}

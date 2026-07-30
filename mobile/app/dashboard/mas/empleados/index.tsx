@@ -212,6 +212,9 @@ export default function EmpleadosRoute() {
   };
   const [empPickerOpen, setEmpPickerOpen] = useState(false);
   const [empSearch, setEmpSearch] = useState('');
+  // Multi-select employees when LOGGING new hours (one row is inserted per
+  // selected worker). Editing an existing entry stays single (tsForm.employee_id).
+  const [tsEmpIds, setTsEmpIds] = useState<string[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -621,6 +624,7 @@ export default function EmpleadosRoute() {
 
   const openLogHours = () => {
     setTsForm(EMPTY_TS());
+    setTsEmpIds([]);
     setHoursText('8');
     setError('');
     setTsModalOpen(true);
@@ -629,7 +633,9 @@ export default function EmpleadosRoute() {
     if (!business) return;
     // Hours are always logged against a registered employee — no free-text
     // worker name. Require a selection before saving.
-    if (!tsForm.employee_id) {
+    // Edit → the one row's employee; new log → every selected worker.
+    const saveIds = tsForm.id ? (tsForm.employee_id ? [tsForm.employee_id] : []) : tsEmpIds;
+    if (saveIds.length === 0) {
       setError(t.timesheetModal.errorEmployeeRequired);
       return;
     }
@@ -637,8 +643,10 @@ export default function EmpleadosRoute() {
       setError(t.timesheetModal.errorHoursRequired);
       return;
     }
-    const emp = employees.find((e) => e.id === tsForm.employee_id);
-    const name = emp ? `${emp.first_name} ${emp.last_name}` : '';
+    const nameOf = (id: string) => {
+      const emp = employees.find((e) => e.id === id);
+      return emp ? `${emp.first_name} ${emp.last_name}` : '';
+    };
     setSaving(true);
     setError('');
     // Editing an existing entry: straight update (offline queue is only for the
@@ -646,7 +654,7 @@ export default function EmpleadosRoute() {
     if (tsForm.id) {
       const { error: upErr } = await supabase.from('timesheets').update({
         employee_id: tsForm.employee_id || null,
-        worker_name: name,
+        worker_name: nameOf(tsForm.employee_id),
         work_date: tsForm.work_date,
         hours_worked: tsForm.hours_worked,
         job_description: tsForm.job_description || null,
@@ -669,24 +677,28 @@ export default function EmpleadosRoute() {
       // queuedInsert writes through when online, or parks the entry in the
       // offline outbox (drained on reconnect) when there's no signal — crews
       // log hours in the field and it syncs later. The banner reports progress.
-      const res = await queuedInsert({
-        table: 'timesheets',
-        businessId: business.id,
-        label: `Horas: ${name || 'trabajador'} · ${tsForm.hours_worked} h`,
-        payload: {
-          // Client-generated id makes an offline retry idempotent (a re-send
-          // after a lost ack collides instead of creating a duplicate timesheet).
-          id: newUuid(),
-          business_id: business.id,
-          employee_id: tsForm.employee_id || null,
-          worker_name: name,
-          work_date: tsForm.work_date,
-          hours_worked: tsForm.hours_worked,
-          job_description: tsForm.job_description || null,
-          status: 'completed',
-        },
-      });
-      queued = res.queued;
+      // One row per selected worker, all sharing the date / hours / description.
+      for (const eid of saveIds) {
+        const nm = nameOf(eid);
+        const res = await queuedInsert({
+          table: 'timesheets',
+          businessId: business.id,
+          label: `Horas: ${nm || 'trabajador'} · ${tsForm.hours_worked} h`,
+          payload: {
+            // Client-generated id makes an offline retry idempotent (a re-send
+            // after a lost ack collides instead of creating a duplicate timesheet).
+            id: newUuid(),
+            business_id: business.id,
+            employee_id: eid || null,
+            worker_name: nm,
+            work_date: tsForm.work_date,
+            hours_worked: tsForm.hours_worked,
+            job_description: tsForm.job_description || null,
+            status: 'completed',
+          },
+        });
+        if (res.queued) queued = true;
+      }
     } catch (err) {
       // Surface the real cause in dev so failures are diagnosable instead of a
       // blanket "couldn't save". Production keeps the friendly message.
@@ -720,6 +732,7 @@ export default function EmpleadosRoute() {
       hours_worked: ts.hours_worked ?? 0,
       job_description: ts.job_description ?? '',
     });
+    setTsEmpIds([]);
     setHoursText(ts.hours_worked != null ? String(ts.hours_worked) : '');
     setError('');
     setTsModalOpen(true);
@@ -830,13 +843,15 @@ export default function EmpleadosRoute() {
                   >
                     <Text
                       className={`flex-1 text-base ${
-                        selectedTsEmp ? 'text-ink' : 'text-faint'
+                        (tsForm.id ? selectedTsEmp : tsEmpIds.length) ? 'text-ink' : 'text-faint'
                       }`}
                       numberOfLines={1}
                     >
-                      {selectedTsEmp
-                        ? `${selectedTsEmp.first_name} ${selectedTsEmp.last_name}`
-                        : t.timesheetModal.selectEmployee}
+                      {tsForm.id
+                        ? (selectedTsEmp ? `${selectedTsEmp.first_name} ${selectedTsEmp.last_name}` : t.timesheetModal.selectEmployee)
+                        : (tsEmpIds.length
+                            ? activeEmployees.filter((e) => tsEmpIds.includes(e.id)).map((e) => `${e.first_name} ${e.last_name}`).join(', ')
+                            : t.timesheetModal.selectEmployee)}
                     </Text>
                     <ChevronDown size={16} color={c.faint} />
                   </Pressable>
@@ -949,13 +964,19 @@ export default function EmpleadosRoute() {
                         foldSearchText(`${e.first_name} ${e.last_name}`).includes(foldSearchText(empSearch.trim())),
                       )
                       .map((e) => {
-                      const isSel = tsForm.employee_id === e.id;
+                      // Editing → single pick (close on tap). Logging new hours →
+                      // multi-select toggle so hours can be added to several at once.
+                      const isSel = tsForm.id ? tsForm.employee_id === e.id : tsEmpIds.includes(e.id);
                       return (
                         <Pressable
                           key={e.id}
                           onPress={() => {
-                            setTsForm((f) => ({ ...f, employee_id: e.id }));
-                            setEmpPickerOpen(false);
+                            if (tsForm.id) {
+                              setTsForm((f) => ({ ...f, employee_id: e.id }));
+                              setEmpPickerOpen(false);
+                            } else {
+                              setTsEmpIds((prev) => (prev.includes(e.id) ? prev.filter((x) => x !== e.id) : [...prev, e.id]));
+                            }
                           }}
                           className={`flex-row items-center justify-between px-5 py-3.5 active:bg-surface ${
                             isSel ? 'bg-primary/5' : ''
@@ -973,6 +994,18 @@ export default function EmpleadosRoute() {
                       );
                     })}
                   </ScrollView>
+                  {!tsForm.id ? (
+                    <View className="px-5 pt-3">
+                      <Pressable
+                        onPress={() => setEmpPickerOpen(false)}
+                        className="py-3 rounded-2xl bg-primary items-center active:opacity-90"
+                      >
+                        <Text className="text-sm font-semibold text-white">
+                          {tsEmpIds.length ? `${tc.buttons.done} (${tsEmpIds.length})` : tc.buttons.done}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
                 </View>
               </View>
             ) : null}
