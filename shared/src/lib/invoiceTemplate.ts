@@ -1694,14 +1694,13 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
   <meta charset="utf-8">
   <title>${escapeHtml(h.invoiceNumber)}</title>
   <style>
-    @page { margin: 14mm 14mm 24mm; }
-    /* Long invoices must paginate (block flow, not the fixed-height flex page);
-       the footer strip is pinned to the bottom of every page via position:fixed
-       with reserved @page bottom margin, so it never stretches or overlaps. */
+    @page { margin: 14mm; }
+    /* Long invoices must paginate — block flow lets content run onto page 2+ and
+       renders the footer once, after the content on the last page (never on
+       every page, never a stretched band). */
     @media print {
       .inv-page.full { aspect-ratio: auto; overflow: visible; display: block; }
       .inv-page.full > * { flex: 0 0 auto; }
-      .inv-footerbar { position: fixed; left: 0; right: 0; bottom: 0; margin: 0; }
     }
     * { box-sizing: border-box; }
     body { font-family: ${st.cssFontFamily}; color: #1f2937; margin: 0; font-size: ${st.fontPx}px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
