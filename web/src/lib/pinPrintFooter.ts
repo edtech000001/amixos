@@ -26,8 +26,11 @@ export function pinPrintFooter(root: HTMLElement | null, marginMm: number): () =
     page.querySelector<HTMLElement>('.inv-doc-tail');
   if (!footer) return noop;
 
-  // Print content box (Letter minus the @page margins).
-  const P = 11 * DPI - 2 * marginMm * PX_PER_MM; // content height, px
+  // Print content box (Letter minus the @page margins). Shave a small safety
+  // buffer off the height so a browser that reserves space for its own
+  // header/footer doesn't make us overshoot onto an extra page.
+  const SAFETY = 42; // ~ Chrome's header/footer reserve
+  const P = 11 * DPI - 2 * marginMm * PX_PER_MM - SAFETY; // content height, px
   const W = 8.5 * DPI - 2 * marginMm * PX_PER_MM; // content width, px
   if (!(P > 0) || !(W > 0)) return noop;
 
@@ -50,11 +53,15 @@ export function pinPrintFooter(root: HTMLElement | null, marginMm: number): () =
   void page.offsetHeight; // force reflow
 
   const contentBefore = footer.getBoundingClientRect().top - page.getBoundingClientRect().top;
-  const footerH = footer.getBoundingClientRect().height;
+  // A footer strip is short; if the measurement comes back implausibly tall
+  // (some themes/measure quirks), treat it as a normal strip so we don't
+  // over-push. Never push the footer onto a fresh page — only fill the space
+  // left on the page it already lands on.
+  const measuredH = footer.getBoundingClientRect().height;
+  const footerH = measuredH > 200 ? 60 : measuredH;
   const remainder = ((contentBefore % P) + P) % P; // used height on the last page
-  let spacer = P - remainder - footerH; // push footer to that page's bottom
-  if (spacer < 0) spacer += P; // footer wouldn't fit → bottom of the next page
-  if (!isFinite(spacer) || spacer < 0) spacer = 0;
+  let spacer = P - remainder - footerH; // fill to that page's bottom
+  if (!isFinite(spacer) || spacer < 0) spacer = 0; // don't push to a new page
 
   const spacerEl = document.createElement('div');
   spacerEl.setAttribute('data-print-spacer', '');
