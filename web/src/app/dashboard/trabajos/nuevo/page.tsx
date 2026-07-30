@@ -769,7 +769,12 @@ function NuevoTrabajoContent() {
       }
       setClients(cl.map(c => ({ ...c, contacts: contactsByClient.get(c.id) })));
       // Roster flag (migration 128): office members opt out of crew pickers.
-      setEmployees(emp.filter(e => (e as { show_in_roster?: boolean | null }).show_in_roster !== false));
+      // Alphabetical by name so the crew / driver / lead pickers read cleanly.
+      setEmployees(
+        emp
+          .filter(e => (e as { show_in_roster?: boolean | null }).show_in_roster !== false)
+          .sort((a, b) => `${a.first_name} ${a.last_name}`.trim().localeCompare(`${b.first_name} ${b.last_name}`.trim(), undefined, { sensitivity: 'base' })),
+      );
 
       // Custom job fields config (bounded per-business table — no pagination).
       const { data: tmpls } = await supabase.from('job_field_templates')
