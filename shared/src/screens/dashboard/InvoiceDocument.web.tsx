@@ -526,7 +526,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
         // Full-bleed strip flush to the bottom edge. Shows the footer text/tagline
         // when set (the business-contact line it used to hold is redundant with the
         // header); otherwise falls back to the business contact.
-        <div style={{ position: 'relative', zIndex: 1, marginTop: gap, background: accent, color: onAcc, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 8, padding: `13px ${st.pad}px`, fontSize: small, whiteSpace: 'pre-wrap', textAlign: 'center' }}>
+        <div className="inv-footerbar" style={{ position: 'relative', zIndex: 1, marginTop: gap, background: accent, color: onAcc, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 8, padding: `13px ${st.pad}px`, fontSize: small, whiteSpace: 'pre-wrap', textAlign: 'center' }}>
           {vm.footer ? (
             <span>{vm.footer}</span>
           ) : (
