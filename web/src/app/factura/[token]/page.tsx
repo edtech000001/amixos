@@ -192,7 +192,7 @@ export default function PublicInvoicePage({ params }: { params: { token: string 
       {/* Full-bleed on print: drop the @page margin and the on-screen max width
           so the letter-ratio page fills the sheet edge-to-edge — otherwise the
           corner decoration stops short of the paper's bottom-right corner. */}
-      <style>{'@media print{@page{margin:0}.inv-doc-page{aspect-ratio:auto!important;overflow:visible!important;min-height:100vh}}'}</style>
+      <style>{'@media print{@page{margin:0}.inv-doc-page{aspect-ratio:auto!important;overflow:visible!important;display:block!important}}'}</style>
       <div className="max-w-3xl mx-auto py-10 px-6 print:py-0 print:px-0 print:max-w-none">
         <div className="bg-white rounded-2xl print:rounded-none border border-gray-100 print:border-0 shadow-sm print:shadow-none overflow-hidden">
           <InvoiceDocument vm={vm} />

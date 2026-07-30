@@ -1696,8 +1696,10 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
   <style>
     @page { margin: 14mm; }
     /* Long invoices must paginate — the single-page aspect-ratio + overflow:
-       hidden would otherwise clip everything past page 1 in the PDF. */
-    @media print { .inv-page.full { aspect-ratio: auto; overflow: visible; min-height: 100vh; } }
+       hidden would otherwise clip everything past page 1. Block flow (not the
+       fixed-height flex page) lets content run onto page 2+ with the footer as
+       a normal strip after it (no giant stretched band). */
+    @media print { .inv-page.full { aspect-ratio: auto; overflow: visible; display: block; } }
     * { box-sizing: border-box; }
     body { font-family: ${st.cssFontFamily}; color: #1f2937; margin: 0; font-size: ${st.fontPx}px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .inv-doc > * { margin-bottom: ${gap}px; }
