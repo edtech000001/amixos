@@ -136,6 +136,9 @@ export function SettingsPageWrapper({ title, children }: SettingsPageProps) {
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 144 }}
           keyboardShouldPersistTaps="handled"
+          // Lift a focused field above the keyboard (iOS) so text blocks like
+          // payment instructions / footer aren't hidden while typing.
+          automaticallyAdjustKeyboardInsets
         >
           {children}
         </Animated.ScrollView>
