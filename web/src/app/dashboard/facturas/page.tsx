@@ -115,6 +115,10 @@ export default function FacturasPage() {
     const today = new Date().toISOString().split('T')[0];
     await supabase.from('invoices').update({ status: 'overdue' })
       .eq('business_id', businessId).eq('status', 'sent').lt('due_date', today);
+    // …and the reverse: an invoice whose due date was pushed back into the
+    // future (or to today) is no longer overdue — demote it to 'sent'.
+    await supabase.from('invoices').update({ status: 'sent' })
+      .eq('business_id', businessId).eq('status', 'overdue').gte('due_date', today);
   };
 
   const runQuery = async (params: InvoicesQueryParams, loadAll = false) => {

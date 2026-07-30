@@ -99,6 +99,11 @@ function NuevaFacturaContent() {
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
+  // Internal notes: private to the business, never rendered on the invoice.
+  const [internalNotes, setInternalNotes] = useState('');
+  // Stored status of the invoice being edited — lets save recompute
+  // sent/overdue from the (possibly changed) due date.
+  const [editStatus, setEditStatus] = useState<string | null>(null);
   // Notes source: 'default' = use the business's default note (Ajustes →
   // Facturas), 'custom' = write your own. New invoices start on 'default' when
   // a default note exists so it's actually applied.
@@ -243,6 +248,8 @@ function NuevaFacturaContent() {
         setIssueDate(inv.issue_date ?? new Date().toISOString().split('T')[0]);
         setDueDate(inv.due_date ?? '');
         setNotes(inv.notes ?? '');
+        setInternalNotes((inv as { internal_notes?: string | null }).internal_notes ?? '');
+        setEditStatus((inv as { status?: string | null }).status ?? null);
         // Show "Use default" when the saved note still matches the business
         // default; otherwise it's a custom note.
         const def = (business?.invoice_notes_default ?? '').trim();
@@ -438,15 +445,28 @@ function NuevaFacturaContent() {
       tax_amount: taxAmount,
       total_amount: total,
       notes: notes || null,
+      internal_notes: internalNotes.trim() || null,
       language,
       custom_fields: Object.keys(customFields).length > 0 ? customFields : null,
     };
 
+    // If a sent/overdue invoice's due date moved, re-derive which of the two
+    // it is now (a future/empty due date is no longer overdue). Draft/paid/
+    // total_loss are left untouched.
+    const today = new Date().toISOString().split('T')[0];
+    const nextStatus =
+      editStatus === 'sent' || editStatus === 'overdue'
+        ? dueDate && dueDate < today
+          ? 'overdue'
+          : 'sent'
+        : null;
+
     let invoiceId: string;
     if (editId) {
-      // Update: don't override status on save (keep current state). User
-      // can advance status via Mark Sent / Mark Paid on the detail page.
-      const { error: upErr } = await supabase.from('invoices').update(payload).eq('id', editId);
+      // Only status change on save is the overdue↔sent re-derivation above;
+      // draft/paid/total_loss are preserved. Mark Sent/Paid live on the detail.
+      const { error: upErr } = await supabase.from('invoices')
+        .update(nextStatus ? { ...payload, status: nextStatus } : payload).eq('id', editId);
       if (upErr) { setError(t.errorSave); setSaving(false); return; }
       invoiceId = editId;
     } else {
@@ -681,6 +701,18 @@ function NuevaFacturaContent() {
           );
         })()}
 
+        {/* Internal notes — private to the business, never on the invoice. */}
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+          <h2 className="text-sm font-semibold text-ink mb-2">{t.internalNotesLabel}</h2>
+          <textarea
+            rows={3}
+            placeholder={t.internalNotesPlaceholder}
+            value={internalNotes}
+            onChange={e => setInternalNotes(e.target.value)}
+            className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none transition"
+          />
+        </div>
+
         {/* Additional custom fields */}
         {customsInSection('additional').length > 0 && (
           <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
@@ -702,20 +734,12 @@ function NuevaFacturaContent() {
 
         {/* Actions */}
         <div className="flex gap-3">
-          {editId ? (
-            <Button onClick={() => save('draft')} loading={saving} fullWidth size="lg">
-              {full.common.buttons.saveChanges}
-            </Button>
-          ) : (
-            <>
-              <Button variant="secondary" onClick={() => save('draft')} loading={saving} fullWidth size="lg">
-                {t.saveDraft}
-              </Button>
-              <Button onClick={() => save('sent')} loading={saving} fullWidth size="lg">
-                {t.sendInvoice}
-              </Button>
-            </>
-          )}
+          {/* Creating an invoice always makes a draft — sending is an explicit
+             action from the invoice detail (was mistakenly marking new
+             invoices "sent"). */}
+          <Button onClick={() => save('draft')} loading={saving} fullWidth size="lg">
+            {editId ? full.common.buttons.saveChanges : t.sendInvoice}
+          </Button>
         </div>
       </div>
     </div>

@@ -64,12 +64,18 @@ export interface InvoiceDetail {
   dueDate: string | null;
   /** When the invoice was sent (ISO timestamp) — drives "sent N days ago". */
   sentAt: string | null;
+  /** When the invoice was marked paid (ISO). Shown on the payment summary. */
+  paidAt: string | null;
+  /** Rolled-up payment-method summary (invoices.payment_method). */
+  paymentMethod: string | null;
   lineItems: InvoiceDetailLineItem[];
   subtotalAmount: number;
   taxRate: number;
   taxAmount: number;
   totalAmount: number;
   notes: string | null;
+  /** Private to the business — never rendered on the client-facing document. */
+  internalNotes: string | null;
   language: InvoiceLang;
   /** Row audit timestamps (ISO). createdAt → header; updatedAt → footer. */
   createdAt: string;
@@ -397,6 +403,30 @@ export function InvoiceDetailScreen({
         <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-4">
           <Text className="text-[11px] text-faint font-semibold uppercase tracking-wide">{t.notes}</Text>
           <Text className="text-sm text-ink mt-1">{invoice.notes}</Text>
+        </View>
+      ) : null}
+
+      {/* Internal notes — app-only, tinted amber to signal it's private and
+         never shown to the client. */}
+      {invoice.internalNotes ? (
+        <View className="bg-amber-500/10 rounded-2xl border border-amber-200 shadow-sm p-4 mb-4">
+          <Text className="text-[11px] text-amber-600 font-semibold uppercase tracking-wide">{t.internalNotes}</Text>
+          <Text className="text-sm text-ink mt-1">{invoice.internalNotes}</Text>
+        </View>
+      ) : null}
+
+      {/* Payment summary for a paid invoice with no itemized ledger rows
+         (legacy / imported / simple mark-paid) — the ledger card below already
+         covers rows with method/date/photo. */}
+      {invoice.status === 'paid' && payments.length === 0 && (invoice.paidAt || invoice.paymentMethod) ? (
+        <View className="bg-emerald-500/10 rounded-2xl border border-emerald-200 shadow-sm p-4 mb-4">
+          <Text className="text-[11px] text-emerald-600 font-semibold uppercase tracking-wide">{tInv.payments.title}</Text>
+          {invoice.paidAt ? (
+            <Text className="text-sm text-ink mt-1">{tInv.payments.dateLabel}: {formatDate(invoice.paidAt)}</Text>
+          ) : null}
+          {invoice.paymentMethod ? (
+            <Text className="text-sm text-ink mt-0.5">{tInv.payments.methodLabel}: {invoice.paymentMethod}</Text>
+          ) : null}
         </View>
       ) : null}
 

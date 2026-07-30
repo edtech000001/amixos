@@ -20,6 +20,7 @@ import {
   Trash2,
   Check,
   FileText,
+  Lock,
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -130,6 +131,11 @@ export default function NuevaFacturaRoute() {
   const [issueDate, setIssueDate] = useState(todayISO());
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
+  // Internal notes: private to the business, never rendered on the invoice.
+  const [internalNotes, setInternalNotes] = useState('');
+  // Stored status of the invoice being edited — lets save recompute
+  // sent/overdue from the (possibly changed) due date.
+  const [editStatus, setEditStatus] = useState<string | null>(null);
   // Notes source: 'default' = use the business's default note, 'custom' = write
   // your own. New invoices start on 'default' when a default note exists.
   const [notesMode, setNotesMode] = useState<'default' | 'custom'>('custom');
@@ -252,6 +258,8 @@ export default function NuevaFacturaRoute() {
           setIssueDate(inv.issue_date ?? todayISO());
           setDueDate(inv.due_date ?? '');
           setNotes(inv.notes ?? '');
+          setInternalNotes((inv as { internal_notes?: string | null }).internal_notes ?? '');
+          setEditStatus((inv as { status?: string | null }).status ?? null);
           {
             const def = (business?.invoice_notes_default ?? '').trim();
             setNotesMode(def && (inv.notes ?? '').trim() === def ? 'default' : 'custom');
@@ -582,13 +590,27 @@ export default function NuevaFacturaRoute() {
       tax_amount: taxAmount,
       total_amount: total,
       notes: notes.trim() || null,
+      internal_notes: internalNotes.trim() || null,
       language,
       custom_fields: Object.keys(customFields).length > 0 ? customFields : null,
     };
 
+    // If a sent/overdue invoice's due date moved, re-derive which of the two
+    // it is now (a future/empty due date is no longer overdue). Draft/paid/
+    // total_loss are left untouched.
+    const nextStatus =
+      editStatus === 'sent' || editStatus === 'overdue'
+        ? dueDate && dueDate < todayISO()
+          ? 'overdue'
+          : 'sent'
+        : null;
+
     let invoiceId: string;
     if (editId) {
-      const { error: upErr } = await supabase.from('invoices').update(payload).eq('id', editId);
+      const { error: upErr } = await supabase
+        .from('invoices')
+        .update(nextStatus ? { ...payload, status: nextStatus } : payload)
+        .eq('id', editId);
       if (upErr) {
         setError(t.errorSave);
         setSaving(false);
@@ -845,6 +867,20 @@ export default function NuevaFacturaRoute() {
           </Section>
           )}
 
+          {/* Internal notes — private to the business, never on the invoice. */}
+          <Section title={t.internalNotesLabel} icon={<Lock size={14} color={c.primary} />}>
+            <TextInput
+              value={internalNotes}
+              onChangeText={setInternalNotes}
+              placeholder={t.internalNotesPlaceholder}
+              placeholderTextColor={c.faint}
+              multiline
+              numberOfLines={3}
+              className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[80px]"
+              style={{ textAlignVertical: 'top' }}
+            />
+          </Section>
+
           {/* Additional — custom fields assigned to the 'additional' section. */}
           {customFieldsFor('additional').length > 0 ? (
             <Section title={sectionLabel.additional}>
@@ -863,24 +899,12 @@ export default function NuevaFacturaRoute() {
           {/* Save — last element of the form so it's where the thumb lands
              after filling the final field. */}
           <View className="mt-4">
-            {editId ? (
-              <Button onPress={() => save('draft')} loading={saving} fullWidth>
-                {tc.buttons.saveChanges}
-              </Button>
-            ) : (
-              <View className="flex-row gap-3">
-                <View className="flex-1">
-                  <Button variant="secondary" onPress={() => save('draft')} loading={saving} fullWidth>
-                    {t.saveDraft}
-                  </Button>
-                </View>
-                <View className="flex-1">
-                  <Button onPress={() => save('sent')} loading={saving} fullWidth>
-                    {t.sendInvoice}
-                  </Button>
-                </View>
-              </View>
-            )}
+            {/* Creating an invoice always makes a draft — sending is an explicit
+               action from the invoice detail (was mistakenly marking new
+               invoices "sent"). */}
+            <Button onPress={() => save('draft')} loading={saving} fullWidth>
+              {editId ? tc.buttons.saveChanges : t.sendInvoice}
+            </Button>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

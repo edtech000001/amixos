@@ -68,12 +68,18 @@ export interface InvoiceDetail {
   dueDate: string | null;
   /** When the invoice was sent (ISO timestamp) — drives "sent N days ago". */
   sentAt: string | null;
+  /** When the invoice was marked paid (ISO). Shown on the payment summary. */
+  paidAt: string | null;
+  /** Rolled-up payment-method summary (invoices.payment_method). */
+  paymentMethod: string | null;
   lineItems: InvoiceDetailLineItem[];
   subtotalAmount: number;
   taxRate: number;
   taxAmount: number;
   totalAmount: number;
   notes: string | null;
+  /** Private to the business — never rendered on the client-facing document. */
+  internalNotes: string | null;
   language: InvoiceLang;
   /** Custom fields (invoice_field_templates), pre-formatted for display. */
   customFields?: { label: string; value: string; key?: string }[];
@@ -407,6 +413,28 @@ export function InvoiceDetailScreen({
           <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
             <p className="text-[11px] text-faint font-semibold uppercase tracking-wide">{t.notes}</p>
             <p className="text-sm text-ink mt-1 whitespace-pre-wrap">{invoice.notes}</p>
+          </div>
+        ) : null}
+
+        {/* Internal notes — app-only, tinted amber to signal it's private and
+           never shown to the client. */}
+        {invoice.internalNotes ? (
+          <div className="bg-amber-500/10 rounded-2xl border border-amber-200 shadow-sm p-5">
+            <p className="text-[11px] text-amber-600 font-semibold uppercase tracking-wide">{t.internalNotes}</p>
+            <p className="text-sm text-ink mt-1 whitespace-pre-wrap">{invoice.internalNotes}</p>
+          </div>
+        ) : null}
+
+        {/* Payment summary for a paid invoice with no itemized ledger rows
+           (legacy / imported / simple mark-paid) — the ledger card inside the
+           totals already covers rows with method/date/photo. */}
+        {invoice.status === 'paid' && payments.length === 0 && (invoice.paidAt || invoice.paymentMethod) ? (
+          <div className="bg-emerald-500/10 rounded-2xl border border-emerald-200 shadow-sm p-5">
+            <p className="text-[11px] text-emerald-600 font-semibold uppercase tracking-wide">{tInv.payments.title}</p>
+            <div className="mt-1.5 space-y-0.5 text-sm text-ink">
+              {invoice.paidAt ? <p>{tInv.payments.dateLabel}: {formatDate(invoice.paidAt)}</p> : null}
+              {invoice.paymentMethod ? <p>{tInv.payments.methodLabel}: {invoice.paymentMethod}</p> : null}
+            </div>
           </div>
         ) : null}
 

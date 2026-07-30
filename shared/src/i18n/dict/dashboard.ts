@@ -329,6 +329,8 @@ export type DashboardDict = {
       notesPlaceholder: string;
       notesUseDefault: string;
       notesCustom: string;
+      internalNotesLabel: string;
+      internalNotesPlaceholder: string;
       customFieldsHeading: string;
       errorAtLeastOne: string;
       errorRequiredField: string;
@@ -2951,6 +2953,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         notesPlaceholder: 'Términos de pago, instrucciones de transferencia, etc.',
         notesUseDefault: 'Usar predeterminada',
         notesCustom: 'Personalizada',
+        internalNotesLabel: 'Notas internas (solo para ti)',
+        internalNotesPlaceholder: 'Recordatorios privados — no aparecen en la factura...',
         customFieldsHeading: 'Campos personalizados',
         errorAtLeastOne: 'Agrega al menos un concepto',
         errorRequiredField: 'El campo "{{field}}" es requerido',
@@ -5558,6 +5562,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         notesPlaceholder: 'Payment terms, transfer instructions, etc.',
         notesUseDefault: 'Use default',
         notesCustom: 'Custom',
+        internalNotesLabel: 'Internal notes (only for you)',
+        internalNotesPlaceholder: 'Private reminders — not shown on the invoice...',
         customFieldsHeading: 'Custom fields',
         errorAtLeastOne: 'Add at least one item',
         errorRequiredField: 'The "{{field}}" field is required',

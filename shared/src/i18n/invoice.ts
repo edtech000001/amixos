@@ -30,6 +30,9 @@ const labels = {
   // Notes
   notes:          { es: 'Notas',                 en: 'Notes' },
 
+  // Internal notes (app-only, never rendered on the client-facing document)
+  internalNotes:  { es: 'Notas internas',        en: 'Internal notes' },
+
   // Custom fields
   customFields:   { es: 'Detalles adicionales',  en: 'Additional details' },
 

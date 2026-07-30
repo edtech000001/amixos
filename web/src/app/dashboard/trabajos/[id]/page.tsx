@@ -1288,9 +1288,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
 
           {/* Internal notes */}
           {job.internal_notes && (
-            <div className="bg-amber-500/10 border border-amber-100 rounded-2xl p-5">
+            <div className="bg-amber-500/10 border border-amber-200 rounded-2xl p-5">
               <h2 className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-2">{td.internalNote}</h2>
-              <p className="text-xs text-amber-800 whitespace-pre-wrap">{job.internal_notes}</p>
+              <p className="text-sm text-ink whitespace-pre-wrap">{job.internal_notes}</p>
             </div>
           )}
 

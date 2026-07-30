@@ -699,12 +699,15 @@ export default function FacturaDetailRoute() {
       issueDate: raw.issue_date,
       dueDate: raw.due_date,
       sentAt: (raw as { sent_at?: string | null }).sent_at ?? null,
+      paidAt: (raw as { paid_at?: string | null }).paid_at ?? null,
+      paymentMethod: (raw as { payment_method?: string | null }).payment_method ?? null,
       lineItems: raw.line_items ?? [],
       subtotalAmount: raw.subtotal_amount,
       taxRate: raw.tax_rate,
       taxAmount: raw.tax_amount,
       totalAmount: raw.total_amount,
       notes: raw.notes,
+      internalNotes: (raw as { internal_notes?: string | null }).internal_notes ?? null,
       language: raw.language ?? 'es',
       createdAt: raw.created_at,
       updatedAt: raw.updated_at,
@@ -1003,7 +1006,7 @@ export default function FacturaDetailRoute() {
         onUpdateStatus={updateStatus}
         onPrint={invoice ? exportPdf : undefined}
         onShareLink={invoice ? shareLink : undefined}
-        onEdit={invoice && canEdit ? () => router.push(`/dashboard/facturas/nueva?edit=${id}` as never) : undefined}
+        onEdit={invoice && canEdit ? () => router.replace(`/dashboard/facturas/nueva?edit=${id}` as never) : undefined}
         onDelete={invoice && canDelete ? confirmDelete : undefined}
         onAutoprice={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? runAutoprice : undefined}
         onClearPrices={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? clearPrices : undefined}
