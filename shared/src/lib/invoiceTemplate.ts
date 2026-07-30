@@ -1695,6 +1695,9 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
   <title>${escapeHtml(h.invoiceNumber)}</title>
   <style>
     @page { margin: 14mm; }
+    /* Long invoices must paginate — the single-page aspect-ratio + overflow:
+       hidden would otherwise clip everything past page 1 in the PDF. */
+    @media print { .inv-page.full { aspect-ratio: auto; overflow: visible; min-height: 100vh; } }
     * { box-sizing: border-box; }
     body { font-family: ${st.cssFontFamily}; color: #1f2937; margin: 0; font-size: ${st.fontPx}px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .inv-doc > * { margin-bottom: ${gap}px; }

@@ -493,7 +493,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
   const hasTail = tailIds.length > 0 || !!estBottom;
   return (
     <div
-      className="text-ink"
+      className="text-ink inv-doc-page"
       style={{ position: 'relative', overflow: 'hidden', background: vm.pageTint ? withAlpha(accent, 0.06) : '#fff', fontFamily: st.cssFontFamily, fontSize: st.fontPx, ...(fullPage ? { display: 'flex', flexDirection: 'column', aspectRatio: '8.5 / 11' } : null) }}
     >
       {deco.full ? <DecoSvg spec={deco.full} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} /> : null}
