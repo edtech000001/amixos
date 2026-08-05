@@ -31,6 +31,12 @@ export type CommonDict = {
     no: string;
     optional: string;
   };
+  // Stale-while-revalidate UI (swrCache): freshness caption + refresh hint.
+  swr: {
+    updatedAgo: string;   // "{{time}}" placeholder, e.g. "hace 5 min"
+    justNow: string;
+    refreshing: string;
+  };
   // Shown when the app can't load the user's account/business (e.g. a
   // not-yet-run DB migration). Deliberately reassures the user nothing was
   // lost and offers a retry.
@@ -94,6 +100,11 @@ export const common: Record<Locale, CommonDict> = {
       no: 'No',
       optional: 'opcional',
     },
+    swr: {
+      updatedAgo: 'Actualizado {{time}}',
+      justNow: 'justo ahora',
+      refreshing: 'Actualizando…',
+    },
     loadError: {
       title: 'No pudimos cargar tu cuenta',
       body: 'Tu información sigue guardada. Esto suele pasar justo después de una actualización. Intenta de nuevo en un momento.',
@@ -151,6 +162,11 @@ export const common: Record<Locale, CommonDict> = {
       yes: 'Yes',
       no: 'No',
       optional: 'optional',
+    },
+    swr: {
+      updatedAgo: 'Updated {{time}}',
+      justNow: 'just now',
+      refreshing: 'Refreshing…',
     },
     loadError: {
       title: "We couldn't load your account",

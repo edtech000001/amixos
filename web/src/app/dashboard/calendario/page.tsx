@@ -107,9 +107,11 @@ export default function CalendarioPage() {
     ).then(rows =>
       setClients(rows.map(c => ({ id: c.id, name: `${c.first_name} ${c.last_name}`.trim() }))),
     );
+    // employees_roster (view, migration 178): names-only roster readable by
+    // every member — the lead filter works without the Employees permission.
     fetchAll<{ id: string; first_name: string; last_name: string }>((from, to) =>
       supabase
-        .from('employees')
+        .from('employees_roster')
         .select('id, first_name, last_name')
         .eq('business_id', businessId)
         .eq('active', true)

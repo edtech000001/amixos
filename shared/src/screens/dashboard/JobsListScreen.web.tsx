@@ -193,6 +193,16 @@ export interface JobsListScreenProps {
     search: string; tabs: string[]; sortBy: JobSortKey; groupBy: JobGroupKey;
     dateFrom: string | null; dateTo: string | null;
   }) => void;
+  /** Business payroll settings — adds "This/Last pay period" chips to the
+   *  date filter that match the Payroll screen's periods exactly. */
+  payPeriod?: { frequency: unknown; anchorDate: unknown; customDays?: unknown };
+  /** Background revalidation in flight while rows are on screen — renders a
+   *  thin animated bar above the list instead of blanking (swrCache). */
+  refreshing?: boolean;
+  /** Rows came from the local cache and the fresh fetch hasn't landed yet. */
+  stale?: boolean;
+  /** Epoch-ms the cached rows were saved (for the "Actualizado hace…" caption). */
+  cachedAt?: number | null;
 }
 
 const STATUS_PILL: Record<string, string> = {
@@ -260,6 +270,10 @@ export function JobsListScreen({
   loadingMore = false,
   onLoadMore,
   onFiltersChange,
+  payPeriod,
+  refreshing = false,
+  stale = false,
+  cachedAt = null,
 }: JobsListScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.jobs;
@@ -322,9 +336,21 @@ export function JobsListScreen({
 
   const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy, dateFrom, dateTo });
   const dateActive = !!dateFrom || !!dateTo;
-  // Quick date-range chips (This week / Last month / …) — same set as payroll,
-  // minus the pay-period ones (jobs aren't tied to a pay schedule).
-  const dateRangePresets = buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets);
+  // Quick date-range chips — same set as payroll history, including the
+  // "This/Last pay period" chips when the caller passes payPeriod.
+  const dateRangePresets = buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets, payPeriod);
+
+  // "Actualizado hace 5 min" caption for cache-served rows (swrCache).
+  const swrT = full.common.swr;
+  const relTime = (ts: number): string => {
+    const m = Math.max(0, Math.round((Date.now() - ts) / 60000));
+    if (m < 1) return swrT.justNow;
+    if (m < 60) return locale === 'es' ? `hace ${m} min` : `${m} min ago`;
+    const h = Math.round(m / 60);
+    return locale === 'es' ? `hace ${h} h` : `${h}h ago`;
+  };
+  const staleCaption = stale && cachedAt ? swrT.updatedAgo.replace('{{time}}', relTime(cachedAt)) : null;
+
   const applyDatePreset = (from: string, to: string) => { setDateFrom(from); setDateTo(to); };
   const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setGroupBy('none'); setDateFrom(null); setDateTo(null); };
 
@@ -959,10 +985,26 @@ export function JobsListScreen({
         })}
       </div>
 
-      {/* Job list */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="flex gap-1">{[0, 1, 2].map((i) => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
+      {/* Job list — loading only shows a skeleton when there are NO rows;
+          otherwise the previous rows stay on screen while `refreshing`. */}
+      {refreshing ? (
+        <div className="h-0.5 -mt-2 mb-1 overflow-hidden rounded-full bg-border-soft">
+          <div className="h-full w-1/3 rounded-full bg-primary animate-pulse" />
+        </div>
+      ) : staleCaption ? (
+        <p className="text-[10px] text-faint text-center -mt-2 mb-1">{staleCaption}</p>
+      ) : null}
+      {loading && filtered.length === 0 ? (
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 8 }, (_, i) => (
+            <div key={i} className="animate-pulse flex items-center gap-3 rounded-2xl border border-border-soft bg-card px-4 py-4">
+              <div className="w-10 h-10 rounded-full bg-border-soft" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3.5 w-3/5 rounded bg-border-soft" />
+                <div className="h-3 w-2/5 rounded bg-border-soft" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center py-20">

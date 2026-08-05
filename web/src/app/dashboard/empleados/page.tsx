@@ -43,7 +43,7 @@ import {
 } from '@amixos/shared/lib/employeeFieldSections';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { resolveAccess, orphanMembers, displayNameFromAccount, type AccessMember, type AccessInvite } from '@amixos/shared/lib/teamPeople';
-import { INVITABLE_ROLES, ROLE_LABELS, can, isReadOnly, type Role } from '@amixos/shared/lib/permissions';
+import { INVITABLE_ROLES, roleLabel, getActiveCustomRoles, can, isReadOnly, type Role } from '@amixos/shared/lib/permissions';
 import ImportModal from '@/components/dashboard/ImportModal';
 
 interface RawEmployee {
@@ -131,6 +131,8 @@ export default function EmpleadosPage() {
   const tc = full.common;
   const teamT = full.dashboard.settings.team;
   const lang: 'es' | 'en' = locale === 'es' ? 'es' : 'en';
+  // Built-in invitable roles + this business's custom roles (migration 179).
+  const assignableRoles: Role[] = [...INVITABLE_ROLES, ...getActiveCustomRoles().map(c => c.key as Role)];
   const supabase = createSupabaseClient();
   const { business, user, currentRole, startImpersonation, activeLocationId, locations } = useApp();
   // UI-hygiene gates (RLS is the real lock). A read-only viewer never sees
@@ -511,7 +513,7 @@ export default function EmpleadosPage() {
       phone: e.phone,
       role: e.role,
       payType: e.pay_type,
-      payRate: e.pay_rate,
+      payRate: e.pay_rate ?? 0,
       active: e.active,
       access: resolveAccess({ userId: e.user_id ?? null, email: e.email }, members, invites),
       // Every field value — categorical queries (overtime/access/status)
@@ -582,7 +584,7 @@ export default function EmpleadosPage() {
     });
     setError(''); setAccessError('');
     // Pre-select the Invite dialog with the planned access role from import.
-    setAccessRole(e.intended_access_role && (INVITABLE_ROLES as string[]).includes(e.intended_access_role) ? e.intended_access_role as Role : 'office');
+    setAccessRole(e.intended_access_role && (assignableRoles as string[]).includes(e.intended_access_role) ? e.intended_access_role as Role : 'office');
     // Row clicks open the read-only detail; pencil in the header flips to edit.
     setEmpModal('view');
   };
@@ -1062,7 +1064,7 @@ export default function EmpleadosPage() {
               {selAccess?.kind === 'active' ? (
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">{ROLE_LABELS[selAccess.role][lang]}</span>
+                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">{roleLabel(selAccess.role, lang)}</span>
                     {selAccess.isYou ? <span className="text-xs text-faint">{teamT.youSuffix}</span> : null}
                     {selAccess.role === 'owner' ? <span className="text-xs text-faint">{teamT.ownerSuffix}</span> : null}
                   </div>
@@ -1074,7 +1076,7 @@ export default function EmpleadosPage() {
                         onChange={e => changeAccessRole(selAccess.memberId, e.target.value as Role)}
                         className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
                       >
-                        {INVITABLE_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r][lang]}</option>)}
+                        {assignableRoles.map(r => <option key={r} value={r}>{roleLabel(r, lang)}</option>)}
                       </select>
                       <button
                         type="button"
@@ -1100,7 +1102,7 @@ export default function EmpleadosPage() {
               ) : selAccess?.kind === 'invited' ? (
                 <div className="flex items-center gap-2">
                   <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">{teamT.pendingBadge}</span>
-                  <span className="text-xs text-muted">{ROLE_LABELS[selAccess.role][lang]}</span>
+                  <span className="text-xs text-muted">{roleLabel(selAccess.role, lang)}</span>
                   {canManageAccess ? (
                     <div className="ml-auto flex items-center gap-1">
                       {invites.find(i => i.id === selAccess!.inviteId)?.acceptUrl ? (
@@ -1133,7 +1135,7 @@ export default function EmpleadosPage() {
                       onChange={e => setAccessRole(e.target.value as Role)}
                       className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none"
                     >
-                      {INVITABLE_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r][lang]}</option>)}
+                      {assignableRoles.map(r => <option key={r} value={r}>{roleLabel(r, lang)}</option>)}
                     </select>
                     <button
                       type="button"

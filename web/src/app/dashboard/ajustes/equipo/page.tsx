@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 import { useEffect, useMemo, useState } from 'react';
 import { confirm } from '@amixos/shared/ui/confirmBus';
 import { useRouter } from 'next/navigation';
-import { Check, RotateCcw, Lock } from 'lucide-react';
+import { Check, RotateCcw, Lock, Plus, Pencil, Trash2 } from 'lucide-react';
 import { SettingsNav } from '@/components/dashboard/SettingsNav';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -20,7 +20,10 @@ import {
   RESOURCE_KEYS,
   RESOURCE_ACTIONS,
   ROLE_LABELS,
-  ROLE_DESCRIPTIONS,
+  roleLabel,
+  roleDescription,
+  getActiveCustomRoles,
+  isCustomRole,
   can,
   type Role,
   type ResourceKey,
@@ -34,6 +37,9 @@ import {
   equalsDefault,
   saveRoleOverride,
   resetRoleOverride,
+  createCustomRole,
+  renameCustomRole,
+  deleteCustomRole,
 } from '@amixos/shared/lib/roleEditor';
 
 // Owner is deliberately absent: it always has full control and can't be
@@ -58,20 +64,34 @@ export default function RolesSettingsPage() {
   }, [appLoading, currentRole, router]);
 
   const [selected, setSelected] = useState<Role>('admin');
+  // Custom roles registered by the overrides loader; re-read whenever
+  // roleOverrides changes (they're loaded together).
+  const customRoles = useMemo(() => getActiveCustomRoles(), [roleOverrides]);
+  const custom = isCustomRole(selected);
   const effective = useMemo(
-    () => roleOverrides[selected] ?? DEFAULT_ROLE_PERMISSIONS[selected],
+    // Custom roles always have an override row; the viewer fallback only
+    // covers the moment right after deleting the selected custom role.
+    () => roleOverrides[selected] ?? DEFAULT_ROLE_PERMISSIONS[selected] ?? DEFAULT_ROLE_PERMISSIONS.viewer,
     [roleOverrides, selected],
   );
   const [draft, setDraft] = useState(() => clonePermissions(effective));
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(false);
+  const [errorText, setErrorText] = useState<string | null>(null);
 
-  useEffect(() => { setDraft(clonePermissions(effective)); setSaved(false); setError(false); }, [effective]);
+  // Create/rename modal state.
+  const [modalMode, setModalMode] = useState<'create' | 'rename' | null>(null);
+  const [modalName, setModalName] = useState('');
+  const [modalBase, setModalBase] = useState<Role>('field');
+  const [modalBusy, setModalBusy] = useState(false);
+  const [modalError, setModalError] = useState(false);
+
+  useEffect(() => { setDraft(clonePermissions(effective)); setSaved(false); setError(false); setErrorText(null); }, [effective]);
 
   const editable = isRoleEditable(selected);
   const dirty = editable && JSON.stringify(draft) !== JSON.stringify(effective);
-  const customized = !equalsDefault(selected, draft) || !!roleOverrides[selected];
+  const customized = !custom && (!equalsDefault(selected, draft) || !!roleOverrides[selected]);
 
   const setView = (r: ResourceKey, view: ViewScope) =>
     setDraft(d => ({ ...d, resources: { ...d.resources, [r]: { ...d.resources[r], view } } }));
@@ -95,6 +115,40 @@ export default function RolesSettingsPage() {
     if (ok) { await reloadPermissions(); setDraft(clonePermissions(DEFAULT_ROLE_PERMISSIONS[selected])); setSaved(true); }
     else setError(true);
     setBusy(false);
+  };
+
+  const doDelete = async () => {
+    if (!business || busy) return;
+    setBusy(true); setError(false); setErrorText(null);
+    const r = await deleteCustomRole(supabase, business.id, selected);
+    if (r.ok) {
+      await reloadPermissions();
+      setSelected('admin');
+    } else {
+      setError(true);
+      setErrorText(r.inUse ? t.deleteRoleInUse : t.deleteRoleError);
+    }
+    setBusy(false);
+  };
+
+  const openCreate = () => { setModalName(''); setModalBase('field'); setModalError(false); setModalMode('create'); };
+  const openRename = () => { setModalName(roleLabel(selected, locale)); setModalError(false); setModalMode('rename'); };
+
+  const modalSubmit = async () => {
+    if (!business || modalBusy || !modalName.trim()) return;
+    setModalBusy(true); setModalError(false);
+    if (modalMode === 'create') {
+      const key = await createCustomRole(supabase, business.id, modalName, modalBase);
+      if (key) {
+        await reloadPermissions();
+        setSelected(key as Role);
+        setModalMode(null);
+      } else setModalError(true);
+    } else {
+      const ok = await renameCustomRole(supabase, business.id, selected, modalName);
+      if (ok) { await reloadPermissions(); setModalMode(null); } else setModalError(true);
+    }
+    setModalBusy(false);
   };
 
   const SCOPE_LABEL: Record<ViewScope, string> = { none: t.scopeNone, assigned: t.scopeAssigned, all: t.scopeAll };
@@ -122,7 +176,7 @@ export default function RolesSettingsPage() {
         <h1 className="text-2xl font-bold text-ink">{t.title}</h1>
         <p className="text-sm text-muted mt-1 mb-6">{t.subtitle}</p>
 
-        {/* Role selector */}
+        {/* Role selector — built-ins, then custom roles, then "+ new role" */}
         <div className="flex flex-wrap gap-2 mb-6">
           {ALL_ROLES.map(r => (
             <button
@@ -136,15 +190,41 @@ export default function RolesSettingsPage() {
               {roleOverrides[r] ? <span className={`ml-1.5 text-[10px] ${selected === r ? 'text-white/80' : 'text-primary'}`}>•</span> : null}
             </button>
           ))}
+          {customRoles.map(cr => (
+            <button
+              key={cr.key}
+              onClick={() => setSelected(cr.key as Role)}
+              className={`px-3.5 py-2 rounded-xl text-sm font-semibold border transition-colors ${
+                selected === cr.key ? 'bg-primary text-white border-primary' : 'bg-card text-ink border-border hover:border-primary'
+              }`}
+            >
+              {cr.name}
+            </button>
+          ))}
+          <button
+            onClick={openCreate}
+            className="px-3.5 py-2 rounded-xl text-sm font-semibold border border-dashed border-border bg-card text-primary hover:border-primary transition-colors inline-flex items-center gap-1"
+          >
+            <Plus size={14} /> {t.newRole}
+          </button>
         </div>
 
         <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 mb-4">
           <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-base font-bold text-ink">{ROLE_LABELS[selected][locale]}</h2>
-              <p className="text-xs text-muted mt-0.5">{ROLE_DESCRIPTIONS[selected][locale]}</p>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-ink truncate">{roleLabel(selected, locale)}</h2>
+                {custom ? (
+                  <button type="button" onClick={openRename} className="text-muted hover:text-ink" title={t.renameRole}>
+                    <Pencil size={14} />
+                  </button>
+                ) : null}
+              </div>
+              <p className="text-xs text-muted mt-0.5">{custom ? t.customRoleDesc : roleDescription(selected, locale)}</p>
             </div>
-            {customized && editable ? (
+            {custom ? (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">{t.customRoleBadge}</span>
+            ) : customized && editable ? (
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">{t.customized}</span>
             ) : null}
           </div>
@@ -219,7 +299,7 @@ export default function RolesSettingsPage() {
         </div>
 
         {error ? (
-          <div className="mb-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-100 text-sm text-red-600">{t.saveError}</div>
+          <div className="mb-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-100 text-sm text-red-600">{errorText ?? t.saveError}</div>
         ) : null}
         {saved && !dirty ? (
           <div className="mb-3 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-100 text-sm text-emerald-700">{t.saved}</div>
@@ -234,7 +314,15 @@ export default function RolesSettingsPage() {
             >
               <Check size={16} /> {full.common.buttons.save}
             </button>
-            {customized ? (
+            {custom ? (
+              <button
+                onClick={() => { void confirm({ message: t.deleteRoleConfirm, destructive: true }).then(ok => { if (ok) void doDelete(); }); }}
+                disabled={busy}
+                className="flex items-center gap-1.5 bg-red-500/10 text-red-600 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-red-500/20 disabled:opacity-40"
+              >
+                <Trash2 size={15} /> {t.deleteRole}
+              </button>
+            ) : customized ? (
               <button
                 onClick={() => { void confirm({ message: t.resetConfirm, destructive: true }).then(ok => { if (ok) void reset(); }); }}
                 disabled={busy}
@@ -243,6 +331,67 @@ export default function RolesSettingsPage() {
                 <RotateCcw size={15} /> {t.reset}
               </button>
             ) : null}
+          </div>
+        ) : null}
+
+        {/* Create / rename custom role modal */}
+        {modalMode !== null ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setModalMode(null)} />
+            <div className="relative bg-card rounded-2xl border border-border-soft shadow-xl p-6 w-full max-w-sm">
+              <h2 className="text-base font-bold text-ink mb-4">
+                {modalMode === 'rename' ? t.renameRoleTitle : t.newRoleTitle}
+              </h2>
+              <label className="block text-sm font-medium text-ink mb-1.5">{t.roleNameLabel}</label>
+              <input
+                autoFocus
+                type="text"
+                value={modalName}
+                onChange={e => setModalName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') void modalSubmit(); }}
+                placeholder={t.roleNamePlaceholder}
+                className="w-full rounded-xl border border-border bg-surface px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              {modalMode === 'create' ? (
+                <>
+                  <label className="block text-sm font-medium text-ink mt-4 mb-1.5">{t.baseRoleLabel}</label>
+                  <div className="flex flex-wrap gap-2">
+                    {ALL_ROLES.map(r => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => setModalBase(r)}
+                        className={`px-3 py-1.5 rounded-xl text-sm font-semibold border transition-colors ${
+                          modalBase === r ? 'bg-primary text-white border-primary' : 'bg-surface text-ink border-border hover:border-primary'
+                        }`}
+                      >
+                        {ROLE_LABELS[r][locale]}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+              {modalError ? (
+                <p className="text-sm text-red-600 mt-3">{t.createError}</p>
+              ) : null}
+              <div className="flex justify-end gap-2 mt-5">
+                <button
+                  type="button"
+                  onClick={() => setModalMode(null)}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold text-muted hover:text-ink"
+                >
+                  {full.common.buttons.cancel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void modalSubmit()}
+                  disabled={modalBusy || !modalName.trim()}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-white hover:opacity-90 disabled:opacity-40"
+                >
+                  {modalMode === 'rename' ? full.common.buttons.save : t.createBtn}
+                </button>
+              </div>
+            </div>
           </div>
         ) : null}
       </div>

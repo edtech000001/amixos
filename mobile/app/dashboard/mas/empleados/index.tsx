@@ -393,7 +393,7 @@ export default function EmpleadosRoute() {
           phone: e.phone,
           role: e.role,
           payType: e.pay_type,
-          payRate: e.pay_rate,
+          payRate: e.pay_rate ?? 0,
           active: e.active,
           access,
           // Every field value — categorical queries are the filter panel's job.

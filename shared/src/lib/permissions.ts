@@ -14,6 +14,11 @@
 
 export type Role = 'owner' | 'admin' | 'manager' | 'office' | 'field' | 'viewer';
 
+// Custom roles (migration 179): a business can define extra roles beyond the
+// built-ins. Their key is an arbitrary slug stored in business_roles
+// (is_system=false) and flows through the app typed as `Role` — every resolver
+// here treats unknown keys as deny-all until the business's snapshot loads.
+
 export const ROLE_LABELS: Record<Role, { es: string; en: string }> = {
   owner:   { es: 'Propietario',  en: 'Owner' },
   admin:   { es: 'Administrador', en: 'Admin' },
@@ -233,10 +238,49 @@ export function setActiveRolePermissions(map: Partial<Record<Role, RolePermissio
   activeOverrides = map;
 }
 
-/** The effective permissions for a role: the active override, else default. */
+/** The effective permissions for a role: the active override, else default.
+ *  Custom roles have no built-in default — before their snapshot loads they
+ *  resolve to null, i.e. deny-all (mirrors the SQL resolvers' fail-closed). */
 export function effectivePermissions(role: Role | null | undefined): RolePermissions | null {
   if (!role) return null;
-  return activeOverrides?.[role] ?? DEFAULT_ROLE_PERMISSIONS[role];
+  return activeOverrides?.[role] ?? DEFAULT_ROLE_PERMISSIONS[role] ?? null;
+}
+
+// ─── Custom-role registry ──────────────────────────────────────────────────
+// Loaded alongside the permission overrides (business_roles rows with
+// is_system=false). Gives the UI display names + the list of extra role keys
+// for pickers. Cleared on logout / business switch, like the overrides.
+
+export interface CustomRoleMeta { key: string; name: string }
+
+let activeCustomRoles: CustomRoleMeta[] = [];
+
+export function setActiveCustomRoles(list: CustomRoleMeta[] | null): void {
+  activeCustomRoles = list ?? [];
+}
+
+export function getActiveCustomRoles(): CustomRoleMeta[] {
+  return activeCustomRoles;
+}
+
+/** True for business-defined roles (not one of the 6 built-ins). */
+export function isCustomRole(role: string | null | undefined): boolean {
+  return !!role && !(role in DEFAULT_ROLE_PERMISSIONS);
+}
+
+/** Display name for any role key: built-in label, else the custom role's
+ *  stored name, else the raw key (e.g. before the registry loads). */
+export function roleLabel(role: string | null | undefined, locale: 'es' | 'en'): string {
+  if (!role) return '';
+  const sys = ROLE_LABELS[role as Role];
+  if (sys) return sys[locale];
+  return activeCustomRoles.find((r) => r.key === role)?.name ?? role;
+}
+
+/** Description for a role key; custom roles have none (return ''). */
+export function roleDescription(role: string | null | undefined, locale: 'es' | 'en'): string {
+  if (!role) return '';
+  return ROLE_DESCRIPTIONS[role as Role]?.[locale] ?? '';
 }
 
 /**
@@ -246,7 +290,10 @@ export function effectivePermissions(role: Role | null | undefined): RolePermiss
  * resolves to a complete RolePermissions.
  */
 export function mergeRolePermissions(role: Role, raw: unknown): RolePermissions {
-  const base = DEFAULT_ROLE_PERMISSIONS[role] ?? DEFAULT_ROLE_PERMISSIONS.viewer;
+  // Custom roles have no built-in default — merge over deny-all so a key
+  // missing from the snapshot means NO access (matches the SQL resolvers).
+  const base = DEFAULT_ROLE_PERMISSIONS[role]
+    ?? { resources: ALL_RESOURCES('none', false, false, false), caps: caps({}) };
   if (!raw || typeof raw !== 'object') return base;
   const r = raw as { resources?: Record<string, Partial<ResourcePerm>>; caps?: Record<string, unknown> };
 
@@ -306,7 +353,8 @@ export const can = {
   editJobMetadata:  (role: Role | null) => !!res(role, 'jobs')?.edit,
   // Status change: writers always; field worker if assigned (checked separately).
   changeJobStatus:  (role: Role | null) => !!res(role, 'jobs')?.edit,
-  changeJobStatusIfAssigned: (role: Role | null) => role === 'field',
+  changeJobStatusIfAssigned: (role: Role | null) =>
+    role === 'field' || (isCustomRole(role) && res(role, 'jobs')?.view === 'assigned'),
   deleteJob:        (role: Role | null) => !!res(role, 'jobs')?.delete,
   // Field workers see only their assigned jobs.
   seeAllJobs:       (role: Role | null) => res(role, 'jobs')?.view === 'all',
@@ -380,10 +428,12 @@ export const can = {
 
 // ─── Special-case helpers ────────────────────────────────────────────────
 
-// True if the role is "field" (only-assigned-jobs view). Saves callers from
-// repeating the string compare.
+// True if the role is "field-like" (only-assigned-jobs view): the built-in
+// field role, or a custom role whose jobs view is 'assigned'. Routes to the
+// field home screen instead of the owner dashboard.
 export function isFieldOnly(role: Role | null | undefined): boolean {
-  return role === 'field';
+  if (role === 'field') return true;
+  return isCustomRole(role) && effectivePermissions(role as Role)?.resources.jobs.view === 'assigned';
 }
 
 // True if the role can ONLY read (cannot write to anything). Used to render

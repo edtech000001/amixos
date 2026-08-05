@@ -23,6 +23,7 @@ import {
   type OpenTimesheet,
 } from '@amixos/shared/lib/fieldHome';
 import { normalizeFrequency, parsePayrollAnchor } from '@amixos/shared/lib/payroll';
+import { useSwr } from '@amixos/shared/lib/swrCache';
 import { can } from '@amixos/shared/lib/permissions';
 import { firstName } from '@amixos/shared/lib/userName';
 
@@ -56,22 +57,34 @@ export function FieldHome() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!business || !user) return;
-    const data = await fetchFieldHome(supabase, business.id, user.id, {
-      frequency: normalizeFrequency(business.payroll_frequency),
-      anchor: parsePayrollAnchor(business.payroll_anchor_date),
-      customDays: (business as { payroll_custom_days?: number | null }).payroll_custom_days ?? null,
-    });
-    setJobs(data.jobs);
-    setRecentCompleted(data.recentCompleted);
-    setOpen(data.openTimesheet);
-    setStats(data.stats);
-    setEmployeeId(data.employeeId);
+  // Cache-first: the last snapshot renders instantly; a background refresh
+  // revalidates (deduped, throttled on tab-focus).
+  const fhKey = business && user ? `field_home_${business.id}_${user.id}` : null;
+  const fh = useSwr(
+    fhKey,
+    () => fetchFieldHome(supabase, business!.id, user!.id, {
+      frequency: normalizeFrequency(business!.payroll_frequency),
+      anchor: parsePayrollAnchor(business!.payroll_anchor_date),
+      customDays: (business as { payroll_custom_days?: number | null } | null)?.payroll_custom_days ?? null,
+    }),
+    { cacheKey: fhKey, resetKey: `${business?.id ?? ''}_${user?.id ?? ''}`, focusThrottleMs: 3_000 },
+  );
+  useEffect(() => {
+    if (!fh.data) return;
+    setJobs(fh.data.jobs);
+    setRecentCompleted(fh.data.recentCompleted);
+    setOpen(fh.data.openTimesheet);
+    setStats(fh.data.stats);
+    setEmployeeId(fh.data.employeeId);
     setLoading(false);
-  }, [business?.id, user?.id]);
-
-  useEffect(() => { void load(); }, [load]);
+  }, [fh.data]);
+  useEffect(() => { if (fh.error) setLoading(false); }, [fh.error]);
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') fh.refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [fh.refresh]);
+  const load = useCallback(async () => { fh.refresh({ force: true }); }, [fh.refresh]);
 
   const toggleClock = async () => {
     if (!business || !user || busy) return;

@@ -228,15 +228,21 @@ export default function NuevoTrabajoRoute() {
   // managers+ get the dispatcher tools; a field creator keeps self-assign on
   // their own job; office/viewer get nothing (they can't write job_assignments).
   const canAssign = can.assignWorkers(currentRole);
+  // created_by of the job being edited — RLS (131/179) lets a member who can
+  // CREATE jobs manage assignments on jobs they created, even without the
+  // assignWorkers cap (field crew, office, custom roles).
+  const [loadedCreatedBy, setLoadedCreatedBy] = useState<string | null>(null);
   // Can this creator schedule / change status? Field crew without the toggle
   // may only RECORD completed work — status is locked to "completed".
   const canSchedule = can.scheduleJobs(currentRole);
   const [myEmployeeId, setMyEmployeeId] = useState<string | null>(null);
   useEffect(() => {
-    if (!restrictedCreator || !business || !user) { setMyEmployeeId(null); return; }
+    // Any non-dispatcher creator needs their own employee row: field crew for
+    // the save-time self-assign, worker-style creators for the lead default.
+    if (canAssign || !business || !user) { setMyEmployeeId(null); return; }
     supabase.from('employees').select('id').eq('business_id', business.id).eq('user_id', user.id).limit(1).maybeSingle()
       .then(({ data }: { data: { id: string } | null }) => setMyEmployeeId(data?.id ?? null));
-  }, [restrictedCreator, business?.id, user?.id]);
+  }, [canAssign, business?.id, user?.id]);
   const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress' | 'completed'>('scheduled');
   // Field crew default a NEW job to "completed" (they log finished work).
   useEffect(() => {
@@ -311,6 +317,29 @@ export default function NuevoTrabajoRoute() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Who may pick lead/crew/drivers: the assignWorkers cap (dispatchers), a
+  // field creator (self-assign flow), or any job-creator role staffing a job
+  // it created (new job, or editing its own) — mirrors RLS 131/179.
+  const creatorStaff =
+    can.createJob(currentRole) && (!sourceId || (!!user && loadedCreatedBy === user.id));
+  const canStaff = canAssign || restrictedCreator || creatorStaff;
+
+  // A worker-style creator (can create jobs but isn't a dispatcher) defaults
+  // to being the job lead on NEW jobs — "the person adding the job leads it".
+  // Prefilled once, not forced: they can change or clear it in the picker.
+  // Field creators are excluded (their save path already self-assigns as lead).
+  const leadDefaulted = useRef(false);
+  useEffect(() => {
+    if (leadDefaulted.current || sourceId || !creatorStaff || canAssign || restrictedCreator) return;
+    if (business?.job_crew_mode === false) return;
+    if (!myEmployeeId || !employees.some((e) => e.id === myEmployeeId)) return;
+    if (leadEmployeeId || assignedEmployees.length > 0) return;
+    leadDefaulted.current = true;
+    setLeadEmployeeId(myEmployeeId);
+    // The lead is always part of the crew (mirrors setLead).
+    setAssignedEmployees((prev) => (prev.includes(myEmployeeId) ? prev : [...prev, myEmployeeId]));
+  }, [sourceId, creatorStaff, canAssign, restrictedCreator, myEmployeeId, employees, leadEmployeeId, assignedEmployees, business?.job_crew_mode]);
+
   // Load clients + employees + (optionally) the job being edited.
   useEffect(() => {
     if (!business) return;
@@ -321,7 +350,58 @@ export default function NuevoTrabajoRoute() {
       // served from AsyncStorage. loadCached never throws, so one read failing
       // offline can't blank out the others (which is what killed the whole
       // Promise.all before, leaving clients + employees empty).
-      const [clRes, empRes, tplRes, contactRes] = await Promise.all([
+      // Each dataset lands as soon as ITS fetch finishes — the crew pickers
+      // (55 workers) must not wait behind a multi-page clients/contacts crawl,
+      // which made the whole Workers section invisible for seconds on big
+      // businesses. Clients still wait for contacts (they merge into the rows).
+      const empPromise = loadCached<Employee[]>(`jobform_employees_${business.id}`, async () => {
+        // employees_roster (view, migration 178): names-only roster readable by
+        // every member — the pickers must work for field/office roles that have
+        // no Employees permission (pay etc. stays behind public.employees RLS).
+        // Fallback: if the view is missing/stale in this DB, roles with the
+        // Employees permission can still read the table directly.
+        const fromTable = (table: string) =>
+          fetchAllById<Employee>((afterId, pageSize) => {
+            let q = supabase
+              .from(table)
+              .select('id, first_name, last_name, role, show_in_roster')
+              .eq('business_id', business.id)
+              .eq('active', true)
+              .order('id', { ascending: true })
+              .limit(pageSize);
+            if (afterId) q = q.gt('id', afterId);
+            return q;
+          });
+        try {
+          const roster = await fromTable('employees_roster');
+          if (roster.length > 0) return roster;
+        } catch { /* view missing — fall through */ }
+        return fromTable('employees');
+      }).then((empRes) => {
+        if (cancelled) return;
+        // Roster flag (migration 128): office members opt out of crew pickers.
+        // Alphabetical by name so the crew / driver / lead pickers read cleanly.
+        setEmployees(
+          (empRes.data ?? [])
+            .filter((e) => (e as { show_in_roster?: boolean | null }).show_in_roster !== false)
+            .sort((a, b) => `${a.first_name} ${a.last_name}`.trim().localeCompare(`${b.first_name} ${b.last_name}`.trim(), undefined, { sensitivity: 'base' })),
+        );
+      });
+
+      const tplPromise = loadCached<FieldTemplate[]>(`jobform_templates_${business.id}`, async () => {
+        const { data, error } = await supabase
+          .from('job_field_templates')
+          .select('*')
+          .eq('business_id', business.id)
+          .order('sort_order');
+        if (error) throw error;
+        return (data ?? []) as FieldTemplate[];
+      }).then((tplRes) => {
+        if (cancelled) return;
+        setTemplates(localizeTemplates((tplRes.data ?? []) as FieldTemplate[], locale));
+      });
+
+      const clientsPromise = Promise.all([
         // Keyset (by id) — offset .range() re-scans under RLS and stalls the
         // create form once a business has thousands of clients.
         loadCached<Client[]>(`jobform_clients_${business.id}`, () =>
@@ -335,27 +415,6 @@ export default function NuevoTrabajoRoute() {
             if (afterId) q = q.gt('id', afterId);
             return q;
           })),
-        loadCached<Employee[]>(`jobform_employees_${business.id}`, () =>
-          fetchAllById<Employee>((afterId, pageSize) => {
-            let q = supabase
-              .from('employees')
-              .select('id, first_name, last_name, role, show_in_roster')
-              .eq('business_id', business.id)
-              .eq('active', true)
-              .order('id', { ascending: true })
-              .limit(pageSize);
-            if (afterId) q = q.gt('id', afterId);
-            return q;
-          })),
-        loadCached<FieldTemplate[]>(`jobform_templates_${business.id}`, async () => {
-          const { data, error } = await supabase
-            .from('job_field_templates')
-            .select('*')
-            .eq('business_id', business.id)
-            .order('sort_order');
-          if (error) throw error;
-          return (data ?? []) as FieldTemplate[];
-        }),
         // Client contacts — so the picker can find an account by a contact's
         // name (primary contact first).
         loadCached<{ id: string; client_id: string; name: string; role: string | null }[]>(`jobform_contacts_${business.id}`, () =>
@@ -369,26 +428,18 @@ export default function NuevoTrabajoRoute() {
             if (afterId) q = q.gt('id', afterId);
             return q;
           })),
-      ]);
+      ]).then(([clRes, contactRes]) => {
+        if (cancelled) return;
+        const contactsByClient = new Map<string, { name: string; role: string | null }[]>();
+        for (const ct of contactRes.data ?? []) {
+          (contactsByClient.get(ct.client_id) ?? contactsByClient.set(ct.client_id, []).get(ct.client_id)!)
+            .push({ name: ct.name, role: ct.role });
+        }
+        setClients((clRes.data ?? []).map((c) => ({ ...c, contacts: contactsByClient.get(c.id) })));
+      });
+
+      await Promise.all([empPromise, tplPromise, clientsPromise]);
       if (cancelled) return;
-      const cl = clRes.data ?? [];
-      const emp = empRes.data ?? [];
-      const tpl = tplRes.data ?? [];
-      const contactRows = contactRes.data ?? [];
-      const contactsByClient = new Map<string, { name: string; role: string | null }[]>();
-      for (const ct of contactRows) {
-        (contactsByClient.get(ct.client_id) ?? contactsByClient.set(ct.client_id, []).get(ct.client_id)!)
-          .push({ name: ct.name, role: ct.role });
-      }
-      setClients(cl.map((c) => ({ ...c, contacts: contactsByClient.get(c.id) })));
-      // Roster flag (migration 128): office members opt out of crew pickers.
-      // Alphabetical by name so the crew / driver / lead pickers read cleanly.
-      setEmployees(
-        emp
-          .filter((e) => (e as { show_in_roster?: boolean | null }).show_in_roster !== false)
-          .sort((a, b) => `${a.first_name} ${a.last_name}`.trim().localeCompare(`${b.first_name} ${b.last_name}`.trim(), undefined, { sensitivity: 'base' })),
-      );
-      setTemplates(localizeTemplates((tpl ?? []) as FieldTemplate[], locale));
 
       if (sourceId) {
         const [{ data: job }, { data: assigns }] = await Promise.all([
@@ -397,11 +448,13 @@ export default function NuevoTrabajoRoute() {
         ]);
         if (cancelled) return;
         if (job && teamOnly) {
+          setLoadedCreatedBy(job.created_by ?? null);
           setClientId(job.client_id ?? '');
           setLocationId(job.location_id ?? '');
           setDriverEmployeeIds(job.driver_employee_ids ?? []);
           if (restrictedCreator) setStatus('completed');
         } else if (job) {
+          setLoadedCreatedBy(job.created_by ?? null);
           const wasEstimate = !!job.estimate_number;
           // Estimates and jobs are ONE record — the form styles itself by
           // PHASE, not by estimate_number alone. In the quote phase the
@@ -996,9 +1049,13 @@ export default function NuevoTrabajoRoute() {
     }
     // ── Workers section key (whole lead/crew/drivers block) ──
     if (k === 'assigned_workers') {
+      // Crew mode off = solo business: no lead/crew/driver pickers at all.
+      // Saving still preserves any existing assignments (state loads from the
+      // job) and field creators still self-assign (RLS needs it to see the job).
+      if (business?.job_crew_mode === false) return null;
       return (
         <Fragment key={k}>
-          {employees.length > 0 && (canAssign || restrictedCreator) ? (
+          {employees.length > 0 && canStaff ? (
             <>
               {/* Crew Finder — dispatcher tool; managers+ only. Hidden when the
                  business turned "Suggest crew" off in Settings > Jobs. */}
@@ -1013,7 +1070,7 @@ export default function NuevoTrabajoRoute() {
               ) : null}
               {/* Lead picker — one designated lead (crew mode only). Hidden for
                  field creators: the person logging the job IS the lead. */}
-              {business?.job_crew_mode !== false && canAssign ? (
+              {canAssign || (creatorStaff && !restrictedCreator) ? (
                 <View className="mb-4">
                   <Text className="text-sm font-semibold text-ink mb-2">{t.leadLabel}</Text>
                   <Pressable
@@ -1031,9 +1088,7 @@ export default function NuevoTrabajoRoute() {
               {/* Crew — searchable multi-select. The lead is shown in its own
                  picker above and excluded here. */}
               <View className="mb-3">
-                {business?.job_crew_mode !== false ? (
-                  <Text className="text-sm font-semibold text-ink mb-2">{t.crewLabel}</Text>
-                ) : null}
+                <Text className="text-sm font-semibold text-ink mb-2">{t.crewLabel}</Text>
                 <Pressable
                   onPress={() => { setCrewSearch(''); setCrewPickerOpen(true); }}
                   className="flex-row items-center justify-between rounded-2xl border border-border bg-card px-4 py-3.5"
@@ -1069,7 +1124,7 @@ export default function NuevoTrabajoRoute() {
 
           {/* Drivers — optional multi-select (like crew). Each driver is
               credited driverHours on top of the job's total hours. */}
-          {employees.length > 0 && (canAssign || restrictedCreator) ? (
+          {employees.length > 0 && canStaff ? (
             <View className="mt-4">
               <Text className="text-sm font-semibold text-ink mb-2">{t.driverLabel}</Text>
               <Pressable
@@ -1467,7 +1522,7 @@ export default function NuevoTrabajoRoute() {
         assigned_workers: assignedEmployees.length ? 'x' : '',
         internal_notes: internalNotes,
       };
-      const missingDefs = JOB_REQUIRABLE.filter(f => jobReq[f.key] && !fHidden(f.key) && !(restrictedCreator && f.key === 'internal_notes') && !String(fieldVal[f.key] ?? '').trim());
+      const missingDefs = JOB_REQUIRABLE.filter(f => jobReq[f.key] && !fHidden(f.key) && !(restrictedCreator && f.key === 'internal_notes') && !(f.key === 'assigned_workers' && (business?.job_crew_mode === false || !canStaff)) && !String(fieldVal[f.key] ?? '').trim());
       setMissingKeys(missingDefs.map(f => f.key));
       if (missingDefs.length) {
         setError(`${locale === 'es' ? 'Campos requeridos' : 'Required fields'}: ${missingDefs.map(f => f.label).join(', ')}`);
@@ -1673,9 +1728,20 @@ export default function NuevoTrabajoRoute() {
           .filter(Boolean)
           .forEach((name) => assignments.push({ job_id: jobId, worker_name: name }));
         // Field creator: self-assign so they can see their own job (RLS 044/089
-        // requires assigned + published for field reads). Lead if none yet.
-        if (restrictedCreator && !editId && myEmployeeId && !assignments.some((a) => a.employee_id === myEmployeeId)) {
-          assignments.push({ job_id: jobId, employee_id: myEmployeeId, worker_name: user?.name ?? '', is_lead: !assignments.some((a) => a.is_lead) });
+        // requires assigned + published for field reads) and become the lead if
+        // none was picked — "the person logging the job is the lead".
+        if (restrictedCreator && !editId) {
+          const alreadyLead = assignments.some((a) => a.is_lead);
+          const creatorName = (user?.name ?? '').trim();
+          if (myEmployeeId) {
+            if (!assignments.some((a) => a.employee_id === myEmployeeId)) {
+              assignments.push({ job_id: jobId, employee_id: myEmployeeId, worker_name: creatorName, is_lead: !alreadyLead });
+            }
+          } else if (!alreadyLead && creatorName) {
+            // No linked employee record yet (e.g. an invite not yet reconciled)
+            // — still record the creator's NAME as lead so it's never blank.
+            assignments.push({ job_id: jobId, worker_name: creatorName, is_lead: true });
+          }
         }
         // Per-assignment insert with client ids so an offline retry is idempotent.
         for (const a of assignments) {
@@ -1862,8 +1928,9 @@ export default function NuevoTrabajoRoute() {
             </Section>
           )}
 
-          {/* Workers (job mode only) */}
-          {!isProposal && (secVisible('workers') || customFieldsFor('workers').length > 0) && (
+          {/* Workers (job mode only; crew mode off hides the standard pickers,
+             so only custom fields can justify the section then) */}
+          {!isProposal && ((secVisible('workers') && business?.job_crew_mode !== false && employees.length > 0 && canStaff) || customFieldsFor('workers').length > 0) && (
             <Section title={t.workersHeading} icon={<UsersIcon size={14} color={c.primary} />}>
               {/* Standard + custom fields, interleaved in saved layout order. */}
               {fieldsInSection(jobLayout, 'workers').map(renderJobField)}

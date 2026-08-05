@@ -85,13 +85,20 @@ function applyTabFilter(q: any, tabs: string[], searching: boolean): any {
   return q.or(tabs.map(tabCondition).join(','));
 }
 
+export interface SearchIds {
+  clientIds: string[];
+  crewJobIds: string[];
+}
+
 /** Resolve a search term to the client_ids and job_ids it should match through
- *  joined tables (client names, crew/lead names). Small id-only lookups. */
-async function resolveSearchIds(
+ *  joined tables (client names, crew/lead names). Small id-only lookups.
+ *  Resolve ONCE per load and pass the result to fetchJobsPage +
+ *  fetchJobTabCounts + fetchJobGroupIndex — they used to each re-resolve. */
+export async function resolveSearchIds(
   supabase: AnySupabase,
   businessId: string,
   term: string,
-): Promise<{ clientIds: string[]; crewJobIds: string[] }> {
+): Promise<SearchIds> {
   // Cap the id lists: they go into the query-string OR filter, which has a URL
   // length limit. A term rarely matches more than a handful of clients / crew,
   // so these caps only bite on extremely broad terms (trimming joined-name
@@ -102,7 +109,9 @@ async function resolveSearchIds(
   const [clientsRes, empRes, crewByNameRes] = await Promise.all([
     supabase.from('clients').select('id').eq('business_id', businessId)
       .or(`first_name.ilike.${like},last_name.ilike.${like},company.ilike.${like}`).limit(ID_CAP),
-    supabase.from('employees').select('id').eq('business_id', businessId)
+    // employees_roster (view, migration 178): readable by every member, so
+    // search-by-crew-name works for roles without the Employees permission.
+    supabase.from('employees_roster').select('id').eq('business_id', businessId)
       .or(`first_name.ilike.${like},last_name.ilike.${like}`).limit(200),
     supabase.from('job_assignments').select('job_id').eq('business_id', businessId)
       .ilike('worker_name', like).limit(ID_CAP),
@@ -125,9 +134,11 @@ async function searchOrClause(
   supabase: AnySupabase,
   businessId: string,
   term: string,
+  preResolved?: SearchIds | null,
 ): Promise<string | null> {
   if (!term) return null;
-  const { clientIds, crewJobIds } = await resolveSearchIds(supabase, businessId, term);
+  const { clientIds, crewJobIds } =
+    preResolved ?? (await resolveSearchIds(supabase, businessId, term));
   const like = `%${escLike(term)}%`;
   const ors = [
     `title.ilike.${like}`, `external_ref.ilike.${like}`, `estimate_number.ilike.${like}`,
@@ -147,6 +158,7 @@ export async function fetchJobsPage<T extends { id: string; created_at?: string 
   supabase: AnySupabase,
   select: string,
   params: JobsQueryParams,
+  searchIds?: SearchIds | null,
 ): Promise<JobsPage<T>> {
   const pageSize = params.pageSize ?? 50;
   const term = params.search?.trim() ?? '';
@@ -162,13 +174,18 @@ export async function fetchJobsPage<T extends { id: string; created_at?: string 
     if (col) q = params.groupKey === '' ? q.is(col, null) : q.eq(col, params.groupKey);
   }
 
-  const searchOr = await searchOrClause(supabase, params.businessId, term);
+  const searchOr = await searchOrClause(supabase, params.businessId, term, searchIds);
   if (searchOr) q = q.or(searchOr);
   q = applyTabFilter(q, tabs, !!term);
 
   if (params.cursor) {
+    // Sargable keyset: the `lte` conjunct drives a range scan on the
+    // (business_id, created_at desc, id desc) index (migration 182); the OR is
+    // just the residual tie-break filter. PostgREST can't express a row
+    // comparison, so this two-part form is the fastest available.
     const c = params.cursor;
-    q = q.or(`created_at.lt.${c.createdAt},and(created_at.eq.${c.createdAt},id.lt.${c.id})`);
+    q = q.lte('created_at', c.createdAt)
+      .or(`created_at.lt.${c.createdAt},id.lt.${c.id}`);
   }
 
   q = q.order('created_at', { ascending: false }).order('id', { ascending: false }).limit(pageSize);
@@ -237,6 +254,7 @@ export async function fetchJobGroupIndex(
     businessId: string; groupBy: string; tabs?: string[]; search?: string;
     locationId?: string | null; dateFrom?: string | null; dateTo?: string | null;
   },
+  searchIds?: SearchIds | null,
 ): Promise<JobGroup[] | null> {
   const term = params.search?.trim() ?? '';
   const fp = jobTabFilterParams(params.tabs ?? [], !!term);
@@ -244,7 +262,7 @@ export async function fetchJobGroupIndex(
   let clientIds: string[] | null = null;
   let crewJobIds: string[] | null = null;
   if (term) {
-    const ids = await resolveSearchIds(supabase, params.businessId, term);
+    const ids = searchIds ?? (await resolveSearchIds(supabase, params.businessId, term));
     clientIds = ids.clientIds;
     crewJobIds = ids.crewJobIds;
   }
@@ -269,25 +287,81 @@ export async function fetchJobGroupIndex(
   }));
 }
 
-/** Per-tab counts for the badges — one count-only query per tab, in parallel.
- *  'all' counts every search-matched job (no tab filter), matching the client. */
+/** Per-tab counts for the badges — ONE grouped scan via the job_tab_counts RPC
+ *  (migration 181), replacing ten parallel count:'exact' queries. Returns every
+ *  tab; 'all' spans archived + every status, matching the client's semantics.
+ *  SECURITY INVOKER — counts reflect exactly what the caller's RLS allows. */
 export async function fetchJobTabCounts(
   supabase: AnySupabase,
   params: Pick<JobsQueryParams, 'businessId' | 'locationId' | 'search'>,
-  tabKeys: string[],
+  searchIds?: SearchIds | null,
 ): Promise<Record<string, number>> {
   const term = params.search?.trim() ?? '';
-  const searchOr = await searchOrClause(supabase, params.businessId, term);
-  const entries = await Promise.all(
-    tabKeys.map(async (key) => {
-      let q = supabase.from('jobs').select('id', { count: 'exact', head: true })
-        .eq('business_id', params.businessId);
-      if (params.locationId) q = q.eq('location_id', params.locationId);
-      if (searchOr) q = q.or(searchOr);
-      if (key !== 'all') q = q.or(tabCondition(key));
-      const { count } = await q;
-      return [key, count ?? 0] as const;
-    }),
-  );
-  return Object.fromEntries(entries);
+  const ids = term
+    ? (searchIds ?? (await resolveSearchIds(supabase, params.businessId, term)))
+    : null;
+  const { data, error } = await supabase.rpc('job_tab_counts', {
+    p_business_id: params.businessId,
+    p_location_id: params.locationId ?? null,
+    p_search_term: term || null,
+    p_client_ids: ids?.clientIds ?? null,
+    p_crew_job_ids: ids?.crewJobIds ?? null,
+  });
+  if (error) throw new Error(error.message);
+  const out: Record<string, number> = {};
+  for (const row of (data ?? []) as { tab: string; cnt: number | string }[]) {
+    out[row.tab] = Number(row.cnt);
+  }
+  return out;
+}
+
+/**
+ * One page of jobs in a SERVER-SIDE sort order (status/startDate/client/
+ * company/lead) via the jobs_page_ids RPC (migration 181): the server sorts +
+ * pages ids, the client refetches just those rows with embeds. Replaces the
+ * old "download every job then sort locally" fallback. RLS applies inside the
+ * RPC AND on the id refetch. Returns null when the tab selection can't be
+ * expressed as RPC filters (multi-tab / delegated) — caller falls back to
+ * 'recent' order paging.
+ */
+export async function fetchJobsPageSorted<T extends { id: string }>(
+  supabase: AnySupabase,
+  select: string,
+  params: JobsQueryParams & { sortBy: string; offset: number },
+  searchIds?: SearchIds | null,
+): Promise<{ jobs: T[]; hasMore: boolean } | null> {
+  const term = params.search?.trim() ?? '';
+  const fp = jobTabFilterParams(params.tabs ?? [], !!term);
+  if (!fp) return null;
+  const pageSize = params.pageSize ?? 50;
+  const ids = term
+    ? (searchIds ?? (await resolveSearchIds(supabase, params.businessId, term)))
+    : null;
+  const { data, error } = await supabase.rpc('jobs_page_ids', {
+    p_business_id: params.businessId,
+    p_sort: params.sortBy,
+    p_status_include: fp.statusInclude,
+    p_exclude_closed: fp.excludeClosed,
+    p_archived: fp.archived,
+    p_search_term: term || null,
+    p_client_ids: ids?.clientIds ?? null,
+    p_crew_job_ids: ids?.crewJobIds ?? null,
+    p_location_id: params.locationId ?? null,
+    p_date_from: params.dateFrom ?? null,
+    p_date_to: params.dateTo ?? null,
+    p_limit: pageSize,
+    p_offset: params.offset,
+  });
+  if (error) throw new Error(error.message);
+  const pageIds = ((data ?? []) as ({ jobs_page_ids: string } | string)[])
+    .map((r) => (typeof r === 'string' ? r : r.jobs_page_ids));
+  if (pageIds.length === 0) return { jobs: [], hasMore: false };
+  const { data: rows, error: rowsErr } = await supabase
+    .from('jobs').select(select).in('id', pageIds);
+  if (rowsErr) throw new Error(rowsErr.message);
+  const order = new Map(pageIds.map((id, i) => [id, i]));
+  const jobs = ((rows ?? []) as T[])
+    .slice()
+    .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+  return { jobs, hasMore: pageIds.length === pageSize };
 }

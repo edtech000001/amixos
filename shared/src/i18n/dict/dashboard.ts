@@ -93,7 +93,22 @@ export type DashboardDict = {
     scopeAssigned: string;
     scopeAll: string;
     resourceNames: { jobs: string; clients: string; invoices: string; employees: string; calendar: string; inventory: string; equipment: string; reports: string };
-    capNames: { manageSettings: string; manageMembers: string; viewAuditLog: string; viewAllTimesheets: string; createEstimates: string; clockInOut: string; scheduleJobs: string; switchLocations: string };
+    capNames: { manageSettings: string; manageMembers: string; viewAuditLog: string; viewAllTimesheets: string; assignWorkers: string; createEstimates: string; clockInOut: string; scheduleJobs: string; switchLocations: string };
+    newRole: string;
+    newRoleTitle: string;
+    roleNameLabel: string;
+    roleNamePlaceholder: string;
+    baseRoleLabel: string;
+    createBtn: string;
+    createError: string;
+    customRoleDesc: string;
+    customRoleBadge: string;
+    renameRole: string;
+    renameRoleTitle: string;
+    deleteRole: string;
+    deleteRoleConfirm: string;
+    deleteRoleInUse: string;
+    deleteRoleError: string;
   };
   home: {
     welcome: string;
@@ -1467,6 +1482,20 @@ export type DashboardDict = {
       saveSuccess: string;
       saveError: string;
     };
+    itemTypes: {
+      heading: string;
+      subtitle: string;
+      toggleLabel: string;
+      saveSuccess: string;
+      saveError: string;
+    };
+    crewFinderToggle: {
+      heading: string;
+      subtitle: string;
+      toggleLabel: string;
+      saveSuccess: string;
+      saveError: string;
+    };
     privateOnInvoice: {
       heading: string;
       subtitle: string;
@@ -2723,7 +2752,22 @@ export const dashboard: Record<Locale, DashboardDict> = {
       scopeAssigned: 'Asignados',
       scopeAll: 'Todos',
       resourceNames: { jobs: 'Trabajos', clients: 'Clientes', invoices: 'Facturas', employees: 'Empleados', calendar: 'Calendario', inventory: 'Inventario', equipment: 'Equipos', reports: 'Reportes' },
-      capNames: { manageSettings: 'Ajustes del negocio', manageMembers: 'Gestionar equipo y roles', viewAuditLog: 'Ver actividad', viewAllTimesheets: 'Ver todas las horas', createEstimates: 'Permitir estimados', clockInOut: 'Marcar entrada/salida', scheduleJobs: 'Programar trabajos (no solo completados)', switchLocations: 'Cambiar entre sucursales (si no, se limita a la suya)' },
+      capNames: { manageSettings: 'Ajustes del negocio', manageMembers: 'Gestionar equipo y roles', viewAuditLog: 'Ver actividad', viewAllTimesheets: 'Ver todas las horas', assignWorkers: 'Asignar trabajadores a cualquier trabajo', createEstimates: 'Permitir estimados', clockInOut: 'Marcar entrada/salida', scheduleJobs: 'Programar trabajos (no solo completados)', switchLocations: 'Cambiar entre sucursales (si no, se limita a la suya)' },
+      newRole: 'Nuevo rol',
+      newRoleTitle: 'Crear rol personalizado',
+      roleNameLabel: 'Nombre del rol',
+      roleNamePlaceholder: 'p. ej. Mecánico',
+      baseRoleLabel: 'Empezar con los permisos de',
+      createBtn: 'Crear rol',
+      createError: 'No se pudo crear el rol. ¿Ya existe uno con ese nombre?',
+      customRoleDesc: 'Rol personalizado de tu negocio.',
+      customRoleBadge: 'Rol propio',
+      renameRole: 'Renombrar',
+      renameRoleTitle: 'Renombrar rol',
+      deleteRole: 'Eliminar rol',
+      deleteRoleConfirm: '¿Eliminar este rol? Esta acción no se puede deshacer.',
+      deleteRoleInUse: 'Hay miembros o invitaciones con este rol. Asígnales otro rol primero.',
+      deleteRoleError: 'No se pudo eliminar el rol.',
     },
     home: {
       welcome: 'Bienvenido 👋',
@@ -4063,10 +4107,24 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       crewMode: {
         heading: 'Modo cuadrilla',
-        subtitle: 'Permite a los líderes asignar la cuadrilla y registrar sus horas.',
+        subtitle: 'Permite a los líderes asignar la cuadrilla y registrar sus horas. Desactívalo si trabajas solo: oculta los selectores de líder, cuadrilla y choferes en los trabajos.',
         saveBtn: 'Guardar modo cuadrilla',
         saveSuccess: 'Modo cuadrilla guardado.',
         saveError: 'No se pudo guardar.',
+      },
+      itemTypes: {
+        heading: 'Materiales y mano de obra',
+        subtitle: 'Muestra la sección de Materiales y mano de obra (con etiquetas Mano de obra / Material / Equipo / Otro) en los trabajos. Desactívalo para ocultarla por completo — para negocios que no detallan líneas. Las propuestas siempre la mantienen.',
+        toggleLabel: 'Mostrar sección',
+        saveSuccess: 'Guardado',
+        saveError: 'No se pudo guardar',
+      },
+      crewFinderToggle: {
+        heading: 'Sugerir cuadrilla',
+        subtitle: 'Muestra un botón “Sugerir cuadrilla” en el formulario de trabajo que ordena a tu equipo por cercanía al trabajo y quién está libre ese día. Desactívalo si solo asignas a tu propio equipo.',
+        toggleLabel: 'Mostrar botón',
+        saveSuccess: 'Guardado',
+        saveError: 'No se pudo guardar',
       },
       privateOnInvoice: {
         heading: 'Privado al facturar',
@@ -5332,7 +5390,22 @@ export const dashboard: Record<Locale, DashboardDict> = {
       scopeAssigned: 'Assigned',
       scopeAll: 'All',
       resourceNames: { jobs: 'Jobs', clients: 'Clients', invoices: 'Invoices', employees: 'Employees', calendar: 'Calendar', inventory: 'Inventory', equipment: 'Equipment', reports: 'Reports' },
-      capNames: { manageSettings: 'Business settings', manageMembers: 'Manage team & roles', viewAuditLog: 'View activity', viewAllTimesheets: 'View all hours', createEstimates: 'Allow estimates', clockInOut: 'Clock in/out', scheduleJobs: 'Schedule jobs (not just completed)', switchLocations: 'Switch between branches (else limited to their own)' },
+      capNames: { manageSettings: 'Business settings', manageMembers: 'Manage team & roles', viewAuditLog: 'View activity', viewAllTimesheets: 'View all hours', assignWorkers: 'Assign workers to any job', createEstimates: 'Allow estimates', clockInOut: 'Clock in/out', scheduleJobs: 'Schedule jobs (not just completed)', switchLocations: 'Switch between branches (else limited to their own)' },
+      newRole: 'New role',
+      newRoleTitle: 'Create custom role',
+      roleNameLabel: 'Role name',
+      roleNamePlaceholder: 'e.g. Mechanic',
+      baseRoleLabel: 'Start with the permissions of',
+      createBtn: 'Create role',
+      createError: 'Could not create the role. Does one with that name already exist?',
+      customRoleDesc: 'Custom role for your business.',
+      customRoleBadge: 'Custom role',
+      renameRole: 'Rename',
+      renameRoleTitle: 'Rename role',
+      deleteRole: 'Delete role',
+      deleteRoleConfirm: 'Delete this role? This cannot be undone.',
+      deleteRoleInUse: 'Members or pending invites still use this role. Assign them another role first.',
+      deleteRoleError: 'Could not delete the role.',
     },
     home: {
       welcome: 'Welcome 👋',
@@ -6672,10 +6745,24 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       crewMode: {
         heading: 'Crew mode',
-        subtitle: 'Lets leads assign a crew and record their hours.',
+        subtitle: 'Lets leads assign a crew and record their hours. Turn off if you work solo: hides the lead, crew and driver pickers on jobs.',
         saveBtn: 'Save crew mode',
         saveSuccess: 'Crew mode saved.',
         saveError: 'Could not save.',
+      },
+      itemTypes: {
+        heading: 'Materials & labor',
+        subtitle: 'Shows the Materials & Labor section (with Labor / Material / Equipment / Other tags) on jobs. Turn off to hide the section entirely — for businesses that don’t itemize. Proposals always keep it.',
+        toggleLabel: 'Show section',
+        saveSuccess: 'Saved',
+        saveError: 'Could not save',
+      },
+      crewFinderToggle: {
+        heading: 'Suggest crew',
+        subtitle: 'Shows a “Suggest crew” button on the job form that ranks your team by distance to the job and who’s free that day. Turn off if you just assign your own team.',
+        toggleLabel: 'Show button',
+        saveSuccess: 'Saved',
+        saveError: 'Could not save',
       },
       privateOnInvoice: {
         heading: 'Private after invoicing',

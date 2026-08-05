@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, ScrollView, Alert, ActivityIndicator, Modal as RNModal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ChevronLeft, Check, RotateCcw, Lock } from 'lucide-react-native';
+import { ChevronLeft, Check, RotateCcw, Lock, Plus, Pencil, Trash2 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
@@ -12,7 +12,10 @@ import {
   RESOURCE_KEYS,
   RESOURCE_ACTIONS,
   ROLE_LABELS,
-  ROLE_DESCRIPTIONS,
+  roleLabel,
+  roleDescription,
+  getActiveCustomRoles,
+  isCustomRole,
   can,
   type Role,
   type ResourceKey,
@@ -27,6 +30,9 @@ import {
   equalsDefault,
   saveRoleOverride,
   resetRoleOverride,
+  createCustomRole,
+  renameCustomRole,
+  deleteCustomRole,
 } from '@amixos/shared/lib/roleEditor';
 
 // Owner is deliberately absent: it always has full control and can't be
@@ -69,20 +75,34 @@ export default function RolesScreen() {
   }, [currentRole]);
 
   const [selected, setSelected] = useState<Role>('admin');
+  // Custom roles registered by the overrides loader; re-read whenever
+  // roleOverrides changes (they're loaded together).
+  const customRoles = useMemo(() => getActiveCustomRoles(), [roleOverrides]);
+  const custom = isCustomRole(selected);
   const effective = useMemo(
-    () => roleOverrides[selected] ?? DEFAULT_ROLE_PERMISSIONS[selected],
+    // Custom roles always have an override row; the viewer fallback only
+    // covers the moment right after deleting the selected custom role.
+    () => roleOverrides[selected] ?? DEFAULT_ROLE_PERMISSIONS[selected] ?? DEFAULT_ROLE_PERMISSIONS.viewer,
     [roleOverrides, selected],
   );
   const [draft, setDraft] = useState(() => clonePermissions(effective));
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(false);
+  const [errorText, setErrorText] = useState<string | null>(null);
 
-  useEffect(() => { setDraft(clonePermissions(effective)); setSaved(false); setError(false); }, [effective]);
+  // Create/rename bottom sheet state.
+  const [sheetMode, setSheetMode] = useState<'create' | 'rename' | null>(null);
+  const [sheetName, setSheetName] = useState('');
+  const [sheetBase, setSheetBase] = useState<Role>('field');
+  const [sheetBusy, setSheetBusy] = useState(false);
+  const [sheetError, setSheetError] = useState(false);
+
+  useEffect(() => { setDraft(clonePermissions(effective)); setSaved(false); setError(false); setErrorText(null); }, [effective]);
 
   const editable = isRoleEditable(selected);
   const dirty = editable && JSON.stringify(draft) !== JSON.stringify(effective);
-  const customized = !equalsDefault(selected, draft) || !!roleOverrides[selected];
+  const customized = !custom && (!equalsDefault(selected, draft) || !!roleOverrides[selected]);
 
   const setView = (r: ResourceKey, view: ViewScope) =>
     setDraft(d => ({ ...d, resources: { ...d.resources, [r]: { ...d.resources[r], view } } }));
@@ -112,6 +132,45 @@ export default function RolesScreen() {
       { text: tc.buttons.cancel, style: 'cancel' },
       { text: t.reset, style: 'destructive', onPress: () => void doReset() },
     ]);
+
+  const doDelete = async () => {
+    if (!business || busy) return;
+    setBusy(true); setError(false); setErrorText(null);
+    const r = await deleteCustomRole(supabase, business.id, selected);
+    if (r.ok) {
+      await reloadPermissions();
+      setSelected('admin');
+    } else {
+      setError(true);
+      setErrorText(r.inUse ? t.deleteRoleInUse : t.deleteRoleError);
+    }
+    setBusy(false);
+  };
+  const confirmDelete = () =>
+    Alert.alert('', t.deleteRoleConfirm, [
+      { text: tc.buttons.cancel, style: 'cancel' },
+      { text: t.deleteRole, style: 'destructive', onPress: () => void doDelete() },
+    ]);
+
+  const openCreate = () => { setSheetName(''); setSheetBase('field'); setSheetError(false); setSheetMode('create'); };
+  const openRename = () => { setSheetName(roleLabel(selected, locale)); setSheetError(false); setSheetMode('rename'); };
+
+  const sheetSubmit = async () => {
+    if (!business || sheetBusy || !sheetName.trim()) return;
+    setSheetBusy(true); setSheetError(false);
+    if (sheetMode === 'create') {
+      const key = await createCustomRole(supabase, business.id, sheetName, sheetBase);
+      if (key) {
+        await reloadPermissions();
+        setSelected(key as Role);
+        setSheetMode(null);
+      } else setSheetError(true);
+    } else {
+      const ok = await renameCustomRole(supabase, business.id, selected, sheetName);
+      if (ok) { await reloadPermissions(); setSheetMode(null); } else setSheetError(true);
+    }
+    setSheetBusy(false);
+  };
 
   const SCOPE_LABEL: Record<ViewScope, string> = { none: t.scopeNone, assigned: t.scopeAssigned, all: t.scopeAll };
 
@@ -148,7 +207,7 @@ export default function RolesScreen() {
       <ScrollView contentContainerClassName="px-5 pb-40 pt-2">
         <Text className="text-sm text-muted mb-4">{t.subtitle}</Text>
 
-        {/* Role selector */}
+        {/* Role selector — built-ins, then custom roles, then "+ new role" */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
           <View className="flex-row gap-2">
             {ALL_ROLES.map(r => (
@@ -162,21 +221,48 @@ export default function RolesScreen() {
                 </Text>
               </Pressable>
             ))}
+            {customRoles.map(cr => (
+              <Pressable
+                key={cr.key}
+                onPress={() => setSelected(cr.key as Role)}
+                className={`px-3.5 py-2 rounded-xl border ${selected === cr.key ? 'bg-primary border-primary' : 'bg-card border-border'}`}
+              >
+                <Text className={`text-sm font-semibold ${selected === cr.key ? 'text-white' : 'text-ink'}`}>
+                  {cr.name}
+                </Text>
+              </Pressable>
+            ))}
+            <Pressable
+              onPress={openCreate}
+              className="px-3.5 py-2 rounded-xl border border-dashed border-border bg-card flex-row items-center gap-1"
+            >
+              <Plus size={14} color={c.primary} />
+              <Text className="text-sm font-semibold text-primary">{t.newRole}</Text>
+            </Pressable>
           </View>
         </ScrollView>
 
         <View className="bg-card rounded-2xl border border-border-soft p-5">
           <View className="flex-row items-start justify-between gap-3">
-            <View className="flex-1">
-              <Text className="text-base font-bold text-ink">{ROLE_LABELS[selected][locale]}</Text>
-              <Text className="text-xs text-muted mt-0.5">{ROLE_DESCRIPTIONS[selected][locale]}</Text>
+            <View className="flex-1 flex-row items-center gap-2">
+              <Text className="text-base font-bold text-ink" numberOfLines={1}>{roleLabel(selected, locale)}</Text>
+              {custom ? (
+                <Pressable onPress={openRename} hitSlop={8}>
+                  <Pencil size={14} color={c.muted} />
+                </Pressable>
+              ) : null}
             </View>
-            {customized && editable ? (
+            {custom ? (
+              <View className="bg-primary/10 px-2 py-0.5 rounded-full">
+                <Text className="text-[11px] font-semibold text-primary">{t.customRoleBadge}</Text>
+              </View>
+            ) : customized && editable ? (
               <View className="bg-primary/10 px-2 py-0.5 rounded-full">
                 <Text className="text-[11px] font-semibold text-primary">{t.customized}</Text>
               </View>
             ) : null}
           </View>
+          <Text className="text-xs text-muted mt-0.5">{custom ? t.customRoleDesc : roleDescription(selected, locale)}</Text>
 
           {!editable ? (
             <View className="mt-4 flex-row items-center gap-2 px-4 py-3 rounded-xl bg-surface border border-border-soft">
@@ -223,7 +309,7 @@ export default function RolesScreen() {
 
         {error ? (
           <View className="mt-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-100">
-            <Text className="text-sm text-red-600">{t.saveError}</Text>
+            <Text className="text-sm text-red-600">{errorText ?? t.saveError}</Text>
           </View>
         ) : null}
         {saved && !dirty ? (
@@ -246,7 +332,12 @@ export default function RolesScreen() {
                 </>
               )}
             </Pressable>
-            {customized ? (
+            {custom ? (
+              <Pressable onPress={confirmDelete} disabled={busy} className="flex-row items-center gap-1.5 px-4 py-3.5 rounded-2xl bg-red-500/10 active:bg-red-500/20">
+                <Trash2 size={15} color="#dc2626" />
+                <Text className="text-base font-semibold text-red-600">{t.deleteRole}</Text>
+              </Pressable>
+            ) : customized ? (
               <Pressable onPress={confirmReset} disabled={busy} className="flex-row items-center gap-1.5 px-4 py-3.5 rounded-2xl bg-border-soft active:bg-border">
                 <RotateCcw size={15} color={c.muted} />
                 <Text className="text-base font-semibold text-ink">{t.reset}</Text>
@@ -255,6 +346,60 @@ export default function RolesScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      {/* Create / rename custom role — bottom sheet (backdrop Pressable as
+         absolute first child; card as plain sibling so its inputs work). */}
+      <RNModal visible={sheetMode !== null} transparent animationType="slide" onRequestClose={() => setSheetMode(null)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end">
+          <Pressable onPress={() => setSheetMode(null)} className="absolute inset-0 bg-black/40" />
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-8">
+            <Text className="text-base font-bold text-ink mb-4">
+              {sheetMode === 'rename' ? t.renameRoleTitle : t.newRoleTitle}
+            </Text>
+            <Text className="text-sm font-semibold text-ink mb-2">{t.roleNameLabel}</Text>
+            <TextInput
+              value={sheetName}
+              onChangeText={setSheetName}
+              placeholder={t.roleNamePlaceholder}
+              placeholderTextColor={c.faint}
+              autoFocus
+              className="rounded-2xl border border-border bg-surface px-4 py-3.5 text-base text-ink"
+            />
+            {sheetMode === 'create' ? (
+              <>
+                <Text className="text-sm font-semibold text-ink mt-4 mb-2">{t.baseRoleLabel}</Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {ALL_ROLES.map(r => (
+                    <Pressable
+                      key={r}
+                      onPress={() => setSheetBase(r)}
+                      className={`px-3 py-2 rounded-xl border ${sheetBase === r ? 'bg-primary border-primary' : 'bg-surface border-border'}`}
+                    >
+                      <Text className={`text-sm font-semibold ${sheetBase === r ? 'text-white' : 'text-ink'}`}>
+                        {ROLE_LABELS[r][locale]}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            ) : null}
+            {sheetError ? (
+              <Text className="text-sm text-red-600 mt-3">{t.createError}</Text>
+            ) : null}
+            <Pressable
+              onPress={sheetSubmit}
+              disabled={sheetBusy || !sheetName.trim()}
+              className={`mt-5 flex-row items-center justify-center gap-1.5 py-3.5 rounded-2xl bg-primary ${(sheetBusy || !sheetName.trim()) ? 'opacity-40' : 'active:opacity-90'}`}
+            >
+              {sheetBusy ? <ActivityIndicator size="small" color="#FFFFFF" /> : (
+                <Text className="text-base font-semibold text-white">
+                  {sheetMode === 'rename' ? tc.buttons.save : t.createBtn}
+                </Text>
+              )}
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </RNModal>
     </SafeAreaView>
   );
 }

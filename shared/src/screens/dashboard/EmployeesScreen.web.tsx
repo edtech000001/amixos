@@ -15,7 +15,7 @@ import {
   Search, X, SlidersHorizontal, ChevronDown, Check, ListChecks } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
-import { ROLE_LABELS } from '../../lib/permissions';
+import { roleLabel } from '../../lib/permissions';
 import type { AccessStatus } from '../../lib/teamPeople';
 import { splitMultiValue } from '../../lib/fieldTemplates';
 
@@ -479,7 +479,7 @@ export function EmployeesScreen({
                   ) : null}
                   {e.access?.kind === 'active' ? (
                     <span className="px-2 py-0.5 rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                      {ROLE_LABELS[e.access.role][lang]}
+                      {roleLabel(e.access.role, lang)}
                     </span>
                   ) : e.access?.kind === 'invited' ? (
                     <span className="px-2 py-0.5 rounded-full bg-amber-100 text-xs font-semibold text-amber-700">
@@ -525,7 +525,7 @@ export function EmployeesScreen({
                   </p>
                   {badges ? <div className="md:hidden flex flex-wrap items-center gap-1.5 mt-1">{badges}</div> : null}
                   <p className="md:hidden text-xs text-faint mt-1 truncate">
-                    {ROLES[e.role] ?? e.role} · {PAY_TYPES[e.payType]} ${e.payRate.toFixed(2)}
+                    {ROLES[e.role] ?? e.role} · {PAY_TYPES[e.payType]} ${Number(e.payRate ?? 0).toFixed(2)}
                     {e.phone ? ` · ${e.phone}` : ''}
                   </p>
                 </div>
@@ -533,7 +533,7 @@ export function EmployeesScreen({
                   {ROLES[e.role] ?? e.role}
                 </span>
                 <span className="hidden md:block w-44 shrink-0 text-xs text-muted">
-                  {PAY_TYPES[e.payType]} ${e.payRate.toFixed(2)}
+                  {PAY_TYPES[e.payType]} ${Number(e.payRate ?? 0).toFixed(2)}
                 </span>
                 <span className="hidden lg:block w-40 shrink-0 text-xs text-faint truncate">
                   {e.phone ?? ''}

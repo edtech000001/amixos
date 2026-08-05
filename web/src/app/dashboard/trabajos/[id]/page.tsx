@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, MapPin, Calendar, Users, DollarSign,
@@ -12,6 +12,7 @@ import {
   MessageSquare, Navigation, Archive, Mail, PenLine } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useLang } from '@/i18n/LangProvider';
@@ -173,8 +174,27 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     }
   }, []);
 
+  // True once ANY snapshot (cached or live) is on screen — revalidates run
+  // silently instead of blanking back to the spinner.
+  const hasDataRef = useRef(false);
   const load = async () => {
     if (!business) return;
+    // Cache-first: paint the last saved snapshot immediately, then let the
+    // live fetch below replace it (same keys the mobile offline cache uses).
+    if (!hasDataRef.current) {
+      const [cj, ci, ca] = await Promise.all([
+        swrRead<Job>(`job_${id}`),
+        swrRead<JobItem[]>(`job_items_${id}`),
+        swrRead<Assignment[]>(`job_assignments_${id}`),
+      ]);
+      if (cj?.data && !hasDataRef.current) {
+        setJob(cj.data);
+        setItems(ci?.data ?? []);
+        setAssignments(ca?.data ?? []);
+        hasDataRef.current = true;
+        setLoading(false);
+      }
+    }
     void supabase.from('price_sheet_items')
       .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, is_addon, sort_order, active')
       .eq('business_id', business.id).eq('active', true)
@@ -203,6 +223,13 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     }
     setAssignments(a ?? []);
     setItems(it ?? []);
+    hasDataRef.current = !!j;
+    // Persist for the next instant open (fire-and-forget; trimmed/size-capped).
+    if (j) {
+      void swrWrite(`job_${id}`, j);
+      void swrWrite(`job_items_${id}`, it ?? []);
+      void swrWrite(`job_assignments_${id}`, a ?? []);
+    }
     setLoading(false);
   };
 

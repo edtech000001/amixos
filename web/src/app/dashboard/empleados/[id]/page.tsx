@@ -30,7 +30,7 @@ import { EmployeeHistoryView } from '@amixos/shared/screens/dashboard/EmployeeHi
 import { diffEmployeeChanges, logEmployeeMilestone } from '@amixos/shared/lib/employeeHistory';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { resolveAccess, type AccessMember, type AccessInvite } from '@amixos/shared/lib/teamPeople';
-import { INVITABLE_ROLES, ROLE_LABELS, can, type Role } from '@amixos/shared/lib/permissions';
+import { INVITABLE_ROLES, roleLabel, getActiveCustomRoles, can, type Role } from '@amixos/shared/lib/permissions';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
 import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import {
@@ -95,6 +95,8 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
   const tc = full.common;
   const teamT = full.dashboard.settings.team;
   const lang: 'es' | 'en' = locale === 'es' ? 'es' : 'en';
+  // Built-in invitable roles + this business's custom roles (migration 179).
+  const assignableRoles: Role[] = [...INVITABLE_ROLES, ...getActiveCustomRoles().map(c => c.key as Role)];
   const supabase = createSupabaseClient();
   const { business, user, currentRole, startImpersonation, locations } = useApp();
 
@@ -194,7 +196,7 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
       })
       .catch(() => { setHomeLocation(''); setSharedLocations([]); });
     // Pre-select the Invite dialog with the planned access role from import.
-    if (e.intended_access_role && (INVITABLE_ROLES as string[]).includes(e.intended_access_role)) {
+    if (e.intended_access_role && (assignableRoles as string[]).includes(e.intended_access_role)) {
       setAccessRole(e.intended_access_role as Role);
     }
     setTemplates(localizeTemplates((tplRes.data ?? []) as FieldTemplate[], locale));
@@ -1023,6 +1025,8 @@ function AccessSection({
   teamT: ReturnType<typeof useLang>['t']['dashboard']['settings']['team'];
   t: ReturnType<typeof useLang>['t']['dashboard']['employees'];
 }) {
+  // Built-in invitable roles + this business's custom roles (migration 179).
+  const assignableRoles: Role[] = [...INVITABLE_ROLES, ...getActiveCustomRoles().map(c => c.key as Role)];
   const [copied, setCopied] = useState(false);
   const copyInviteLink = async (url: string) => {
     try {
@@ -1039,14 +1043,14 @@ function AccessSection({
       {selAccess?.kind === 'active' ? (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">{ROLE_LABELS[selAccess.role][lang]}</span>
+            <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">{roleLabel(selAccess.role, lang)}</span>
             {selAccess.isYou ? <span className="text-xs text-faint">{teamT.youSuffix}</span> : null}
             {selAccess.role === 'owner' ? <span className="text-xs text-faint">{teamT.ownerSuffix}</span> : null}
           </div>
           {canManage && !selAccess.isYou && selAccess.role !== 'owner' ? (
             <div className="flex items-center gap-2">
               <select value={selAccess.role} disabled={busy} onChange={e => onChangeRole(selAccess.memberId, e.target.value as Role)} className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
-                {INVITABLE_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r][lang]}</option>)}
+                {assignableRoles.map(r => <option key={r} value={r}>{roleLabel(r, lang)}</option>)}
               </select>
               <button type="button" disabled={busy} onClick={() => onRemove(selAccess.memberId)} className="px-3 py-2 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-500/10 transition-colors disabled:opacity-50">
                 {teamT.removeBtn}
@@ -1062,7 +1066,7 @@ function AccessSection({
       ) : selAccess?.kind === 'invited' ? (
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">{teamT.pendingBadge}</span>
-          <span className="text-xs text-muted">{ROLE_LABELS[selAccess.role][lang]}</span>
+          <span className="text-xs text-muted">{roleLabel(selAccess.role, lang)}</span>
           {canManage ? (
             <div className="ml-auto flex items-center gap-1">
               {selAccess.acceptUrl ? (
@@ -1081,7 +1085,7 @@ function AccessSection({
           <p className="text-xs text-muted">{t.modal.appAccessNoneHint}</p>
           <div className="flex items-center gap-2">
             <select value={role} disabled={busy} onChange={e => setRole(e.target.value as Role)} className="flex-1 rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
-              {INVITABLE_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r][lang]}</option>)}
+              {assignableRoles.map(r => <option key={r} value={r}>{roleLabel(r, lang)}</option>)}
             </select>
             <button type="button" disabled={busy || !email} onClick={() => onInvite(email, role)} className="px-3 py-2 rounded-xl text-sm font-semibold text-primary hover:bg-primary/10 transition-colors disabled:opacity-50">
               {teamT.inviteBtn}

@@ -47,6 +47,7 @@ Core handles universal business needs: clients, jobs/proposals, invoices, employ
 - `jobs` table is unified (proposals + work). Status flow:
   `proposal → sent → accepted → scheduled → in_progress → completed → invoiced`
 - Client contacts: multiple people per client with roles
+- `employees_roster` (view, migration 178): names-only employee roster readable by ANY business member — use it for pickers/name resolution. Full `employees` reads (pay, phone, address) stay behind the Employees permission (`member_view = 'all'`).
 
 ## Supabase Query Pagination (CRITICAL)
 
@@ -88,6 +89,14 @@ async function fetchAll<T>(
 - **Clientes (Clients):** expandable fields, custom field templates, CSV import
 - **Empleados (Employees):** list, assignments to jobs
 - **Ajustes (Settings):** Negocio, Trabajos (pipeline config), Clientes (required fields + custom fields), Cuenta
+- **Roles:** role editor (Ajustes → Equipo / mobile Roles) supports custom roles — `business_roles` rows with `is_system=false`, key `c_<slug>`, full permissions snapshot (migration 179). Use `roleLabel()`/`getActiveCustomRoles()` from `shared/src/lib/permissions.ts` for labels/pickers; never index `ROLE_LABELS[x]` directly with a member's role.
+
+## Data Loading — stale-while-revalidate (perf overhaul, migrations 181-183)
+
+- `shared/src/lib/swrCache.ts` `useSwr(fetchKey, fetcher, {cacheKey, resetKey, cacheTrim})` is the loading pattern for screens: cached data renders instantly, the fetch revalidates in the background, rows never blank. Storage keys are `amixos_cache_<key>` (kvStore: AsyncStorage/localStorage) — byte-compatible with `mobile/lib/offline/cache.ts`, so outbox optimistic writes stay visible.
+- Key conventions: include business id (+ branch where relevant) in `cacheKey`/`resetKey` so tenant switches can never flash another business's rows. Jobs list: `jobs_list_v2_<biz>_<loc>`; dashboard: `dashboard_home_<biz>`; field home: `field_home_<biz>_<user>`; job detail keeps `job_<id>` / `job_items_<id>` / `job_assignments_<id>` (outbox patches these).
+- Tab-badge counts come from grouped RPCs (`job_tab_counts`, `invoice_tab_counts`) — never add per-tab `count:'exact'` loops. Server-side sorts go through `jobs_page_ids`; never download-all-then-sort.
+- RLS rule (migrations 160/161/181): SECURITY DEFINER helpers must NEVER appear in a policy with a row-column argument — wrap them in a no-arg `auth.uid()`-keyed set function referenced via `business_id in (select …)` (initplan, evaluated once per query).
 
 ## Mobile Bottom Sheets (CRITICAL — recurring bug)
 

@@ -5,6 +5,7 @@
 import {
   DEFAULT_ROLE_PERMISSIONS,
   RESOURCE_KEYS,
+  isCustomRole,
   type Role,
   type RolePermissions,
   type ResourceKey,
@@ -24,6 +25,7 @@ export const EDITABLE_CAPS: CapabilityKey[] = [
   'manageMembers',
   'viewAuditLog',
   'viewAllTimesheets',
+  'assignWorkers',
   'createEstimates',
   'clockInOut',
   'scheduleJobs',
@@ -36,18 +38,21 @@ export const EDITABLE_CAPS: CapabilityKey[] = [
 export const FIELD_ONLY_CAPS: CapabilityKey[] = ['clockInOut', 'scheduleJobs'];
 
 /** Whether a capability toggle is meaningful for a given role (drives editor
- *  visibility). Field-only caps are hidden for every non-field role. */
+ *  visibility). Field-only caps are hidden for every non-field built-in role;
+ *  custom roles show them (they can be configured field-like). */
 export function capAppliesToRole(cap: CapabilityKey, role: Role): boolean {
-  return FIELD_ONLY_CAPS.includes(cap) ? role === 'field' : true;
+  return FIELD_ONLY_CAPS.includes(cap) ? role === 'field' || isCustomRole(role) : true;
 }
 
 export function isRoleEditable(role: Role): boolean {
   return role !== 'owner';
 }
 
-/** Deep-ish equality vs the built-in default for a role (decides save/delete). */
+/** Deep-ish equality vs the built-in default for a role (decides save/delete).
+ *  Custom roles have no default — never "equal", their row is never deleted. */
 export function equalsDefault(role: Role, perms: RolePermissions): boolean {
   const def = DEFAULT_ROLE_PERMISSIONS[role];
+  if (!def) return false;
   for (const k of RESOURCE_KEYS) {
     const a = perms.resources[k];
     const b = def.resources[k];
@@ -89,13 +94,91 @@ export async function saveRoleOverride(
       {
         business_id: businessId,
         key: role,
-        is_system: true,
+        is_system: !isCustomRole(role),
         permissions: perms,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'business_id,key' },
     );
   return !error;
+}
+
+// ─── Custom roles (business_roles rows with is_system=false) ───────────────
+
+/** Slug for a new custom role key: `c_` prefix (never collides with built-ins
+ *  or future system keys) + normalized name. */
+export function customRoleKey(name: string): string {
+  const slug = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 32);
+  return `c_${slug || 'rol'}`;
+}
+
+/**
+ * Create a custom role: full permissions snapshot cloned from a built-in base
+ * role. Returns the new key, or null on failure (e.g. duplicate name/key).
+ */
+export async function createCustomRole(
+  supabase: SupabaseLike,
+  businessId: string,
+  name: string,
+  baseRole: Role,
+): Promise<string | null> {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  const key = customRoleKey(trimmed);
+  if (key in DEFAULT_ROLE_PERMISSIONS) return null;
+  const base = DEFAULT_ROLE_PERMISSIONS[baseRole] ?? DEFAULT_ROLE_PERMISSIONS.viewer;
+  const { error } = await supabase.from('business_roles').insert({
+    business_id: businessId,
+    key,
+    name: trimmed,
+    is_system: false,
+    permissions: clonePermissions(base),
+  });
+  return error ? null : key;
+}
+
+/** Rename a custom role (display name only — the key never changes). */
+export async function renameCustomRole(
+  supabase: SupabaseLike,
+  businessId: string,
+  key: string,
+  name: string,
+): Promise<boolean> {
+  const trimmed = name.trim();
+  if (!trimmed) return false;
+  const { error } = await supabase
+    .from('business_roles')
+    .update({ name: trimmed, updated_at: new Date().toISOString() })
+    .eq('business_id', businessId)
+    .eq('key', key)
+    .eq('is_system', false);
+  return !error;
+}
+
+/**
+ * Delete a custom role. The DB blocks deletion while members or pending
+ * invites still hold the key (migration 179 trigger) — that surfaces as
+ * `{ ok: false, inUse: true }` so the UI can tell the admin to reassign first.
+ */
+export async function deleteCustomRole(
+  supabase: SupabaseLike,
+  businessId: string,
+  key: string,
+): Promise<{ ok: boolean; inUse: boolean }> {
+  const { error } = await supabase
+    .from('business_roles')
+    .delete()
+    .eq('business_id', businessId)
+    .eq('key', key)
+    .eq('is_system', false);
+  if (!error) return { ok: true, inUse: false };
+  return { ok: false, inUse: /role in use|23503/i.test(error.message ?? '') };
 }
 
 /** Remove a role's override (revert to built-in default). */

@@ -5,6 +5,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import {
   setActiveRolePermissions,
+  setActiveCustomRoles,
   mergeRolePermissions,
   permissionsForRole,
   can,
@@ -22,6 +23,7 @@ import {
 } from '@amixos/shared/lib/impersonation';
 import { displayNameFromUser } from '@amixos/shared/lib/userName';
 import { fetchLocations, fetchMyHomeLocation, type Location } from '@amixos/shared/lib/locations';
+import { purgeSwrCache } from '@amixos/shared/lib/swrCache';
 
 export interface Business {
   id: string;
@@ -299,19 +301,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const reloadPermissions = useCallback(async () => {
     if (!activeBusinessId) {
       setActiveRolePermissions(null);
+      setActiveCustomRoles(null);
       setRoleOverrides({});
       return;
     }
     const { data } = await supabase
       .from('business_roles')
-      .select('key, permissions')
+      .select('key, name, is_system, permissions')
       .eq('business_id', activeBusinessId);
+    const rows = (data ?? []) as Array<{ key: string; name: string | null; is_system: boolean; permissions: unknown }>;
     const map: Partial<Record<Role, RolePermissions>> = {};
-    for (const row of (data ?? []) as Array<{ key: string; permissions: unknown }>) {
+    for (const row of rows) {
       map[row.key as Role] = mergeRolePermissions(row.key as Role, row.permissions);
     }
     // Register before state-set so the re-render reads up-to-date overrides.
     setActiveRolePermissions(Object.keys(map).length ? map : null);
+    // Custom roles (is_system=false): keys + display names for pickers/labels.
+    setActiveCustomRoles(
+      rows.filter((r) => r.is_system === false).map((r) => ({ key: r.key, name: r.name ?? r.key })),
+    );
     setRoleOverrides(map);
   }, [activeBusinessId]);
 
@@ -331,13 +339,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const rows = await fetchLocations(supabase, activeBusinessId);
     setLocations(rows);
     // The caller's OWN home branch — used to auto-select a branch on new records
-    // and as the default active filter. Fetched once per load.
-    const home = rows.length >= 2 && realUser
-      ? await fetchMyHomeLocation(supabase, activeBusinessId, realUser.id)
+    // and as the default active filter. Under "Ver como" resolve the TARGET
+    // member's home instead (their JWT is on data requests), and ignore the
+    // admin's saved branch choice.
+    const uid = impersonation?.target.userId ?? realUser?.id;
+    const home = rows.length >= 2 && uid
+      ? await fetchMyHomeLocation(supabase, activeBusinessId, uid)
       : null;
     const validHome = home && rows.some((l) => l.id === home) ? home : null;
     setMyHomeLocationId(validHome);
-    const saved = readActiveLocCookie()[activeBusinessId];
+    const saved = impersonation ? undefined : readActiveLocCookie()[activeBusinessId];
     if (saved !== undefined) {
       if (saved === '__all__') { setActiveLocationIdState(null); return; }
       setActiveLocationIdState(rows.some((l) => l.id === saved) ? saved : null);
@@ -347,7 +358,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Everyone — owners included — defaults to their own home branch when they
     // have one; owners with no assigned branch fall back to All.
     setActiveLocationIdState(validHome);
-  }, [activeBusinessId, realUser?.id]);
+  }, [activeBusinessId, realUser?.id, impersonation]);
 
   useEffect(() => { void loadLocations(); }, [loadLocations]);
 
@@ -479,6 +490,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setRoles({});
           setRoleOverrides({});
           setActiveRolePermissions(null);
+          setActiveCustomRoles(null);
+          // Wipe cached lists/dashboards so the next sign-in on this device
+          // can never hydrate another account's data.
+          void purgeSwrCache();
           setActiveBusinessIdState(null);
           writeActiveCookie(null);
           window.location.href = '/auth/login';

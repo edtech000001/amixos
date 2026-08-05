@@ -53,14 +53,24 @@ export async function prefetchForOffline(businessId: string): Promise<void> {
     })
       .then(rows => writeCached(`jobform_clients_${businessId}`, rows)),
 
-    fetchAllById<RawEmployee>((afterId, pageSize) => {
-      let q = supabase.from('employees')
-        .select('id, first_name, last_name, role, show_in_roster')
-        .eq('business_id', businessId).eq('active', true).order('id', { ascending: true }).limit(pageSize);
-      if (afterId) q = q.gt('id', afterId);
-      return q;
-    })
-      .then(rows => writeCached(`jobform_employees_${businessId}`, rows)),
+    // employees_roster (view, migration 178): names-only roster readable by
+    // every member, so the job-form picker cache warms for field crew too.
+    // Fallback to the table (privileged roles) if the view is missing/stale,
+    // so a good cache is never overwritten with an empty roster.
+    (async () => {
+      const fromTable = (table: string) =>
+        fetchAllById<RawEmployee>((afterId, pageSize) => {
+          let q = supabase.from(table)
+            .select('id, first_name, last_name, role, show_in_roster')
+            .eq('business_id', businessId).eq('active', true).order('id', { ascending: true }).limit(pageSize);
+          if (afterId) q = q.gt('id', afterId);
+          return q;
+        });
+      let rows: RawEmployee[] = [];
+      try { rows = await fromTable('employees_roster'); } catch { /* view missing */ }
+      if (rows.length === 0) rows = await fromTable('employees');
+      await writeCached(`jobform_employees_${businessId}`, rows);
+    })(),
 
     fetchAllById<RawContact>((afterId, pageSize) => {
       let q = supabase.from('client_contacts')

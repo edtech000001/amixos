@@ -10,7 +10,7 @@ import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { Fab } from '../../ui/Fab';
-import { ROLE_LABELS } from '../../lib/permissions';
+import { roleLabel } from '../../lib/permissions';
 import type { AccessStatus } from '../../lib/teamPeople';
 import { splitMultiValue } from '../../lib/fieldTemplates';
 
@@ -376,7 +376,7 @@ export function EmployeesScreen({
               ) : null}
               {e.access?.kind === 'active' ? (
                 <View className="px-2 py-0.5 rounded-full bg-primary/10">
-                  <Text className="text-xs font-semibold text-primary">{ROLE_LABELS[e.access.role][lang]}</Text>
+                  <Text className="text-xs font-semibold text-primary">{roleLabel(e.access.role, lang)}</Text>
                 </View>
               ) : e.access?.kind === 'invited' ? (
                 <View className="px-2 py-0.5 rounded-full bg-amber-100">
@@ -386,7 +386,7 @@ export function EmployeesScreen({
             </View>
           ) : null}
           <Text className="text-xs text-faint mt-1">
-            {ROLES[e.role] ?? e.role} · {PAY_TYPES[e.payType]} ${e.payRate.toFixed(2)}
+            {ROLES[e.role] ?? e.role} · {PAY_TYPES[e.payType]} ${Number(e.payRate ?? 0).toFixed(2)}
             {e.phone ? ` · ${e.phone}` : ''}
           </Text>
         </View>

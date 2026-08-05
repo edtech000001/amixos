@@ -34,8 +34,20 @@ invitesRouter.post('/', async (req: AuthRequest, res) => {
   if (!business_id || !email || !role) {
     return res.status(400).json({ success: false, message: 'business_id, email, role required' });
   }
+  // Built-in invitable roles, or a custom role defined by this business
+  // (business_roles with is_system=false, migration 179). The DB trigger
+  // re-validates on insert, this just gives a clean 400.
   if (!ALLOWED_ROLES.includes(role as InviteRole)) {
-    return res.status(400).json({ success: false, message: 'invalid role' });
+    const { data: customRole } = await supabase
+      .from('business_roles')
+      .select('key')
+      .eq('business_id', business_id)
+      .eq('key', role)
+      .eq('is_system', false)
+      .maybeSingle();
+    if (!customRole) {
+      return res.status(400).json({ success: false, message: 'invalid role' });
+    }
   }
 
   const normalizedEmail = String(email).trim().toLowerCase();

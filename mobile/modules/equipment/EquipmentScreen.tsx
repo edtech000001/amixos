@@ -532,8 +532,10 @@ export default function EquipmentScreen() {
 
   const loadEmployees = useCallback(async () => {
     if (!business) return;
+    // employees_roster (view, migration 178): names-only roster readable by
+    // every member — assignee picker works without the Employees permission.
     const data = await fetchAllById<EmployeeOption>((afterId, pageSize) => {
-      let q = supabase.from('employees').select('id, first_name, last_name')
+      let q = supabase.from('employees_roster').select('id, first_name, last_name')
         .eq('business_id', business.id)
         .eq('active', true)
         .order('id', { ascending: true })

@@ -50,6 +50,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { WEB_APP_URL } from '@/lib/webUrl';
 import { queuedUpdate } from '@/lib/offline/mutate';
 import { loadCached, patchCached, writeCached } from '@/lib/offline/cache';
+import { swrRead } from '@amixos/shared/lib/swrCache';
 import { Button } from '@amixos/shared/ui';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { jobShortCode } from '@amixos/shared/lib/jobRef';
@@ -329,9 +330,29 @@ export default function JobDetailRoute() {
     other: t.new.itemTypeOther,
   };
 
+  // True once ANY snapshot (cached or live) is on screen — focus revalidates
+  // then run silently instead of blanking back to the spinner.
+  const hasDataRef = useRef(false);
   const load = async () => {
     if (!business || !id) return;
-    setLoading(true);
+    // Cache-first: paint the last saved snapshot immediately (instant open +
+    // offline), then let the live fetch below replace it.
+    if (!hasDataRef.current) {
+      const [cj, ci, ca] = await Promise.all([
+        swrRead<Job>(`job_${id}`),
+        swrRead<JobItem[]>(`job_items_${id}`),
+        swrRead<JobAssignment[]>(`job_assignments_${id}`),
+      ]);
+      if (cj?.data && !hasDataRef.current) {
+        setJob(cj.data);
+        setItems(ci?.data ?? []);
+        setAssignments(ca?.data ?? []);
+        hasDataRef.current = true;
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+    }
     // Cached so a crew can open the job offline (to mark status / log actuals).
     // Each fetcher throws on error so loadCached can fall back to the cache.
     const [jobRes, itemsRes, asgRes] = await Promise.all([
@@ -376,6 +397,7 @@ export default function JobDetailRoute() {
     setJob(jobRes.data ? (jobRes.data as Job) : null);
     setItems((itemsRes.data as JobItem[] | null) ?? []);
     setAssignments((asgRes.data as unknown as JobAssignment[] | null) ?? []);
+    hasDataRef.current = !!jobRes.data;
     setLoading(false);
   };
 

@@ -12,7 +12,7 @@ import { SUPPORT_EMAIL, buildSupportMailto } from '@amixos/shared/lib/support';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { INVOICE_EMAIL_TOKENS } from '@amixos/shared/lib/invoiceEmail';
-import { ROLE_LABELS, can } from '@amixos/shared/lib/permissions';
+import { roleLabel, can } from '@amixos/shared/lib/permissions';
 import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import { parseHiddenFields, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, JOB_LAYOUT_SECTIONS, type JobFieldEntry, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import {
@@ -2697,12 +2697,8 @@ export default function AjustesPage() {
               <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <h2 className="text-base font-semibold text-ink">{locale === 'en' ? 'Materials & labor' : 'Materiales y mano de obra'}</h2>
-                    <p className="text-xs text-faint mt-1">
-                      {locale === 'en'
-                        ? 'Shows the Materials & Labor section (with Labor / Material / Equipment / Other tags) on jobs. Turn off to hide the section entirely — for businesses that don’t itemize. Proposals always keep it.'
-                        : 'Muestra la sección de Materiales y mano de obra (con etiquetas Mano de obra / Material / Equipo / Otro) en los trabajos. Desactívalo para ocultarla por completo — para negocios que no detallan líneas. Las propuestas siempre la mantienen.'}
-                    </p>
+                    <h2 className="text-base font-semibold text-ink">{t.itemTypes.heading}</h2>
+                    <p className="text-xs text-faint mt-1">{t.itemTypes.subtitle}</p>
                   </div>
                   <Toggle checked={itemTypesOn} onChange={() => saveItemTypes(!itemTypesOn)} disabled={savingItemTypes} />
                 </div>
@@ -2712,12 +2708,8 @@ export default function AjustesPage() {
               <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <h2 className="text-base font-semibold text-ink">{locale === 'en' ? 'Suggest crew' : 'Sugerir cuadrilla'}</h2>
-                    <p className="text-xs text-faint mt-1">
-                      {locale === 'en'
-                        ? 'Shows a “Suggest crew” button on the job form that ranks your team by distance to the job and who’s free that day. Turn off if you just assign your own team.'
-                        : 'Muestra un botón “Sugerir cuadrilla” en el formulario de trabajo que ordena a tu equipo por cercanía al trabajo y quién está libre ese día. Desactívalo si solo asignas a tu propio equipo.'}
-                    </p>
+                    <h2 className="text-base font-semibold text-ink">{t.crewFinderToggle.heading}</h2>
+                    <p className="text-xs text-faint mt-1">{t.crewFinderToggle.subtitle}</p>
                   </div>
                   <Toggle checked={crewFinderOn} onChange={() => saveCrewFinder(!crewFinderOn)} disabled={savingCrewFinder} />
                 </div>
@@ -3082,7 +3074,7 @@ export default function AjustesPage() {
                 </div>
                 <div className="flex flex-col gap-2 mt-5 pt-4 border-t border-border-soft">
                   <p className="text-sm text-muted">{t.account.emailLabel}: <span className="font-medium text-ink">{user?.email}</span></p>
-                  <p className="text-sm text-muted">{t.account.roleLabel}: <span className="font-medium text-ink">{currentRole ? ROLE_LABELS[currentRole][locale] : '—'}</span></p>
+                  <p className="text-sm text-muted">{t.account.roleLabel}: <span className="font-medium text-ink">{currentRole ? roleLabel(currentRole, locale) : '—'}</span></p>
                 </div>
               </div>
 
@@ -3124,7 +3116,7 @@ export default function AjustesPage() {
                           </span>
                           {role ? (
                             <span className="bg-primary/10 rounded-full px-2.5 py-1 text-xs font-semibold text-primary shrink-0">
-                              {ROLE_LABELS[role][locale]}
+                              {roleLabel(role, locale)}
                             </span>
                           ) : null}
                         </div>

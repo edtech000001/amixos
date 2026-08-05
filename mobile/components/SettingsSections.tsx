@@ -35,7 +35,7 @@ import { normalizeBundle, activeBundleConfig, invoiceDefaultLanguage, setBundleD
 import { formatPhoneInput } from '@amixos/shared/lib/format';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { INVOICE_EMAIL_TOKENS } from '@amixos/shared/lib/invoiceEmail';
-import { ROLE_LABELS } from '@amixos/shared/lib/permissions';
+import { roleLabel } from '@amixos/shared/lib/permissions';
 import { createSupabaseClient } from '@/lib/supabase';
 import { Input, Button, Modal, Toggle, Select, DatePicker } from '@amixos/shared/ui';
 import {
@@ -1868,7 +1868,9 @@ export function CrewModeSection() {
 export function JobItemTypesSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
+  const { t: full } = useLang();
   const c = useThemeColors();
+  const t = full.dashboard.settings.itemTypes;
 
   const initial = business?.job_item_types_enabled !== false;
   const [value, setValue] = useState<boolean>(initial);
@@ -1893,7 +1895,7 @@ export function JobItemTypesSection() {
       .update({ job_item_types_enabled: value })
       .eq('id', business.id);
     setSaving(false);
-    setMsg({ text: error ? 'No se pudo guardar' : 'Guardado', isError: !!error });
+    setMsg({ text: error ? t.saveError : t.saveSuccess, isError: !!error });
     if (!error) {
       setSaved(value);
       await refetchBusiness();
@@ -1907,11 +1909,11 @@ export function JobItemTypesSection() {
     <View className="gap-3">
       <SectionHeader
         icon={<Sliders size={18} color={c.primary} />}
-        title="Materiales y mano de obra"
-        subtitle="Muestra la sección de Materiales y mano de obra (con etiquetas Mano de obra / Material / Equipo / Otro) en los trabajos. Desactívalo para ocultarla por completo. Las propuestas siempre la mantienen."
+        title={t.heading}
+        subtitle={t.subtitle}
       />
       <View className="bg-card rounded-2xl border border-border-soft px-4 py-3 flex-row items-center">
-        <Text className="flex-1 text-sm text-ink">Mostrar sección</Text>
+        <Text className="flex-1 text-sm text-ink">{t.toggleLabel}</Text>
         <Toggle value={value} onValueChange={setValue} />
       </View>
       <StatusMsg msg={msg} />
@@ -1924,7 +1926,9 @@ export function JobItemTypesSection() {
 export function CrewFinderSection() {
   const supabase = createSupabaseClient();
   const { business, refetchBusiness } = useApp();
+  const { t: full } = useLang();
   const c = useThemeColors();
+  const t = full.dashboard.settings.crewFinderToggle;
 
   const initial = business?.crew_finder_enabled !== false;
   const [value, setValue] = useState<boolean>(initial);
@@ -1949,7 +1953,7 @@ export function CrewFinderSection() {
       .update({ crew_finder_enabled: value })
       .eq('id', business.id);
     setSaving(false);
-    setMsg({ text: error ? 'No se pudo guardar' : 'Guardado', isError: !!error });
+    setMsg({ text: error ? t.saveError : t.saveSuccess, isError: !!error });
     if (!error) {
       setSaved(value);
       await refetchBusiness();
@@ -1963,11 +1967,11 @@ export function CrewFinderSection() {
     <View className="gap-3">
       <SectionHeader
         icon={<Sliders size={18} color={c.primary} />}
-        title="Sugerir cuadrilla"
-        subtitle="Muestra un botón “Sugerir cuadrilla” en el formulario de trabajo que ordena a tu equipo por cercanía al trabajo y quién está libre ese día. Desactívalo si solo asignas a tu propio equipo."
+        title={t.heading}
+        subtitle={t.subtitle}
       />
       <View className="bg-card rounded-2xl border border-border-soft px-4 py-3 flex-row items-center">
-        <Text className="flex-1 text-sm text-ink">Mostrar botón</Text>
+        <Text className="flex-1 text-sm text-ink">{t.toggleLabel}</Text>
         <Toggle value={value} onValueChange={setValue} />
       </View>
       <StatusMsg msg={msg} />
@@ -3510,7 +3514,7 @@ export function AccountSection() {
         <View className="gap-1">
           <Text className="text-xs text-muted">{t.account.roleLabel}</Text>
           <Text className="text-sm font-medium text-ink">
-            {currentRole ? ROLE_LABELS[currentRole][locale] : '—'}
+            {currentRole ? roleLabel(currentRole, locale) : '—'}
           </Text>
         </View>
       </View>
@@ -3548,7 +3552,7 @@ export function AccountSection() {
                   {role ? (
                     <View className="bg-primary/10 rounded-full px-2.5 py-1 shrink-0">
                       <Text className="text-xs font-semibold text-primary">
-                        {ROLE_LABELS[role][locale]}
+                        {roleLabel(role, locale)}
                       </Text>
                     </View>
                   ) : null}

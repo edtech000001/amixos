@@ -22,7 +22,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-type AnySupabase = { from: (table: string) => any };
+type AnySupabase = { from: (table: string) => any; rpc: (fn: string, params?: any) => any };
 
 export interface InvoicesCursor {
   createdAt: string;
@@ -193,23 +193,28 @@ export async function fetchInvoiceStatusCounts(
   supabase: AnySupabase,
   params: Pick<InvoicesQueryParams, 'businessId' | 'locationId' | 'search' | 'dateFrom' | 'dateTo'>,
 ): Promise<Record<string, number>> {
+  // ONE grouped scan via the invoice_tab_counts RPC (migration 183) — was six
+  // parallel count:'exact' queries, each paying the full RLS cost.
   const term = params.search?.trim() ?? '';
-  const searchOr = await searchOrClause(supabase, params.businessId, term);
-  const keys = [...INVOICE_STATUS_KEYS, 'all'];
-  const entries = await Promise.all(
-    keys.map(async (key) => {
-      let q = supabase.from('invoices').select('id', { count: 'exact', head: true })
-        .eq('business_id', params.businessId);
-      if (params.locationId) q = q.eq('location_id', params.locationId);
-      if (params.dateFrom) q = q.gte('issue_date', params.dateFrom);
-      if (params.dateTo) q = q.lte('issue_date', params.dateTo);
-      if (searchOr) q = q.or(searchOr);
-      if (key !== 'all') q = q.eq('status', key);
-      const { count } = await q;
-      return [key, count ?? 0] as const;
-    }),
-  );
-  return Object.fromEntries(entries);
+  const ids = term ? await resolveSearchIds(supabase, params.businessId, term) : null;
+  const qAmount = term.replace(/[$,\s]/g, '');
+  const amount = term && qAmount !== '' && /^\d+(\.\d+)?$/.test(qAmount) ? qAmount : null;
+  const { data, error } = await supabase.rpc('invoice_tab_counts', {
+    p_business_id: params.businessId,
+    p_location_id: params.locationId ?? null,
+    p_date_from: params.dateFrom ?? null,
+    p_date_to: params.dateTo ?? null,
+    p_search_term: term || null,
+    p_search_amount: amount,
+    p_client_ids: ids?.clientIds?.length ? ids.clientIds : null,
+    p_invoice_ids: ids?.invoiceIds?.length ? ids.invoiceIds : null,
+  });
+  if (error) throw new Error(error.message);
+  const out: Record<string, number> = {};
+  for (const row of (data ?? []) as { tab: string; cnt: number | string }[]) {
+    out[row.tab] = Number(row.cnt);
+  }
+  return out;
 }
 
 export interface InvoiceGroup {

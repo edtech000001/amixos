@@ -20,3 +20,21 @@ export async function kvSet(key: string, value: string): Promise<void> {
     /* storage unavailable — ignore */
   }
 }
+
+export async function kvRemove(key: string): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** All stored keys starting with `prefix` (for cache purges). */
+export async function kvKeys(prefix: string): Promise<string[]> {
+  try {
+    const all = await AsyncStorage.getAllKeys();
+    return all.filter((k) => k.startsWith(prefix));
+  } catch {
+    return [];
+  }
+}

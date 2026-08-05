@@ -1,11 +1,13 @@
 import { StyleSheet } from 'react-native';
 import Svg, { Defs, LinearGradient, Stop, Rect, RadialGradient, Circle } from 'react-native-svg';
+import { useThemeColors } from '../theme';
 
-// Decorative pastel backdrop for auth screens. Renders behind the scrollview
-// so the form floats on a soft mesh of color instead of plain white.
-// All colors are very low-saturation so they stay subtle and don't fight
-// the form content for attention.
+// Decorative backdrop for auth screens. Renders behind the scrollview so the
+// form floats on a soft mesh of color instead of plain white. Colors come from
+// the active theme so the backdrop follows light/dark mode — otherwise a
+// dark-mode device gets a light backdrop behind dark inputs (invisible labels).
 export function AuthBackground() {
+  const c = useThemeColors();
   return (
     <Svg
       style={StyleSheet.absoluteFill}
@@ -14,12 +16,12 @@ export function AuthBackground() {
     >
       <Defs>
         <LinearGradient id="authBgBase" x1="0%" y1="0%" x2="50%" y2="100%">
-          <Stop offset="0%" stopColor="#F8FAFC" />
-          <Stop offset="100%" stopColor="#FFFFFF" />
+          <Stop offset="0%" stopColor={c.surface} />
+          <Stop offset="100%" stopColor={c.card} />
         </LinearGradient>
         <RadialGradient id="authBgBlob" cx="50%" cy="50%" r="50%">
-          <Stop offset="0%" stopColor="#CBD5E1" stopOpacity="0.35" />
-          <Stop offset="100%" stopColor="#CBD5E1" stopOpacity="0" />
+          <Stop offset="0%" stopColor={c.border} stopOpacity="0.4" />
+          <Stop offset="100%" stopColor={c.border} stopOpacity="0" />
         </RadialGradient>
       </Defs>
       <Rect x="0" y="0" width="100%" height="100%" fill="url(#authBgBase)" />

@@ -33,6 +33,7 @@ import { Input } from '../../ui/Input';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
 import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
 import { Fab } from '../../ui/Fab';
+import { SkeletonList } from '../../ui/Skeleton';
 import { formatDateLong, formatTime12h } from '../../lib/format';
 import { formatProjectDuration } from '../../lib/duration';
 import { searchMatches, usStateName } from '../../lib/usStates';
@@ -174,6 +175,16 @@ export interface JobsListScreenProps {
     search: string; tabs: string[]; sortBy: JobSortKey; groupBy: JobGroupKey;
     dateFrom: string | null; dateTo: string | null;
   }) => void;
+  /** Business payroll settings — adds "This/Last pay period" chips to the
+   *  date filter that match the Payroll screen's periods exactly. */
+  payPeriod?: { frequency: unknown; anchorDate: unknown; customDays?: unknown };
+  /** Background revalidation in flight while rows are on screen — renders a
+   *  thin bar above the list instead of blanking (swrCache). */
+  refreshing?: boolean;
+  /** Rows came from the local cache and the fresh fetch hasn't landed yet. */
+  stale?: boolean;
+  /** Epoch-ms the cached rows were saved (for the "Actualizado hace…" caption). */
+  cachedAt?: number | null;
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
@@ -256,6 +267,10 @@ export function JobsListScreen({
   loadingMore = false,
   onLoadMore,
   onFiltersChange,
+  payPeriod,
+  refreshing = false,
+  stale = false,
+  cachedAt = null,
 }: JobsListScreenProps) {
   const { t: full, locale } = useLang();
   const c = useThemeColors();
@@ -1034,11 +1049,30 @@ export function JobsListScreen({
     </>
   );
 
+
+  // "Actualizado hace 5 min" caption for cache-served rows (swrCache).
+  const swrT = full.common.swr;
+  const relTime = (ts: number): string => {
+    const m = Math.max(0, Math.round((Date.now() - ts) / 60000));
+    if (m < 1) return swrT.justNow;
+    if (m < 60) return locale === 'es' ? `hace ${m} min` : `${m} min ago`;
+    const h = Math.round(m / 60);
+    return locale === 'es' ? `hace ${h} h` : `${h}h ago`;
+  };
+  const staleCaption = stale && cachedAt ? swrT.updatedAgo.replace('{{time}}', relTime(cachedAt)) : null;
+
   return (
     <View className="flex-1 bg-surface">
+      {refreshing ? (
+        <View className="h-0.5 overflow-hidden bg-border-soft">
+          <View className="h-full w-1/3 rounded-full bg-primary" />
+        </View>
+      ) : staleCaption ? (
+        <Text className="text-[10px] text-faint text-center py-0.5">{staleCaption}</Text>
+      ) : null}
       <SectionList
         ref={sectionListRef}
-        sections={loading || filtered.length === 0 ? [] : flatSections}
+        sections={filtered.length === 0 ? [] : flatSections}
         keyExtractor={item => item.id}
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={jobsHeader}
@@ -1069,13 +1103,7 @@ export function JobsListScreen({
           </View>
         ) : null}
         ListEmptyComponent={loading ? (
-        <View className="items-center py-20">
-          <View className="flex-row gap-1">
-            {[0, 1, 2].map(i => (
-              <View key={i} className="w-2 h-2 rounded-full bg-primary" />
-            ))}
-          </View>
-        </View>
+        <SkeletonList rows={8} />
       ) : (
         <View className="items-center py-20">
           <ClipboardList size={40} color={c.faint} />
@@ -1321,7 +1349,7 @@ export function JobsListScreen({
       toLabel={t.dateFilter.to}
       clearLabel={t.dateFilter.clear}
       applyLabel={t.dateFilter.apply}
-      presets={buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets)}
+      presets={buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets, payPeriod)}
     />
     </View>
   );

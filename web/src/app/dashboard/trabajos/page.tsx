@@ -6,7 +6,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
-import { fetchJobsPage, fetchJobTabCounts, fetchJobGroupIndex, fetchAllJobsInGroup, LAZY_GROUP_DIMS, type JobsCursor, type JobsQueryParams, type JobGroup } from '@amixos/shared/lib/jobsQuery';
+import { fetchJobsPage, fetchJobsPageSorted, fetchJobTabCounts, fetchJobGroupIndex, fetchAllJobsInGroup, resolveSearchIds, LAZY_GROUP_DIMS, type JobsCursor, type JobsQueryParams, type JobGroup, type SearchIds } from '@amixos/shared/lib/jobsQuery';
+import { useSwr } from '@amixos/shared/lib/swrCache';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import {
   JobsListScreen,
@@ -134,54 +135,118 @@ export default function TrabajosPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const cursorRef = useRef<JobsCursor | null>(null);
   const paramsRef = useRef<JobsQueryParams | null>(null);
-  // Whether the current view needs the FULL matching set (advanced sort/group,
-  // which can't be done correctly on a single page) vs. paginated browsing.
-  const loadAllRef = useRef(false);
-  // Lazy group-by (Phase 2b): 'group' mode loads the group index then each
-  // group's jobs on demand as the user scrolls to the bottom.
-  const modeRef = useRef<'page' | 'all' | 'group'>('page');
+  // 'page' = recent-order keyset paging; 'sorted' = server-side sort via the
+  // jobs_page_ids RPC (offset paging); 'group' = lazy group index + per-group.
+  const modeRef = useRef<'page' | 'sorted' | 'group'>('page');
+  const sortKeyRef = useRef<string>('recent');
+  const sortOffsetRef = useRef(0);
+  const searchIdsRef = useRef<SearchIds | null>(null);
   const groupIndexRef = useRef<JobGroup[]>([]);
   const loadedGroupsRef = useRef(0);
   const groupByRef = useRef<string>('none');
 
-  const runQuery = async (params: JobsQueryParams, loadAll = false) => {
+  // ── SWR default view: instant from cache, background revalidate ───────────
+  type Filters = { search: string; tabs: string[]; sortBy: string; groupBy: string; dateFrom: string | null; dateTo: string | null };
+  const [filters, setFilters] = useState<Filters | null>(null);
+  const isDefaultFilters = (f: Filters) =>
+    !f.search && f.tabs.length === 0 && f.sortBy === 'recent' && f.groupBy === 'none' && !f.dateFrom && !f.dateTo;
+  const defaultActive = !!business && !!filters && isDefaultFilters(filters);
+  const swrKey = defaultActive ? `jobs_list_v2_${business.id}_${activeLocationId ?? 'all'}` : null;
+  type JobsPayload = { jobs: RawJob[]; nextCursor: JobsCursor | null; counts: Record<string, number> };
+  const swr = useSwr<JobsPayload>(
+    swrKey,
+    async () => {
+      const params: JobsQueryParams = { businessId: business!.id, locationId: activeLocationId ?? null, tabs: [], search: '' };
+      const [page, counts] = await Promise.all([
+        fetchJobsPage<RawJob>(supabase, JOB_LIST_SELECT, { ...params, pageSize: 50 }),
+        fetchJobTabCounts(supabase, params),
+      ]);
+      return { jobs: page.jobs, nextCursor: page.nextCursor, counts };
+    },
+    {
+      cacheKey: swrKey,
+      resetKey: `${business?.id ?? ''}_${activeLocationId ?? 'all'}`,
+      focusThrottleMs: 3_000,
+      // Persist only the first page — pagination past it stays network-only.
+      cacheTrim: (d) => ({ ...d, jobs: d.jobs.slice(0, 50), nextCursor: null }),
+    },
+  );
+  // Sync SWR payload into the list state whenever the default view is active.
+  useEffect(() => {
+    if (!swrKey || !swr.data || !business) return;
+    ++loadSeqRef.current; // cancel any filtered load still in flight
+    modeRef.current = 'page';
+    paramsRef.current = { businessId: business.id, locationId: activeLocationId ?? null, tabs: [], search: '' };
+    setRawJobs(swr.data.jobs);
+    setServerCounts(swr.data.counts);
+    cursorRef.current = swr.data.nextCursor;
+    setHasMore(!!swr.data.nextCursor);
+    setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swr.data, swrKey]);
+
+  // Search-id resolution runs ONCE per load, shared by page + counts + index.
+  const resolveIds = async (params: JobsQueryParams): Promise<SearchIds | null> => {
+    const term = params.search?.trim() ?? '';
+    return term ? resolveSearchIds(supabase, params.businessId, term) : null;
+  };
+
+  // Filtered 'recent'-order paging (2 round trips). Previous rows stay on
+  // screen while this loads — the screen only skeletons when there's nothing.
+  const runQuery = async (params: JobsQueryParams) => {
     const seq = ++loadSeqRef.current;
     paramsRef.current = params;
-    loadAllRef.current = loadAll;
-    modeRef.current = loadAll ? 'all' : 'page';
+    modeRef.current = 'page';
     setLoading(true);
     cursorRef.current = null;
     setHasMore(false);
     try {
-      const countsP = fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search }, [...TAB_KEYS, 'archived']);
-      if (loadAll) {
-        // Load every matching row (in big pages) so sort/group is complete. Fast
-        // when a tab/search narrows the set; a full unfiltered group loads all.
-        const acc: RawJob[] = [];
-        let cursor: JobsCursor | null = null;
-        for (let i = 0; i < 200; i++) {
-          const page = await fetchJobsPage<RawJob>(supabase, JOB_LIST_SELECT, { ...params, cursor, pageSize: 1000 });
-          acc.push(...page.jobs);
-          if (seq === loadSeqRef.current) setRawJobs([...acc]); // progressive
-          if (!page.nextCursor) break;
-          cursor = page.nextCursor;
-        }
-        const counts = await countsP;
-        if (seq !== loadSeqRef.current) return;
-        setServerCounts(counts);
-      } else {
-        const [page, counts] = await Promise.all([
-          fetchJobsPage<RawJob>(supabase, JOB_LIST_SELECT, { ...params, pageSize: 50 }),
-          countsP,
-        ]);
-        if (seq !== loadSeqRef.current) return;
-        setRawJobs(page.jobs);
-        cursorRef.current = page.nextCursor;
-        setHasMore(!!page.nextCursor);
-        setServerCounts(counts);
-      }
+      const ids = await resolveIds(params);
+      if (seq !== loadSeqRef.current) return;
+      searchIdsRef.current = ids;
+      const [page, counts] = await Promise.all([
+        fetchJobsPage<RawJob>(supabase, JOB_LIST_SELECT, { ...params, pageSize: 50 }, ids),
+        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search }, ids),
+      ]);
+      if (seq !== loadSeqRef.current) return;
+      setRawJobs(page.jobs);
+      cursorRef.current = page.nextCursor;
+      setHasMore(!!page.nextCursor);
+      setServerCounts(counts);
     } catch (e) {
       console.error('Jobs query failed', e);
+    } finally {
+      if (seq === loadSeqRef.current) setLoading(false);
+    }
+  };
+
+  // Server-side sort (status/startDate/client/company/lead) via jobs_page_ids.
+  // Falls back to 'recent' paging when the tab combo can't be expressed
+  // (multi-tab / delegated) — filters stay correct, order degrades to recent.
+  const runSorted = async (params: JobsQueryParams, sortKey: string) => {
+    const seq = ++loadSeqRef.current;
+    paramsRef.current = params;
+    modeRef.current = 'sorted';
+    sortKeyRef.current = sortKey;
+    sortOffsetRef.current = 0;
+    setLoading(true);
+    setHasMore(false);
+    try {
+      const ids = await resolveIds(params);
+      if (seq !== loadSeqRef.current) return;
+      searchIdsRef.current = ids;
+      const [pageRes, counts] = await Promise.all([
+        fetchJobsPageSorted<RawJob>(supabase, JOB_LIST_SELECT, { ...params, sortBy: sortKey, offset: 0, pageSize: 50 }, ids),
+        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search }, ids),
+      ]);
+      if (seq !== loadSeqRef.current) return;
+      setServerCounts(counts);
+      if (pageRes === null) { await runQuery(params); return; }
+      setRawJobs(pageRes.jobs);
+      sortOffsetRef.current = pageRes.jobs.length;
+      setHasMore(pageRes.hasMore);
+    } catch (e) {
+      console.error('Jobs sorted query failed', e);
     } finally {
       if (seq === loadSeqRef.current) setLoading(false);
     }
@@ -221,11 +286,30 @@ export default function TrabajosPage() {
   const loadMore = async () => {
     if (loadingMore || !paramsRef.current) return;
     if (modeRef.current === 'group') { void loadNextGroup(); return; }
-    if (!cursorRef.current) return;
     const seq = loadSeqRef.current;
+    if (modeRef.current === 'sorted') {
+      setLoadingMore(true);
+      try {
+        const pageRes = await fetchJobsPageSorted<RawJob>(
+          supabase, JOB_LIST_SELECT,
+          { ...paramsRef.current, sortBy: sortKeyRef.current, offset: sortOffsetRef.current, pageSize: 50 },
+          searchIdsRef.current,
+        );
+        if (seq !== loadSeqRef.current || !pageRes) return;
+        setRawJobs(prev => [...prev, ...pageRes.jobs]);
+        sortOffsetRef.current += pageRes.jobs.length;
+        setHasMore(pageRes.hasMore);
+      } catch (e) {
+        console.error('Jobs sorted load-more failed', e);
+      } finally {
+        setLoadingMore(false);
+      }
+      return;
+    }
+    if (!cursorRef.current) return;
     setLoadingMore(true);
     try {
-      const page = await fetchJobsPage<RawJob>(supabase, JOB_LIST_SELECT, { ...paramsRef.current, cursor: cursorRef.current, pageSize: 50 });
+      const page = await fetchJobsPage<RawJob>(supabase, JOB_LIST_SELECT, { ...paramsRef.current, cursor: cursorRef.current, pageSize: 50 }, searchIdsRef.current);
       if (seq !== loadSeqRef.current) return;
       setRawJobs(prev => [...prev, ...page.jobs]);
       cursorRef.current = page.nextCursor;
@@ -245,16 +329,23 @@ export default function TrabajosPage() {
     paramsRef.current = params;
     groupByRef.current = groupBy;
     modeRef.current = 'group';
-    loadAllRef.current = false;
     setLoading(true); setHasMore(false); cursorRef.current = null;
     try {
+      const ids = await resolveIds(params);
+      if (seq !== loadSeqRef.current) return;
+      searchIdsRef.current = ids;
       const [index, counts] = await Promise.all([
-        fetchJobGroupIndex(supabase, { businessId: params.businessId, groupBy, tabs: params.tabs, search: params.search, locationId: params.locationId, dateFrom: params.dateFrom, dateTo: params.dateTo }),
-        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search }, [...TAB_KEYS, 'archived']),
+        fetchJobGroupIndex(supabase, { businessId: params.businessId, groupBy, tabs: params.tabs, search: params.search, locationId: params.locationId, dateFrom: params.dateFrom, dateTo: params.dateTo }, ids),
+        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search }, ids),
       ]);
       if (seq !== loadSeqRef.current) return;
       setServerCounts(counts);
-      if (index === null) { await runQuery(params, true); return; }
+      if (index === null) {
+        // Tab combo the index RPC can't express — stream server-sorted pages by
+        // the group dimension instead; groupJobs sections them incrementally.
+        await runSorted(params, groupBy === 'state' ? 'recent' : groupBy);
+        return;
+      }
       groupIndexRef.current = orderGroups(index, groupBy);
       loadedGroupsRef.current = 0;
       setRawJobs([]);
@@ -268,10 +359,12 @@ export default function TrabajosPage() {
 
   // Re-run the current view — after a mutation, or when the branch changes.
   const reRun = (locationId: string | null) => {
+    if (defaultActive) { swr.refresh({ force: true }); return; }
     if (!paramsRef.current) return;
     const p = { ...paramsRef.current, locationId };
     if (modeRef.current === 'group') void runGroupLazy(p, groupByRef.current);
-    else void runQuery(p, loadAllRef.current);
+    else if (modeRef.current === 'sorted') void runSorted(p, sortKeyRef.current);
+    else void runQuery(p);
   };
   const reload = () => reRun(activeLocationId ?? null);
 
@@ -302,20 +395,37 @@ export default function TrabajosPage() {
     setMoveClientIds(null);
     reload();
   };
+  // The default view handles branch changes itself — its SWR key includes the
+  // branch. Filtered views re-run explicitly.
   useEffect(() => {
-    reRun(activeLocationId ?? null);
+    if (!defaultActive) reRun(activeLocationId ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLocationId]);
+  // Revalidate when the tab regains focus/visibility — throttled, no blanking.
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible' && defaultActive) swr.refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => { document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('focus', onVisible); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultActive]);
 
-  const handleFiltersChange = (f: { search: string; tabs: string[]; sortBy: string; groupBy: string; dateFrom: string | null; dateTo: string | null }) => {
+  const handleFiltersChange = (f: Filters) => {
     if (!business) return;
+    setFilters(f);
+    // Default view → the SWR hook owns it (key flips non-null; cached rows
+    // render immediately and a background revalidate kicks off).
+    if (isDefaultFilters(f)) return;
     const params = { businessId: business.id, locationId: activeLocationId ?? null, tabs: f.tabs, search: f.search, dateFrom: f.dateFrom, dateTo: f.dateTo };
     if (f.groupBy !== 'none' && LAZY_GROUP_DIMS.includes(f.groupBy)) {
       void runGroupLazy(params, f.groupBy);
+    } else if (f.groupBy === 'lead' || f.groupBy === 'company') {
+      // Server-sorted stream by the group dimension — groupJobs sections it.
+      void runSorted(params, f.groupBy);
+    } else if (f.sortBy !== 'recent') {
+      void runSorted(params, f.sortBy);
     } else {
-      // lead/company grouping or advanced sort → load all matching + client group.
-      const needsAll = f.sortBy !== 'recent' || f.groupBy !== 'none';
-      void runQuery(params, needsAll);
+      void runQuery(params);
     }
   };
 
@@ -327,6 +437,8 @@ export default function TrabajosPage() {
     if (status === 'declined') update.declined_at = new Date().toISOString();
     await supabase.from('jobs').update(update).eq('id', id);
     setRawJobs(prev => prev.map(j => j.id === id ? { ...j, ...update } : j));
+    // Keep the SWR default-view cache in step so the next open shows the change.
+    swr.mutate(prev => prev ? { ...prev, jobs: prev.jobs.map(j => (j.id === id ? { ...j, ...update } : j)) } : prev);
   };
 
   const jobs: JobListItem[] = useMemo(() => rawJobs.map(j => ({
@@ -386,9 +498,13 @@ export default function TrabajosPage() {
       />
     )}
     <JobsListScreen
-      loading={loading}
+      loading={(loading || swr.loading) && jobs.length === 0}
+      refreshing={swr.refreshing || (loading && jobs.length > 0)}
+      stale={swr.stale}
+      cachedAt={swr.cachedAt}
       jobs={jobs}
       initialTab={initialTab}
+      payPeriod={business ? { frequency: business.payroll_frequency, anchorDate: business.payroll_anchor_date, customDays: business.payroll_custom_days } : undefined}
       onJobPress={(id) => { saveScrollAnchor('jobs-list', id); router.push(`/dashboard/trabajos/${id}`); }}
       onUpdateStatus={updateStatus}
       onGenerateInvoice={(id) => { saveScrollAnchor('jobs-list', id); router.push(`/dashboard/trabajos/${id}?action=invoice`); }}

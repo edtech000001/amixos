@@ -9,7 +9,7 @@ import { Building2, Check, X, ArrowRight, Smartphone } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/i18n/LangProvider';
 import { Button } from '@/components/ui/Button';
-import { ROLE_LABELS, type Role } from '@amixos/shared/lib/permissions';
+import { roleLabel, type Role } from '@amixos/shared/lib/permissions';
 
 interface InviteInfo {
   id: string;
@@ -17,6 +17,7 @@ interface InviteInfo {
   business_name: string;
   email: string;
   role: Role;
+  role_name?: string | null;
   expires_at: string;
   accepted_at: string | null;
 }
@@ -119,7 +120,7 @@ export default function AceptarInvitacionPage({ params }: { params: { token: str
             </h1>
             <p className="text-lg font-semibold text-primary mb-1">{invite.business_name}</p>
             <p className="text-sm text-gray-500 mb-6">
-              {lang === 'es' ? 'Rol: ' : 'Role: '}<span className="font-semibold">{ROLE_LABELS[invite.role][lang]}</span>
+              {lang === 'es' ? 'Rol: ' : 'Role: '}<span className="font-semibold">{invite.role_name ?? roleLabel(invite.role, lang)}</span>
             </p>
             <Button onClick={accept} loading={status === 'accepting'} fullWidth>
               {lang === 'es' ? 'Aceptar invitación' : 'Accept invitation'} <ArrowRight size={14} className="ml-2"/>

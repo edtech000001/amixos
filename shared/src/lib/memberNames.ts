@@ -14,9 +14,11 @@ export async function memberNameMap(
 ): Promise<Record<string, string>> {
   const [{ data: members }, employees] = await Promise.all([
     supabase.rpc('list_business_members', { b_id: businessId }),
+    // employees_roster (view, migration 178): names-only, readable by every
+    // member — so roles without the Employees permission still resolve names.
     fetchAll<{ user_id: string; first_name: string | null; last_name: string | null }>((from, to) =>
       supabase
-        .from('employees')
+        .from('employees_roster')
         .select('user_id, first_name, last_name')
         .eq('business_id', businessId)
         .not('user_id', 'is', null)

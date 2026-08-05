@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import {
   setActiveRolePermissions,
+  setActiveCustomRoles,
   mergeRolePermissions,
   permissionsForRole,
   can,
@@ -12,6 +13,7 @@ import {
 } from '@amixos/shared/lib/permissions';
 import { displayNameFromUser } from '@amixos/shared/lib/userName';
 import { fetchLocations, fetchMyHomeLocation, type Location } from '@amixos/shared/lib/locations';
+import { purgeSwrCache } from '@amixos/shared/lib/swrCache';
 import {
   subscribeImpersonation,
   getImpersonation,
@@ -309,6 +311,7 @@ export const useAuthStore = create<AuthStore>()(
         const u = get().user;
         if (!u) {
           setActiveRolePermissions(null);
+          setActiveCustomRoles(null);
           set({ businesses: [], business: null, businessLoaded: true, activeBusinessId: null, locations: [], activeLocationId: null, roles: {}, currentRole: null, roleOverrides: {}, permissions: null });
           return;
         }
@@ -416,12 +419,16 @@ export const useAuthStore = create<AuthStore>()(
         }
         try {
           const rows = await fetchLocations(supabase, businessId);
-          const uid = get().user?.id;
+          // Under "Ver como", resolve the TARGET member's home branch and role —
+          // queries already run under their JWT, so their employee row is the
+          // one visible; the admin's saved branch choice doesn't apply.
+          const imp = getImpersonation();
+          const uid = imp?.target.userId ?? get().user?.id;
           const home = rows.length >= 2 && uid
             ? await fetchMyHomeLocation(supabase, businessId, uid)
             : null;
           const validHome = home && rows.some((l) => l.id === home) ? home : null;
-          const saved = get().activeLocationByBiz[businessId];
+          const saved = imp ? undefined : get().activeLocationByBiz[businessId];
           let active: string | null;
           if (saved !== undefined) {
             active = saved === '__all__' ? null : (rows.some((l) => l.id === saved) ? saved : null);
@@ -432,7 +439,8 @@ export const useAuthStore = create<AuthStore>()(
           }
           // Enforce the per-role location lock: a role without switchLocations is
           // pinned to its own home branch (RLS enforces the same on reads).
-          if (rows.length >= 2 && !can.switchLocations(get().currentRole)) {
+          const roleForLock = imp ? imp.target.role : get().currentRole;
+          if (rows.length >= 2 && !can.switchLocations(roleForLock)) {
             active = validHome;
           }
           set({ locations: rows, activeLocationId: active, myHomeLocationId: validHome });
@@ -445,19 +453,26 @@ export const useAuthStore = create<AuthStore>()(
       _loadRolePermissions: async (businessId) => {
         if (!businessId) {
           setActiveRolePermissions(null);
+          setActiveCustomRoles(null);
           const role = get().currentRole;
           set({ roleOverrides: {}, permissions: role ? permissionsForRole(role) : null });
           return;
         }
         const { data } = await supabase
           .from('business_roles')
-          .select('key, permissions')
+          .select('key, name, is_system, permissions')
           .eq('business_id', businessId);
+        const rows = (data ?? []) as Array<{ key: string; name: string | null; is_system: boolean; permissions: unknown }>;
         const map: Partial<Record<Role, RolePermissions>> = {};
-        for (const row of (data ?? []) as Array<{ key: string; permissions: unknown }>) {
+        for (const row of rows) {
           map[row.key as Role] = mergeRolePermissions(row.key as Role, row.permissions);
         }
         setActiveRolePermissions(Object.keys(map).length ? map : null);
+        // Custom roles (is_system=false): register keys + display names for
+        // pickers and labels.
+        setActiveCustomRoles(
+          rows.filter((r) => r.is_system === false).map((r) => ({ key: r.key, name: r.name ?? r.key })),
+        );
         const role = get().currentRole;
         set({
           roleOverrides: map,
@@ -495,6 +510,10 @@ export const useAuthStore = create<AuthStore>()(
           case 'SIGNED_OUT':
             stopImp();
             setActiveRolePermissions(null);
+            setActiveCustomRoles(null);
+            // Wipe cached lists/dashboards so the next sign-in on this device
+            // can never hydrate another account's data.
+            void purgeSwrCache();
             set({ user: null, business: null, businessLoaded: false, status: 'logged_out', error: null, roleOverrides: {}, permissions: null, roles: {}, currentRole: null, locations: [], activeLocationId: null });
             break;
           case 'TOKEN_REFRESHED':
@@ -562,6 +581,14 @@ export const useAuthStore = create<AuthStore>()(
 // Subscribing inside useEffect would create duplicate listeners on remount.
 supabase.auth.onAuthStateChange((event, session) => {
   void useAuthStore.getState()._handleAuthEvent(event, session);
+});
+
+// Re-resolve branches when "Ver como" starts/stops: the active + home branch
+// must reflect the impersonated member (their JWT is now on data requests),
+// and revert to the admin's own on exit.
+subscribeImpersonation(() => {
+  const bid = useAuthStore.getState().activeBusinessId;
+  if (bid) void useAuthStore.getState()._loadLocations(bid);
 });
 
 // Safety net: if INITIAL_SESSION never fires (network hung, AsyncStorage

@@ -62,7 +62,7 @@ import {
   type AccessMember,
   type AccessInvite,
 } from '@amixos/shared/lib/teamPeople';
-import { INVITABLE_ROLES, ROLE_LABELS, can, type Role } from '@amixos/shared/lib/permissions';
+import { INVITABLE_ROLES, roleLabel, getActiveCustomRoles, can, type Role } from '@amixos/shared/lib/permissions';
 import { useUnsavedGuard } from '@/lib/useUnsavedGuard';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
 import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
@@ -129,6 +129,8 @@ export default function EmpleadoDetailRoute() {
   const tc = full.common;
   const teamT = full.dashboard.settings.team;
   const lang: 'es' | 'en' = locale === 'es' ? 'es' : 'en';
+  // Built-in invitable roles + this business's custom roles (migration 179).
+  const assignableRoles: Role[] = [...INVITABLE_ROLES, ...getActiveCustomRoles().map(c => c.key as Role)];
 
   const PAY_TYPE_OPTIONS = [
     { value: 'hourly', label: t.payTypes.hourly },
@@ -399,7 +401,7 @@ export default function EmpleadoDetailRoute() {
       })
       .catch(() => { setHomeLocation(''); setSharedLocations([]); });
     // Pre-select the Invite dialog with the planned access role from import.
-    if (e.intended_access_role && (INVITABLE_ROLES as string[]).includes(e.intended_access_role)) {
+    if (e.intended_access_role && (assignableRoles as string[]).includes(e.intended_access_role)) {
       setAccessRole(e.intended_access_role as Role);
     }
     setTemplates(localizeTemplates((tplRes.data ?? []) as FieldTemplate[], locale));
@@ -753,7 +755,7 @@ export default function EmpleadoDetailRoute() {
           <View className="flex-row items-center gap-2">
             {selAccess?.kind === 'active' ? (
               <View className="rounded-full bg-primary/10 px-2.5 py-0.5">
-                <Text className="text-xs font-semibold text-primary">{ROLE_LABELS[selAccess.role][lang]}</Text>
+                <Text className="text-xs font-semibold text-primary">{roleLabel(selAccess.role, lang)}</Text>
               </View>
             ) : null}
             {!employee.active ? (
@@ -904,7 +906,7 @@ export default function EmpleadoDetailRoute() {
               <View className="gap-2">
                 <View className="flex-row items-center gap-2">
                   <View className="rounded-full bg-primary/10 px-2.5 py-0.5">
-                    <Text className="text-xs font-semibold text-primary">{ROLE_LABELS[selAccess.role][lang]}</Text>
+                    <Text className="text-xs font-semibold text-primary">{roleLabel(selAccess.role, lang)}</Text>
                   </View>
                   {selAccess.isYou ? <Text className="text-xs text-faint">{teamT.youSuffix}</Text> : null}
                   {selAccess.role === 'owner' ? <Text className="text-xs text-faint">{teamT.ownerSuffix}</Text> : null}
@@ -914,7 +916,7 @@ export default function EmpleadoDetailRoute() {
                     <Select
                       value={selAccess.role}
                       onValueChange={(v) => changeAccessRole(selAccess.memberId, v as Role)}
-                      options={INVITABLE_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r][lang] }))}
+                      options={assignableRoles.map((r) => ({ value: r, label: roleLabel(r, lang) }))}
                     />
                     <Pressable onPress={() => removeAccess(selAccess.memberId)} disabled={accessBusy}
                       className="py-2.5 rounded-2xl bg-red-500/10 active:bg-red-100 items-center">
@@ -935,7 +937,7 @@ export default function EmpleadoDetailRoute() {
                 <View className="rounded-full bg-amber-100 px-2.5 py-0.5">
                   <Text className="text-xs font-semibold text-amber-700">{teamT.pendingBadge}</Text>
                 </View>
-                <Text className="text-xs text-muted">{ROLE_LABELS[selAccess.role][lang]}</Text>
+                <Text className="text-xs text-muted">{roleLabel(selAccess.role, lang)}</Text>
                 {canManageAccess ? (
                   <View className="ml-auto flex-row items-center gap-1">
                     {invites.find((i) => i.id === selAccess.inviteId)?.acceptUrl ? (
@@ -962,7 +964,7 @@ export default function EmpleadoDetailRoute() {
                 <Select
                   value={accessRole}
                   onValueChange={(v) => setAccessRole(v as Role)}
-                  options={INVITABLE_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r][lang] }))}
+                  options={assignableRoles.map((r) => ({ value: r, label: roleLabel(r, lang) }))}
                 />
                 <Pressable
                   onPress={() => inviteToApp(form.email.trim(), accessRole)}

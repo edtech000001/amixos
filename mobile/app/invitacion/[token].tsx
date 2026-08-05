@@ -8,7 +8,7 @@ import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { Button } from '@amixos/shared/ui';
-import { ROLE_LABELS, type Role } from '@amixos/shared/lib/permissions';
+import { roleLabel, type Role } from '@amixos/shared/lib/permissions';
 
 interface InviteInfo {
   id: string;
@@ -16,6 +16,7 @@ interface InviteInfo {
   business_name: string;
   email: string;
   role: Role;
+  role_name?: string | null;
   expires_at: string;
   accepted_at: string | null;
 }
@@ -120,7 +121,7 @@ export default function AceptarInvitacionPage() {
               </Text>
               <Text className="text-lg font-semibold text-primary mb-1">{invite.business_name}</Text>
               <Text className="text-sm text-muted mb-6">
-                {lang === 'es' ? 'Rol: ' : 'Role: '}<Text className="font-semibold">{ROLE_LABELS[invite.role][lang]}</Text>
+                {lang === 'es' ? 'Rol: ' : 'Role: '}<Text className="font-semibold">{invite.role_name ?? roleLabel(invite.role, lang)}</Text>
               </Text>
               <View className="w-full">
                 <Button onPress={accept} loading={status === 'accepting'} fullWidth>

@@ -38,6 +38,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
+import { useSwr } from '@amixos/shared/lib/swrCache';
+import { kvGet, kvSet } from '@amixos/shared/lib/kvStore';
 import {
   DASHBOARD_WIDGET_SIZES,
   buildDashboardLayout,
@@ -47,7 +49,6 @@ import {
   type DashboardLayout,
 } from '@amixos/shared/lib/dashboardWidgets';
 import { can, isFieldOnly } from '@amixos/shared/lib/permissions';
-import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { FieldHome } from '@/components/dashboard/FieldHome';
 
 const formatCurrency = (n: number) =>
@@ -260,13 +261,20 @@ export default function DashboardPage() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
+  // Mark overdue invoices at most once per day (was: a write on EVERY open).
   useEffect(() => {
     if (!business) return;
-    void supabase.from('invoices')
-      .update({ status: 'overdue' })
-      .eq('business_id', business.id)
-      .eq('status', 'sent')
-      .lt('due_date', new Date().toISOString().split('T')[0]);
+    const flagKey = `overdue_checked_${business.id}`;
+    const today = new Date().toISOString().split('T')[0];
+    void kvGet(flagKey).then(async (last) => {
+      if (last === today) return;
+      await supabase.from('invoices')
+        .update({ status: 'overdue' })
+        .eq('business_id', business.id)
+        .eq('status', 'sent')
+        .lt('due_date', today);
+      void kvSet(flagKey, today);
+    });
   }, [business?.id]);
 
   // Layout state follows the business (keyed on id so a background refetch
@@ -279,79 +287,70 @@ export default function DashboardPage() {
     setSizes(Object.fromEntries(resolved.visible.map(w => [w.id, w.size])));
   }, [business?.id, currentRole, profileLayout]);
 
-  useEffect(() => {
-    if (!business) return;
-    const load = async () => {
+  // Cache-first dashboard: cached numbers render instantly, one dashboard_stats
+  // RPC (migration 181) + two small embed queries revalidate in the background.
+  // Replaces 7 stat queries incl. an unbounded paid-invoice download.
+  type DashPayload = { stats: DashboardStats; recent: RecentInvoice[]; upcoming: UpcomingJob[] };
+  const dashKey = business ? `dashboard_home_${business.id}` : null;
+  const dash = useSwr<DashPayload>(
+    dashKey,
+    async () => {
       const now = new Date();
-      try {
-        const startMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-        const startYear = new Date(now.getFullYear(), 0, 1).toISOString();
-        const today = now.toISOString().split('T')[0];
-
-        const [paidMonth, paidYearRows, pending, overdue, clients, clocked, jobsActive, recentInv, upcomingJobs] = await Promise.all([
-          supabase.from('invoices').select('total_amount').eq('business_id', business.id).eq('status', 'paid').gte('paid_at', startMonth),
-          // All paid invoices this year (also feeds the monthly chart) — can
-          // exceed 1000 rows for a busy business. Keyset (by id) — offset
-          // .range() re-scans under RLS and stalls at scale.
-          fetchAllById<{ id: string; total_amount: number | null; paid_at: string | null }>((afterId, pageSize) => {
-            let q = supabase.from('invoices').select('id, total_amount, paid_at').eq('business_id', business.id).eq('status', 'paid').gte('paid_at', startYear).order('id', { ascending: true }).limit(pageSize);
-            if (afterId) q = q.gt('id', afterId);
-            return q;
-          }),
-          supabase.from('invoices').select('id', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'sent'),
-          supabase.from('invoices').select('id', { count: 'exact', head: true }).eq('business_id', business.id).eq('status', 'overdue'),
-          supabase.from('clients').select('id', { count: 'exact', head: true }).eq('business_id', business.id),
-          supabase.from('timesheets').select('id', { count: 'exact', head: true }).eq('business_id', business.id).is('clock_out', null),
-          supabase.from('jobs').select('id', { count: 'exact', head: true }).eq('business_id', business.id).in('status', ['scheduled', 'in_progress']),
-          // Fetch enough rows for the largest widget size (lg shows 8).
-          supabase.from('invoices').select('id, invoice_number, total_amount, status, due_date, clients(first_name, last_name)').eq('business_id', business.id).order('created_at', { ascending: false }).limit(LIST_ROWS.lg),
-          supabase.from('jobs').select('id, title, status, scheduled_date, clients(first_name, last_name)').eq('business_id', business.id).in('status', ['scheduled', 'in_progress']).gte('scheduled_date', today).order('scheduled_date', { ascending: true }).limit(LIST_ROWS.lg),
-        ]);
-
-        const sum = (rows: { total_amount?: number | null }[] | null) => rows?.reduce((acc, r) => acc + (r.total_amount ?? 0), 0) ?? 0;
-
-        const monthly = Array(12).fill(0) as number[];
-        for (const row of paidYearRows) {
-          if (!row.paid_at) continue;
-          monthly[new Date(row.paid_at).getMonth()] += row.total_amount ?? 0;
-        }
-
-        setStats({
-          earningsMonth: sum(paidMonth.data),
-          earningsYear: sum(paidYearRows),
-          invoicesPending: pending.count ?? 0,
-          invoicesOverdue: overdue.count ?? 0,
-          clientsTotal: clients.count ?? 0,
-          clockedInNow: clocked.count ?? 0,
-          jobsActive: jobsActive.count ?? 0,
-          monthly,
-        });
-
-        const rawInv = (recentInv.data ?? []) as unknown as RawRecentInvoice[];
-        setRecent(rawInv.map(inv => ({
+      const startMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const startYear = new Date(now.getFullYear(), 0, 1).toISOString();
+      const today = now.toISOString().split('T')[0];
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+      const [statsRes, recentInv, upcomingJobs] = await Promise.all([
+        supabase.rpc('dashboard_stats', {
+          p_business_id: business!.id, p_start_month: startMonth, p_start_year: startYear, p_tz: tz,
+        }),
+        supabase.from('invoices').select('id, invoice_number, total_amount, status, due_date, clients(first_name, last_name)').eq('business_id', business!.id).order('created_at', { ascending: false }).limit(LIST_ROWS.lg),
+        supabase.from('jobs').select('id, title, status, scheduled_date, clients(first_name, last_name)').eq('business_id', business!.id).in('status', ['scheduled', 'in_progress']).gte('scheduled_date', today).order('scheduled_date', { ascending: true }).limit(LIST_ROWS.lg),
+      ]);
+      if (statsRes.error) throw new Error(statsRes.error.message);
+      if (recentInv.error) throw new Error(recentInv.error.message);
+      if (upcomingJobs.error) throw new Error(upcomingJobs.error.message);
+      const d = (statsRes.data ?? {}) as Record<string, unknown>;
+      const stats: DashboardStats = {
+        earningsMonth: Number(d.earnings_month ?? 0),
+        earningsYear: Number(d.earnings_year ?? 0),
+        invoicesPending: Number(d.invoices_pending ?? 0),
+        invoicesOverdue: Number(d.invoices_overdue ?? 0),
+        clientsTotal: Number(d.clients_total ?? 0),
+        clockedInNow: Number(d.clocked_in_now ?? 0),
+        jobsActive: Number(d.jobs_active ?? 0),
+        monthly: Array.isArray(d.monthly) ? (d.monthly as number[]).map(Number) : Array(12).fill(0),
+      };
+      const rawInv = (recentInv.data ?? []) as unknown as RawRecentInvoice[];
+      const rawJobs = (upcomingJobs.data ?? []) as unknown as RawUpcomingJob[];
+      return {
+        stats,
+        recent: rawInv.map(inv => ({
           id: inv.id,
           invoiceNumber: inv.invoice_number,
           totalAmount: inv.total_amount,
           status: inv.status,
           clientName: inv.clients ? `${inv.clients.first_name} ${inv.clients.last_name}` : null,
-        })));
-
-        const rawJobs = (upcomingJobs.data ?? []) as unknown as RawUpcomingJob[];
-        setUpcoming(rawJobs.map(job => ({
+        })),
+        upcoming: rawJobs.map(job => ({
           id: job.id,
           title: job.title,
           status: job.status,
           scheduledDate: job.scheduled_date,
           clientName: job.clients ? `${job.clients.first_name} ${job.clients.last_name}` : null,
-        })));
-      } catch (err) {
-        console.error('dashboard load failed', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    void load();
-  }, [business?.id]);
+        })),
+      };
+    },
+    { cacheKey: dashKey, resetKey: business?.id ?? '' },
+  );
+  useEffect(() => {
+    if (!dash.data) return;
+    setStats(dash.data.stats);
+    setRecent(dash.data.recent);
+    setUpcoming(dash.data.upcoming);
+    setLoading(false);
+  }, [dash.data]);
+  useEffect(() => { if (dash.error) setLoading(false); }, [dash.error]);
 
   const persistLayout = async (
     visible: DashboardWidgetId[],
