@@ -170,9 +170,12 @@ export function useSwr<T>(
     if (!p) {
       p = fetcherRef.current();
       inflight.set(key, p as Promise<unknown>);
-      void p.finally(() => {
+      // Cleanup via then(ok, err) — a .finally() chain would itself reject on
+      // fetch failure and fire "unhandled promise rejection" warnings.
+      const cleanup = () => {
         if (inflight.get(key) === p) inflight.delete(key);
-      });
+      };
+      void p.then(cleanup, cleanup);
     }
     setFetching(true);
     p.then(

@@ -120,6 +120,14 @@ export function impersonatingFetch(
     'default_role_permissions',
     'member_res',
     'member_view',
+    // List/dashboard aggregates (165, 181, 183) — pure SELECTs under the
+    // caller's RLS; without these the jobs list badges, sorted views, group-by
+    // and dashboard all error in "Ver como".
+    'job_group_index',
+    'job_tab_counts',
+    'jobs_page_ids',
+    'dashboard_stats',
+    'invoice_tab_counts',
   ];
   const isReadOnlyRpc = isRpc && READONLY_RPCS.some(fn => url.includes(`/rest/v1/rpc/${fn}`));
   const isDbWrite =
