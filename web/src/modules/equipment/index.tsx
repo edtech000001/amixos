@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
 import { useLang } from '@/i18n/LangProvider';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -252,6 +253,8 @@ export default function EquipmentModule() {
   // Plain function (not useCallback): it reads groupBy/debouncedSearch — declared
   // below — at CALL time, so it can't sit in a deps array without a TDZ. The
   // query effect (after the groupBy declaration) drives it.
+  // True once any snapshot (cached or live) painted — hydrate only first run.
+  const hydratedRef = useRef(false);
   const runQuery = async () => {
     if (!business) return;
     const seq = ++loadSeqRef.current;
@@ -262,7 +265,20 @@ export default function EquipmentModule() {
     setLoading(true);
     cursorRef.current = null;
     setHasMore(false);
+    const isDefault = !debouncedSearch.trim() && groupBy === 'none';
     try {
+      // Cache-first for the default view: paint the last snapshot instantly.
+      const cacheKey = `equipment_v2_${business.id}_${activeLocationId ?? 'all'}`;
+      if (isDefault && !hydratedRef.current) {
+        const cached = await swrRead<{ items: Equipment[]; total: number }>(cacheKey);
+        if (cached?.data && seq === loadSeqRef.current && !hydratedRef.current) {
+          hydratedRef.current = true;
+          setEquipment(cached.data.items);
+          setServerTotal(cached.data.total);
+          setLoading(false);
+          void loadCovers(cached.data.items.map(r => r.id));
+        }
+      }
       const countP = fetchEquipmentCount(supabase, base);
       if (needsAll) {
         const rows = await fetchAllEquipmentMatching<Equipment>(supabase, '*', base);
@@ -278,10 +294,12 @@ export default function EquipmentModule() {
           countP,
         ]);
         if (seq !== loadSeqRef.current) return;
+        hydratedRef.current = true;
         setEquipment(page.items);
         cursorRef.current = page.nextCursor;
         setHasMore(!!page.nextCursor);
         setServerTotal(total);
+        if (isDefault) void swrWrite(cacheKey, { items: page.items.slice(0, 50), total });
         setCoverPhotos({});
         await loadCovers(page.items.map(r => r.id));
       }

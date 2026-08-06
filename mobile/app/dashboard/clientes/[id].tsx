@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -34,6 +34,7 @@ import * as Sharing from 'expo-sharing';
 import { buildClientCsv, buildClientHtml } from '@amixos/shared/lib/clientShare';
 import { createSupabaseClient } from '@/lib/supabase';
 import { loadCached, writeCached } from '@/lib/offline/cache';
+import { swrRead } from '@amixos/shared/lib/swrCache';
 import { queuedInsert, queuedUpdate } from '@/lib/offline/mutate';
 import { newUuid } from '@/lib/offline/ids';
 import { isOnlineNow } from '@/lib/offline/network';
@@ -219,9 +220,26 @@ export default function ClienteDetailRoute() {
     onLogged: () => setCommReload(n => n + 1),
   });
 
+  // True once any snapshot (cached or live) painted — focus revalidates run
+  // silently instead of blanking back to the spinner.
+  const hasDataRef = useRef(false);
   const load = async () => {
     if (!business || !id) return;
-    setLoading(true);
+    // Cache-first: paint the last saved snapshot immediately, then let the
+    // live fetch below replace it (same keys loadCached persists).
+    if (!hasDataRef.current) {
+      setLoading(true);
+      const [cc, cts] = await Promise.all([
+        swrRead<NonNullable<typeof client>>(`client_${id}`),
+        swrRead<typeof contacts>(`client_contacts_${id}`),
+      ]);
+      if (cc?.data && !hasDataRef.current) {
+        hasDataRef.current = true;
+        setClient(cc.data);
+        setContacts(cts?.data ?? []);
+        setLoading(false);
+      }
+    }
     // Client + contacts cached so the record opens offline (incl. on-site adds).
     // Invoices + templates are best-effort (offline → empty).
     const clientRes = await loadCached(`client_${id}`, async () => {
@@ -256,6 +274,7 @@ export default function ClienteDetailRoute() {
         .order('sort_order');
       tplData = (data as FieldTemplate[] | null) ?? [];
     } catch { /* offline */ }
+    hasDataRef.current = !!clientRes.data;
     setClient(clientRes.data ?? null);
     setInvoices(invData);
     setTemplates(localizeTemplates(tplData, locale));

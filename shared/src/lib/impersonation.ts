@@ -128,6 +128,11 @@ export function impersonatingFetch(
     'jobs_page_ids',
     'dashboard_stats',
     'invoice_tab_counts',
+    'team_hour_totals',
+    'payroll_period_inputs',
+    'payroll_period_ledger',
+    'employee_hours_breakdown',
+    'reports_overview',
   ];
   const isReadOnlyRpc = isRpc && READONLY_RPCS.some(fn => url.includes(`/rest/v1/rpc/${fn}`));
   const isDbWrite =

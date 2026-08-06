@@ -224,7 +224,7 @@ export function InventoryScreen({
   return (
     <View className="flex-1 bg-surface">
       <FlatList
-        data={loading ? [] : filtered}
+        data={filtered}
         keyExtractor={i => i.id}
         renderItem={renderItem}
         ListHeaderComponent={header}

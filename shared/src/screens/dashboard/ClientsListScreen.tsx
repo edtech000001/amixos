@@ -28,6 +28,7 @@ import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { Input } from '../../ui/Input';
 import { Fab } from '../../ui/Fab';
+import { SkeletonList } from '../../ui/Skeleton';
 import { clientMatchesSearch, matchingContacts } from '../../lib/clientSearch';
 import { groupClients, parseClientGroupKey, CLIENTS_GROUP_KEY, type ClientSection, type ClientGroupKey } from '../../lib/clientSections';
 import { usStateName } from '../../lib/usStates';
@@ -219,7 +220,8 @@ export function ClientsListScreen({
     selectedIds.size === 1 ? t.selectedCountSingle : t.selectedCountPlural
   ).replace('{{count}}', String(selectedIds.size));
 
-  const showList = !loading && filtered.length > 0;
+  // Never blank loaded rows during a refetch — loading only matters when empty.
+  const showList = filtered.length > 0;
   const lastSection = sections.length > 0 ? sections[sections.length - 1] : null;
   const lastClientId = lastSection ? lastSection.data[lastSection.data.length - 1].id : null;
 
@@ -418,14 +420,8 @@ export function ClientsListScreen({
         <View className="bg-card rounded-t-2xl h-3" />
       ) : null}
 
-      {loading ? (
-        <View className="items-center py-20">
-          <View className="flex-row gap-1">
-            {[0, 1, 2].map(i => (
-              <View key={i} className="w-2 h-2 rounded-full bg-primary" />
-            ))}
-          </View>
-        </View>
+      {loading && filtered.length === 0 ? (
+        <SkeletonList rows={8} />
       ) : filtered.length === 0 ? (
         <View className="items-center py-20">
           <User size={40} color={c.faint} />

@@ -3,7 +3,7 @@ import { Alert, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
-import { loadCached } from '@/lib/offline/cache';
+import { useSwr } from '@amixos/shared/lib/swrCache';
 import { useApp } from '@/lib/AppContext';
 import { can } from '@amixos/shared/lib/permissions';
 import {
@@ -83,6 +83,11 @@ export default function ClientesTab() {
   const paramsRef = useRef<{ businessId: string; search: string } | null>(null);
   const loadAllRef = useRef(false);
 
+  // ── SWR default view (no search, name grouping): instant from cache ───────
+  const [filters, setFilters] = useState<{ search: string; groupBy: string } | null>(null);
+  const isDefaultFilters = (f: { search: string; groupBy: string }) => !f.search && !clientGroupNeedsAll(f.groupBy);
+  const defaultActive = !!business && !!filters && isDefaultFilters(filters);
+
   // Branch scoping: clients restricted to OTHER branches are hidden (small set).
   const excludeIds = useMemo(() => {
     if (!activeLocationId) return [] as string[];
@@ -126,22 +131,53 @@ export default function ClientesTab() {
       finally { if (seq === loadSeqRef.current) setLoading(false); }
       return;
     }
-    const cacheKey = `clients_list_${base.businessId}_${activeLocationId ?? 'all'}`;
-    const res = await loadCached<{ clients: Client[]; nextCursor: ClientsCursor | null; total: number }>(cacheKey, async () => {
+    try {
+      const [page, total] = await Promise.all([
+        fetchClientsPage<Client>(supabase, CLIENT_PAGE_SELECT, { ...params, pageSize: 50 }),
+        fetchClientCount(supabase, params),
+      ]);
+      if (seq !== loadSeqRef.current) return;
+      setRawClients(page.clients);
+      cursorRef.current = page.nextCursor;
+      setHasMore(!!page.nextCursor);
+      setServerTotal(total);
+    } catch { /* offline / error — keep whatever's on screen */ }
+    finally { if (seq === loadSeqRef.current) setLoading(false); }
+  };
+
+  // Default view rides the SWR cache: renders the last snapshot instantly and
+  // revalidates in the background (filtered/grouped views fetch live above).
+  type ClientsPayload = { clients: Client[]; nextCursor: ClientsCursor | null; total: number };
+  const swrKey = defaultActive ? `clients_list_v2_${business.id}_${activeLocationId ?? 'all'}` : null;
+  const swr = useSwr<ClientsPayload>(
+    swrKey,
+    async () => {
+      const params = { businessId: business!.id, search: '', excludeIds: excludeIdsRef.current };
       const [page, total] = await Promise.all([
         fetchClientsPage<Client>(supabase, CLIENT_PAGE_SELECT, { ...params, pageSize: 50 }),
         fetchClientCount(supabase, params),
       ]);
       return { clients: page.clients, nextCursor: page.nextCursor, total };
-    });
-    if (seq !== loadSeqRef.current) return;
-    const d = res.data;
-    setRawClients(d?.clients ?? []);
-    cursorRef.current = res.fromCache ? null : (d?.nextCursor ?? null);
-    setHasMore(!res.fromCache && !!d?.nextCursor);
-    setServerTotal(d?.total ?? 0);
+    },
+    {
+      cacheKey: swrKey,
+      resetKey: `${business?.id ?? ''}_${activeLocationId ?? 'all'}`,
+      focusThrottleMs: 3_000,
+      cacheTrim: (d) => ({ ...d, clients: d.clients.slice(0, 50), nextCursor: null }),
+    },
+  );
+  useEffect(() => {
+    if (!swrKey || !swr.data || !business) return;
+    ++loadSeqRef.current;
+    paramsRef.current = { businessId: business.id, search: '' };
+    loadAllRef.current = false;
+    setRawClients(swr.data.clients);
+    cursorRef.current = swr.data.nextCursor;
+    setHasMore(!!swr.data.nextCursor);
+    setServerTotal(swr.data.total);
     setLoading(false);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swr.data, swrKey]);
 
   const loadMore = async () => {
     if (loadingMore || !paramsRef.current || loadAllRef.current || !cursorRef.current) return;
@@ -157,7 +193,10 @@ export default function ClientesTab() {
     finally { setLoadingMore(false); }
   };
 
-  const reRun = () => { if (paramsRef.current) void runQuery(paramsRef.current, loadAllRef.current); };
+  const reRun = () => {
+    if (defaultActive) { swr.refresh({ force: true }); return; }
+    if (paramsRef.current) void runQuery(paramsRef.current, loadAllRef.current);
+  };
   // Re-run when the branch scope changes (locations load, or branch switch).
   useEffect(() => {
     if (paramsRef.current) void runQuery(paramsRef.current, loadAllRef.current);
@@ -166,6 +205,8 @@ export default function ClientesTab() {
 
   const handleFiltersChange = (f: { search: string; groupBy: string }) => {
     if (!business) return;
+    setFilters(f);
+    if (isDefaultFilters(f)) return; // SWR owns the default view
     void runQuery({ businessId: business.id, search: f.search }, clientGroupNeedsAll(f.groupBy));
   };
 
@@ -174,9 +215,10 @@ export default function ClientesTab() {
   useFocusEffect(
     useCallback(() => {
       void loadMeta();
-      reRun();
+      if (defaultActive) swr.refresh(); // throttled, never blanks
+      else reRun();
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [business, locale, activeLocationId]),
+    }, [business, locale, activeLocationId, defaultActive]),
   );
 
   const items: ClientListItem[] = useMemo(

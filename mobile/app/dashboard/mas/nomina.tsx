@@ -13,16 +13,16 @@ import {
 } from '@amixos/shared/screens/dashboard/PayrollScreen';
 import {
   getPayrollPeriod,
-  computePayrollRows,
+  computePayrollRowsFromAggregates,
   normalizePayrollConfig,
   type PayrollConfig,
-  employeeBreakdownInRange,
+  type PayrollAggregate,
+  type PayrollBreakdown,
   normalizeFrequency,
   parsePayrollAnchor,
   type PayrollFrequency,
-  type PayrollJob,
 } from '@amixos/shared/lib/payroll';
-import type { FormulaFieldDef } from '@amixos/shared/lib/payrollFormula';
+import { formulaJobFieldRefs, type FormulaFieldDef } from '@amixos/shared/lib/payrollFormula';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { fetchEmployeeLocations, employeeIdsAtLocation, type EmployeeLocation } from '@amixos/shared/lib/locations';
 import { LocationSwitcher } from '@/components/LocationSwitcher';
@@ -67,9 +67,14 @@ export default function NominaRoute() {
     setPeriodApplied(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periodParam, periodApplied, business?.id, frequency, anchorDate]);
-  const [employees, setEmployees] = useState<{ id: string; first_name: string; last_name: string; pay_rate: number; pay_type: string }[]>([]);
-  const [timesheets, setTimesheets] = useState<{ employee_id: string | null; hours_worked: number | null; work_date: string | null }[]>([]);
-  const [jobs, setJobs] = useState<PayrollJob[]>([]);
+  // Per-employee aggregated inputs from the payroll_period_inputs RPC
+  // (migration 186) — the pay phase runs client-side on top of these.
+  type AggInput = PayrollAggregate & { active: boolean; breakdown: PayrollBreakdown };
+  const [inputs, setInputs] = useState<AggInput[]>([]);
+  const employees = useMemo(
+    () => inputs.map(i => ({ ...i.employee, active: i.active })),
+    [inputs],
+  );
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [loanBalances, setLoanBalances] = useState<Record<string, number>>({});
   const [loanEntries, setLoanEntries] = useState<Record<string, LoanLedgerEntry[]>>({});
@@ -96,54 +101,81 @@ export default function NominaRoute() {
     return `${period.start.toLocaleDateString(dateLocale, opts)} – ${period.end.toLocaleDateString(dateLocale, { ...opts, year: 'numeric' })}`;
   }, [frequency, anchorDate, period, dateLocale]);
 
+  // Job custom-field keys the active pay formula reads — the inputs RPC only
+  // collects raw values for these; a formula edit that references NEW keys
+  // triggers a refetch (the key list is a load dependency below).
+  const jcfKeys = useMemo(() => {
+    const cfg = normalizePayrollConfig(business?.payroll_config);
+    const refs = cfg.formula ? formulaJobFieldRefs(cfg.formula) : [];
+    return Array.from(new Set(refs.map(r => r.k))).sort();
+  }, [business?.payroll_config]);
+  const jcfKeysStr = jcfKeys.join(',');
+
   const load = useCallback(async () => {
     if (!business) return;
     setLoading(true);
     const bid = business.id;
-    const [empRes, tsRes, jobRes, payRes, loanRes] = await Promise.all([
-      supabase.from('employees').select('id, first_name, last_name, pay_rate, pay_type, active, overtime_eligible, overtime_threshold, overtime_multiplier, custom_fields').eq('business_id', bid),
-      supabase.from('timesheets').select('employee_id, hours_worked, work_date').eq('business_id', bid)
-        .gte('work_date', period.startStr).lte('work_date', period.endStr),
-      supabase.from('jobs').select('id, title, scheduled_date, total_hours, driver_employee_ids, driver_hours, custom_fields, job_assignments(employee_id)')
-        .eq('business_id', bid).gte('scheduled_date', period.startStr).lte('scheduled_date', period.endStr),
-      // Match by period OVERLAP, not exact period_start: if the owner changes the
-      // pay start date the boundaries shift, and an already-paid worker must still
-      // show as paid (the snapshot lives on permanently in Payroll History either way).
-      supabase.from('payroll_payments').select('id, employee_id, method, check_number, bonus, gross_pay, hours, created_at, components').eq('business_id', bid).lte('period_start', period.endStr).gte('period_end', period.startStr),
-      // Loan ledger — full history; balance per worker = sum(amount) across ALL periods.
-      supabase.from('employee_loans').select('id, employee_id, amount, note, entry_date').eq('business_id', bid).order('entry_date', { ascending: false }),
+    // 2 RPCs (migration 186) replace 5 whole/period-table downloads: the
+    // server aggregates hours per employee; pay math runs client-side.
+    const [inputsRes, ledgerRes] = await Promise.all([
+      supabase.rpc('payroll_period_inputs', {
+        p_business_id: bid, p_start: period.startStr, p_end: period.endStr,
+        p_jcf_keys: jcfKeys.length ? jcfKeys : null,
+      }),
+      supabase.rpc('payroll_period_ledger', {
+        p_business_id: bid, p_start: period.startStr, p_end: period.endStr,
+      }),
     ]);
-    setEmployees((empRes.data ?? []) as never);
-    setTimesheets((tsRes.data ?? []) as never);
-    setJobs(((jobRes.data ?? []) as Array<{ id: string; title: string | null; scheduled_date: string | null; total_hours: number | null; driver_employee_ids: string[] | null; driver_hours: number | null; job_assignments: { employee_id: string | null }[] }>).map(j => ({
-      id: j.id,
-      title: j.title,
-      scheduled_date: j.scheduled_date,
-      total_hours: j.total_hours,
-      driver_employee_ids: j.driver_employee_ids,
-      driver_hours: j.driver_hours,
-      custom_fields: (j as { custom_fields?: Record<string, unknown> | null }).custom_fields ?? null,
-      assignmentEmployeeIds: (j.job_assignments ?? []).map(a => a.employee_id).filter((x): x is string => !!x),
-    })));
-    setPayments((payRes.data ?? []) as PaymentRow[]);
-    const balances: Record<string, number> = {};
-    const entries: Record<string, LoanLedgerEntry[]> = {};
-    ((loanRes.data ?? []) as { id: string; employee_id: string | null; amount: number | null; note: string | null; entry_date: string | null }[]).forEach(l => {
-      if (!l.employee_id) return;
-      balances[l.employee_id] = (balances[l.employee_id] ?? 0) + (Number(l.amount) || 0);
-      (entries[l.employee_id] ??= []).push({
-        id: l.id,
-        amount: Number(l.amount) || 0,
-        note: l.note,
-        entryDate: l.entry_date ?? '',
-      });
-    });
-    setLoanBalances(balances);
-    setLoanEntries(entries);
+    if (!inputsRes.error) {
+      type Raw = {
+        employee_id: string; first_name: string; last_name: string;
+        pay_rate: number | string; pay_type: string; active: boolean | null;
+        overtime_eligible: boolean | null; overtime_threshold: number | string | null;
+        overtime_multiplier: number | string | null; custom_fields: Record<string, unknown> | null;
+        worked_hours: number | string; driven_hours: number | string; jobs_driven: number | string;
+        jcf_raw: Record<string, unknown[]> | null; breakdown: PayrollBreakdown;
+      };
+      setInputs(((inputsRes.data ?? []) as Raw[]).map(r => ({
+        employee: {
+          id: r.employee_id,
+          first_name: r.first_name,
+          last_name: r.last_name,
+          pay_rate: Number(r.pay_rate) || 0,
+          pay_type: r.pay_type,
+          overtime_eligible: r.overtime_eligible,
+          overtime_threshold: r.overtime_threshold == null ? null : Number(r.overtime_threshold),
+          overtime_multiplier: r.overtime_multiplier == null ? null : Number(r.overtime_multiplier),
+          custom_fields: r.custom_fields,
+        },
+        active: r.active !== false,
+        worked: Number(r.worked_hours) || 0,
+        driven: Number(r.driven_hours) || 0,
+        jobsDriven: Number(r.jobs_driven) || 0,
+        jcfRaw: r.jcf_raw,
+        breakdown: r.breakdown,
+      })));
+    }
+    if (!ledgerRes.error && ledgerRes.data) {
+      const led = ledgerRes.data as {
+        payments?: PaymentRow[] | null;
+        loan_balances?: Record<string, number> | null;
+        loan_entries?: Record<string, { id: string; amount: number; note: string | null; entryDate: string }[]> | null;
+      };
+      setPayments(led.payments ?? []);
+      const balances: Record<string, number> = {};
+      for (const [k, v] of Object.entries(led.loan_balances ?? {})) balances[k] = Number(v) || 0;
+      setLoanBalances(balances);
+      const entries: Record<string, LoanLedgerEntry[]> = {};
+      for (const [k, list] of Object.entries(led.loan_entries ?? {})) {
+        entries[k] = (list ?? []).map(l => ({ id: l.id, amount: Number(l.amount) || 0, note: l.note, entryDate: l.entryDate ?? '' }));
+      }
+      setLoanEntries(entries);
+    }
     // Branch memberships for the location filter (best-effort).
     void fetchEmployeeLocations(supabase, bid).then(setEmpLocations).catch(() => {});
     setLoading(false);
-  }, [business, supabase, period.startStr, period.endStr]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business, supabase, period.startStr, period.endStr, jcfKeysStr]);
 
   useEffect(() => { void load(); }, [load]);
   // Payroll settings are business-wide (stored on the businesses row). Pull the
@@ -200,16 +232,17 @@ export default function NominaRoute() {
   // Scope the paid workers to the active branch: only employees assigned to it.
   // "All locations" (null) pays everyone. Workers with no branch assignment are
   // excluded from a branch view (mirrors the Team list's branch filter).
-  const scopedEmployees = useMemo(() => {
-    if (!activeLocationId) return employees;
+  const scopedInputs = useMemo(() => {
+    if (!activeLocationId) return inputs;
     const ids = employeeIdsAtLocation(empLocations, activeLocationId);
-    return employees.filter(e => ids.has(e.id));
-  }, [employees, empLocations, activeLocationId]);
+    return inputs.filter(i => ids.has(i.employee.id));
+  }, [inputs, empLocations, activeLocationId]);
 
   const rows: PayrollScreenRow[] = useMemo(() => {
     // includeZero + post-filter: a 0-hour worker WITH a payment this period
     // (manual check — owner pay, ex-worker correction) must stay visible.
-    const base = computePayrollRows({ employees: scopedEmployees, timesheets, jobs, period, includeZero: true, config });
+    const base = computePayrollRowsFromAggregates({ aggregates: scopedInputs, period, includeZero: true, config });
+    const breakdownByEmp = new Map(scopedInputs.map(i => [i.employee.id, i.breakdown]));
     // Several payments can cover one period (partial checks) — group them.
     const payByEmp = new Map<string, PaymentRow[]>();
     payments.forEach(p => {
@@ -231,16 +264,10 @@ export default function NominaRoute() {
           paidAt: p.created_at ?? null,
           components: p.components ?? null,
         })),
-        breakdown: employeeBreakdownInRange({
-          employeeId: r.employeeId,
-          timesheets,
-          jobs,
-          startStr: period.startStr,
-          endStr: period.endStr,
-        }),
+        breakdown: breakdownByEmp.get(r.employeeId) ?? { jobs: [], loggedHours: 0, workedHours: 0, drivenHours: 0, totalHours: 0 },
       };
     }).filter(r => r.hours > 0 || r.payType === 'salary' || (r.payments?.length ?? 0) > 0);
-  }, [scopedEmployees, timesheets, jobs, payments, period, config]);
+  }, [scopedInputs, payments, period, config]);
 
   const onFrequencyChange = async (f: PayrollFrequency) => {
     setFrequency(f);
@@ -293,7 +320,14 @@ export default function NominaRoute() {
       check_number: method === 'check' && checkNumber ? checkNumber : null,
       components: components && Object.values(components).some(v => v) ? components : null,
       // Pay-time snapshot: how these hours were earned (survives job deletes).
-      breakdown: employeeBreakdownInRange({ employeeId, timesheets, jobs, startStr: target.startStr, endStr: target.endStr }),
+      // Current period comes from the inputs RPC; a manual PAST-period payment
+      // resolves its own bounds server-side.
+      breakdown: target.startStr === period.startStr
+        ? (inputs.find(i => i.employee.id === employeeId)?.breakdown ?? null)
+        : (await supabase.rpc('employee_hours_breakdown', {
+            p_business_id: business.id, p_employee_id: employeeId,
+            p_start: target.startStr, p_end: target.endStr,
+          })).data ?? null,
       created_by: user?.id ?? null,
     });
     const emp = employees.find(e => e.id === employeeId);

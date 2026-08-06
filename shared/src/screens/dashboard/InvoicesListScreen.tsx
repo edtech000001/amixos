@@ -9,6 +9,7 @@ import { Fab } from '../../ui/Fab';
 import { formatDateLong, daysOverdue, daysSince } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
+import { SkeletonList } from '../../ui/Skeleton';
 import { INVOICES_FILTERS_KEY, parseInvoicesFilters } from '../../lib/invoicesFilters';
 import { useThemeColors } from '../../theme';
 
@@ -457,7 +458,7 @@ export function InvoicesListScreen({
     <View className="flex-1 bg-surface">
       <SectionList
         className="flex-1"
-        sections={loading || filtered.length === 0 ? [] : sections}
+        sections={filtered.length === 0 ? [] : sections}
         keyExtractor={(item) => item.id}
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={listHeader}
@@ -520,11 +521,7 @@ export function InvoicesListScreen({
         }}
         ListEmptyComponent={
           loading ? (
-            <View className="items-center py-20">
-              <View className="flex-row gap-1">
-                {[0, 1, 2].map(i => (<View key={i} className="w-2 h-2 rounded-full bg-primary" />))}
-              </View>
-            </View>
+            <SkeletonList rows={8} />
           ) : (
             <View className="items-center py-20">
               <FileText size={40} color={c.faint} />

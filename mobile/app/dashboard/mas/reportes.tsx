@@ -7,13 +7,10 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 import { ReportsScreen } from '@amixos/shared/screens/dashboard/ReportsScreen';
 import {
-  fetchReportsData,
-  computeReports,
-  type ReportsData,
+  fetchReportsMetricsServer,
+  type ReportsMetrics,
   type ReportRange,
 } from '@amixos/shared/lib/reports';
-
-const EMPTY: ReportsData = { invoices: [], jobs: [], clients: [], timesheets: [], employees: [], inventory: [], locations: [] };
 
 export default function ReportesRoute() {
   const supabase = createSupabaseClient();
@@ -28,27 +25,35 @@ export default function ReportesRoute() {
   // Custom date range overrides the preset when set; picking a preset clears it.
   const [customFrom, setCustomFrom] = useState<string | null>(null);
   const [customTo, setCustomTo] = useState<string | null>(null);
-  const [data, setData] = useState<ReportsData>(EMPTY);
+  const [metrics, setMetrics] = useState<ReportsMetrics | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Inventory metrics only fetch when the module is enabled (mirrors web).
   const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
   const inventoryEnabled = enabledModules.some(m => m.id === 'inventory');
 
+  // Server-side aggregates (migration 186): two RPCs replace the old
+  // seven full-table downloads; range changes refetch (still tiny payloads).
   useEffect(() => {
     if (!business) return;
     let cancelled = false;
     setLoading(true);
-    fetchReportsData(supabase, business.id, inventoryEnabled).then(d => {
-      if (!cancelled) { setData(d); setLoading(false); }
+    fetchReportsMetricsServer({
+      supabase,
+      businessId: business.id,
+      range,
+      dateLocale,
+      custom: { from: customFrom, to: customTo },
+      unassignedLocationLabel: unassignedLocation,
+      payrollConfig: business.payroll_config,
+      inventoryEnabled,
+    }).then(m => {
+      if (!cancelled) { setMetrics(m); setLoading(false); }
+    }).catch(() => {
+      if (!cancelled) setLoading(false); // offline / migration missing — keep previous
     });
     return () => { cancelled = true; };
-  }, [business?.id, inventoryEnabled]);
-
-  const metrics = useMemo(
-    () => (loading ? null : computeReports(data, range, dateLocale, manualWorker, { from: customFrom, to: customTo }, unassignedLocation, business?.payroll_config)),
-    [data, range, dateLocale, manualWorker, loading, customFrom, customTo, unassignedLocation, business?.payroll_config],
-  );
+  }, [business?.id, inventoryEnabled, range, customFrom, customTo, dateLocale, unassignedLocation, business?.payroll_config]);
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>

@@ -4,7 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TrendingUp, TrendingDown, ScanLine, Sparkles, X } from 'lucide-react-native';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { createSupabaseClient } from '@/lib/supabase';
-import { loadCached, writeCached } from '@/lib/offline/cache';
+import { writeCached } from '@/lib/offline/cache';
+import { useSwr } from '@amixos/shared/lib/swrCache';
 import { queuedInsert, queuedUpdate, queuedDelete } from '@/lib/offline/mutate';
 import { newUuid } from '@/lib/offline/ids';
 import { useApp } from '@/lib/AppContext';
@@ -87,36 +88,53 @@ export default function InventoryModuleScreen() {
     cursorRef.current = null;
     setHasMore(false);
     const params = { businessId, locationId: activeLocationId ?? null, ...base };
-    // Only the default (unfiltered) view is cached for offline; search / segment
-    // fetch online.
-    const isDefault = !base.search && !base.lowStockOnly;
-    const fetchFresh = async () => {
+    try {
       const [page, stats] = await Promise.all([
         fetchInventoryPage<RawItem>(supabase, '*', { ...params, pageSize: 50 }),
         fetchInventoryStats(supabase, { businessId, locationId: activeLocationId ?? null }),
       ]);
-      return { items: page.items, nextCursor: page.nextCursor, stats };
-    };
-    try {
-      if (isDefault) {
-        const res = await loadCached<{ items: RawItem[]; nextCursor: InventoryCursor | null; stats: InventoryStats }>(`inventory_${businessId}_${activeLocationId ?? 'all'}`, fetchFresh);
-        if (seq !== loadSeqRef.current) return;
-        const d = res.data;
-        setItems(d?.items ?? []);
-        cursorRef.current = res.fromCache ? null : (d?.nextCursor ?? null);
-        setHasMore(!res.fromCache && !!d?.nextCursor);
-        setServerStats(d?.stats ?? { count: 0, value: 0, lowStockCount: 0 });
-      } else {
-        const d = await fetchFresh();
-        if (seq !== loadSeqRef.current) return;
-        setItems(d.items);
-        cursorRef.current = d.nextCursor;
-        setHasMore(!!d.nextCursor);
-        setServerStats(d.stats);
-      }
+      if (seq !== loadSeqRef.current) return;
+      setItems(page.items);
+      cursorRef.current = page.nextCursor;
+      setHasMore(!!page.nextCursor);
+      setServerStats(stats);
     } catch { /* offline / error — keep what's loaded */ }
     finally { if (seq === loadSeqRef.current) setLoading(false); }
   };
+
+  // ── SWR default view (no search/segment): instant from cache ──────────────
+  const [invFilters, setInvFilters] = useState<{ search: string; lowStockOnly: boolean } | null>(null);
+  const defaultActive = !!business && !!invFilters && !invFilters.search && !invFilters.lowStockOnly;
+  type InvPayload = { items: RawItem[]; nextCursor: InventoryCursor | null; stats: InventoryStats };
+  const swrKey = defaultActive ? `inventory_v2_${business.id}_${activeLocationId ?? 'all'}` : null;
+  const swr = useSwr<InvPayload>(
+    swrKey,
+    async () => {
+      const [page, stats] = await Promise.all([
+        fetchInventoryPage<RawItem>(supabase, '*', { businessId: business!.id, locationId: activeLocationId ?? null, search: '', lowStockOnly: false, pageSize: 50 }),
+        fetchInventoryStats(supabase, { businessId: business!.id, locationId: activeLocationId ?? null }),
+      ]);
+      return { items: page.items, nextCursor: page.nextCursor, stats };
+    },
+    {
+      cacheKey: swrKey,
+      resetKey: `${business?.id ?? ''}_${activeLocationId ?? 'all'}`,
+      focusThrottleMs: 3_000,
+      cacheTrim: (d) => ({ ...d, items: d.items.slice(0, 50), nextCursor: null }),
+    },
+  );
+  useEffect(() => {
+    if (!swrKey || !swr.data) return;
+    ++loadSeqRef.current;
+    paramsRef.current = { search: '', lowStockOnly: false };
+    setItems(swr.data.items);
+    cursorRef.current = swr.data.nextCursor;
+    setHasMore(!!swr.data.nextCursor);
+    setServerStats(swr.data.stats);
+    setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swr.data, swrKey]);
+
 
   const loadMore = async () => {
     if (loadingMore || !paramsRef.current || !cursorRef.current || !business) return;
@@ -132,10 +150,18 @@ export default function InventoryModuleScreen() {
     finally { setLoadingMore(false); }
   };
 
-  const reRun = () => { if (paramsRef.current) void runQuery(paramsRef.current); };
-  const handleFiltersChange = (f: { search: string; lowStockOnly: boolean }) => { void runQuery(f); };
-  // Re-query when business finally loads or the branch changes.
-  useEffect(() => { reRun(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [business, activeLocationId]);
+  const reRun = () => {
+    if (defaultActive) { swr.refresh({ force: true }); return; }
+    if (paramsRef.current) void runQuery(paramsRef.current);
+  };
+  const handleFiltersChange = (f: { search: string; lowStockOnly: boolean }) => {
+    setInvFilters(f);
+    if (!f.search && !f.lowStockOnly) return; // SWR owns the default view
+    void runQuery(f);
+  };
+  // Re-query when business finally loads or the branch changes (the SWR key
+  // covers the default view).
+  useEffect(() => { if (!defaultActive) reRun(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [business, activeLocationId]);
 
   const screenItems: ScreenItem[] = useMemo(() => items.map(i => ({
     id: i.id,

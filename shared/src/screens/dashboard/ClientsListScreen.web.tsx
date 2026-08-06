@@ -175,7 +175,8 @@ export function ClientsListScreen({
   const allSelected = filtered.length > 0 && selectedIds.size === filtered.length;
   const selectedCountText = (selectedIds.size === 1 ? t.selectedCountSingle : t.selectedCountPlural)
     .replace('{{count}}', String(selectedIds.size));
-  const showList = !loading && filtered.length > 0;
+  // Never blank loaded rows during a refetch — loading only matters when empty.
+  const showList = filtered.length > 0;
 
   // Selection mode — entered via the Seleccionar button (same pattern as the
   // jobs list). Checkboxes only render while it's on; no persistent controls.
@@ -324,10 +325,18 @@ export function ClientsListScreen({
         </div>
       ) : null}
 
-      {/* List card */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="flex gap-1">{[0, 1, 2].map((i) => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
+      {/* List card — loading only skeletons when there are NO rows */}
+      {loading && filtered.length === 0 ? (
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 8 }, (_, i) => (
+            <div key={i} className="animate-pulse flex items-center gap-3 rounded-2xl border border-border-soft bg-card px-4 py-4">
+              <div className="w-10 h-10 rounded-full bg-border-soft" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3.5 w-3/5 rounded bg-border-soft" />
+                <div className="h-3 w-2/5 rounded bg-border-soft" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center py-20">

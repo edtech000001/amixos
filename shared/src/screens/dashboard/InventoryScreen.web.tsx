@@ -208,7 +208,7 @@ export function InventoryScreen({
       </div>
 
       {/* List */}
-      {loading ? (
+      {loading && filtered.length === 0 ? (
         <div className="flex items-center justify-center py-20">
           <div className="flex gap-1">
             {[0, 1, 2].map(i => (

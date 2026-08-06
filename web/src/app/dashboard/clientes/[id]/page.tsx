@@ -2,13 +2,14 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, Phone, Mail, MapPin, FileText, Plus, Pencil, Building2, Trash2, Star, UserPlus, Printer, Share2 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
 import { can } from '@amixos/shared/lib/permissions';
 import { Button } from '@/components/ui/Button';
 import { Toggle } from '@/components/ui/Toggle';
@@ -241,8 +242,39 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
     setShareDialog(false);
   };
 
+  // Populate client-derived state (detail view + edit-modal mirror) — used by
+  // both the cached paint and the live load so they can never diverge.
+  const applyClient = (c: NonNullable<typeof client>) => {
+    setClient(c);
+    setForm({
+      first_name: c.first_name, last_name: c.last_name, company: c.company ?? '',
+      phone_cell: c.phone_cell ?? c.phone ?? '', phone_office: c.phone_office ?? '',
+      email_office: c.email_office ?? c.email ?? '', email_home: c.email_home ?? '',
+      address: c.address ?? '', address_line2: c.address_line2 ?? '',
+      city: c.city ?? '', state: c.state ?? '', zip_code: c.zip_code ?? '',
+      notes: c.notes ?? '', price_tier_id: (c as { price_tier_id?: string | null }).price_tier_id ?? '',
+    });
+    setCustomVals(c.custom_fields ?? {});
+  };
+
+  // True once any snapshot (cached or live) painted.
+  const hasDataRef = useRef(false);
   const load = async () => {
     if (!business) return;
+    // Cache-first: paint the last saved snapshot (written by this page and by
+    // the mobile offline cache — same keys) before the live fetch lands.
+    if (!hasDataRef.current) {
+      const [cc, ccts] = await Promise.all([
+        swrRead<NonNullable<typeof client>>(`client_${id}`),
+        swrRead<typeof contacts>(`client_contacts_${id}`),
+      ]);
+      if (cc?.data && !hasDataRef.current) {
+        hasDataRef.current = true;
+        applyClient(cc.data);
+        setContacts(ccts?.data ?? []);
+        setLoading(false);
+      }
+    }
     const [{ data: c }, { data: inv }, { data: tpl }, { data: cts }] = await Promise.all([
       supabase.from('clients').select('*').eq('id', id).single(),
       supabase.from('invoices').select('id, invoice_number, status, total_amount, due_date, created_at')
@@ -251,16 +283,11 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
       supabase.from('client_contacts').select('*').eq('client_id', id).order('is_primary', { ascending: false }),
     ]);
     if (c) {
-      setClient(c);
-      setForm({
-        first_name: c.first_name, last_name: c.last_name, company: c.company ?? '',
-        phone_cell: c.phone_cell ?? c.phone ?? '', phone_office: c.phone_office ?? '',
-        email_office: c.email_office ?? c.email ?? '', email_home: c.email_home ?? '',
-        address: c.address ?? '', address_line2: c.address_line2 ?? '',
-        city: c.city ?? '', state: c.state ?? '', zip_code: c.zip_code ?? '',
-        notes: c.notes ?? '', price_tier_id: (c as { price_tier_id?: string | null }).price_tier_id ?? '',
-      });
-      setCustomVals(c.custom_fields ?? {});
+      applyClient(c);
+      hasDataRef.current = true;
+      // Persist for the next instant open (shared keys with mobile's cache).
+      void swrWrite(`client_${id}`, c);
+      void swrWrite(`client_contacts_${id}`, cts ?? []);
     }
     setInvoices(inv ?? []);
     setTemplates(localizeTemplates(tpl ?? [], locale));

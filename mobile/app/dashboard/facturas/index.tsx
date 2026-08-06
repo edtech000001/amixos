@@ -3,7 +3,7 @@ import { Alert, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
-import { loadCached } from '@/lib/offline/cache';
+import { useSwr } from '@amixos/shared/lib/swrCache';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import {
@@ -105,9 +105,8 @@ export default function FacturasTab() {
     setLoading(true);
     cursorRef.current = null;
     setHasMore(false);
-    const cacheKey = `invoices_list_${params.businessId}_${params.locationId ?? 'all'}`;
-    const res = await loadCached<{ invoices: RawInvoice[]; nextCursor: InvoicesCursor | null; counts: Record<string, number> }>(cacheKey, async () => {
-      await maybeSweep(params.businessId);
+    try {
+      await maybeSweep(params.businessId).catch(() => {});
       const countsP = fetchInvoiceStatusCounts(supabase, {
         businessId: params.businessId, locationId: params.locationId,
         search: params.search, dateFrom: params.dateFrom, dateTo: params.dateTo,
@@ -118,26 +117,69 @@ export default function FacturasTab() {
         for (let i = 0; i < 200; i++) {
           const page = await fetchInvoicesPage<RawInvoice>(supabase, INVOICE_LIST_SELECT, { ...params, cursor, pageSize: 1000 });
           acc.push(...page.invoices);
+          if (seq === loadSeqRef.current) setRawInvoices([...acc]); // progressive
           if (!page.nextCursor) break;
           cursor = page.nextCursor;
         }
-        return { invoices: acc, nextCursor: null, counts: await countsP };
+        const counts = await countsP;
+        if (seq !== loadSeqRef.current) return;
+        setServerCounts(counts);
+        setServerTotal(totalFor(counts, params.statuses));
+      } else {
+        const [page, counts] = await Promise.all([
+          fetchInvoicesPage<RawInvoice>(supabase, INVOICE_LIST_SELECT, { ...params, pageSize: 50 }),
+          countsP,
+        ]);
+        if (seq !== loadSeqRef.current) return;
+        setRawInvoices(page.invoices);
+        cursorRef.current = page.nextCursor;
+        setHasMore(!!page.nextCursor);
+        setServerCounts(counts);
+        setServerTotal(totalFor(counts, params.statuses));
       }
+    } catch { /* offline / error — keep whatever's on screen */ }
+    finally { if (seq === loadSeqRef.current) setLoading(false); }
+  };
+
+  // ── SWR default view (no search/status/date, no grouping) ─────────────────
+  const [filters, setFilters] = useState<{ search: string; statuses: string[]; groupBy: string; dateFrom: string | null; dateTo: string | null } | null>(null);
+  const isDefaultFilters = (f: NonNullable<typeof filters>) =>
+    !f.search && f.statuses.length === 0 && f.groupBy === 'none' && !f.dateFrom && !f.dateTo;
+  const defaultActive = !!business && !!filters && isDefaultFilters(filters);
+  type InvoicesPayload = { invoices: RawInvoice[]; nextCursor: InvoicesCursor | null; counts: Record<string, number> };
+  const swrKey = defaultActive ? `invoices_list_v2_${business.id}_${activeLocationId ?? 'all'}` : null;
+  const swr = useSwr<InvoicesPayload>(
+    swrKey,
+    async () => {
+      const params: InvoicesQueryParams = { businessId: business!.id, locationId: activeLocationId ?? null, statuses: [], search: '' };
+      await maybeSweep(business!.id).catch(() => {});
       const [page, counts] = await Promise.all([
         fetchInvoicesPage<RawInvoice>(supabase, INVOICE_LIST_SELECT, { ...params, pageSize: 50 }),
-        countsP,
+        fetchInvoiceStatusCounts(supabase, { businessId: business!.id, locationId: activeLocationId ?? null }),
       ]);
       return { invoices: page.invoices, nextCursor: page.nextCursor, counts };
-    });
-    if (seq !== loadSeqRef.current) return;
-    const d = res.data;
-    setRawInvoices(d?.invoices ?? []);
-    cursorRef.current = res.fromCache ? null : (d?.nextCursor ?? null);
-    setHasMore(!res.fromCache && !!d?.nextCursor);
-    setServerCounts(d?.counts ?? {});
-    setServerTotal(totalFor(d?.counts ?? {}, params.statuses));
+    },
+    {
+      cacheKey: swrKey,
+      resetKey: `${business?.id ?? ''}_${activeLocationId ?? 'all'}`,
+      focusThrottleMs: 3_000,
+      cacheTrim: (d) => ({ ...d, invoices: d.invoices.slice(0, 50), nextCursor: null }),
+    },
+  );
+  useEffect(() => {
+    if (!swrKey || !swr.data || !business) return;
+    ++loadSeqRef.current;
+    modeRef.current = 'page';
+    loadAllRef.current = false;
+    paramsRef.current = { businessId: business.id, locationId: activeLocationId ?? null, statuses: [], search: '' };
+    setRawInvoices(swr.data.invoices);
+    cursorRef.current = swr.data.nextCursor;
+    setHasMore(!!swr.data.nextCursor);
+    setServerCounts(swr.data.counts);
+    setServerTotal(totalFor(swr.data.counts, []));
     setLoading(false);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swr.data, swrKey]);
 
   const loadNextGroup = async () => {
     const seq = loadSeqRef.current;
@@ -200,6 +242,7 @@ export default function FacturasTab() {
   };
 
   const reRun = (locationId: string | null) => {
+    if (defaultActive) { swr.refresh({ force: true }); return; }
     if (!paramsRef.current) return;
     const p = { ...paramsRef.current, locationId };
     if (modeRef.current === 'group') void runGroupLazy(p);
@@ -207,14 +250,20 @@ export default function FacturasTab() {
   };
   const reload = () => reRun(activeLocationId ?? null);
   useEffect(() => {
-    reRun(activeLocationId ?? null);
+    if (!defaultActive) reRun(activeLocationId ?? null); // SWR key covers the default view
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLocationId]);
-  // Refresh on focus so newly created/edited invoices appear after returning.
-  useFocusEffect(useCallback(() => { reload(); }, [activeLocationId]));
+  // Revalidate on focus — throttled, never blanks.
+  useFocusEffect(useCallback(() => {
+    if (defaultActive) swr.refresh();
+    else reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLocationId, defaultActive]));
 
   const handleFiltersChange = (f: { search: string; statuses: string[]; groupBy: string; dateFrom: string | null; dateTo: string | null }) => {
     if (!business) return;
+    setFilters(f);
+    if (isDefaultFilters(f)) return; // SWR owns the default view
     const params: InvoicesQueryParams = {
       businessId: business.id, locationId: activeLocationId ?? null,
       statuses: f.statuses, search: f.search, dateFrom: f.dateFrom, dateTo: f.dateTo,

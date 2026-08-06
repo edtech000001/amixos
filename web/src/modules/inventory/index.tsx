@@ -5,6 +5,7 @@ import { confirm } from '@amixos/shared/ui/confirmBus';
 import { TrendingDown, TrendingUp, Sparkles } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { useSwr } from '@amixos/shared/lib/swrCache';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -97,6 +98,39 @@ export default function InventoryModule() {
     }
   };
 
+  // ── SWR default view (no search/segment): instant from cache ──────────────
+  const [invFilters, setInvFilters] = useState<{ search: string; lowStockOnly: boolean } | null>(null);
+  const defaultActive = !!business && !!invFilters && !invFilters.search && !invFilters.lowStockOnly;
+  type InvPayload = { items: RawItem[]; nextCursor: InventoryCursor | null; stats: InventoryStats };
+  const swrKey = defaultActive ? `inventory_v2_${business.id}_${activeLocationId ?? 'all'}` : null;
+  const swr = useSwr<InvPayload>(
+    swrKey,
+    async () => {
+      const [page, stats] = await Promise.all([
+        fetchInventoryPage<RawItem>(supabase, '*', { businessId: business!.id, locationId: activeLocationId ?? null, search: '', lowStockOnly: false, pageSize: 50 }),
+        fetchInventoryStats(supabase, { businessId: business!.id, locationId: activeLocationId ?? null }),
+      ]);
+      return { items: page.items, nextCursor: page.nextCursor, stats };
+    },
+    {
+      cacheKey: swrKey,
+      resetKey: `${business?.id ?? ''}_${activeLocationId ?? 'all'}`,
+      focusThrottleMs: 3_000,
+      cacheTrim: (d) => ({ ...d, items: d.items.slice(0, 50), nextCursor: null }),
+    },
+  );
+  useEffect(() => {
+    if (!swrKey || !swr.data) return;
+    ++loadSeqRef.current;
+    paramsRef.current = { search: '', lowStockOnly: false };
+    setItems(swr.data.items);
+    cursorRef.current = swr.data.nextCursor;
+    setHasMore(!!swr.data.nextCursor);
+    setServerStats(swr.data.stats);
+    setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swr.data, swrKey]);
+
   const loadMore = async () => {
     if (loadingMore || !paramsRef.current || !cursorRef.current || !business) return;
     const seq = loadSeqRef.current;
@@ -114,10 +148,17 @@ export default function InventoryModule() {
     }
   };
 
-  const reRun = () => { if (paramsRef.current) void runQuery(paramsRef.current); };
-  const handleFiltersChange = (f: { search: string; lowStockOnly: boolean }) => { void runQuery(f); };
-  // Re-query on branch change (the screen doesn't know about locations).
-  useEffect(() => { reRun(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeLocationId]);
+  const reRun = () => {
+    if (defaultActive) { swr.refresh({ force: true }); return; }
+    if (paramsRef.current) void runQuery(paramsRef.current);
+  };
+  const handleFiltersChange = (f: { search: string; lowStockOnly: boolean }) => {
+    setInvFilters(f);
+    if (!f.search && !f.lowStockOnly) return; // SWR owns the default view
+    void runQuery(f);
+  };
+  // Re-query on branch change (the SWR key covers the default view).
+  useEffect(() => { if (!defaultActive) reRun(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeLocationId]);
 
   const screenItems: ScreenItem[] = useMemo(() => items.map(i => ({
     id: i.id,

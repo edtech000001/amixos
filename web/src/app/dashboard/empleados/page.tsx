@@ -382,34 +382,29 @@ export default function EmpleadosPage() {
   // across crew assignments) count too — not just the timesheets table.
   const loadHourTotals = async () => {
     if (!business) return;
-    const bid = business.id;
-    const freq = normalizeFrequency(business.payroll_frequency);
-    const anchor = parsePayrollAnchor(business.payroll_anchor_date);
-    const customDays = business.payroll_custom_days ?? null;
+    const biz = business as {
+      id: string;
+      payroll_frequency?: string | null;
+      payroll_anchor_date?: string | null;
+      payroll_custom_days?: number | null;
+    };
+    const freq = normalizeFrequency(biz.payroll_frequency);
+    const anchor = parsePayrollAnchor(biz.payroll_anchor_date);
+    const customDays = biz.payroll_custom_days ?? null;
     const period = getPayrollPeriod(freq, new Date(), 0, anchor, customDays);
-    const [empRes, tsRes, jobRes] = await Promise.all([
-      supabase.from('employees').select('id, first_name, last_name, pay_rate, pay_type, overtime_eligible, overtime_threshold, overtime_multiplier, custom_fields').eq('business_id', bid),
-      supabase.from('timesheets').select('employee_id, hours_worked, work_date').eq('business_id', bid)
-        .gte('work_date', period.startStr).lte('work_date', period.endStr),
-      supabase.from('jobs').select('id, title, scheduled_date, total_hours, driver_employee_ids, driver_hours, custom_fields, job_assignments(employee_id)')
-        .eq('business_id', bid).gte('scheduled_date', period.startStr).lte('scheduled_date', period.endStr),
-    ]);
-    const jobs = ((jobRes.data ?? []) as Array<{ id: string; title: string | null; scheduled_date: string | null; total_hours: number | null; driver_employee_ids: string[] | null; driver_hours: number | null; custom_fields: Record<string, unknown> | null; job_assignments: { employee_id: string | null }[] }>).map(j => ({
-      id: j.id, title: j.title, scheduled_date: j.scheduled_date,
-      total_hours: j.total_hours, driver_employee_ids: j.driver_employee_ids,
-      driver_hours: j.driver_hours, custom_fields: j.custom_fields,
-      assignmentEmployeeIds: (j.job_assignments ?? []).map(a => a.employee_id).filter((x): x is string => !!x),
-    }));
-    const rows = computePayrollRows({
-      employees: (empRes.data ?? []) as PayrollEmployee[],
-      timesheets: (tsRes.data ?? []) as PayrollTimesheet[],
-      jobs,
-      period,
-      includeZero: false,
-      config: normalizePayrollConfig(business.payroll_config),
-    });
-    setHourTotals(rows.map(r => ({ employeeId: r.employeeId, workerName: r.name, hours: r.hours })));
     setPayPeriodLabel(`${formatDateLong(period.startStr, locale)} – ${formatDateLong(period.endStr, locale)}`);
+    // team_hour_totals RPC (migration 185): one scan replaces downloading the
+    // roster + every timesheet/job in the period. The displayed hours are
+    // config-free (timesheets + job crew hours + driver hours), so this is
+    // exactly computePayrollRows' hour-attribution phase, server-side.
+    const { data, error } = await supabase.rpc('team_hour_totals', {
+      p_business_id: biz.id,
+      p_start: period.startStr,
+      p_end: period.endStr,
+    });
+    if (error) return; // offline / migration not run — keep previous totals
+    setHourTotals(((data ?? []) as { employee_id: string; worker_name: string; hours: number | string }[])
+      .map(r => ({ employeeId: r.employee_id, workerName: r.worker_name, hours: Number(r.hours) })));
   };
 
   const loadTemplates = async () => {

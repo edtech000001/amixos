@@ -13,6 +13,8 @@
 // whole business. Price sheets are intentionally NOT warmed (owner's choice).
 
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
+import { fetchJobsPage, fetchJobTabCounts } from '@amixos/shared/lib/jobsQuery';
+import { fetchInvoicesPage, fetchInvoiceStatusCounts } from '@amixos/shared/lib/invoicesQuery';
 import { createSupabaseClient } from '@/lib/supabase';
 import { writeCached } from './cache';
 import { isOnlineNow } from './network';
@@ -21,6 +23,21 @@ import { isOnlineNow } from './network';
 // per minute is plenty for reference data that changes slowly.
 let lastWarm = 0;
 const MIN_INTERVAL_MS = 60_000;
+
+// KEEP IN SYNC with JOB_LIST_SELECT in mobile/app/dashboard/trabajos/index.tsx
+// and INVOICE_LIST_SELECT in mobile/app/dashboard/facturas/index.tsx — the
+// warmed payloads must match what those screens' SWR fetchers return.
+const JOB_LIST_SELECT = `
+  id, client_id, invoice_id, title, description, status, priority,
+  job_address, job_city, job_state, scheduled_date, time_start, end_date,
+  estimated_hours, time_end, total_amount, estimate_number, external_ref, issue_date,
+  expiry_date, delegated_to_business_id, delegated_from_business_id,
+  published_to_crew, created_at, archived_at,
+  clients(first_name, last_name, company),
+  job_assignments(worker_name, is_lead)
+`;
+const INVOICE_LIST_SELECT =
+  'id, invoice_number, status, total_amount, due_date, issue_date, created_at, sent_at, line_items, clients(first_name, last_name, company, state), invoice_clients(clients(first_name, last_name, company, state)), jobs(external_ref, title)';
 
 interface RawClient { id: string; first_name: string; last_name: string; company: string | null; city?: string; state?: string }
 interface RawEmployee { id: string; first_name: string; last_name: string; role: string; show_in_roster?: boolean | null }
@@ -44,6 +61,23 @@ export async function prefetchForOffline(businessId: string): Promise<void> {
   // Keyset (by id) — offset .range() re-scans under RLS and is slow to warm
   // once a business has thousands of clients/contacts.
   await Promise.allSettled([
+    // First jobs page + tab counts → the jobs list's SWR cache ("All branches"
+    // variant), so even a first-ever open of Trabajos paints instantly.
+    (async () => {
+      const [page, counts] = await Promise.all([
+        fetchJobsPage<{ id: string; created_at?: string | null }>(supabase, JOB_LIST_SELECT, { businessId, tabs: [], search: '', pageSize: 50 }),
+        fetchJobTabCounts(supabase, { businessId }),
+      ]);
+      await writeCached(`jobs_list_v2_${businessId}_all`, { jobs: page.jobs, nextCursor: null, counts });
+    })(),
+    // Same for the invoices list.
+    (async () => {
+      const [page, counts] = await Promise.all([
+        fetchInvoicesPage<{ id: string }>(supabase, INVOICE_LIST_SELECT, { businessId, statuses: [], search: '', pageSize: 50 }),
+        fetchInvoiceStatusCounts(supabase, { businessId }),
+      ]);
+      await writeCached(`invoices_list_v2_${businessId}_all`, { invoices: page.invoices, nextCursor: null, counts });
+    })(),
     fetchAllById<RawClient>((afterId, pageSize) => {
       let q = supabase.from('clients')
         .select('id, first_name, last_name, company, city, state')

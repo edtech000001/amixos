@@ -2,10 +2,11 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useLang } from '@/i18n/LangProvider';
@@ -505,9 +506,23 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     };
   };
 
+  // True once any snapshot (cached or live) painted.
+  const hasDataRef = useRef(false);
   useEffect(() => {
     if (!business) return;
     void (async () => {
+      // Cache-first: paint the last snapshot BEFORE the line-item rebuild
+      // below — that's a WRITE round trip that used to block first paint.
+      if (!hasDataRef.current) {
+        const cached = await swrRead<{ invoice: NonNullable<typeof invoice>; shareToken: string | null; invClientId: string | null }>(`invoice_detail_${id}`);
+        if (cached?.data && !hasDataRef.current) {
+          hasDataRef.current = true;
+          setInvoice(cached.data.invoice);
+          setShareToken(cached.data.shareToken);
+          setInvClientId(cached.data.invClientId);
+          setLoading(false);
+        }
+      }
       // Sync a draft invoice's line items with its jobs' current items first,
       // so amounts reflect items added after the invoice was created.
       await rebuildInvoiceLineItems(supabase, { invoiceId: id, itemTypeLabels, hideItemTypes: business?.job_item_types_enabled === false, qtyField: business?.invoice_qty_field });
@@ -528,6 +543,14 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         setShareToken(raw.share_token ?? null);
         setInvoiceConfigRaw(raw.template_config ?? null);
         setInvClientId(raw.client_id ?? null);
+        hasDataRef.current = true;
+        // Persist for the next instant open (mapped snapshot; signed photo
+        // URLs are NOT cached — payments re-sign on load).
+        void swrWrite(`invoice_detail_${id}`, {
+          invoice: mapInvoice(data as unknown as RawInvoice, templateList),
+          shareToken: raw.share_token ?? null,
+          invClientId: raw.client_id ?? null,
+        });
         void loadJobs();
         void loadPayments();
       }

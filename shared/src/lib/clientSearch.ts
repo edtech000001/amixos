@@ -82,3 +82,44 @@ export function matchingContacts(
     searchMatches([ct.name, ct.role].filter(Boolean).join(' '), search),
   );
 }
+
+// ─── Server-side picker search (job form) ──────────────────────────────────
+// The job-form client picker used to depend on downloading EVERY client +
+// contact before it was usable (minutes on big businesses). This searches the
+// server instead: one alphabetical page matching the term across client
+// fields AND contact names (via clientsQuery's searchOrClause), plus the
+// matched clients' contacts so the picker can show "who you searched".
+// Callers fall back to their locally-cached list when this throws (offline).
+
+import { fetchClientsPage } from './clientsQuery';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnySupabaseClient = { from: (table: string) => any };
+
+export async function searchClientsServer<T extends { id: string; first_name: string; last_name: string }>(
+  supabase: AnySupabaseClient,
+  businessId: string,
+  term: string,
+  select: string,
+  limit = 50,
+): Promise<(T & { contacts?: ClientSearchContact[] })[]> {
+  const page = await fetchClientsPage<T>(supabase as never, select, {
+    businessId,
+    search: term.trim() || undefined,
+    pageSize: limit,
+  });
+  const ids = page.clients.map((c) => c.id);
+  const contactsByClient = new Map<string, ClientSearchContact[]>();
+  if (ids.length) {
+    const { data } = await supabase
+      .from('client_contacts')
+      .select('client_id, name, role')
+      .in('client_id', ids)
+      .limit(400);
+    for (const ct of (data ?? []) as { client_id: string; name: string; role: string | null }[]) {
+      (contactsByClient.get(ct.client_id) ?? contactsByClient.set(ct.client_id, []).get(ct.client_id)!)
+        .push({ name: ct.name, role: ct.role });
+    }
+  }
+  return page.clients.map((c) => ({ ...c, contacts: contactsByClient.get(c.id) }));
+}

@@ -352,93 +352,154 @@ export function computePayrollRows(opts: {
     }
   }
 
-  // Overtime threshold is per WEEK — scale it to the period length so
-  // biweekly/monthly periods behave sensibly (approximation: days ÷ 7).
+  const weeks = weeksInPeriod(period);
+  const rows: PayrollRow[] = employees.map(e =>
+    payRowFor(e, workedById[e.id] ?? 0, drivenById[e.id] ?? 0, jobsDrivenById[e.id] ?? 0, jcfById[e.id] ?? {}, cfg, jcfRefs, weeks),
+  );
+
+  const filtered = includeZero
+    ? rows
+    : rows.filter(r => r.hours > 0 || r.payType === 'salary');
+  return filtered.sort((a, b) => b.pay - a.pay);
+}
+
+// Overtime threshold is per WEEK — scale it to the period length so
+// biweekly/monthly periods behave sensibly (approximation: days ÷ 7).
+function weeksInPeriod(period: Pick<PayrollPeriod, 'startStr' | 'endStr'>): number {
   const periodDays =
     (new Date(period.endStr).getTime() - new Date(period.startStr).getTime()) / 86_400_000 + 1;
-  const weeks = Math.max(1, periodDays / 7);
+  return Math.max(1, periodDays / 7);
+}
 
-  const rows: PayrollRow[] = employees.map(e => {
-    const worked = workedById[e.id] ?? 0;
-    const driven = drivenById[e.id] ?? 0;
-    const jobsDriven = jobsDrivenById[e.id] ?? 0;
+/** The pay phase for ONE employee — shared verbatim by the raw-rows path
+ *  (computePayrollRows) and the server-aggregate path
+ *  (computePayrollRowsFromAggregates), so the two can never diverge. */
+function payRowFor(
+  e: PayrollEmployee,
+  worked: number,
+  driven: number,
+  jobsDriven: number,
+  jcf: Record<string, number>,
+  cfg: PayrollConfig,
+  jcfRefs: ReturnType<typeof formulaJobFieldRefs>,
+  weeks: number,
+): PayrollRow {
+  // Driver component: 'same' folds driven hours into base hours (legacy);
+  // the other modes pay them separately and keep them out of base/overtime.
+  const driverPay =
+    cfg.driver.mode === 'rate' ? driven * cfg.driver.rate
+    : cfg.driver.mode === 'flat' ? jobsDriven * cfg.driver.flat
+    : 0;
+  const baseHours = cfg.driver.mode === 'same' ? worked + driven : worked;
 
-    // Driver component: 'same' folds driven hours into base hours (legacy);
-    // the other modes pay them separately and keep them out of base/overtime.
-    const driverPay =
-      cfg.driver.mode === 'rate' ? driven * cfg.driver.rate
-      : cfg.driver.mode === 'flat' ? jobsDriven * cfg.driver.flat
-      : 0;
-    const baseHours = cfg.driver.mode === 'same' ? worked + driven : worked;
+  // Overtime applies to hourly workers only.
+  // Per-worker overrides (null/undefined = business defaults).
+  const otThreshold = (e.overtime_threshold ?? cfg.overtime.weeklyThreshold) * weeks;
+  const otMultiplier = e.overtime_multiplier ?? cfg.overtime.multiplier;
+  let basePay: number;
+  let overtimeHours = 0;
+  let overtimePay = 0;
+  // Overtime is opt-in PER WORKER; the business config only supplies defaults.
+  if ((e.overtime_eligible ?? false) && e.pay_type === 'hourly' && baseHours > otThreshold) {
+    overtimeHours = baseHours - otThreshold;
+    basePay = otThreshold * e.pay_rate;
+    overtimePay = overtimeHours * e.pay_rate * otMultiplier;
+  } else {
+    basePay = payForHours(baseHours, e.pay_rate, e.pay_type);
+  }
 
-    // Overtime applies to hourly workers only.
-    // Per-worker overrides (null/undefined = business defaults).
-    const otThreshold = (e.overtime_threshold ?? cfg.overtime.weeklyThreshold) * weeks;
-    const otMultiplier = e.overtime_multiplier ?? cfg.overtime.multiplier;
-    let basePay: number;
-    let overtimeHours = 0;
-    let overtimePay = 0;
-    // Overtime is opt-in PER WORKER; the business config only supplies defaults.
-    if ((e.overtime_eligible ?? false) && e.pay_type === 'hourly' && baseHours > otThreshold) {
-      overtimeHours = baseHours - otThreshold;
-      basePay = otThreshold * e.pay_rate;
-      overtimePay = overtimeHours * e.pay_rate * otMultiplier;
-    } else {
-      basePay = payForHours(baseHours, e.pay_rate, e.pay_type);
+  // Custom formula (hourly only): replaces the gross calc. The standard
+  // components above still feed it as variables (normal_pay, driver_pay…).
+  let pay = basePay + overtimePay + driverPay;
+  if (cfg.formula && e.pay_type === 'hourly') {
+    const normalHours = baseHours - overtimeHours;
+    const result = evaluateFormula(cfg.formula, {
+      vars: {
+        pay_rate: e.pay_rate,
+        worked_hours: worked,
+        driven_hours: driven,
+        total_hours: worked + driven,
+        normal_hours: normalHours,
+        overtime_hours: overtimeHours,
+        normal_pay: basePay,
+        overtime_pay: overtimePay,
+        driver_pay: driverPay,
+        standard_pay: basePay + overtimePay + driverPay,
+      },
+      ecf: e.custom_fields ?? {},
+      jcf,
+    });
+    if (result !== null) pay = result;
+  }
+
+  // Per-label sums of the formula's job-field reads — snapshot material
+  // for payment records ("this check paid 2 overnights").
+  let formulaJobFields: Record<string, number> | undefined;
+  if (cfg.formula && jcfRefs.length) {
+    formulaJobFields = {};
+    for (const tok of cfg.formula) {
+      if (tok.t !== 'jcf') continue;
+      formulaJobFields[tok.label] = jcf[fieldRefId(tok)] ?? 0;
     }
+  }
 
-    // Custom formula (hourly only): replaces the gross calc. The standard
-    // components above still feed it as variables (normal_pay, driver_pay…).
-    let pay = basePay + overtimePay + driverPay;
-    if (cfg.formula && e.pay_type === 'hourly') {
-      const normalHours = baseHours - overtimeHours;
-      const result = evaluateFormula(cfg.formula, {
-        vars: {
-          pay_rate: e.pay_rate,
-          worked_hours: worked,
-          driven_hours: driven,
-          total_hours: worked + driven,
-          normal_hours: normalHours,
-          overtime_hours: overtimeHours,
-          normal_pay: basePay,
-          overtime_pay: overtimePay,
-          driver_pay: driverPay,
-          standard_pay: basePay + overtimePay + driverPay,
-        },
-        ecf: e.custom_fields ?? {},
-        jcf: jcfById[e.id] ?? {},
-      });
-      if (result !== null) pay = result;
-    }
+  const hours = Math.round((worked + driven) * 100) / 100;
+  return {
+    employeeId: e.id,
+    name: `${e.first_name} ${e.last_name}`,
+    payRate: e.pay_rate,
+    payType: e.pay_type,
+    hours,
+    pay: Math.round(pay * 100) / 100,
+    workedHours: Math.round(worked * 100) / 100,
+    drivenHours: Math.round(driven * 100) / 100,
+    overtimeHours: Math.round(overtimeHours * 100) / 100,
+    overtimePay: Math.round(overtimePay * 100) / 100,
+    driverPay: Math.round(driverPay * 100) / 100,
+    ...(formulaJobFields ? { formulaJobFields } : {}),
+  };
+}
 
-    // Per-label sums of the formula's job-field reads — snapshot material
-    // for payment records ("this check paid 2 overnights").
-    let formulaJobFields: Record<string, number> | undefined;
-    if (cfg.formula && jcfRefs.length) {
-      formulaJobFields = {};
-      for (const tok of cfg.formula) {
-        if (tok.t !== 'jcf') continue;
-        formulaJobFields[tok.label] = jcfById[e.id]?.[fieldRefId(tok)] ?? 0;
+// ── Server-aggregate path (payroll_period_inputs RPC, migration 186) ─────────
+// The RPC returns per-employee AGGREGATED hour inputs; the pay phase above
+// runs unchanged on top. Raw job custom-field values arrive uncoerced (one
+// entry per contributing job) so numericFieldValue/matchFieldValue semantics
+// stay byte-identical to the raw-rows path.
+
+export interface PayrollAggregate {
+  employee: PayrollEmployee;
+  worked: number;
+  driven: number;
+  jobsDriven: number;
+  /** field_key → raw values, one per contributing job (crew ∪ drivers). */
+  jcfRaw?: Record<string, unknown[]> | null;
+}
+
+export function computePayrollRowsFromAggregates(opts: {
+  aggregates: PayrollAggregate[];
+  period: Pick<PayrollPeriod, 'startStr' | 'endStr'>;
+  includeZero?: boolean;
+  config?: PayrollConfig;
+}): PayrollRow[] {
+  const cfg = opts.config ?? DEFAULT_PAYROLL_CONFIG;
+  const includeZero = opts.includeZero ?? true;
+  const jcfRefs = cfg.formula ? formulaJobFieldRefs(cfg.formula) : [];
+  const weeks = weeksInPeriod(opts.period);
+  const rows = opts.aggregates.map(a => {
+    const jcf: Record<string, number> = {};
+    if (jcfRefs.length && a.jcfRaw) {
+      for (const ref of jcfRefs) {
+        const vals = a.jcfRaw[ref.k] ?? [];
+        let sum = 0;
+        for (const raw of vals) {
+          const v = ref.eq === undefined ? numericFieldValue(raw) : matchFieldValue(raw, ref.eq);
+          if (v) sum += v;
+        }
+        if (vals.length) jcf[fieldRefId(ref)] = sum;
       }
     }
-
-    const hours = Math.round((worked + driven) * 100) / 100;
-    return {
-      employeeId: e.id,
-      name: `${e.first_name} ${e.last_name}`,
-      payRate: e.pay_rate,
-      payType: e.pay_type,
-      hours,
-      pay: Math.round(pay * 100) / 100,
-      workedHours: Math.round(worked * 100) / 100,
-      drivenHours: Math.round(driven * 100) / 100,
-      overtimeHours: Math.round(overtimeHours * 100) / 100,
-      overtimePay: Math.round(overtimePay * 100) / 100,
-      driverPay: Math.round(driverPay * 100) / 100,
-      ...(formulaJobFields ? { formulaJobFields } : {}),
-    };
+    return payRowFor(a.employee, a.worked, a.driven, a.jobsDriven, jcf, cfg, jcfRefs, weeks);
   });
-
   const filtered = includeZero
     ? rows
     : rows.filter(r => r.hours > 0 || r.payType === 'salary');

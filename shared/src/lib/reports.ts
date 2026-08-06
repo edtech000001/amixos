@@ -8,7 +8,8 @@
 // hung the mobile Reports screen for a business with 4000+ jobs).
 
 import { fetchAllById } from './supabaseFetch';
-import { computePayrollRows, normalizePayrollConfig, type PayrollConfig } from './payroll';
+import { computePayrollRows, computePayrollRowsFromAggregates, normalizePayrollConfig, type PayrollAggregate, type PayrollConfig } from './payroll';
+import { formulaJobFieldRefs } from './payrollFormula';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseLike = any;
@@ -360,6 +361,208 @@ export function computeReports(
     inventoryItemsCount: data.inventory.length,
     lowStock: data.inventory.filter(i => i.quantity <= 5).length,
     outOfStock: data.inventory.filter(i => i.quantity === 0).length,
+    byLocation,
+  };
+}
+
+// ─── Server-side reports (reports_overview + payroll_period_inputs RPCs) ─────
+// Replaces fetchReportsData's seven full-table downloads with two aggregate
+// calls; range/bucket math stays client-side (device-local `now`), and the
+// payroll estimate runs the SAME client pay engine over per-employee
+// aggregated inputs. totalHours = payroll-engine hours (job + driver credits
+// included) on BOTH platforms — the canonical semantics.
+
+function resolveReportRange(range: ReportRange, custom?: { from: string | null; to: string | null }) {
+  const customActive = !!(custom && (custom.from || custom.to));
+  const parseLocal = (s2: string) => {
+    const [y, mo, d] = s2.split('-').map(Number);
+    return new Date(y, mo - 1, d);
+  };
+  const rangeStart = customActive
+    ? (custom!.from ? parseLocal(custom!.from) : null)
+    : getReportRangeStart(range);
+  const rangeEnd = customActive
+    ? (() => {
+        if (!custom!.to) return new Date();
+        const d = parseLocal(custom!.to);
+        d.setHours(23, 59, 59, 999);
+        return d;
+      })()
+    : getReportRangeEnd(range);
+  // Month buckets — identical to computeReports.
+  const now = new Date();
+  let months: number;
+  let start: Date;
+  if (customActive && rangeStart) {
+    start = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
+    months = Math.max(1, Math.min(24,
+      (rangeEnd.getFullYear() - start.getFullYear()) * 12 + (rangeEnd.getMonth() - start.getMonth()) + 1));
+  } else {
+    months = range === 'month' || range === 'last_month' ? 1
+      : range === 'quarter' ? 3
+      : range === 'half' ? 6
+      : range === 'year' ? now.getMonth() + 1
+      : 12;
+    start = range === 'last_month' ? new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      : range === 'year' ? new Date(now.getFullYear(), 0, 1)
+      : range === 'last_year' ? new Date(now.getFullYear() - 1, 0, 1)
+      : new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+  }
+  return { rangeStart, rangeEnd, bucketStart: start, months };
+}
+
+const toYMDLocal = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+export async function fetchReportsMetricsServer(opts: {
+  supabase: SupabaseLike;
+  businessId: string;
+  range: ReportRange;
+  dateLocale: string;
+  custom?: { from: string | null; to: string | null };
+  unassignedLocationLabel?: string;
+  payrollConfig?: unknown;
+  inventoryEnabled: boolean;
+}): Promise<ReportsMetrics> {
+  const { supabase, businessId, range, dateLocale, custom, payrollConfig } = opts;
+  const unassignedLocationLabel = opts.unassignedLocationLabel ?? 'Sin ubicación';
+  const { rangeStart, rangeEnd, bucketStart, months } = resolveReportRange(range, custom);
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+  const cfg = normalizePayrollConfig(payrollConfig) as PayrollConfig;
+  const jcfKeys = Array.from(new Set((cfg.formula ? formulaJobFieldRefs(cfg.formula) : []).map(r => r.k))).sort();
+
+  const [overviewRes, inputsRes, locRes] = await Promise.all([
+    supabase.rpc('reports_overview', {
+      p_business_id: businessId,
+      p_from: rangeStart ? rangeStart.toISOString() : null,
+      p_to: rangeEnd.toISOString(),
+      p_bucket_start: toYMDLocal(bucketStart),
+      p_bucket_months: months,
+      p_tz: tz,
+      p_include_inventory: opts.inventoryEnabled,
+    }),
+    supabase.rpc('payroll_period_inputs', {
+      p_business_id: businessId,
+      p_start: rangeStart ? toYMDLocal(rangeStart) : '1900-01-01',
+      p_end: toYMDLocal(rangeEnd),
+      p_jcf_keys: jcfKeys.length ? jcfKeys : null,
+    }),
+    supabase.from('locations').select('id, name').eq('business_id', businessId).eq('archived', false),
+  ]);
+  if (overviewRes.error) throw new Error(overviewRes.error.message);
+  if (inputsRes.error) throw new Error(inputsRes.error.message);
+  const ov = (overviewRes.data ?? {}) as Record<string, unknown>;
+  const n = (k: string) => Number(ov[k] ?? 0) || 0;
+
+  // Payroll estimate — client pay engine over server aggregates (preserves the
+  // all-time weeks scaling quirk exactly: 1900-01-01 → huge OT threshold).
+  const aggregates: PayrollAggregate[] = ((inputsRes.data ?? []) as {
+    employee_id: string; first_name: string; last_name: string; pay_rate: number | string;
+    pay_type: string; overtime_eligible: boolean | null; overtime_threshold: number | string | null;
+    overtime_multiplier: number | string | null; custom_fields: Record<string, unknown> | null;
+    worked_hours: number | string; driven_hours: number | string; jobs_driven: number | string;
+    jcf_raw: Record<string, unknown[]> | null;
+  }[]).map(r => ({
+    employee: {
+      id: r.employee_id, first_name: r.first_name, last_name: r.last_name,
+      pay_rate: Number(r.pay_rate) || 0, pay_type: r.pay_type,
+      overtime_eligible: r.overtime_eligible,
+      overtime_threshold: r.overtime_threshold == null ? null : Number(r.overtime_threshold),
+      overtime_multiplier: r.overtime_multiplier == null ? null : Number(r.overtime_multiplier),
+      custom_fields: r.custom_fields,
+    },
+    worked: Number(r.worked_hours) || 0,
+    driven: Number(r.driven_hours) || 0,
+    jobsDriven: Number(r.jobs_driven) || 0,
+    jcfRaw: r.jcf_raw,
+  }));
+  const payrollRows = computePayrollRowsFromAggregates({
+    aggregates,
+    period: { startStr: rangeStart ? toYMDLocal(rangeStart) : '1900-01-01', endStr: toYMDLocal(rangeEnd) },
+    includeZero: false,
+    config: cfg,
+  });
+  const totalHours = payrollRows.reduce((s2, r) => s2 + r.hours, 0);
+  const totalPayroll = payrollRows.reduce((s2, r) => s2 + r.pay, 0);
+  const employeeHours = [...payrollRows]
+    .map(r => ({ name: r.name, hours: r.hours, pay: r.pay }))
+    .sort((a, b) => b.hours - a.hours)
+    .slice(0, 8);
+
+  // avgJobValue — same 3-tier fallback as computeReports.
+  const pricedCount = n('pricedJobsCount');
+  const perJobCount = n('perJobCount');
+  const invoicesTotal = n('invoicesTotal');
+  const avgJobValue = pricedCount
+    ? n('pricedJobsSum') / pricedCount
+    : perJobCount
+      ? n('perJobSum') / perJobCount
+      : invoicesTotal
+        ? n('invoicesSum') / invoicesTotal
+        : 0;
+
+  // Monthly series — 'ym' keys localized here; revenue keeps the historical
+  // integer truncation (+x.toFixed(0)).
+  const monthlyRevenue = ((ov.monthlyRevenue ?? []) as { ym: string; revenue: number | string; jobs: number | string }[])
+    .map(m => ({
+      name: new Date(`${m.ym}-01T00:00:00`).toLocaleDateString(dateLocale, { month: 'short' }),
+      revenue: +Number(m.revenue ?? 0).toFixed(0),
+      jobs: Number(m.jobs ?? 0) || 0,
+    }));
+
+  // Job status — fixed order + colors, zeros dropped.
+  const jobCounts: Record<string, number> = {};
+  for (const row of (ov.jobStatus ?? []) as { status: string; value: number | string }[]) {
+    jobCounts[row.status] = Number(row.value) || 0;
+  }
+  const jobStatus = JOB_STATUS_REPORT
+    .map(s2 => ({ status: s2.status, value: jobCounts[s2.status] ?? 0, color: s2.color }))
+    .filter(d => d.value > 0);
+
+  const invoiceStatus = ((ov.invoiceStatus ?? []) as { status: string; count: number | string }[])
+    .map(r => ({ status: r.status, count: Number(r.count) || 0 }));
+
+  // Per-branch breakdown — only when the business runs multiple locations.
+  const locations = ((locRes.data ?? []) as { id: string; name: string }[]);
+  let byLocation: ReportsMetrics['byLocation'] = [];
+  if (locations.length > 0) {
+    const rows = ((ov.byLocation ?? []) as { locationId: string | null; jobCount: number | string; revenue: number | string }[]);
+    const byId = new Map(rows.map(r => [r.locationId ?? '__none__', r]));
+    byLocation = locations.map(l => ({
+      locationId: l.id,
+      name: l.name,
+      jobCount: Number(byId.get(l.id)?.jobCount ?? 0) || 0,
+      revenue: Number(byId.get(l.id)?.revenue ?? 0) || 0,
+    }));
+    const none = byId.get('__none__');
+    if (none) byLocation.push({ locationId: null, name: unassignedLocationLabel, jobCount: Number(none.jobCount) || 0, revenue: Number(none.revenue) || 0 });
+  }
+
+  const completedJobsCount = n('completedJobsCount');
+  const jobsTotal = n('jobsTotal');
+  return {
+    totalRevenue: n('totalRevenue'),
+    pendingRevenue: n('pendingRevenue'),
+    overdueRevenue: n('overdueRevenue'),
+    avgJobValue,
+    completedJobsCount,
+    paidInvoicesCount: n('paidInvoicesCount'),
+    totalHours,
+    totalPayroll,
+    payrollWorkers: payrollRows.length,
+    inventoryValue: n('inventoryValue'),
+    monthlyRevenue,
+    invoiceStatus,
+    invoicesTotal,
+    jobStatus,
+    jobsTotal,
+    completionRate: jobsTotal > 0 ? Math.round((completedJobsCount / jobsTotal) * 100) : 0,
+    employeeHours,
+    newClientsCount: n('newClientsCount'),
+    totalClientsCount: n('totalClientsCount'),
+    inventoryItemsCount: n('inventoryItemsCount'),
+    lowStock: n('lowStock'),
+    outOfStock: n('outOfStock'),
     byLocation,
   };
 }

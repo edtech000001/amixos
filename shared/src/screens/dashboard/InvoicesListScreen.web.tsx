@@ -526,10 +526,18 @@ export function InvoicesListScreen({
         </p>
       ) : null}
 
-      {/* List */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="flex gap-1">{[0, 1, 2].map((i) => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
+      {/* List — loading only skeletons when there are NO rows */}
+      {loading && filtered.length === 0 ? (
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 8 }, (_, i) => (
+            <div key={i} className="animate-pulse flex items-center gap-3 rounded-2xl border border-border-soft bg-card px-4 py-4">
+              <div className="w-10 h-10 rounded-full bg-border-soft" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3.5 w-3/5 rounded bg-border-soft" />
+                <div className="h-3 w-2/5 rounded bg-border-soft" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center py-20">

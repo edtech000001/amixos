@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { Alert, Share, View, Text, Pressable, ScrollView, Modal as RNModal, Linking, TextInput, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { X, Camera } from 'lucide-react-native';
 import * as Print from 'expo-print';
@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
 import { WEB_APP_URL } from '@/lib/webUrl';
 import { useApp } from '@/lib/AppContext';
+import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { memberNameMap } from '@amixos/shared/lib/memberNames';
 import { useThemeColors } from '@/lib/ThemeProvider';
@@ -729,9 +730,23 @@ export default function FacturaDetailRoute() {
     };
   };
 
+  // True once any snapshot (cached or live) painted.
+  const hasDataRef = useRef(false);
   useEffect(() => {
     if (!business) return;
     void (async () => {
+      // Cache-first: paint the last snapshot BEFORE the line-item rebuild
+      // below — that's a WRITE round trip that used to block first paint.
+      if (!hasDataRef.current) {
+        const cached = await swrRead<{ invoice: NonNullable<typeof invoice>; shareToken: string | null; invClientId: string | null }>(`invoice_detail_${id}`);
+        if (cached?.data && !hasDataRef.current) {
+          hasDataRef.current = true;
+          setInvoice(cached.data.invoice);
+          setShareToken(cached.data.shareToken);
+          setInvClientId(cached.data.invClientId);
+          setLoading(false);
+        }
+      }
       // Sync a draft invoice's line items with its jobs' current items first.
       await rebuildInvoiceLineItems(supabase, { invoiceId: id, itemTypeLabels, hideItemTypes: business?.job_item_types_enabled === false, qtyField: business?.invoice_qty_field });
       const [{ data }, { data: tpls }] = await Promise.all([
@@ -755,6 +770,14 @@ export default function FacturaDetailRoute() {
         setShareToken(raw.share_token ?? null);
         setInvoiceConfigRaw(raw.template_config ?? null);
         setInvClientId(raw.client_id ?? null);
+        hasDataRef.current = true;
+        // Persist for the next instant open (mapped snapshot; signed photo
+        // URLs are NOT cached — payments re-sign on load).
+        void swrWrite(`invoice_detail_${id}`, {
+          invoice: mapInvoice(data as unknown as RawInvoice, templateList),
+          shareToken: raw.share_token ?? null,
+          invClientId: raw.client_id ?? null,
+        });
         void loadJobs();
         void loadPayments();
       }

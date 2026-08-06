@@ -21,7 +21,7 @@ import { parseHiddenFields, isJobFieldHidden, jobSectionHasVisibleField, JOB_FIE
 import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import { useDirty, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
-import { clientPickerDisplay } from '@amixos/shared/lib/clientSearch';
+import { clientPickerDisplay, searchClientsServer } from '@amixos/shared/lib/clientSearch';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
@@ -436,11 +436,11 @@ function NuevoTrabajoContent() {
                       className={`w-full text-left px-4 py-3 text-base hover:bg-surface transition-colors ${!clientId ? 'text-primary font-medium' : 'text-muted'}`}>
                       {t.clientNone}
                     </button>
-                    {filteredClients.map(c => {
+                    {(pickerResults ?? filteredClients).map(c => {
                       const ct = matchedContactOf(c);
                       const { top, sub } = clientPickerDisplay(c);
                       return (
-                        <button type="button" key={c.id} onClick={() => handleClientChange(c.id)}
+                        <button type="button" key={c.id} onClick={() => { ensureClientInList(c); handleClientChange(c.id, c); }}
                           className={`w-full text-left px-4 py-3 hover:bg-surface transition-colors ${clientId === c.id ? 'bg-primary/5' : ''}`}>
                           <span className={`block text-base truncate ${clientId === c.id ? 'text-primary font-medium' : 'text-ink'}`}>
                             {top}
@@ -452,7 +452,7 @@ function NuevoTrabajoContent() {
                         </button>
                       );
                     })}
-                    {filteredClients.length === 0 && (
+                    {(pickerResults ?? filteredClients).length === 0 && (
                       <p className="px-4 py-3 text-xs text-faint text-center">{t.clientNoResults}</p>
                     )}
                   </div>
@@ -966,11 +966,13 @@ function NuevoTrabajoContent() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const handleClientChange = (id: string) => {
+  const handleClientChange = (id: string, row?: Client) => {
     setClientId(id);
     setClientDropdownOpen(false);
     setClientSearch('');
-    const client = clients.find(c => c.id === id);
+    // The row param covers a server-search pick that isn't in `clients` yet
+    // (state update from ensureClientInList lands after this runs).
+    const client = row ?? clients.find(c => c.id === id);
     if (client && !isEditProposal) {
       if (client.city) setCity(client.city);
       if (client.state) setState(client.state);
@@ -1021,6 +1023,24 @@ function NuevoTrabajoContent() {
     setQuickLastName('');
     setQuickCompany('');
     setQuickPhone('');
+  };
+
+  // Server-side picker search while the local list is still downloading —
+  // see the mobile twin for rationale. Falls back to local filtering.
+  const [pickerResults, setPickerResults] = useState<Client[] | null>(null);
+  useEffect(() => {
+    if (!clientDropdownOpen || !business || clients.length > 0) { setPickerResults(null); return; }
+    let cancelled = false;
+    const h = setTimeout(() => {
+      searchClientsServer<Client>(supabase, business.id, clientSearch, 'id, first_name, last_name, company, address, city, state')
+        .then((rows) => { if (!cancelled) setPickerResults(rows as Client[]); })
+        .catch(() => { if (!cancelled) setPickerResults(null); });
+    }, clientSearch.trim() ? 250 : 0);
+    return () => { cancelled = true; clearTimeout(h); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientDropdownOpen, clientSearch, business?.id, clients.length > 0]);
+  const ensureClientInList = (cl: Client) => {
+    setClients(prev => (prev.some(c => c.id === cl.id) ? prev : [...prev, cl]));
   };
 
   const filteredClients = clientSearch

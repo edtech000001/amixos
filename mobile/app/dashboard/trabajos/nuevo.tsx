@@ -49,7 +49,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
-import { clientPickerDisplay } from '@amixos/shared/lib/clientSearch';
+import { clientPickerDisplay, searchClientsServer } from '@amixos/shared/lib/clientSearch';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
@@ -1231,6 +1231,30 @@ export default function NuevoTrabajoRoute() {
     return null;
   };
 
+  // Server-side picker search: the picker must be usable BEFORE the full
+  // client download finishes (minutes on big businesses). While the local list
+  // is still empty we query the server (alphabetical page + term across client
+  // fields and contact names); once the full list is cached locally, local
+  // filtering takes over (richer matching + offline). Server errors fall back
+  // to whatever the local list has.
+  const [pickerResults, setPickerResults] = useState<Client[] | null>(null);
+  useEffect(() => {
+    if (!clientPickerOpen || !business || clients.length > 0) { setPickerResults(null); return; }
+    let cancelled = false;
+    const h = setTimeout(() => {
+      searchClientsServer<Client>(supabase, business.id, clientSearch, 'id, first_name, last_name, company, city, state')
+        .then((rows) => { if (!cancelled) setPickerResults(rows as Client[]); })
+        .catch(() => { if (!cancelled) setPickerResults(null); });
+    }, clientSearch.trim() ? 250 : 0);
+    return () => { cancelled = true; clearTimeout(h); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientPickerOpen, clientSearch, business?.id, clients.length > 0]);
+  // Picking a server-search result must also land it in `clients` so the
+  // selected-name display works before the background download completes.
+  const ensureClientInList = (cl: Client) => {
+    setClients((prev) => (prev.some((c) => c.id === cl.id) ? prev : [...prev, cl]));
+  };
+
   const filteredClients = useMemo(() => {
     if (!clientSearch.trim()) return clients;
     const q = clientSearch.toLowerCase();
@@ -2199,13 +2223,13 @@ export default function NuevoTrabajoRoute() {
                 </Text>
                 {!clientId ? <Check size={16} color={c.primary} /> : null}
               </Pressable>
-              {filteredClients.map((cl) => {
+              {(pickerResults ?? filteredClients).map((cl) => {
                 const isSel = cl.id === clientId;
                 const { top, sub } = clientPickerDisplay(cl);
                 return (
                   <Pressable
                     key={cl.id}
-                    onPress={() => pickClient(cl.id)}
+                    onPress={() => { ensureClientInList(cl); pickClient(cl.id); }}
                     className={`flex-row items-center justify-between px-5 py-3.5 active:bg-surface ${
                       isSel ? 'bg-primary/5' : ''
                     }`}
@@ -2237,7 +2261,7 @@ export default function NuevoTrabajoRoute() {
                   </Pressable>
                 );
               })}
-              {filteredClients.length === 0 ? (
+              {(pickerResults ?? filteredClients).length === 0 ? (
                 <View className="px-5 py-8 items-center">
                   <Text className="text-sm text-faint">{t.clientNoResults}</Text>
                 </View>

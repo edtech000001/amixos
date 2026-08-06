@@ -23,6 +23,7 @@ import {
 import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
 import { useLang } from '@/i18n/LangProvider';
+import { useSwr } from '@amixos/shared/lib/swrCache';
 import ImportModal from '@/components/dashboard/ImportModal';
 import { confirm } from '@amixos/shared/ui/confirmBus';
 import { useScrollRestore, saveScrollAnchor } from '@/lib/useScrollRestore';
@@ -170,6 +171,46 @@ export default function FacturasPage() {
     }
   };
 
+  // ── SWR default view (no search/status/date, no grouping) ─────────────────
+  const [filters, setFilters] = useState<{ search: string; statuses: string[]; groupBy: string; dateFrom: string | null; dateTo: string | null } | null>(null);
+  const isDefaultFilters = (f: NonNullable<typeof filters>) =>
+    !f.search && f.statuses.length === 0 && f.groupBy === 'none' && !f.dateFrom && !f.dateTo;
+  const defaultActive = !!business && !!filters && isDefaultFilters(filters);
+  type InvoicesPayload = { invoices: RawInvoice[]; nextCursor: InvoicesCursor | null; counts: Record<string, number> };
+  const swrKey = defaultActive ? `invoices_list_v2_${business.id}_${activeLocationId ?? 'all'}` : null;
+  const swr = useSwr<InvoicesPayload>(
+    swrKey,
+    async () => {
+      const params: InvoicesQueryParams = { businessId: business!.id, locationId: activeLocationId ?? null, statuses: [], search: '' };
+      await maybeSweep(business!.id).catch(() => {});
+      const [page, counts] = await Promise.all([
+        fetchInvoicesPage<RawInvoice>(supabase, INVOICE_LIST_SELECT, { ...params, pageSize: 50 }),
+        fetchInvoiceStatusCounts(supabase, { businessId: business!.id, locationId: activeLocationId ?? null }),
+      ]);
+      return { invoices: page.invoices, nextCursor: page.nextCursor, counts };
+    },
+    {
+      cacheKey: swrKey,
+      resetKey: `${business?.id ?? ''}_${activeLocationId ?? 'all'}`,
+      focusThrottleMs: 3_000,
+      cacheTrim: (d) => ({ ...d, invoices: d.invoices.slice(0, 50), nextCursor: null }),
+    },
+  );
+  useEffect(() => {
+    if (!swrKey || !swr.data || !business) return;
+    ++loadSeqRef.current;
+    modeRef.current = 'page';
+    loadAllRef.current = false;
+    paramsRef.current = { businessId: business.id, locationId: activeLocationId ?? null, statuses: [], search: '' };
+    setRawInvoices(swr.data.invoices);
+    cursorRef.current = swr.data.nextCursor;
+    setHasMore(!!swr.data.nextCursor);
+    setServerCounts(swr.data.counts);
+    setServerTotal(totalFor(swr.data.counts, []));
+    setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swr.data, swrKey]);
+
   const loadNextGroup = async () => {
     const seq = loadSeqRef.current;
     const idx = loadedGroupsRef.current;
@@ -242,6 +283,7 @@ export default function FacturasPage() {
 
   // Re-run the current view — after a mutation, or when the branch changes.
   const reRun = (locationId: string | null) => {
+    if (defaultActive) { swr.refresh({ force: true }); return; }
     if (!paramsRef.current) return;
     const p = { ...paramsRef.current, locationId };
     if (modeRef.current === 'group') void runGroupLazy(p);
@@ -249,12 +291,14 @@ export default function FacturasPage() {
   };
   const reload = () => reRun(activeLocationId ?? null);
   useEffect(() => {
-    reRun(activeLocationId ?? null);
+    if (!defaultActive) reRun(activeLocationId ?? null); // SWR key covers the default view
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLocationId]);
 
   const handleFiltersChange = (f: { search: string; statuses: string[]; groupBy: string; dateFrom: string | null; dateTo: string | null }) => {
     if (!business) return;
+    setFilters(f);
+    if (isDefaultFilters(f)) return; // SWR owns the default view
     const params: InvoicesQueryParams = {
       businessId: business.id, locationId: activeLocationId ?? null,
       statuses: f.statuses, search: f.search, dateFrom: f.dateFrom, dateTo: f.dateTo,

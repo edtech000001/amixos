@@ -57,7 +57,8 @@ import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { createSupabaseClient } from '@/lib/supabase';
-import { loadCached, writeCached } from '@/lib/offline/cache';
+import { writeCached } from '@/lib/offline/cache';
+import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
 import { queuedInsert, queuedUpdate, queuedDelete, queuedUpload } from '@/lib/offline/mutate';
 import { newUuid } from '@/lib/offline/ids';
 import { isOnlineNow } from '@/lib/offline/network';
@@ -457,6 +458,9 @@ export default function EquipmentScreen() {
     });
   }, [supabase]);
 
+  // True once any snapshot (cached or live) painted — hydrate only on the
+  // first run so refetches never regress to stale data.
+  const hydratedRef = useRef(false);
   // Plain function (reads groupBy/debouncedSearch at call time — see web module).
   const runQuery = async () => {
     if (!business) return;
@@ -472,22 +476,31 @@ export default function EquipmentScreen() {
     const isDefault = !searching && groupBy === 'none';
     try {
       if (isDefault) {
-        // Cache the default view for offline.
-        const res = await loadCached<{ items: Equipment[]; nextCursor: EquipmentCursor | null; total: number }>(`equipment_${business.id}_${activeLocationId ?? 'all'}`, async () => {
-          const [page, total] = await Promise.all([
-            fetchEquipmentPage<Equipment>(supabase, '*', { ...base, pageSize: 50 }),
-            fetchEquipmentCount(supabase, base),
-          ]);
-          return { items: page.items, nextCursor: page.nextCursor, total };
-        });
+        // Cache-first: paint the last snapshot instantly, then fetch fresh.
+        const cacheKey = `equipment_v2_${business.id}_${activeLocationId ?? 'all'}`;
+        if (!hydratedRef.current) {
+          const cached = await swrRead<{ items: Equipment[]; nextCursor: EquipmentCursor | null; total: number }>(cacheKey);
+          if (cached?.data && seq === loadSeqRef.current && !hydratedRef.current) {
+            hydratedRef.current = true;
+            setEquipment(cached.data.items);
+            setServerTotal(cached.data.total);
+            setLoading(false);
+            void loadCovers(cached.data.items.map(r => r.id));
+          }
+        }
+        const [page, total] = await Promise.all([
+          fetchEquipmentPage<Equipment>(supabase, '*', { ...base, pageSize: 50 }),
+          fetchEquipmentCount(supabase, base),
+        ]);
         if (seq !== loadSeqRef.current) return;
-        const d = res.data;
-        setEquipment(d?.items ?? []);
-        cursorRef.current = res.fromCache ? null : (d?.nextCursor ?? null);
-        setHasMore(!res.fromCache && !!d?.nextCursor);
-        setServerTotal(d?.total ?? 0);
+        hydratedRef.current = true;
+        setEquipment(page.items);
+        cursorRef.current = page.nextCursor;
+        setHasMore(!!page.nextCursor);
+        setServerTotal(total);
+        void swrWrite(cacheKey, { items: page.items.slice(0, 50), nextCursor: null, total });
         setCoverPhotos({});
-        await loadCovers((d?.items ?? []).map(r => r.id));
+        await loadCovers(page.items.map(r => r.id));
       } else if (needsAll) {
         const rows = await fetchAllEquipmentMatching<Equipment>(supabase, '*', base);
         const total = await fetchEquipmentCount(supabase, base);

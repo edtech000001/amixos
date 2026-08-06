@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { queuedInsert } from '@/lib/offline/mutate';
 import { newUuid } from '@/lib/offline/ids';
 import { useApp } from '@/lib/AppContext';
+import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
 import { LocationSwitcher } from '@/components/LocationSwitcher';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
@@ -259,8 +260,22 @@ export default function EmpleadosRoute() {
 
   const loadEmployees = async () => {
     if (!business) return;
-    setEmployees(await fetchEmployees(business.id));
+    const rows = await fetchEmployees(business.id);
+    setEmployees(rows);
+    // Persist for the next instant open (size-capped; trimmed automatically).
+    void swrWrite(`employees_list_${business.id}`, rows);
   };
+  // Cache-first: paint the last roster snapshot immediately on first mount.
+  const empHydratedRef = useRef(false);
+  useEffect(() => {
+    if (!business || empHydratedRef.current) return;
+    void swrRead<RawEmployee[]>(`employees_list_${business.id}`).then((hit) => {
+      if (!hit || empHydratedRef.current) return;
+      empHydratedRef.current = true;
+      setEmployees((prev) => (prev.length > 0 ? prev : hit.data));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id]);
   const loadTimesheets = async () => {
     if (!business) return;
     // All logged/manual hours (not period-bound) — paginate past the 1000-row
@@ -284,35 +299,24 @@ export default function EmpleadosRoute() {
       payroll_frequency?: string | null;
       payroll_anchor_date?: string | null;
       payroll_custom_days?: number | null;
-      payroll_config?: unknown;
     };
     const freq = normalizeFrequency(biz.payroll_frequency);
     const anchor = parsePayrollAnchor(biz.payroll_anchor_date);
     const customDays = biz.payroll_custom_days ?? null;
     const period = getPayrollPeriod(freq, new Date(), 0, anchor, customDays);
-    const [empRes, tsRes, jobRes] = await Promise.all([
-      supabase.from('employees').select('id, first_name, last_name, pay_rate, pay_type, overtime_eligible, overtime_threshold, overtime_multiplier, custom_fields').eq('business_id', biz.id),
-      supabase.from('timesheets').select('employee_id, hours_worked, work_date').eq('business_id', biz.id)
-        .gte('work_date', period.startStr).lte('work_date', period.endStr),
-      supabase.from('jobs').select('id, title, scheduled_date, total_hours, driver_employee_ids, driver_hours, custom_fields, job_assignments(employee_id)')
-        .eq('business_id', biz.id).gte('scheduled_date', period.startStr).lte('scheduled_date', period.endStr),
-    ]);
-    const jobs = ((jobRes.data ?? []) as Array<{ id: string; title: string | null; scheduled_date: string | null; total_hours: number | null; driver_employee_ids: string[] | null; driver_hours: number | null; custom_fields: Record<string, unknown> | null; job_assignments: { employee_id: string | null }[] }>).map(j => ({
-      id: j.id, title: j.title, scheduled_date: j.scheduled_date,
-      total_hours: j.total_hours, driver_employee_ids: j.driver_employee_ids,
-      driver_hours: j.driver_hours, custom_fields: j.custom_fields,
-      assignmentEmployeeIds: (j.job_assignments ?? []).map(a => a.employee_id).filter((x): x is string => !!x),
-    }));
-    const rows = computePayrollRows({
-      employees: (empRes.data ?? []) as PayrollEmployee[],
-      timesheets: (tsRes.data ?? []) as PayrollTimesheet[],
-      jobs,
-      period,
-      includeZero: false,
-      config: normalizePayrollConfig(biz.payroll_config),
-    });
-    setHourTotals(rows.map(r => ({ employeeId: r.employeeId, workerName: r.name, hours: r.hours })));
     setPayPeriodLabel(`${formatDateLong(period.startStr, locale)} – ${formatDateLong(period.endStr, locale)}`);
+    // team_hour_totals RPC (migration 185): one scan replaces downloading the
+    // roster + every timesheet/job in the period. The displayed hours are
+    // config-free (timesheets + job crew hours + driver hours), so this is
+    // exactly computePayrollRows' hour-attribution phase, server-side.
+    const { data, error } = await supabase.rpc('team_hour_totals', {
+      p_business_id: biz.id,
+      p_start: period.startStr,
+      p_end: period.endStr,
+    });
+    if (error) return; // offline / migration not run — keep previous totals
+    setHourTotals(((data ?? []) as { employee_id: string; worker_name: string; hours: number | string }[])
+      .map(r => ({ employeeId: r.employee_id, workerName: r.worker_name, hours: Number(r.hours) })));
   };
 
   const loadTemplates = async () => {
@@ -365,8 +369,14 @@ export default function EmpleadosRoute() {
 
   // Reload on focus (not just mount) so employees added/edited on the
   // dedicated /nuevo and /[id] screens appear when the user navigates back.
+  // Throttled: these are five whole-table reads — refreshing more than once
+  // per few seconds (e.g. rapid tab switches) is pure waste.
+  const lastFocusLoadRef = useRef(0);
   useFocusEffect(
     useCallback(() => {
+      const now = Date.now();
+      if (now - lastFocusLoadRef.current < 3_000) return;
+      lastFocusLoadRef.current = now;
       void loadPeople();
       void loadTimesheets();
       void loadHourTotals();

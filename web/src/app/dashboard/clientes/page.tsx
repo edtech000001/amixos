@@ -27,6 +27,7 @@ import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { useScrollRestore, saveScrollAnchor } from '@/lib/useScrollRestore';
 import ImportClientsModal from '@/components/dashboard/ImportClientsModal';
 import { useLang } from '@/i18n/LangProvider';
+import { useSwr } from '@amixos/shared/lib/swrCache';
 import {
   ClientsListScreen,
   type ClientListItem,
@@ -123,6 +124,11 @@ export default function ClientesPage() {
   const paramsRef = useRef<{ businessId: string; search: string } | null>(null);
   const loadAllRef = useRef(false);
 
+  // ── SWR default view (no search, name grouping): instant from cache ───────
+  const [filters, setFilters] = useState<{ search: string; groupBy: string } | null>(null);
+  const isDefaultFilters = (f: { search: string; groupBy: string }) => !f.search && !clientGroupNeedsAll(f.groupBy);
+  const defaultActive = !!business && !!filters && isDefaultFilters(filters);
+
   // Branch scoping: clients restricted to OTHER branches are hidden. Restricted
   // clients (any link) minus those at the active branch. Small set (only
   // explicitly-restricted clients have links). Empty for "All locations".
@@ -189,6 +195,40 @@ export default function ClientesPage() {
     }
   };
 
+  // Default view rides the SWR cache: renders the last snapshot instantly and
+  // revalidates in the background (filtered/grouped views fetch live above).
+  type ClientsPayload = { clients: Client[]; nextCursor: ClientsCursor | null; total: number };
+  const swrKey = defaultActive ? `clients_list_v2_${business.id}_${activeLocationId ?? 'all'}` : null;
+  const swr = useSwr<ClientsPayload>(
+    swrKey,
+    async () => {
+      const params = { businessId: business!.id, search: '', excludeIds: excludeIdsRef.current };
+      const [page, total] = await Promise.all([
+        fetchClientsPage<Client>(supabase, CLIENT_PAGE_SELECT, { ...params, pageSize: 50 }),
+        fetchClientCount(supabase, params),
+      ]);
+      return { clients: page.clients, nextCursor: page.nextCursor, total };
+    },
+    {
+      cacheKey: swrKey,
+      resetKey: `${business?.id ?? ''}_${activeLocationId ?? 'all'}`,
+      focusThrottleMs: 3_000,
+      cacheTrim: (d) => ({ ...d, clients: d.clients.slice(0, 50), nextCursor: null }),
+    },
+  );
+  useEffect(() => {
+    if (!swrKey || !swr.data || !business) return;
+    ++loadSeqRef.current;
+    paramsRef.current = { businessId: business.id, search: '' };
+    loadAllRef.current = false;
+    setRawClients(swr.data.clients);
+    cursorRef.current = swr.data.nextCursor;
+    setHasMore(!!swr.data.nextCursor);
+    setServerTotal(swr.data.total);
+    setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swr.data, swrKey]);
+
   const loadMore = async () => {
     if (loadingMore || !paramsRef.current || loadAllRef.current || !cursorRef.current) return;
     const seq = loadSeqRef.current;
@@ -206,7 +246,10 @@ export default function ClientesPage() {
     }
   };
 
-  const reRun = () => { if (paramsRef.current) void runQuery(paramsRef.current, loadAllRef.current); };
+  const reRun = () => {
+    if (defaultActive) { swr.refresh({ force: true }); return; }
+    if (paramsRef.current) void runQuery(paramsRef.current, loadAllRef.current);
+  };
   // Re-run when the branch scope changes (locations load, or branch switch).
   useEffect(() => {
     if (paramsRef.current) void runQuery(paramsRef.current, loadAllRef.current);
@@ -215,6 +258,8 @@ export default function ClientesPage() {
 
   const handleFiltersChange = (f: { search: string; groupBy: string }) => {
     if (!business) return;
+    setFilters(f);
+    if (isDefaultFilters(f)) return; // SWR owns the default view
     void runQuery({ businessId: business.id, search: f.search }, clientGroupNeedsAll(f.groupBy));
   };
 
