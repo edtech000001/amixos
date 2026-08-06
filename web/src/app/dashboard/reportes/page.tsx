@@ -15,8 +15,7 @@ import {
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
-import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
-import { computePayrollRows, normalizePayrollConfig } from '@amixos/shared/lib/payroll';
+import { fetchReportsMetricsServer, type ReportsMetrics, type ReportRange } from '@amixos/shared/lib/reports';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -152,212 +151,76 @@ export default function ReportesPage() {
   const [dateOpen, setDateOpen] = useState(false);
   const [customFrom, setCustomFrom] = useState<string>('');
   const [customTo, setCustomTo] = useState<string>('');
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [metrics, setMetrics] = useState<ReportsMetrics | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Inventory KPIs only render — and only fetch — when the business has
-  // the Inventory module enabled. Disabled businesses don't need (or pay
-  // the query cost for) the inventory_items scan.
+  // the Inventory module enabled.
   const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
   const inventoryEnabled = enabledModules.some(m => m.id === 'inventory');
 
-  // Load all data once — filter client-side per range.
-  // Each fetch paginates via fetchAll because reports must be accurate
-  // even when a business is past PostgREST's 1000-row default cap.
+  const customActive = !!customFrom || !!customTo;
+
+  // Server-side aggregates (migration 186): two RPCs replace the old seven
+  // full-table downloads; range changes refetch (tiny payloads). The payroll
+  // estimate — incl. totalHours — uses the payroll engine (job + driver
+  // credits), matching mobile and the Nómina page.
   useEffect(() => {
     if (!business) return;
-    const businessId = business.id;
-    // Keyset (id-cursor) pagination — OFFSET .range() re-scans all prior rows
-    // per page under RLS and times out once jobs/invoices grow into the
-    // thousands. Reports still loads full tables to aggregate client-side; a
-    // server-side aggregate (RPC/view) would be the next step for instant reports.
-    Promise.all([
-      fetchAllById<Invoice>((afterId, pageSize) => {
-        let q = supabase.from('invoices')
-          .select('id, status, total_amount, paid_at, created_at, issue_date, line_items')
-          .eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
-        if (afterId) q = q.gt('id', afterId);
-        return q;
-      }),
-      fetchAllById<Job>((afterId, pageSize) => {
-        let q = supabase.from('jobs')
-          .select('id, status, total_amount, created_at, client_id, location_id, scheduled_date, total_hours, driver_employee_ids, driver_hours, custom_fields, job_assignments(employee_id)')
-          .eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
-        if (afterId) q = q.gt('id', afterId);
-        return q;
-      }),
-      fetchAllById<Client>((afterId, pageSize) => {
-        let q = supabase.from('clients')
-          .select('id, created_at')
-          .eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
-        if (afterId) q = q.gt('id', afterId);
-        return q;
-      }),
-      fetchAllById<Timesheet>((afterId, pageSize) => {
-        let q = supabase.from('timesheets')
-          .select('id, hours_worked, work_date, employee_id, worker_name')
-          .eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
-        if (afterId) q = q.gt('id', afterId);
-        return q;
-      }),
-      fetchAllById<Employee>((afterId, pageSize) => {
-        let q = supabase.from('employees')
-          .select('id, first_name, last_name, pay_rate, pay_type, overtime_eligible, overtime_threshold, overtime_multiplier, custom_fields')
-          .eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
-        if (afterId) q = q.gt('id', afterId);
-        return q;
-      }),
-      inventoryEnabled
-        ? fetchAllById<InventoryItem>((afterId, pageSize) => {
-            let q = supabase.from('inventory_items')
-              .select('id, quantity, unit_cost')
-              .eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
-            if (afterId) q = q.gt('id', afterId);
-            return q;
-          })
-        : Promise.resolve([] as InventoryItem[]),
-    ]).then(([inv, j, cl, ts, emp, inv_items]) => {
-      setInvoices(inv);
-      setJobs(j);
-      setClients(cl);
-      setTimesheets(ts);
-      setEmployees(emp);
-      setInventory(inv_items);
-      setLoading(false);
+    let cancelled = false;
+    setLoading(true);
+    fetchReportsMetricsServer({
+      supabase,
+      businessId: business.id,
+      range: range as ReportRange,
+      dateLocale,
+      custom: { from: customFrom || null, to: customTo || null },
+      unassignedLocationLabel: locale === 'es' ? 'Sin ubicación' : 'No location',
+      payrollConfig: business.payroll_config,
+      inventoryEnabled,
+    }).then(m => {
+      if (!cancelled) { setMetrics(m); setLoading(false); }
+    }).catch(() => {
+      if (!cancelled) setLoading(false); // offline / migration missing — keep previous
     });
-  }, [business, inventoryEnabled]);
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id, inventoryEnabled, range, customFrom, customTo, dateLocale, locale, business?.payroll_config]);
 
-  // Filter by date range — a custom from/to overrides the preset when set.
-  const customActive = !!customFrom || !!customTo;
-  const parseLocal = (s: string) => { const [y, mo, d] = s.split('-').map(Number); return new Date(y, mo - 1, d); };
-  const rangeStart = customActive ? (customFrom ? parseLocal(customFrom) : null) : getRangeStart(range);
-  const rangeEnd = customActive
-    ? (customTo ? (() => { const d = parseLocal(customTo); d.setHours(23, 59, 59, 999); return d; })() : new Date())
-    : getRangeEnd(range);
+  // Derived values keep their historical names so the render stays unchanged.
+  const totalRevenue = metrics?.totalRevenue ?? 0;
+  const pendingRevenue = metrics?.pendingRevenue ?? 0;
+  const overdueRevenue = metrics?.overdueRevenue ?? 0;
+  const avgJobValue = metrics?.avgJobValue ?? 0;
+  const totalHours = metrics?.totalHours ?? 0;
+  const inventoryValue = metrics?.inventoryValue ?? 0;
+  const totalPayroll = metrics?.totalPayroll ?? 0;
+  const payrollWorkers = metrics?.payrollWorkers ?? 0;
+  const grossMargin = totalRevenue - totalPayroll;
+  const marginPct = totalRevenue > 0 ? Math.round((grossMargin / totalRevenue) * 100) : 0;
+  const byLocation = metrics?.byLocation ?? [];
+  const paidInvoicesCount = metrics?.paidInvoicesCount ?? 0;
+  const invoicesTotalCount = metrics?.invoicesTotal ?? 0;
+  const jobsTotalCount = metrics?.jobsTotal ?? 0;
+  const completedJobsCount = metrics?.completedJobsCount ?? 0;
+  const completionRate = metrics?.completionRate ?? 0;
+  const newClientsCount = metrics?.newClientsCount ?? 0;
+  const totalClientsCount = metrics?.totalClientsCount ?? 0;
+  const inventoryItemsCount = metrics?.inventoryItemsCount ?? 0;
+  const lowStockCount = metrics?.lowStock ?? 0;
+  const outOfStockCount = metrics?.outOfStock ?? 0;
 
-  const inRange = (dateStr: string) => {
-    const d = new Date(dateStr);
-    if (rangeStart && d < rangeStart) return false;
-    if (d > rangeEnd) return false;
-    return true;
-  };
+  // Chart series keyed by localized labels (recharts reads the object keys).
+  const monthlyRevenue = useMemo(
+    () => (metrics?.monthlyRevenue ?? []).map(x => ({
+      name: x.name,
+      [t.chart.revenueSeries]: x.revenue,
+      [t.chart.jobsSeries]: x.jobs,
+    })),
+    [metrics?.monthlyRevenue, t.chart.revenueSeries, t.chart.jobsSeries],
+  );
 
-  // Invoices bucket by ISSUE date (accrual billing view) — see shared reports.ts.
-  const filteredInvoices = useMemo(() => invoices.filter(i => inRange(i.issue_date || i.created_at)), [invoices, range, customFrom, customTo]);
-  const filteredJobs     = useMemo(() => jobs.filter(j => inRange(j.created_at)), [jobs, range, customFrom, customTo]);
-  const filteredClients  = useMemo(() => clients.filter(c => inRange(c.created_at)), [clients, range, customFrom, customTo]);
-  const filteredSheets   = useMemo(() => timesheets.filter(ts => inRange(ts.work_date)), [timesheets, range, customFrom, customTo]);
-
-  // ── Revenue KPIs ─────────────────────────────────────────────────────────
-  const paidInvoices = filteredInvoices.filter(i => i.status === 'paid');
-  // Raw sums; rounding to cents happens once at display (see fmt).
-  const totalRevenue = paidInvoices.reduce((s, i) => s + i.total_amount, 0);
-  const pendingRevenue = filteredInvoices.filter(i => i.status === 'sent').reduce((s, i) => s + i.total_amount, 0);
-  const overdueRevenue = filteredInvoices.filter(i => i.status === 'overdue').reduce((s, i) => s + i.total_amount, 0);
-  const avgInvoice = paidInvoices.length ? totalRevenue / paidInvoices.length : 0;
-
-  const completedJobs = filteredJobs.filter(j => j.status === 'completed' || j.status === 'invoiced');
-  // Average job value, best-available source:
-  //   1. jobs with their own amount (user-entered totals),
-  //   2. invoice LINE ITEMS summed per job_id — the true per-job revenue for
-  //      migrated data where pricing lives on invoices,
-  //   3. average invoice total as the last resort.
-  const pricedJobs = completedJobs.filter(j => (j.total_amount ?? 0) > 0);
-  const perJobRevenue = new Map<string, number>();
-  filteredInvoices.forEach(inv => (inv.line_items ?? []).forEach(li => {
-    if (!li?.job_id) return;
-    const amt = (Number(li.qty ?? 1) || 0) * (Number(li.rate ?? 0) || 0);
-    perJobRevenue.set(li.job_id, (perJobRevenue.get(li.job_id) ?? 0) + amt);
-  }));
-  const perJobValues = Array.from(perJobRevenue.values());
-  const avgJobValue = pricedJobs.length
-    ? pricedJobs.reduce((s, j) => s + j.total_amount, 0) / pricedJobs.length
-    : perJobValues.length
-      ? perJobValues.reduce((s, v) => s + v, 0) / perJobValues.length
-      : filteredInvoices.length
-        ? filteredInvoices.reduce((s, i) => s + i.total_amount, 0) / filteredInvoices.length
-        : 0;
-
-  const totalHours = filteredSheets.reduce((s, ts) => s + (ts.hours_worked ?? 0), 0);
-
-  const inventoryValue = inventory.reduce((s, i) => s + i.quantity * i.unit_cost, 0);
-
-  // ── Per-branch breakdown ──────────────────────────────────────────────────
-  // Reports stay business-wide totals; this compares branches. jobCount = jobs
-  // created in range; revenue = total_amount of completed/invoiced jobs (the
-  // job is the only location-tagged revenue proxy — invoices carry no branch).
-  const byLocation = useMemo(() => {
-    if (locations.length === 0) return [] as { locationId: string | null; name: string; jobCount: number; revenue: number }[];
-    const agg = new Map<string, { jobCount: number; revenue: number }>();
-    filteredJobs.forEach(j => {
-      const key = j.location_id ?? '__none__';
-      const earned = j.status === 'completed' || j.status === 'invoiced' ? j.total_amount : 0;
-      const cur = agg.get(key) ?? { jobCount: 0, revenue: 0 };
-      cur.jobCount += 1; cur.revenue += earned; agg.set(key, cur);
-    });
-    const rows = locations.map(l => ({
-      locationId: l.id as string | null, name: l.name,
-      jobCount: agg.get(l.id)?.jobCount ?? 0, revenue: agg.get(l.id)?.revenue ?? 0,
-    }));
-    const none = agg.get('__none__');
-    if (none) rows.push({ locationId: null, name: locale === 'es' ? 'Sin ubicación' : 'No location', jobCount: none.jobCount, revenue: none.revenue });
-    return rows;
-  }, [locations, filteredJobs, locale]);
-
-  // ── Monthly revenue chart ─────────────────────────────────────────────────
-  const monthlyRevenue = useMemo(() => {
-    const now = new Date();
-    let months: number;
-    let start: Date;
-    if (customActive) {
-      // Custom range: buckets span the range itself (capped at 24 months) —
-      // a 2024 range must chart 2024's months, not the last 12 from today.
-      const s0 = rangeStart ?? new Date(now.getFullYear(), now.getMonth() - 11, 1);
-      start = new Date(s0.getFullYear(), s0.getMonth(), 1);
-      months = Math.max(1, Math.min(24,
-        (rangeEnd.getFullYear() - start.getFullYear()) * 12 + (rangeEnd.getMonth() - start.getMonth()) + 1));
-    } else {
-      months = range === 'month' || range === 'last_month' ? 1
-        : range === 'quarter' ? 3
-        : range === 'half' ? 6
-        : range === 'year' ? now.getMonth() + 1   // Jan → current month
-        : 12;                                     // last_year (Jan–Dec) / all (rolling 12)
-      // First bucket month: calendar-year ranges anchor at January.
-      start = range === 'last_month' ? new Date(now.getFullYear(), now.getMonth() - 1, 1)
-        : range === 'year' ? new Date(now.getFullYear(), 0, 1)
-        : range === 'last_year' ? new Date(now.getFullYear() - 1, 0, 1)
-        : new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
-    }
-
-    return Array.from({ length: months }, (_, i) => {
-      const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
-      const monthInvoices = paidInvoices.filter(inv => {
-        const pd = new Date(inv.issue_date || inv.paid_at || inv.created_at);
-        return pd.getFullYear() === d.getFullYear() && pd.getMonth() === d.getMonth();
-      });
-      const monthJobs = filteredJobs.filter(j => {
-        const jd = new Date(j.created_at);
-        return jd.getFullYear() === d.getFullYear() && jd.getMonth() === d.getMonth();
-      });
-      // Locale-aware short month label (e.g. "Ene"/"Jan")
-      const name = d.toLocaleDateString(dateLocale, { month: 'short' });
-      return {
-        name,
-        [t.chart.revenueSeries]: +monthInvoices.reduce((s, i) => s + i.total_amount, 0).toFixed(0),
-        [t.chart.jobsSeries]: monthJobs.length,
-      };
-    });
-  }, [paidInvoices, filteredJobs, range, customFrom, customTo, dateLocale, t.chart.revenueSeries, t.chart.jobsSeries]);  // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Invoice status pie ────────────────────────────────────────────────────
   const invoiceStatusData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    filteredInvoices.forEach(i => { counts[i.status] = (counts[i.status] ?? 0) + 1; });
     const labelFor = (status: string): string => {
       switch (status) {
         case 'paid':      return t.pieStatuses.paid;
@@ -368,80 +231,13 @@ export default function ReportesPage() {
         default:          return status;
       }
     };
-    return Object.entries(counts).map(([status, count]) => ({
-      name: labelFor(status), value: count, status,
-    }));
-  }, [filteredInvoices, t.pieStatuses]);
+    return (metrics?.invoiceStatus ?? []).map(r => ({ name: labelFor(r.status), value: r.count, status: r.status }));
+  }, [metrics?.invoiceStatus, t.pieStatuses]);
 
-  // ── Job status data ───────────────────────────────────────────────────────
   const jobStatusData = useMemo(() => {
-    const map: Record<string, number> = {
-      scheduled: 0, in_progress: 0, completed: 0, invoiced: 0, cancelled: 0,
-    };
-    filteredJobs.forEach(j => { if (j.status in map) map[j.status]++; });
-    const tabs = full.dashboard.jobs.tabs;
-    return [
-      { name: tabs.scheduled,   value: map.scheduled,   color: '#6366F1' },
-      { name: tabs.in_progress, value: map.in_progress, color: '#F59E0B' },
-      { name: tabs.completed,   value: map.completed,   color: '#10B981' },
-      { name: tabs.invoiced,    value: map.invoiced,    color: '#8B5CF6' },
-      { name: tabs.cancelled,   value: map.cancelled,   color: '#D1D5DB' },
-    ].filter(d => d.value > 0);
-  }, [filteredJobs, full.dashboard.jobs.tabs]);
-
-  // ── Employee hours + payroll estimate ─────────────────────────────────────
-  // Hours come from BOTH the timesheets table AND hours logged on jobs
-  // (total_hours + driver hours via crew assignments). Uses the SAME engine as
-  // the Payroll page so the estimate matches — a business that logs hours only
-  // on jobs no longer shows $0. Filtered by the selected range (by work date).
-  const payrollRows = useMemo(() => {
-    const toYMD = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const startStr = rangeStart ? toYMD(rangeStart) : '1900-01-01';
-    const endStr = toYMD(rangeEnd ?? new Date());
-    const pjobs = jobs.map(j => ({
-      id: j.id,
-      scheduled_date: j.scheduled_date,
-      total_hours: j.total_hours,
-      driver_employee_ids: j.driver_employee_ids,
-      driver_hours: j.driver_hours,
-      custom_fields: j.custom_fields ?? null,
-      assignmentEmployeeIds: (j.job_assignments ?? []).map(a => a.employee_id).filter((x): x is string => !!x),
-    }));
-    return computePayrollRows({
-      employees,
-      timesheets: timesheets.map(ts => ({ employee_id: ts.employee_id, hours_worked: ts.hours_worked, work_date: ts.work_date })),
-      jobs: pjobs,
-      period: { startStr, endStr },
-      includeZero: false,
-      config: normalizePayrollConfig(business?.payroll_config),
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobs, timesheets, employees, rangeStart, rangeEnd, business?.payroll_config]);
-
-  const employeeHours = useMemo(
-    () => [...payrollRows]
-      .map(r => ({ name: r.name, hours: r.hours, payRate: r.payRate, payType: r.payType, pay: r.pay }))
-      .sort((a, b) => b.hours - a.hours)
-      .slice(0, 8),
-    [payrollRows],
-  );
-
-  const totalPayroll = payrollRows.reduce((s, r) => s + r.pay, 0);
-  const payrollWorkers = payrollRows.length;
-  const grossMargin = totalRevenue - totalPayroll;
-  const marginPct = totalRevenue > 0 ? Math.round((grossMargin / totalRevenue) * 100) : 0;
-
-  // ── Top clients by invoice revenue ───────────────────────────────────────
-  const topClients = useMemo(() => {
-    const map: Record<string, { name: string; revenue: number; count: number }> = {};
-    // We need client names — join through jobs table
-    filteredInvoices.filter(i => i.status === 'paid').forEach(inv => {
-      // We don't have client name here directly, but client_id is on invoice
-      // Use invoice id as key for now — ideally we'd join
-    });
-    return [];
-  }, [filteredInvoices]);
+    const tabs = full.dashboard.jobs.tabs as Record<string, string>;
+    return (metrics?.jobStatus ?? []).map(r => ({ name: tabs[r.status] ?? r.status, value: r.value, color: r.color }));
+  }, [metrics?.jobStatus, full.dashboard.jobs.tabs]);
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-[60vh]">
@@ -451,11 +247,11 @@ export default function ReportesPage() {
     </div>
   );
 
-  const paidSubLabel = paidInvoices.length === 0
+  const paidSubLabel = paidInvoicesCount === 0
     ? t.kpis.noPaidInvoices
-    : (paidInvoices.length === 1
-        ? t.kpis.paidInvoicesCountSingle.replace('{{count}}', String(paidInvoices.length))
-        : t.kpis.paidInvoicesCountPlural.replace('{{count}}', String(paidInvoices.length)));
+    : (paidInvoicesCount === 1
+        ? t.kpis.paidInvoicesCountSingle.replace('{{count}}', String(paidInvoicesCount))
+        : t.kpis.paidInvoicesCountPlural.replace('{{count}}', String(paidInvoicesCount)));
 
   return (
     <div className="p-6">
@@ -580,7 +376,7 @@ export default function ReportesPage() {
         <KpiCard icon={<PiggyBank size={16}/>} label={t.kpis.grossMargin} value={totalRevenue > 0 ? fmt(grossMargin) : '—'} color="blue"
           sub={totalRevenue > 0 ? t.kpis.grossMarginSub.replace('{{percent}}', String(marginPct)) : undefined}/>
         <KpiCard icon={<ClipboardList size={16}/>} label={t.kpis.avgJobValue} value={avgJobValue > 0 ? fmt(avgJobValue) : '—'} color="indigo"
-          sub={t.kpis.completedJobsCount.replace('{{count}}', String(completedJobs.length))}/>
+          sub={t.kpis.completedJobsCount.replace('{{count}}', String(completedJobsCount))}/>
         <KpiCard icon={<Clock size={16}/>} label={t.kpis.hoursLogged} value={totalHours.toFixed(1)} color="purple"
           sub={t.kpis.estPayrollSub.replace('{{amount}}', fmt(totalPayroll))}/>
       </div>
@@ -666,7 +462,7 @@ export default function ReportesPage() {
                 ))}
                 <div className="border-t border-border-soft pt-2 flex justify-between text-xs font-bold">
                   <span className="text-muted">{t.invoicePie.total}</span>
-                  <span>{filteredInvoices.length}</span>
+                  <span>{invoicesTotalCount}</span>
                 </div>
               </div>
             </div>
@@ -677,7 +473,7 @@ export default function ReportesPage() {
       <div className="grid md:grid-cols-2 gap-5 mb-5">
         {/* ── Jobs breakdown ─────────────────────────────────────────────── */}
         <Section title={t.sections.jobsByStatus}>
-          {filteredJobs.length === 0 ? (
+          {jobsTotalCount === 0 ? (
             <div className="flex items-center justify-center h-48 text-faint">
               <div className="text-center">
                 <ClipboardList size={32} className="mx-auto mb-2 opacity-30"/>
@@ -699,14 +495,12 @@ export default function ReportesPage() {
               </ResponsiveContainer>
               <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-border-soft">
                 <div className="text-center">
-                  <p className="text-xl font-black text-ink">{filteredJobs.length}</p>
+                  <p className="text-xl font-black text-ink">{jobsTotalCount}</p>
                   <p className="text-xs text-faint">{t.jobsBreakdown.totalJobs}</p>
                 </div>
                 <div className="text-center">
                   <p className="text-xl font-black text-emerald-600">
-                    {filteredJobs.length > 0
-                      ? Math.round((completedJobs.length / filteredJobs.length) * 100)
-                      : 0}%
+                    {completionRate}%
                   </p>
                   <p className="text-xs text-faint">{t.jobsBreakdown.completionRate}</p>
                 </div>
@@ -761,10 +555,10 @@ export default function ReportesPage() {
         {/* Nuevos clientes */}
         <Section title={t.sections.newClients}>
           <div className="text-center py-6">
-            <p className="text-5xl font-black text-primary">{filteredClients.length}</p>
+            <p className="text-5xl font-black text-primary">{newClientsCount}</p>
             <p className="text-sm text-muted mt-1">{t.newClientsBlock.newCount}</p>
             <p className="text-xs text-faint mt-0.5">
-              {t.newClientsBlock.totalAccumulated.replace('{{count}}', String(clients.length))}
+              {t.newClientsBlock.totalAccumulated.replace('{{count}}', String(totalClientsCount))}
             </p>
           </div>
         </Section>
@@ -780,18 +574,18 @@ export default function ReportesPage() {
               <div className="flex flex-col gap-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-muted">{t.inventoryBlock.totalItems}</span>
-                  <span className="font-bold">{inventory.length}</span>
+                  <span className="font-bold">{inventoryItemsCount}</span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-muted">{t.inventoryBlock.lowStock}</span>
-                  <span className={`font-bold ${inventory.filter(i => i.quantity <= 5).length > 0 ? 'text-orange-500' : 'text-ink'}`}>
-                    {inventory.filter(i => i.quantity <= 5).length}
+                  <span className={`font-bold ${lowStockCount > 0 ? 'text-orange-500' : 'text-ink'}`}>
+                    {lowStockCount}
                   </span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-muted">{t.inventoryBlock.outOfStock}</span>
-                  <span className={`font-bold ${inventory.filter(i => i.quantity === 0).length > 0 ? 'text-red-500' : 'text-ink'}`}>
-                    {inventory.filter(i => i.quantity === 0).length}
+                  <span className={`font-bold ${outOfStockCount > 0 ? 'text-red-500' : 'text-ink'}`}>
+                    {outOfStockCount}
                   </span>
                 </div>
               </div>

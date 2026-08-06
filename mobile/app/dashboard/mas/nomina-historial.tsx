@@ -10,7 +10,7 @@ import {
   type PayrollHistoryEntry,
 } from '@amixos/shared/screens/dashboard/PayrollHistoryScreen';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
-import { employeeBreakdownInRange } from '@amixos/shared/lib/payroll';
+import type { PayrollBreakdown } from '@amixos/shared/lib/payroll';
 import { logAudit } from '@amixos/shared/lib/audit';
 
 export default function NominaHistorialScreen() {
@@ -69,34 +69,20 @@ export default function NominaHistorialScreen() {
 
 
   // Hours breakdown for one record's period — same attribution as the live
-  // Payroll view (crew hours + driver hours + standalone timesheets).
+  // Payroll view, computed server-side (employee_hours_breakdown, migration
+  // 186) instead of downloading the period's timesheets + jobs.
   const loadBreakdown = async (h: PayrollHistoryEntry) => {
     if (!business || !h.employeeId) return null;
-    const bid = business.id;
     const from = h.periodStart.slice(0, 10);
     const to = h.periodEnd.slice(0, 10);
-    const [tsRes, jobRes] = await Promise.all([
-      supabase.from('timesheets').select('employee_id, hours_worked, work_date')
-        .eq('business_id', bid).gte('work_date', from).lte('work_date', to),
-      supabase.from('jobs').select('id, title, scheduled_date, total_hours, driver_employee_ids, driver_hours, job_assignments(employee_id)')
-        .eq('business_id', bid).gte('scheduled_date', from).lte('scheduled_date', to),
-    ]);
-    const jobs = ((jobRes.data ?? []) as Array<{ id: string; title: string | null; scheduled_date: string | null; total_hours: number | null; driver_employee_ids: string[] | null; driver_hours: number | null; job_assignments: { employee_id: string | null }[] }>).map(j => ({
-      id: j.id,
-      title: j.title,
-      scheduled_date: j.scheduled_date,
-      total_hours: j.total_hours,
-      driver_employee_ids: j.driver_employee_ids,
-      driver_hours: j.driver_hours,
-      assignmentEmployeeIds: (j.job_assignments ?? []).map(a => a.employee_id).filter((x): x is string => !!x),
-    }));
-    const breakdown = employeeBreakdownInRange({
-      employeeId: h.employeeId,
-      timesheets: (tsRes.data ?? []) as { employee_id: string | null; hours_worked: number | null; work_date: string | null }[],
-      jobs,
-      startStr: from,
-      endStr: to,
+    const { data, error } = await supabase.rpc('employee_hours_breakdown', {
+      p_business_id: business.id,
+      p_employee_id: h.employeeId,
+      p_start: from,
+      p_end: to,
     });
+    if (error || !data) return null;
+    const breakdown = data as PayrollBreakdown;
     // Lazy backfill: freeze this record now so future opens survive job
     // deletes (pre-136 records and imports have no pay-time snapshot).
     // Best-effort — read-only roles just keep recomputing.

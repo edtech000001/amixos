@@ -280,8 +280,12 @@ export default function EmpleadosRoute() {
     if (!business) return;
     // All logged/manual hours (not period-bound) — paginate past the 1000-row
     // cap, then sort newest-first for the History tab.
+    // Only the columns the History tab renders — `*` hauled every timesheet
+    // column for the whole table on each load.
     const rows = await fetchAllById<RawTimesheet>((afterId, pageSize) => {
-      let q = supabase.from('timesheets').select('*').eq('business_id', business.id)
+      let q = supabase.from('timesheets')
+        .select('id, worker_name, work_date, hours_worked, job_description, employee_id')
+        .eq('business_id', business.id)
         .order('id', { ascending: true }).limit(pageSize);
       if (afterId) q = q.gt('id', afterId);
       return q;
