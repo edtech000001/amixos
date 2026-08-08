@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { resizeImage } from '@/components/jobs/JobPhotosSection';
 import { EQUIPMENT_BUCKET, MAX_PHOTOS_PER_EQUIPMENT, equipmentPhotoPath } from '@amixos/shared/lib/equipment';
 import { logImportRun } from '@amixos/shared/lib/importRunners';
+import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
 import {
   buildPhotoMatcher,
   removePendingName,
@@ -49,6 +50,7 @@ export function ImportEquipmentPhotosModal({ open, businessId, onClose }: Props)
   const [picked, setPicked] = useState<Picked[]>([]);
   const [phase, setPhase] = useState<'pick' | 'review' | 'uploading' | 'done'>('pick');
   const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const { label: elapsedLabel } = useElapsedTimer(phase === 'uploading');
   const [limitSkipped, setLimitSkipped] = useState(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -189,6 +191,14 @@ export function ImportEquipmentPhotosModal({ open, businessId, onClose }: Props)
   return (
     <Modal open={open} onClose={phase === 'uploading' ? () => {} : onClose} title={tr('Importar fotos de equipo', 'Import equipment photos')} size="lg">
       <div className="flex flex-col gap-4">
+        {phase === 'uploading' ? (
+          <div className="flex items-center gap-3 -mt-1">
+            <div className="flex-1 h-2 bg-border-soft rounded-full overflow-hidden">
+              <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }} />
+            </div>
+            <p className="text-xs font-semibold text-muted shrink-0">{tr(`Subiendo ${progress.done} / ${progress.total}`, `Uploading ${progress.done} / ${progress.total}`)} · {elapsedLabel}</p>
+          </div>
+        ) : null}
         <p className="text-xs text-muted">{tr('Sube todas tus fotos; se emparejan con el equipo por el nombre de archivo de la columna "Fotos" y solo las coincidencias se guardan.', 'Drop all your photos; they match to equipment by the file names in the "Photos" column, and only matches are stored.')}</p>
 
         {phase === 'pick' ? (
@@ -243,15 +253,6 @@ export function ImportEquipmentPhotosModal({ open, businessId, onClose }: Props)
                     <span className="text-faint truncate shrink-0 max-w-[45%]">→ {p.match!.jobTitle}</span>
                   </div>
                 ))}
-              </div>
-            ) : null}
-
-            {phase === 'uploading' ? (
-              <div>
-                <p className="text-sm text-muted mb-2">{tr(`Subiendo ${progress.done} / ${progress.total}`, `Uploading ${progress.done} / ${progress.total}`)}</p>
-                <div className="h-2 rounded-full bg-border-soft overflow-hidden">
-                  <div className="h-full bg-primary transition-all" style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }} />
-                </div>
               </div>
             ) : null}
 

@@ -6,6 +6,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
+import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
 import { logImportRun } from '@amixos/shared/lib/importRunners';
 import { EQUIPMENT_BUCKET, MAX_PHOTOS_PER_EQUIPMENT, equipmentPhotoPath } from '@amixos/shared/lib/equipment';
 import {
@@ -36,6 +37,7 @@ export function ImportEquipmentPhotosModal({ open, businessId, onClose }: Props)
   const [picked, setPicked] = useState<Picked[]>([]);
   const [phase, setPhase] = useState<'pick' | 'review' | 'uploading' | 'done'>('pick');
   const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const { label: elapsedLabel } = useElapsedTimer(phase === 'uploading');
   const [limitSkipped, setLimitSkipped] = useState(0);
 
   const loadPending = useCallback(async () => {
@@ -158,6 +160,14 @@ export function ImportEquipmentPhotosModal({ open, businessId, onClose }: Props)
       <Pressable onPress={phase === 'uploading' ? undefined : onClose} className="flex-1 bg-black/40 justify-end">
         <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]" onPress={() => {}}>
           <Text className="text-lg font-bold text-ink mb-2">{tr('Importar fotos de equipo', 'Import equipment photos')}</Text>
+          {phase === 'uploading' ? (
+            <View className="flex-row items-center gap-3 mb-3">
+              <View className="flex-1 h-2 rounded-full bg-border-soft overflow-hidden">
+                <View className="h-full bg-primary" style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }} />
+              </View>
+              <Text className="text-xs font-semibold text-muted">{progress.done} / {progress.total} · {elapsedLabel}</Text>
+            </View>
+          ) : null}
           <ScrollView showsVerticalScrollIndicator={false}>
             <Text className="text-xs text-muted mb-4 leading-5">{tr('Elige tus fotos; se emparejan con el equipo por el nombre de archivo de la columna "Fotos" y solo las coincidencias se guardan.', 'Pick your photos; they match to equipment by the file names in the "Photos" column, and only matches are stored.')}</Text>
 
@@ -199,13 +209,6 @@ export function ImportEquipmentPhotosModal({ open, businessId, onClose }: Props)
                       {unmatched.slice(0, 12).map((p, i) => <Text key={i} className="text-xs font-mono text-amber-800" numberOfLines={1}>{p.name || tr('(sin nombre)', '(no name)')}</Text>)}
                       {unmatched.length > 12 ? <Text className="text-xs text-amber-700">+{unmatched.length - 12}</Text> : null}
                     </View>
-                  </View>
-                ) : null}
-
-                {phase === 'uploading' ? (
-                  <View>
-                    <Text className="text-sm text-muted mb-2">{tr(`Subiendo ${progress.done} / ${progress.total}`, `Uploading ${progress.done} / ${progress.total}`)}</Text>
-                    <View className="h-2 rounded-full bg-border-soft overflow-hidden"><View className="h-full bg-primary" style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }} /></View>
                   </View>
                 ) : null}
 

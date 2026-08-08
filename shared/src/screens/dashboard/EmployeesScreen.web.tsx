@@ -162,7 +162,6 @@ export function EmployeesScreen({
   const filterFields = useMemo<FilterField[]>(() => {
     const id = (v: string) => v;
     const fields: FilterField[] = [
-      { key: 'status', label: t.filter.status, get: e => (e.active ? 'active' : 'inactive'), labelOf: v => (v === 'active' ? t.filter.active : t.filter.inactive) },
       { key: 'role', label: t.filter.role, get: e => e.role, labelOf: v => ROLES[v] ?? v },
       { key: 'access', label: t.filter.access, get: e => (e.access?.kind === 'active' ? 'yes' : e.access?.kind === 'invited' ? 'invited' : 'no'), labelOf: v => (v === 'yes' ? t.filter.accessYes : v === 'invited' ? t.filter.accessInvited : t.filter.accessNo) },
       { key: 'payType', label: t.filter.payType, get: e => e.payType, labelOf: v => PAY_TYPES[v] ?? v },
@@ -196,9 +195,14 @@ export function EmployeesScreen({
       a[0] === '' ? 1 : b[0] === '' ? -1 : f.labelOf(a[0]).localeCompare(f.labelOf(b[0])));
   };
 
+  // Default view: ACTIVE workers only — ex-workers are occasional reading, so
+  // they live behind the Activos/Inactivos segment instead of mixing in.
+  const [statusView, setStatusView] = useState<'active' | 'inactive'>('active');
+
   const filteredEmployees = useMemo(() => {
     const q = norm(search.trim());
     return employees.filter(e => {
+      if (e.active !== (statusView === 'active')) return false;
       if (q && !norm(`${e.firstName} ${e.lastName} ${e.phone ?? ''} ${e.searchExtra ?? ''}`).includes(q)) return false;
       for (const f of filterFields) {
         const sel = filterSel[f.key];
@@ -206,7 +210,7 @@ export function EmployeesScreen({
       }
       return true;
     });
-  }, [employees, search, filterFields, filterSel]);
+  }, [employees, search, filterFields, filterSel, statusView]);
 
   // Multi-select + bulk delete (team tab). Mirrors the clients list.
   const canBulkDelete = !!onBulkDelete;
@@ -433,6 +437,29 @@ export function EmployeesScreen({
           </button>
         ) : null}
         </div>
+        {/* Active/Inactive segment — the list shows one group at a time (active
+            by default). Hidden while everyone is active: nothing to switch to. */}
+        {employees.length - activeCount > 0 ? (
+          <div className="flex gap-1.5 mb-4">
+            {(['active', 'inactive'] as const).map(k => {
+              const on = statusView === k;
+              const n = k === 'active' ? activeCount : employees.length - activeCount;
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setStatusView(k)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                    on ? 'bg-primary text-white' : 'bg-border-soft text-muted hover:bg-border'
+                  }`}
+                >
+                  {k === 'active' ? t.viewActive : t.viewInactive}
+                  <span className={on ? 'font-bold text-white/80' : 'font-bold text-faint'}>{n}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
         {selectionMode ? (
           <div className="flex items-center justify-between mb-3 px-4 py-2.5 rounded-2xl bg-primary/5 border border-primary/30">
             <span className="text-sm font-semibold text-primary">{selectedCountLabel}</span>

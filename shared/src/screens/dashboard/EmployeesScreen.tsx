@@ -158,7 +158,6 @@ export function EmployeesScreen({
   const filterFields = useMemo<FilterField[]>(() => {
     const id = (v: string) => v;
     const fields: FilterField[] = [
-      { key: 'status', label: t.filter.status, get: e => (e.active ? 'active' : 'inactive'), labelOf: v => (v === 'active' ? t.filter.active : t.filter.inactive) },
       { key: 'role', label: t.filter.role, get: e => e.role, labelOf: v => ROLES[v] ?? v },
       { key: 'access', label: t.filter.access, get: e => (e.access?.kind === 'active' ? 'yes' : e.access?.kind === 'invited' ? 'invited' : 'no'), labelOf: v => (v === 'yes' ? t.filter.accessYes : v === 'invited' ? t.filter.accessInvited : t.filter.accessNo) },
       { key: 'payType', label: t.filter.payType, get: e => e.payType, labelOf: v => PAY_TYPES[v] ?? v },
@@ -192,9 +191,14 @@ export function EmployeesScreen({
       a[0] === '' ? 1 : b[0] === '' ? -1 : f.labelOf(a[0]).localeCompare(f.labelOf(b[0])));
   };
 
+  // Default view: ACTIVE workers only — ex-workers are occasional reading, so
+  // they live behind the Activos/Inactivos segment instead of mixing in.
+  const [statusView, setStatusView] = useState<'active' | 'inactive'>('active');
+
   const filteredEmployees = useMemo(() => {
     const q = norm(search.trim());
     return employees.filter(e => {
+      if (e.active !== (statusView === 'active')) return false;
       if (q && !norm(`${e.firstName} ${e.lastName} ${e.phone ?? ''} ${e.searchExtra ?? ''}`).includes(q)) return false;
       for (const f of filterFields) {
         const sel = filterSel[f.key];
@@ -202,7 +206,7 @@ export function EmployeesScreen({
       }
       return true;
     });
-  }, [employees, search, filterFields, filterSel]);
+  }, [employees, search, filterFields, filterSel, statusView]);
 
   // Multi-select + bulk delete (team tab). Long-press a row to enter select
   // mode; tap toggles; a bottom bar deletes. Mirrors the clients/jobs lists.
@@ -300,6 +304,11 @@ export function EmployeesScreen({
             autoCorrect={false}
             className="flex-1 px-2.5 py-2.5 text-sm text-ink"
           />
+          {search ? (
+            <Pressable onPress={() => setSearch('')} hitSlop={8}>
+              <X size={16} color={c.faint} />
+            </Pressable>
+          ) : null}
         </View>
         <Pressable
           onPress={() => setFilterOpen(o => !o)}
@@ -320,6 +329,29 @@ export function EmployeesScreen({
           </Pressable>
         ) : null}
       </View>
+
+      {/* Active/Inactive segment — the list shows one group at a time (active
+          by default). Hidden while everyone is active: nothing to switch to. */}
+      {employees.length - activeCount > 0 ? (
+        <View className="flex-row gap-1.5 mb-3">
+          {(['active', 'inactive'] as const).map(k => {
+            const on = statusView === k;
+            const n = k === 'active' ? activeCount : employees.length - activeCount;
+            return (
+              <Pressable
+                key={k}
+                onPress={() => setStatusView(k)}
+                className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-xl ${on ? 'bg-primary' : 'bg-border-soft'}`}
+              >
+                <Text className={`text-xs font-semibold ${on ? 'text-white' : 'text-muted'}`}>
+                  {k === 'active' ? t.viewActive : t.viewInactive}
+                </Text>
+                <Text className={`text-xs font-bold ${on ? 'text-white/80' : 'text-faint'}`}>{n}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
 
       {selectionMode ? (
         <View className="flex-row items-center gap-2 bg-primary/5 border border-primary/20 rounded-xl px-3 py-2.5 mb-3">

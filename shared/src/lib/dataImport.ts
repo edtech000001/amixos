@@ -31,38 +31,54 @@ export interface EmployeeLite {
   last_name: string | null;
   /** "Name on checks" — matched too (payroll exports often use it). */
   check_name?: string | null;
+  /** Ambiguity tiebreak: when several employees share a name, a SINGLE active
+   *  one among them wins (an inactive namesake is almost never the intent).
+   *  Optional so callers without the column keep the strict behavior. */
+  active?: boolean;
+}
+
+/** Ambiguity resolution shared by every matching stage: a unique candidate
+ *  wins; among several, a SINGLE active one wins; otherwise no match — we
+ *  never silently guess between two active people with the same name. */
+function pickUnique(candidates: EmployeeLite[]): string | null {
+  if (candidates.length === 1) return candidates[0].id;
+  if (candidates.length > 1) {
+    const act = candidates.filter(e => e.active !== false);
+    if (act.length === 1) return act[0].id;
+  }
+  return null;
 }
 
 /** Resolve a free-text name to an employee id, or null if no confident match.
- *  Tries, in order: exact normalized full name → exact "first last" → unique
- *  first-name-only. A first-name match that is ambiguous (two employees named
- *  "Noel") is treated as NO match so we never silently link to the wrong
- *  person; the importer records the name in the snapshot regardless. */
+ *  Tries, in order: exact normalized full name → check name → full-name prefix
+ *  → first-name-only. At every stage an ambiguous set (two employees named
+ *  "Noel") resolves to the single ACTIVE one if there is exactly one, else NO
+ *  match — so we never silently link to the wrong person; the importer records
+ *  the name in the snapshot regardless. */
 export function matchEmployeeId(name: string, employees: EmployeeLite[]): string | null {
   const target = normalizeName(name);
   if (!target) return null;
 
   const full = (e: EmployeeLite) => normalizeName(`${e.first_name} ${e.last_name ?? ''}`);
   const exact = employees.filter(e => full(e) === target);
-  if (exact.length === 1) return exact[0].id;
-  if (exact.length > 1) return null; // ambiguous full-name dup → don't guess
+  const exactPick = pickUnique(exact);
+  if (exactPick) return exactPick;
+  if (exact.length > 1) return null; // active-tie on the FULL name → don't guess
 
   // Check-name match ("name on checks" often IS the payroll-export name).
-  const byCheck = employees.filter(e => e.check_name && normalizeName(e.check_name) === target);
-  if (byCheck.length === 1) return byCheck[0].id;
+  const byCheck = pickUnique(employees.filter(e => e.check_name && normalizeName(e.check_name) === target));
+  if (byCheck) return byCheck;
 
   // Prefix tolerance: "Edvin Ramirez" ↔ stored "Edvin Ramirez Gomez" (extra
-  // surname on either side). Only when exactly one candidate qualifies.
-  const byPrefix = employees.filter(e => {
+  // surname on either side).
+  const byPrefix = pickUnique(employees.filter(e => {
     const f = full(e);
     return f.startsWith(`${target} `) || target.startsWith(`${f} `);
-  });
-  if (byPrefix.length === 1) return byPrefix[0].id;
+  }));
+  if (byPrefix) return byPrefix;
 
-  // First-name-only fallback, but ONLY when it's unambiguous.
-  const byFirst = employees.filter(e => normalizeName(e.first_name) === target);
-  if (byFirst.length === 1) return byFirst[0].id;
-  return null;
+  // First-name-only fallback.
+  return pickUnique(employees.filter(e => normalizeName(e.first_name) === target));
 }
 
 /** Parse a money/quantity string into a number. Strips $, commas, spaces.

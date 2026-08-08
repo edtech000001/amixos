@@ -241,6 +241,16 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
       <Pressable onPress={phase === 'uploading' ? undefined : onClose} className="flex-1 bg-black/40 justify-end">
         <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]" onPress={() => {}}>
           <Text className="text-lg font-bold text-ink mb-2">{t.title}</Text>
+          {phase === 'uploading' ? (
+            <View className="flex-row items-center gap-3 mb-3">
+              <View className="flex-1 h-2 rounded-full bg-border-soft overflow-hidden">
+                <View className="h-full bg-primary" style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }} />
+              </View>
+              <Text className="text-xs font-semibold text-muted">
+                {t.uploading.replace('{{done}}', String(progress.done)).replace('{{total}}', String(progress.total))} · {elapsedLabel}
+              </Text>
+            </View>
+          ) : null}
           <ScrollView showsVerticalScrollIndicator={false}>
             <Text className="text-xs text-muted mb-4 leading-5">{t.intro}</Text>
 
@@ -305,20 +315,6 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
                       {unmatched.length > 12 ? (
                         <Text className="text-xs text-amber-700">+{unmatched.length - 12}</Text>
                       ) : null}
-                    </View>
-                  </View>
-                ) : null}
-
-                {phase === 'uploading' ? (
-                  <View>
-                    <Text className="text-sm text-muted mb-2">
-                      {t.uploading.replace('{{done}}', String(progress.done)).replace('{{total}}', String(progress.total))} · {elapsedLabel}
-                    </Text>
-                    <View className="h-2 rounded-full bg-border-soft overflow-hidden">
-                      <View
-                        className="h-full bg-primary"
-                        style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }}
-                      />
                     </View>
                   </View>
                 ) : null}

@@ -547,7 +547,7 @@ export async function runJobsImport(ctx: ImportRunCtx): Promise<ImportResult> {
   }>(ctx, 'jobs', 'id, external_ref, custom_fields, scheduled_at, in_progress_at, completed_at, invoiced_at');
   const existingRefs = new Set(existingJobs.map(j => j.external_ref).filter(Boolean) as string[]);
   const existingByRef = new Map(existingJobs.filter(j => j.external_ref).map(j => [j.external_ref as string, j]));
-  const employees = await fetchAllRows<EmployeeLite & { email: string | null; user_id: string | null }>(ctx, 'employees', 'id, first_name, last_name, email, user_id');
+  const employees = await fetchAllRows<EmployeeLite & { email: string | null; user_id: string | null }>(ctx, 'employees', 'id, first_name, last_name, email, user_id, active');
   // "Agregado por (email)" → the team member's linked account. Only people
   // with an app login can be a creator (created_by → auth.users): employees
   // with a linked account, plus the importing user's own login email (owners
@@ -1291,7 +1291,7 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
   const failedRows: ImportFailedRow[] = [];
   let skipped = 0;
 
-  const employees = await fetchAllRows<EmployeeLite>(ctx, 'employees', 'id, first_name, last_name, check_name');
+  const employees = await fetchAllRows<EmployeeLite>(ctx, 'employees', 'id, first_name, last_name, check_name, active');
   const { data: biz } = await ctx.supabase
     .from('businesses').select('payroll_frequency, payroll_anchor_date, payroll_custom_days').eq('id', ctx.businessId).single();
   const freq = normalizeFrequency(biz?.payroll_frequency);
@@ -1471,9 +1471,17 @@ export async function runEquipmentImport(ctx: ImportRunCtx): Promise<ImportResul
   const failedRows: ImportFailedRow[] = [];
   let skipped = 0;
 
-  const existing = await fetchAllRows<{ id: string; name: string }>(ctx, 'equipment', 'id, name');
+  const existing = await fetchAllRows<{ id: string; name: string; assigned_employee_id: string | null }>(
+    ctx, 'equipment', 'id, name, assigned_employee_id');
   const existingNames = new Set(existing.map(e => normalizeName(e.name)));
-  const employees = await fetchAllRows<EmployeeLite>(ctx, 'employees', 'id, first_name, last_name');
+  const existingByName = new Map(existing.map(e => [normalizeName(e.name), e]));
+  // Existing same-name rows missing an assignee whose CSV row names a worker —
+  // re-running the file repairs an earlier import instead of just skipping.
+  const backfills: { id: string; empId: string }[] = [];
+  const employees = await fetchAllRows<EmployeeLite>(ctx, 'employees', 'id, first_name, last_name, active');
+  // "Assigned to" names that didn't resolve to an employee — reported in the
+  // result notes so a silent all-Unassigned import can't happen again.
+  const unmatchedAssignees = new Set<string>();
   const branch = branchMatcher(ctx);
   const unknownBranches = new Set<string>();
 
@@ -1486,11 +1494,22 @@ export async function runEquipmentImport(ctx: ImportRunCtx): Promise<ImportResul
     const name = get(row, 'name');
     const label = `${tr('Fila', 'Row')} ${idx + 2} · ${name || tr('(fila vacía)', '(empty row)')}`;
     if (!name) { failedRows.push({ label, reason: tr('Falta el nombre', 'Missing name'), rowIndex: idx }); continue; }
-    if (existingNames.has(normalizeName(name))) { skipped++; continue; }
+    if (existingNames.has(normalizeName(name))) {
+      const prior = existingByName.get(normalizeName(name));
+      const priorAssigned = get(row, 'assigned_to');
+      if (prior && !prior.assigned_employee_id && priorAssigned) {
+        const empId = matchEmployeeId(priorAssigned, employees);
+        if (empId) backfills.push({ id: prior.id, empId });
+        else unmatchedAssignees.add(priorAssigned);
+      }
+      skipped++; continue;
+    }
     existingNames.add(normalizeName(name));
 
     const paidOff = parseYesNo(get(row, 'paid_off'));
     const assignedName = get(row, 'assigned_to');
+    const assignedId = assignedName ? matchEmployeeId(assignedName, employees) : null;
+    if (assignedName && !assignedId) unmatchedAssignees.add(assignedName);
     items.push({ meta: { label, rowIndex: idx }, entry: {
       business_id: ctx.businessId,
       name,
@@ -1508,7 +1527,7 @@ export async function runEquipmentImport(ctx: ImportRunCtx): Promise<ImportResul
       paid_off: paidOff,
       loan_lender: paidOff ? null : (get(row, 'loan_lender') || null),
       loan_amount: paidOff ? null : parseNum(get(row, 'loan_amount')),
-      assigned_employee_id: assignedName ? matchEmployeeId(assignedName, employees) : null,
+      assigned_employee_id: assignedId,
       location: get(row, 'location') || null,
       purchase_date: parseDate(get(row, 'purchase_date')),
       insurance_carrier: get(row, 'insurance_carrier') || null,
@@ -1540,12 +1559,33 @@ export async function runEquipmentImport(ctx: ImportRunCtx): Promise<ImportResul
   });
   failedRows.push(...fr);
 
+  // Backfill pass — link pre-existing unassigned equipment to its worker.
+  let backfilled = 0;
+  for (const b of backfills) {
+    if (ctx.shouldAbort?.()) break;
+    const { error } = await ctx.supabase.from('equipment')
+      .update({ assigned_employee_id: b.empId }).eq('id', b.id);
+    if (!error) backfilled++;
+  }
+
   ctx.onProgress?.(ctx.rows.length, ctx.rows.length);
   const notes: string[] = [];
+  if (backfilled) {
+    notes.push(tr(
+      `${backfilled} equipo(s) existentes vinculados a su trabajador ("Asignado a").`,
+      `${backfilled} existing equipment linked to their worker ("Assigned to").`,
+    ));
+  }
   if (unknownBranches.size) {
     notes.push(tr(
       `Sucursal no reconocida (ese equipo quedó sin sucursal): ${Array.from(unknownBranches).slice(0, 10).join(', ')}.`,
       `Unrecognized branch (that equipment was left unfiled): ${Array.from(unknownBranches).slice(0, 10).join(', ')}.`,
+    ));
+  }
+  if (unmatchedAssignees.size) {
+    notes.push(tr(
+      `"Asignado a" sin coincidencia (ese equipo quedó sin asignar): ${Array.from(unmatchedAssignees).slice(0, 10).join(', ')}. Verifica que existan en Equipo; si varios ACTIVOS comparten el nombre, usa nombre y apellido en el CSV.`,
+      `"Assigned to" didn't match a worker (that equipment was left unassigned): ${Array.from(unmatchedAssignees).slice(0, 10).join(', ')}. Check they exist under Team; if several ACTIVE workers share the name, use the full name in the CSV.`,
     ));
   }
   return { success, skipped, failedRows, notes };

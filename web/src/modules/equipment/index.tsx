@@ -71,6 +71,9 @@ interface EmployeeOption {
   id: string;
   first_name: string;
   last_name: string;
+  /** Inactive employees resolve names (existing assignments) but aren't
+   *  offered in the picker. */
+  active: boolean;
 }
 
 const EMPTY_FORM = {
@@ -335,9 +338,8 @@ export default function EquipmentModule() {
     // employees_roster (view, migration 178): names-only roster readable by
     // every member — assignee picker works without the Employees permission.
     const data = await fetchAllById<EmployeeOption>((afterId, pageSize) => {
-      let q = supabase.from('employees_roster').select('id, first_name, last_name')
+      let q = supabase.from('employees_roster').select('id, first_name, last_name, active')
         .eq('business_id', business.id)
-        .eq('active', true)
         .order('id', { ascending: true })
         .limit(pageSize);
       if (afterId) q = q.gt('id', afterId);
@@ -801,10 +803,12 @@ export default function EquipmentModule() {
           {section.data.map(e => {
             const cover = coverPhotos[e.id];
             const days = plateExpirationDays(e.plate_expiration);
+            // Solid colors: this badge overlays the cover PHOTO, where the
+            // translucent tint used on card backgrounds is unreadable.
             const plateBadge =
               days === null ? null
-              : days < 0 ? { text: t.plateExpired, cls: 'bg-red-500/10 text-red-700 border-red-200' }
-              : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), cls: 'bg-amber-500/10 text-amber-700 border-amber-200' }
+              : days < 0 ? { text: t.plateExpired, cls: 'bg-red-600 text-white border-red-500 shadow-sm' }
+              : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), cls: 'bg-amber-500 text-white border-amber-400 shadow-sm' }
               : null;
             const assigned = employeeName(e.assigned_employee_id);
             return (
@@ -974,7 +978,7 @@ export default function EquipmentModule() {
                 onChange={e => setForm(f => ({ ...f, assigned_employee_id: e.target.value }))}
                 className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary appearance-none">
                 <option value="">{t.assignedToNone}</option>
-                {employees.map(emp => (
+                {employees.filter(emp => emp.active || emp.id === form.assigned_employee_id).map(emp => (
                   <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>
                 ))}
               </select>

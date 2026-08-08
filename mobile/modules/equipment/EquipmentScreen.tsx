@@ -96,6 +96,9 @@ interface EmployeeOption {
   id: string;
   first_name: string;
   last_name: string;
+  /** Inactive employees resolve names (existing assignments) but aren't
+   *  offered in the picker. */
+  active: boolean;
 }
 
 interface EquipForm {
@@ -548,9 +551,8 @@ export default function EquipmentScreen() {
     // employees_roster (view, migration 178): names-only roster readable by
     // every member — assignee picker works without the Employees permission.
     const data = await fetchAllById<EmployeeOption>((afterId, pageSize) => {
-      let q = supabase.from('employees_roster').select('id, first_name, last_name')
+      let q = supabase.from('employees_roster').select('id, first_name, last_name, active')
         .eq('business_id', business.id)
-        .eq('active', true)
         .order('id', { ascending: true })
         .limit(pageSize);
       if (afterId) q = q.gt('id', afterId);
@@ -1211,7 +1213,9 @@ export default function EquipmentScreen() {
                   placeholder={t.assignedToNone}
                   options={[
                     { value: '', label: t.assignedToNone },
-                    ...employees.map((e) => ({ value: e.id, label: `${e.first_name} ${e.last_name}` })),
+                    ...employees
+                      .filter((e) => e.active || e.id === form.assigned_employee_id)
+                      .map((e) => ({ value: e.id, label: `${e.first_name} ${e.last_name}` })),
                   ]}
                   onSelect={(v) => setForm((f) => ({ ...f, assigned_employee_id: v }))}
                   searchable
