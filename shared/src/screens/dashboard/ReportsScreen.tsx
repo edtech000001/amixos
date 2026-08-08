@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { DollarSign, FileText, ClipboardList, Clock, BarChart3, CalendarRange, ChevronRight, MapPin, Wallet, PiggyBank } from 'lucide-react-native';
+import { ChipScroll } from '../../ui/ChipScroll';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
@@ -103,7 +104,7 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
       <Text className="text-sm text-muted mt-0.5 mb-4">{t.subtitle}</Text>
 
       {/* Range selector — presets + a Custom date-range chip (opens the sheet) */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-5">
+      <ChipScroll className="mb-5">
         <View className="flex-row gap-1.5">
           {REPORT_RANGE_KEYS.map(r => {
             const on = range === r && !customActive;
@@ -127,7 +128,7 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
             </Text>
           </Pressable>
         </View>
-      </ScrollView>
+      </ChipScroll>
 
       {/* Payroll page entry */}
       {onOpenPayroll ? (

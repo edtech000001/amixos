@@ -114,7 +114,9 @@ export default function MasMenu() {
           <Pressable
             key={item.key}
             onPress={() => {
-              if (item.path) router.push(item.path as any);
+              // navigate (not push): a double-tap must not stack two copies
+              // of the same screen — same fix family as the dock debounce.
+              if (item.path) router.navigate(item.path as any);
               else item.onPress?.();
             }}
             className={`flex-row items-center gap-3 px-4 py-4 active:bg-surface ${

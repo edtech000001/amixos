@@ -429,18 +429,22 @@ export const useAuthStore = create<AuthStore>()(
             : null;
           const validHome = home && rows.some((l) => l.id === home) ? home : null;
           const saved = imp ? undefined : get().activeLocationByBiz[businessId];
+          const roleForLock = imp ? imp.target.role : get().currentRole;
+          const locked = rows.length >= 2 && !can.switchLocations(roleForLock);
           let active: string | null;
           if (saved !== undefined) {
             active = saved === '__all__' ? null : (rows.some((l) => l.id === saved) ? saved : null);
           } else if (rows.length < 2) {
             active = null;
           } else {
-            active = validHome;
+            // Unlocked roles (owner/admin/manager…) start on "All locations" —
+            // untagged records only appear there, so defaulting to a home
+            // branch made lists look incomplete. Locked roles pin to home.
+            active = locked ? validHome : null;
           }
           // Enforce the per-role location lock: a role without switchLocations is
           // pinned to its own home branch (RLS enforces the same on reads).
-          const roleForLock = imp ? imp.target.role : get().currentRole;
-          if (rows.length >= 2 && !can.switchLocations(roleForLock)) {
+          if (locked) {
             active = validHome;
           }
           set({ locations: rows, activeLocationId: active, myHomeLocationId: validHome });

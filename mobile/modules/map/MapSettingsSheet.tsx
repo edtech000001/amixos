@@ -52,6 +52,7 @@ import {
   type WeatherConfig,
 } from '@amixos/shared/lib/weather';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import { ChipScroll } from '@amixos/shared/ui/ChipScroll';
 
 export type MapType = 'standard' | 'satellite' | 'hybrid' | 'terrain';
 export type PinSize = 'small' | 'medium' | 'large';
@@ -1107,7 +1108,7 @@ function StylePickerModal({
 
               {/* Category tabs — hidden during search since results span all categories. */}
               {!query ? (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
+                <ChipScroll contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
                   {PIN_ICON_CATEGORIES.map(cat => {
                     const on = activeCategory.i18nKey === cat.i18nKey;
                     return (
@@ -1122,7 +1123,7 @@ function StylePickerModal({
                       </Pressable>
                     );
                   })}
-                </ScrollView>
+                </ChipScroll>
               ) : null}
 
               {/* Icon grid — visibleIcons is either the active category or the search results. */}

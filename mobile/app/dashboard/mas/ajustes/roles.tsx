@@ -22,6 +22,7 @@ import {
   type ViewScope,
 } from '@amixos/shared/lib/permissions';
 import { useThemeColors } from '@/lib/ThemeProvider';
+import { ChipScroll } from '@amixos/shared/ui/ChipScroll';
 import {
   EDITABLE_CAPS,
   capAppliesToRole,
@@ -208,7 +209,7 @@ export default function RolesScreen() {
         <Text className="text-sm text-muted mb-4">{t.subtitle}</Text>
 
         {/* Role selector — built-ins, then custom roles, then "+ new role" */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
+        <ChipScroll className="mb-4">
           <View className="flex-row gap-2">
             {ALL_ROLES.map(r => (
               <Pressable
@@ -240,7 +241,7 @@ export default function RolesScreen() {
               <Text className="text-sm font-semibold text-primary">{t.newRole}</Text>
             </Pressable>
           </View>
-        </ScrollView>
+        </ChipScroll>
 
         <View className="bg-card rounded-2xl border border-border-soft p-5">
           <View className="flex-row items-start justify-between gap-3">

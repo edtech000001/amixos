@@ -157,7 +157,7 @@ export default function EmpleadoDetailRoute() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [form, setForm] = useState({
     first_name: '', last_name: '', check_name: '', phone: '', role: 'worker',
-    pay_type: 'hourly', pay_rate: 0, overtime_eligible: false, overtime_threshold: '', overtime_multiplier: '', email: '',
+    pay_type: 'hourly', pay_rate: '', overtime_eligible: false, overtime_threshold: '', overtime_multiplier: '', email: '',
     birthday: '', hire_date: '',
     address: '', city: '', state: '', zip_code: '',
     emergency_contact_name: '', emergency_contact_phone: '',
@@ -253,8 +253,16 @@ export default function EmpleadoDetailRoute() {
               <Input
                 containerClassName="flex-1 ml-2"
                 placeholder="0.00"
-                value={form.pay_rate ? String(form.pay_rate) : ''}
-                onChangeText={(v) => setForm((f) => ({ ...f, pay_rate: parseFloat(v) || 0 }))}
+                value={form.pay_rate}
+                onChangeText={(v) => {
+                  // Keep the RAW text while typing; parse once on save.
+                  // Per-keystroke parseFloat ate the decimal point ("15." →
+                  // 15), making cents like 15.60 impossible to enter.
+                  let clean = v.replace(/[^0-9.]/g, '');
+                  const dot = clean.indexOf('.');
+                  if (dot !== -1) clean = clean.slice(0, dot + 1) + clean.slice(dot + 1).replace(/\./g, '');
+                  setForm((f) => ({ ...f, pay_rate: clean }));
+                }}
                 keyboardType="decimal-pad"
               />
             </View>
@@ -413,7 +421,7 @@ export default function EmpleadoDetailRoute() {
     })));
     setForm({
       first_name: e.first_name, last_name: e.last_name, check_name: e.check_name ?? '', phone: e.phone ?? '', role: e.role,
-      pay_type: e.pay_type, pay_rate: e.pay_rate,
+      pay_type: e.pay_type, pay_rate: e.pay_rate != null ? String(e.pay_rate) : '',
       overtime_eligible: (e as { overtime_eligible?: boolean | null }).overtime_eligible ?? false,
       overtime_threshold: (e as { overtime_threshold?: number | null }).overtime_threshold != null ? String((e as { overtime_threshold?: number | null }).overtime_threshold) : '',
       overtime_multiplier: (e as { overtime_multiplier?: number | null }).overtime_multiplier != null ? String((e as { overtime_multiplier?: number | null }).overtime_multiplier) : '',
@@ -442,6 +450,7 @@ export default function EmpleadoDetailRoute() {
     setSaving(true); setError('');
     const payload = {
       ...form,
+      pay_rate: parseFloat(form.pay_rate) || 0,
       overtime_threshold: form.overtime_threshold.trim() === '' ? null : parseFloat(form.overtime_threshold) || 0,
       overtime_multiplier: form.overtime_multiplier.trim() === '' ? null : parseFloat(form.overtime_multiplier) || 1,
       check_name: form.check_name.trim() || null,
@@ -461,7 +470,7 @@ export default function EmpleadoDetailRoute() {
     if (locations.length > 0) await setEmployeePrimaryLocation(supabase, business.id, employee.id, homeLocation || null);
     const milestones = diffEmployeeChanges(
       { pay_rate: prev.pay_rate, pay_type: prev.pay_type, role: prev.role },
-      { pay_rate: form.pay_rate, pay_type: form.pay_type, role: form.role },
+      { pay_rate: parseFloat(form.pay_rate) || 0, pay_type: form.pay_type, role: form.role },
     );
     for (const m of milestones) {
       void logEmployeeMilestone(supabase, {

@@ -5,10 +5,16 @@
 // doubles as the default. Sorting is stable, so a group's internal order
 // still follows the selected sort.
 
-export type JobSortKey = 'recent' | 'status' | 'startDate' | 'client' | 'lead';
+// 'client' and 'lead' remain valid sort VALUES (old saved preferences, server
+// RPC arms) but are no longer offered in the menu — grouping by them gives the
+// same order plus section headers, so the sort menu stays purely about order.
+export type JobSortKey =
+  | 'recent' | 'status' | 'startDate' | 'priority' | 'updated' | 'title' | 'endDate'
+  | 'client' | 'lead';
 export type JobGroupKey = 'none' | 'client' | 'lead' | 'company' | 'state';
 
-export const JOB_SORT_KEYS: JobSortKey[] = ['recent', 'status', 'startDate', 'client', 'lead'];
+export const JOB_SORT_KEYS: JobSortKey[] =
+  ['recent', 'status', 'startDate', 'endDate', 'priority', 'updated', 'title'];
 export const JOB_GROUP_KEYS: JobGroupKey[] = ['none', 'client', 'lead', 'company', 'state'];
 
 export interface SortableJob {
@@ -18,6 +24,10 @@ export interface SortableJob {
   clientName?: string | null;
   clientCompany: string | null;
   jobState: string | null;
+  priority?: string | null;
+  updatedAt?: string | null;
+  title?: string | null;
+  endDate?: string | null;
 }
 
 // Pipeline order — matches the tab order on the list screens.
@@ -37,6 +47,15 @@ const STATUS_SORT_ORDER = [
 function statusIdx(status: string): number {
   const i = STATUS_SORT_ORDER.indexOf(status);
   return i === -1 ? STATUS_SORT_ORDER.length : i;
+}
+
+// Hottest first. Missing counts as 'normal'; unknown values sink last —
+// mirrors jobs_page_ids' array_position (null → NULLS LAST) server-side.
+const PRIORITY_SORT_ORDER = ['urgent', 'high', 'normal', 'low'];
+
+function priorityIdx(priority: string | null | undefined): number {
+  const i = PRIORITY_SORT_ORDER.indexOf(priority ?? 'normal');
+  return i === -1 ? PRIORITY_SORT_ORDER.length : i;
 }
 
 export function sortJobs<T extends SortableJob>(jobs: T[], sortBy: JobSortKey): T[] {
@@ -69,6 +88,33 @@ export function sortJobs<T extends SortableJob>(jobs: T[], sortBy: JobSortKey): 
       if (!ac) return 1;
       if (!bc) return -1;
       return ac.localeCompare(bc);
+    });
+  } else if (sortBy === 'priority') {
+    out.sort((a, b) => priorityIdx(a.priority) - priorityIdx(b.priority));
+  } else if (sortBy === 'updated') {
+    // Latest activity first; rows without the column (stale cache) sink.
+    out.sort((a, b) => {
+      if (!a.updatedAt && !b.updatedAt) return 0;
+      if (!a.updatedAt) return 1;
+      if (!b.updatedAt) return -1;
+      return b.updatedAt.localeCompare(a.updatedAt);
+    });
+  } else if (sortBy === 'title') {
+    out.sort((a, b) => {
+      const at = a.title?.trim().toLowerCase() || null;
+      const bt = b.title?.trim().toLowerCase() || null;
+      if (!at && !bt) return 0;
+      if (!at) return 1;
+      if (!bt) return -1;
+      return at.localeCompare(bt);
+    });
+  } else if (sortBy === 'endDate') {
+    // Soonest deadline first; jobs without an end date sink to the bottom.
+    out.sort((a, b) => {
+      if (!a.endDate && !b.endDate) return 0;
+      if (!a.endDate) return 1;
+      if (!b.endDate) return -1;
+      return a.endDate.localeCompare(b.endDate);
     });
   }
   return out;

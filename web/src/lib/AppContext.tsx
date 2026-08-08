@@ -355,9 +355,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
     if (rows.length < 2) { setActiveLocationIdState(null); return; }
-    // Everyone — owners included — defaults to their own home branch when they
-    // have one; owners with no assigned branch fall back to All.
-    setActiveLocationIdState(validHome);
+    // Default to "All locations" — untagged records only appear there, so a
+    // home-branch default made lists look incomplete for management roles.
+    // Branch-LOCKED roles are pinned to their home branch by the lock effect
+    // below (which re-runs once role overrides load).
+    setActiveLocationIdState(null);
   }, [activeBusinessId, realUser?.id, impersonation]);
 
   useEffect(() => { void loadLocations(); }, [loadLocations]);

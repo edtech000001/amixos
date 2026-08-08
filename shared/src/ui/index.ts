@@ -11,3 +11,4 @@ export { Toggle } from './Toggle';
 export { DatePicker } from './DatePicker';
 export { DateRangeSheet } from './DateRangeSheet';
 export { Fab } from './Fab';
+export { ChipScroll } from './ChipScroll';

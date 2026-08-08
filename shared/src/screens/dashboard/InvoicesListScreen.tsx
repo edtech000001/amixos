@@ -10,6 +10,7 @@ import { formatDateLong, daysOverdue, daysSince } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { SkeletonList } from '../../ui/Skeleton';
+import { ChipScroll } from '../../ui/ChipScroll';
 import { INVOICES_FILTERS_KEY, parseInvoicesFilters } from '../../lib/invoicesFilters';
 import { useThemeColors } from '../../theme';
 
@@ -393,12 +394,7 @@ export function InvoicesListScreen({
           screen root) for one-hand reach. */}
 
       {/* Status tabs — multi-select chips; "all" is an icon reset. */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        className="mb-4"
-        contentContainerClassName="gap-1 pb-1"
-      >
+      <ChipScroll className="mb-4" contentContainerClassName="gap-1 pb-1">
         <Pressable
           onPress={() => setStatuses([])}
           accessibilityLabel={t.filters.all}
@@ -425,7 +421,7 @@ export function InvoicesListScreen({
             </Pressable>
           );
         })}
-      </ScrollView>
+      </ChipScroll>
 
       {/* Selection banner — ✕ / count / Todas (clients mobile pattern). */}
       {selectMode ? (

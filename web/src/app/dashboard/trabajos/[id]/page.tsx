@@ -559,6 +559,15 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       setTimeout(() => setCopiedKey(null), 2000);
     } catch { /* clipboard unavailable */ }
   };
+  // Plain click-to-copy (title / reference / description) — no share sheet.
+  const copyText = async (text: string, key: string) => {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 1500);
+    } catch { /* clipboard unavailable */ }
+  };
 
   const shareLocation = () => shareText(buildMapsUrl(), 'loc');
 
@@ -804,20 +813,41 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           <div>
             {isProposal && (
               <div className="flex items-center gap-2 mb-0.5">
-                <span className="text-xs font-mono text-faint">{job.estimate_number}</span>
+                <span className="text-xs font-mono text-faint cursor-pointer hover:text-muted"
+                  onClick={() => copyText(job.estimate_number ?? '', 'ref')}>
+                  {job.estimate_number}
+                </span>
+                {copiedKey === 'ref' && <span className="text-xs text-emerald-600">{td.copied}</span>}
                 {isExpired && <span className="text-xs text-orange-500 font-medium">{t.expired}</span>}
               </div>
             )}
             <h1 className="text-xl font-bold text-ink">
-              {job.title}
+              <span className="cursor-pointer" onClick={() => copyText(job.title ?? '', 'title')}>
+                {job.title}
+              </span>
+              {copiedKey === 'title' && (
+                <span className="ml-2 align-middle text-xs font-normal text-emerald-600">{td.copied}</span>
+              )}
               {/* Every non-proposal job shows a reference: imported project id,
                  else a stable short code so old/manual jobs still have an ID.
                  Proposals show their estimate number above instead. */}
               {!isProposal ? (
-                <span className="ml-2 align-middle text-xs font-mono font-normal text-faint">{job.external_ref?.trim() || jobShortCode(job.id)}</span>
+                <span className="ml-2 align-middle text-xs font-mono font-normal text-faint cursor-pointer hover:text-muted"
+                  onClick={() => copyText(job.external_ref?.trim() || jobShortCode(job.id), 'ref')}>
+                  {job.external_ref?.trim() || jobShortCode(job.id)}
+                </span>
               ) : job.external_ref ? (
-                <span className="ml-2 align-middle text-xs font-mono font-normal text-faint">{job.external_ref}</span>
+                <span className="ml-2 align-middle text-xs font-mono font-normal text-faint cursor-pointer hover:text-muted"
+                  onClick={() => copyText(job.external_ref ?? '', 'extref')}>
+                  {job.external_ref}
+                </span>
               ) : null}
+              {!isProposal && copiedKey === 'ref' && (
+                <span className="ml-1.5 align-middle text-xs font-normal text-emerald-600">{td.copied}</span>
+              )}
+              {copiedKey === 'extref' && (
+                <span className="ml-1.5 align-middle text-xs font-normal text-emerald-600">{td.copied}</span>
+              )}
             </h1>
             {clientName && (
               <Link href={`/dashboard/clientes/${job.client_id}?from=job&job=${job.id}`}
@@ -1294,8 +1324,11 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                 </div>
               )}
               {job.description && (
-                <div>
-                  <p className="text-xs text-faint mb-1">{td.description}</p>
+                <div className="cursor-pointer" onClick={() => copyText(job.description ?? '', 'desc')}>
+                  <p className="text-xs text-faint mb-1">
+                    {td.description}
+                    {copiedKey === 'desc' && <span className="ml-1.5 text-emerald-600">{td.copied}</span>}
+                  </p>
                   <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap">{job.description}</p>
                 </div>
               )}

@@ -15,7 +15,8 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { SvgXml } from 'react-native-svg';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useRoute } from '@react-navigation/native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -215,15 +216,21 @@ interface PipelineStep {
 
 export default function JobDetailRoute() {
   const router = useRouter();
-  const { id, from, invoice: fromInvoice } = useLocalSearchParams<{ id: string; from?: string; invoice?: string }>();
+  const { id, from, invoice: fromInvoice, worker: fromWorker } =
+    useLocalSearchParams<{ id: string; from?: string; invoice?: string; worker?: string }>();
   // ?from=map → back returns to the map module; ?from=calendar → back returns
-  // to the calendar; ?from=invoice → back to that invoice. Otherwise default
-  // behavior (trabajos list).
+  // to the calendar; ?from=invoice → back to that invoice; ?from=nomina → back
+  // to payroll, reopening that worker's breakdown. Otherwise default behavior
+  // (trabajos list).
   const goBack = () => {
     if (from === 'map') {
       router.replace('/dashboard/mas/modulos/map' as never);
     } else if (from === 'calendar') {
       router.replace('/dashboard/mas/calendario' as never);
+    } else if (from === 'nomina') {
+      router.replace(
+        `/dashboard/mas/nomina${fromWorker ? `?worker=${fromWorker}` : ''}` as never,
+      );
     } else if (from === 'invoice' && fromInvoice) {
       router.replace(`/dashboard/facturas/${fromInvoice}` as never);
     } else if (router.canGoBack()) {
@@ -235,6 +242,27 @@ export default function JobDetailRoute() {
       router.replace('/dashboard/trabajos' as never);
     }
   };
+
+  // The cross-section origin (?from=nomina/invoice/…) is only valid while the
+  // user stays inside that flow. Leaving this screen via the DOCK keeps it
+  // mounted in the Trabajos stack — if the params survived, coming back later
+  // through the dock would resurrect a stale back-target (back arrow jumping
+  // to payroll long after leaving it). On blur, if this screen is still the
+  // top of its stack (blur ⇒ tab switch, not a pushed child like the edit
+  // form, whose round trip must keep the origin), drop the origin params so
+  // the screen degrades to a normal job view (back → jobs list).
+  const navigation = useNavigation();
+  const routeKey = useRoute().key;
+  useEffect(() => {
+    if (!from) return undefined;
+    return navigation.addListener('blur', () => {
+      const st = navigation.getState();
+      const top = st?.routes?.[st.index ?? 0];
+      if (top?.key === routeKey) {
+        navigation.setParams({ from: undefined, invoice: undefined, worker: undefined } as never);
+      }
+    });
+  }, [from, navigation, routeKey]);
   const supabase = createSupabaseClient();
   const c = useThemeColors();
   const { business } = useApp();
@@ -247,6 +275,22 @@ export default function JobDetailRoute() {
   const { confirm: confirmAction, confirmSheet } = useConfirmSheet();
   const tc = full.common;
   const dateLoc = full.dashboard.dateLocale;
+
+  // Tap-to-copy on title / reference / description. Tracks which one was just
+  // copied so a transient "Copiado ✓" hint shows next to it.
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const copyText = (key: string, text: string) => {
+    try {
+      // Lazy require: expo-clipboard is a NATIVE module added after some dev
+      // clients were built — importing it at module scope would crash this
+      // screen on those builds. Loading on tap degrades to a no-op instead.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const Clipboard = require('expo-clipboard') as typeof import('expo-clipboard');
+      void Clipboard.setStringAsync(text);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500);
+    } catch { /* clipboard module not in this native build yet */ }
+  };
 
   const [job, setJob] = useState<Job | null>(null);
   const [items, setItems] = useState<JobItem[]>([]);
@@ -1275,13 +1319,31 @@ export default function JobDetailRoute() {
         {/* Title + client + created date */}
         <View className="mb-6">
           {isProposal ? (
-            <Text className="text-xs font-mono text-faint mb-1">{job.estimate_number}</Text>
+            <Pressable onPress={() => copyText('ref', job.estimate_number ?? '')} hitSlop={6}>
+              <Text className="text-xs font-mono text-faint mb-1">
+                {job.estimate_number}
+                {copiedKey === 'ref' ? <Text className="text-emerald-500">  {td.copied}</Text> : null}
+              </Text>
+            </Pressable>
           ) : null}
-          <Text className="text-2xl font-bold text-ink">{job.title}</Text>
+          <Pressable onPress={() => copyText('title', job.title ?? '')} hitSlop={4}>
+            <Text className="text-2xl font-bold text-ink">
+              {job.title}
+              {copiedKey === 'title' ? <Text className="text-sm font-normal text-emerald-500">  {td.copied}</Text> : null}
+            </Text>
+          </Pressable>
           {/* Non-proposals show a reference so every job has an ID: imported
              project id, else a stable short code for old/manual jobs. */}
           {!isProposal ? (
-            <Text className="text-xs font-mono text-faint mt-0.5">{job.external_ref?.trim() || jobShortCode(job.id)}</Text>
+            <Pressable
+              onPress={() => copyText('ref', job.external_ref?.trim() || jobShortCode(job.id))}
+              hitSlop={6}
+            >
+              <Text className="text-xs font-mono text-faint mt-0.5">
+                {job.external_ref?.trim() || jobShortCode(job.id)}
+                {copiedKey === 'ref' ? <Text className="text-emerald-500">  {td.copied}</Text> : null}
+              </Text>
+            </Pressable>
           ) : null}
           {clientName ? (
             <Pressable
@@ -1556,10 +1618,13 @@ export default function JobDetailRoute() {
           ) : null}
 
           {job.description ? (
-            <View>
-              <Text className="text-xs text-muted mb-1">{td.description}</Text>
+            <Pressable onPress={() => copyText('desc', job.description ?? '')}>
+              <Text className="text-xs text-muted mb-1">
+                {td.description}
+                {copiedKey === 'desc' ? <Text className="text-emerald-500">  {td.copied}</Text> : null}
+              </Text>
               <Text className="text-sm text-ink">{job.description}</Text>
-            </View>
+            </Pressable>
           ) : null}
 
           {job.internal_notes ? (

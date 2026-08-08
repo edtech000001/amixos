@@ -63,6 +63,9 @@ export default function InventoryModuleScreen() {
   const [modal, setModal] = useState<'add' | 'edit' | 'adjust' | null>(null);
   const [selected, setSelected] = useState<RawItem | null>(null);
   const [form, setForm] = useState<Omit<RawItem, 'id'>>(EMPTY);
+  // Raw text for the unit-cost input — parsing per keystroke ate the decimal
+  // point ('15.' → 15), making cents impossible to type. Parsed into form.
+  const [unitCostText, setUnitCostText] = useState('');
   const [adjustQty, setAdjustQty] = useState(0);
   const [adjustType, setAdjustType] = useState<'add' | 'remove'>('add');
   const [saving, setSaving] = useState(false);
@@ -213,7 +216,7 @@ export default function InventoryModuleScreen() {
   };
 
   const openAdd = () => {
-    setForm({ ...EMPTY, location_id: activeLocationId ?? myHomeLocationId ?? null }); setError(''); setSelected(null); setModal('add');
+    setForm({ ...EMPTY, location_id: activeLocationId ?? myHomeLocationId ?? null }); setUnitCostText(''); setError(''); setSelected(null); setModal('add');
   };
   const openEdit = (id: string) => {
     const item = items.find(it => it.id === id);
@@ -224,6 +227,7 @@ export default function InventoryModuleScreen() {
       unit_cost: item.unit_cost, category: item.category ?? '', low_stock_threshold: item.low_stock_threshold,
       location_id: item.location_id ?? null,
     });
+    setUnitCostText(item.unit_cost ? String(item.unit_cost) : '');
     setError('');
     setModal('edit');
   };
@@ -385,8 +389,14 @@ export default function InventoryModuleScreen() {
               <Input
                 label={t.modal.unitCostLabel}
                 keyboardType="decimal-pad"
-                value={form.unit_cost ? String(form.unit_cost) : ''}
-                onChangeText={v => setForm(f => ({ ...f, unit_cost: parseFloat(v) || 0 }))}
+                value={unitCostText}
+                onChangeText={v => {
+                  let clean = v.replace(/[^0-9.]/g, '');
+                  const dot = clean.indexOf('.');
+                  if (dot !== -1) clean = clean.slice(0, dot + 1) + clean.slice(dot + 1).replace(/\./g, '');
+                  setUnitCostText(clean);
+                  setForm(f => ({ ...f, unit_cost: parseFloat(clean) || 0 }));
+                }}
               />
             </View>
             <View className="flex-1">

@@ -73,7 +73,9 @@ export function parseJobsFilters(raw: string | null | undefined): Partial<JobsFi
       out.tabs = [o.tab]; // legacy single-tab value
     }
     if (typeof o.search === 'string') out.search = o.search;
-    if (o.sortBy) out.sortBy = o.sortBy;
+    // 'client'/'lead' left the sort menu (grouping covers them) — migrate old
+    // saved views to the default order instead of restoring a hidden option.
+    if (o.sortBy) out.sortBy = o.sortBy === 'client' || o.sortBy === 'lead' ? 'recent' : o.sortBy;
     if (o.groupBy) out.groupBy = o.groupBy;
     if (typeof o.dateFrom === 'string') out.dateFrom = o.dateFrom;
     if (typeof o.dateTo === 'string') out.dateTo = o.dateTo;

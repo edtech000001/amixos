@@ -627,6 +627,10 @@ export type DashboardDict = {
         recent: string;
         status: string;
         startDate: string;
+        priority: string;
+        updated: string;
+        title: string;
+        endDate: string;
         client: string;
         lead: string;
       };
@@ -774,6 +778,7 @@ export type DashboardDict = {
       location: string;
       callClient: string;
       description: string;
+      copied: string;
       clientNote: string;
       internalNote: string;
       createdOn: string;
@@ -3276,6 +3281,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
           recent: 'Más recientes',
           status: 'Estado del trabajo',
           startDate: 'Fecha de inicio',
+          priority: 'Prioridad',
+          updated: 'Actualizados recientemente',
+          title: 'Nombre del trabajo (A–Z)',
+          endDate: 'Fecha de fin',
           client: 'Cliente',
           lead: 'Líder de equipo',
         },
@@ -3417,6 +3426,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         location: 'Ubicación',
         callClient: '📞 Llamar a cliente',
         description: 'Descripción',
+        copied: 'Copiado ✓',
         clientNote: 'Nota para cliente',
         internalNote: '📝 Nota interna',
         createdOn: 'Creado el {{date}}',
@@ -5914,6 +5924,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
           recent: 'Newest',
           status: 'Job status',
           startDate: 'Start date',
+          priority: 'Priority',
+          updated: 'Recently updated',
+          title: 'Job title (A–Z)',
+          endDate: 'End date',
           client: 'Client',
           lead: 'Crew lead',
         },
@@ -6055,6 +6069,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         location: 'Location',
         callClient: '📞 Call client',
         description: 'Description',
+        copied: 'Copied ✓',
         clientNote: 'Note for client',
         internalNote: '📝 Internal note',
         createdOn: 'Created on {{date}}',

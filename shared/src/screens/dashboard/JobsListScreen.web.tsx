@@ -33,6 +33,10 @@ import {
   Receipt,
   Trash2,
   Archive,
+  Flag,
+  History,
+  ArrowDownAZ,
+  CalendarClock,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { formatDateLong, formatTime12h } from '../../lib/format';
@@ -127,6 +131,10 @@ const SORT_ICON: Record<JobSortKey, typeof List> = {
   recent: Clock,
   status: ListChecks,
   startDate: Calendar,
+  endDate: CalendarClock,
+  priority: Flag,
+  updated: History,
+  title: ArrowDownAZ,
   client: User,
   lead: Users,
 };

@@ -475,7 +475,8 @@ export default function NominaRoute() {
         onConfigChange={onConfigChange}
         onMarkPaid={onMarkPaid}
         onDeletePayment={onDeletePayment}
-        onJobPress={(id) => router.push(`/dashboard/trabajos/${id}`)}
+        onJobPress={(id, employeeId) =>
+          router.push(`/dashboard/trabajos/${id}?from=nomina&worker=${employeeId}` as never)}
         onClearPayments={onClearPayments}
         onBack={() => router.back()}
         canManage={canManage}

@@ -44,7 +44,7 @@ import { loadCached, prependCached, writeCached } from '@/lib/offline/cache';
 import { newUuid } from '@/lib/offline/ids';
 import { useApp } from '@/lib/AppContext';
 import { CrewFinderSheet } from '@/modules/crewFinder/CrewFinderSheet';
-import { can } from '@amixos/shared/lib/permissions';
+import { isCustomRole, can } from '@amixos/shared/lib/permissions';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { Input, Select, DatePicker, Toggle } from '@amixos/shared/ui';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
@@ -237,18 +237,17 @@ export default function NuevoTrabajoRoute() {
   const canSchedule = can.scheduleJobs(currentRole);
   const [myEmployeeId, setMyEmployeeId] = useState<string | null>(null);
   useEffect(() => {
-    // Any non-dispatcher creator needs their own employee row: field crew for
-    // the save-time self-assign, worker-style creators for the lead default.
-    if (canAssign || !business || !user) { setMyEmployeeId(null); return; }
+    // Resolve the creator's own employee row: field crew for the save-time
+    // self-assign, worker-style creators for the lead default. Cheap single
+    // query under the self-read policy — always fetch (gating on assignWorkers
+    // broke the lead default for custom roles that got that capability).
+    if (!business || !user) { setMyEmployeeId(null); return; }
     supabase.from('employees').select('id').eq('business_id', business.id).eq('user_id', user.id).limit(1).maybeSingle()
       .then(({ data }: { data: { id: string } | null }) => setMyEmployeeId(data?.id ?? null));
-  }, [canAssign, business?.id, user?.id]);
-  const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress' | 'completed'>('scheduled');
-  // Field crew default a NEW job to "completed" (they log finished work).
-  useEffect(() => {
-    if (sourceId || !restrictedCreator) return;
-    setStatus('completed');
-  }, [sourceId, restrictedCreator]);
+  }, [business?.id, user?.id]);
+  // New jobs default to "completed" for EVERY role — most entries log finished
+  // work. Anyone with the schedule permission can flip it in the picker.
+  const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress' | 'completed'>('completed');
   // The job's status when the edit form loaded — used to stamp the pipeline
   // timestamp only on a real status change at save time.
   const [loadedStatus, setLoadedStatus] = useState<string | null>(null);
@@ -324,13 +323,14 @@ export default function NuevoTrabajoRoute() {
     can.createJob(currentRole) && (!sourceId || (!!user && loadedCreatedBy === user.id));
   const canStaff = canAssign || restrictedCreator || creatorStaff;
 
-  // A worker-style creator (can create jobs but isn't a dispatcher) defaults
-  // to being the job lead on NEW jobs — "the person adding the job leads it".
-  // Prefilled once, not forced: they can change or clear it in the picker.
-  // Field creators are excluded (their save path already self-assigns as lead).
+  // Whoever enters a NEW job defaults as its lead — "the person adding the job
+  // leads it". Prefilled once, not forced: they can change or clear it in the
+  // picker. Field creators are excluded (their save path self-assigns as lead).
   const leadDefaulted = useRef(false);
   useEffect(() => {
-    if (leadDefaulted.current || sourceId || !creatorStaff || canAssign || restrictedCreator) return;
+    if (leadDefaulted.current || sourceId || !creatorStaff || restrictedCreator) return;
+    // Applies to EVERY role (dispatchers included) — whoever enters the job
+    // defaults as its lead, provided they have a linked employee row.
     if (business?.job_crew_mode === false) return;
     if (!myEmployeeId || !employees.some((e) => e.id === myEmployeeId)) return;
     if (leadEmployeeId || assignedEmployees.length > 0) return;

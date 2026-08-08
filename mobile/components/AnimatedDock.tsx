@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Pressable, type LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -140,7 +140,7 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
   // we still land on the list. If a dirty form is focused it routes through the
   // unsaved-changes prompt (leaveGuardStore) and only proceeds on "Salir sin
   // guardar"; a clean screen navigates immediately.
-  const resetSection = (r: (typeof visibleRoutes)[number]) => {
+  const resetSection = (r: { name: string; state?: unknown }) => {
     const navigate = () => {
       const nested = r.state as { key?: string; index?: number } | undefined;
       if (nested?.key && (nested.index ?? 0) > 0) {
@@ -156,6 +156,13 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
     if (request) request(navigate);
     else navigate();
   };
+
+  // Rapid taps during a transition act on STALE render state (the bubble/tab
+  // snapshot lags the navigator), which stacked navigations and bounced users
+  // between a section's detail and list. Two guards: swallow taps inside the
+  // transition window, and resolve "am I already here?" + the nested stack
+  // from the navigator's LIVE state at press time, never the render snapshot.
+  const lastPressRef = useRef(0);
 
   const [barWidth, setBarWidth] = useState(0);
   const numTabs = Math.max(1, visibleRoutes.length);
@@ -286,15 +293,25 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
           const Icon = descriptors[route.key].options.tabBarIcon;
           const isActive = i === activeIndex;
           const onPress = () => {
+            // Debounce: a tap mid-transition would act on a half-applied
+            // navigation state (the "spam the dock" bug).
+            const now = Date.now();
+            if (now - lastPressRef.current < 350) return;
+            lastPressRef.current = now;
             const event = navigation.emit({
               type: 'tabPress',
               target: route.key,
               canPreventDefault: true,
             });
             if (event.defaultPrevented) return;
+            // Resolve focus + nested history from the LIVE navigator state —
+            // the render-time `route`/`activeIndex` lag during transitions.
+            const live = navigation.getState();
+            const liveRoute = live.routes[live.index ?? 0];
+            const liveActive = liveRoute?.key === route.key;
             // Already in this section → go to its list (see resetSection).
-            if (isActive) {
-              resetSection(route);
+            if (liveActive) {
+              resetSection({ name: route.name, state: liveRoute?.state });
               return;
             }
             // React Navigation's `navigate` is heavily overloaded on the route

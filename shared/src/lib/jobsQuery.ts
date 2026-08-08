@@ -90,6 +90,27 @@ export interface SearchIds {
   crewJobIds: string[];
 }
 
+/** Jobs whose displayed short code (jobRef.ts: "AX-" + first 6 hex chars of the
+ *  UUID) matches the search term. The code is a uuid prefix, so a uuid range
+ *  probe finds it — ilike on the text columns never can. Requires the AX
+ *  prefix or at least one digit so plain hex-looking words ("cafe", "decade")
+ *  don't drag unrelated uuid matches into ordinary searches. */
+async function resolveShortCodeIds(
+  supabase: AnySupabase,
+  businessId: string,
+  term: string,
+): Promise<string[]> {
+  const m = term.trim().match(/^(ax[\s-]?)?([0-9a-f]{4,8})$/i);
+  if (!m) return [];
+  if (!m[1] && !/\d/.test(m[2])) return [];
+  const p = m[2].toLowerCase();
+  const lo = `${p.padEnd(8, '0')}-0000-0000-0000-000000000000`;
+  const hi = `${p.padEnd(8, 'f')}-ffff-ffff-ffff-ffffffffffff`;
+  const { data } = await supabase.from('jobs').select('id')
+    .eq('business_id', businessId).gte('id', lo).lte('id', hi).limit(25);
+  return ((data ?? []) as { id: string }[]).map((r) => r.id);
+}
+
 /** Resolve a search term to the client_ids and job_ids it should match through
  *  joined tables (client names, crew/lead names). Small id-only lookups.
  *  Resolve ONCE per load and pass the result to fetchJobsPage +
@@ -106,7 +127,7 @@ export async function resolveSearchIds(
   // the cap — the next step if it's ever needed.
   const ID_CAP = 150;
   const like = `%${escLike(term)}%`;
-  const [clientsRes, empRes, crewByNameRes] = await Promise.all([
+  const [clientsRes, empRes, crewByNameRes, codeJobIds] = await Promise.all([
     supabase.from('clients').select('id').eq('business_id', businessId)
       .or(`first_name.ilike.${like},last_name.ilike.${like},company.ilike.${like}`).limit(ID_CAP),
     // employees_roster (view, migration 178): readable by every member, so
@@ -115,12 +136,16 @@ export async function resolveSearchIds(
       .or(`first_name.ilike.${like},last_name.ilike.${like}`).limit(200),
     supabase.from('job_assignments').select('job_id').eq('business_id', businessId)
       .ilike('worker_name', like).limit(ID_CAP),
+    resolveShortCodeIds(supabase, businessId, term),
   ]);
   const clientIds = ((clientsRes.data ?? []) as { id: string }[]).map((r) => r.id);
   const empIds = ((empRes.data ?? []) as { id: string }[]).map((r) => r.id);
   const crewJobIds = new Set<string>(
     ((crewByNameRes.data ?? []) as { job_id: string }[]).map((r) => r.job_id),
   );
+  // Short-code matches ride in crewJobIds: it already flows into the
+  // `id.in.(…)` arm of every consumer (page query + all three RPCs).
+  codeJobIds.forEach((jid) => crewJobIds.add(jid));
   if (empIds.length) {
     const { data } = await supabase.from('job_assignments').select('job_id')
       .eq('business_id', businessId).in('employee_id', empIds).limit(ID_CAP);

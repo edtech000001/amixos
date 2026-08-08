@@ -10,7 +10,7 @@ import { ArrowLeft, Trash2, MapPin, Calendar, Users, DollarSign, FileText, Searc
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { CrewFinderPanel } from '@/modules/crewFinder/CrewFinderPanel';
-import { can } from '@amixos/shared/lib/permissions';
+import { isCustomRole, can } from '@amixos/shared/lib/permissions';
 import { useLang } from '@/i18n/LangProvider';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -214,12 +214,6 @@ function NuevoTrabajoContent() {
   const canSchedule = can.scheduleJobs(currentRole);
   const [myEmployeeId, setMyEmployeeId] = useState<string | null>(null);
 
-  // Field crew default a NEW job to "completed" (they log finished work).
-  useEffect(() => {
-    if (sourceId || !restrictedCreator) return;
-    setStatus('completed');
-  }, [sourceId, restrictedCreator]);
-
   // Default a NEW job's branch to the active branch, else the user's own home
   // branch (so data auto-files to where they work even when viewing "All").
   useEffect(() => {
@@ -229,12 +223,14 @@ function NuevoTrabajoContent() {
 
   // Resolve the field creator's own employee row so we can self-assign them.
   useEffect(() => {
-    // Any non-dispatcher creator needs their own employee row: field crew for
-    // the save-time self-assign, worker-style creators for the lead default.
-    if (canAssign || !business || !user) { setMyEmployeeId(null); return; }
+    // Resolve the creator's own employee row: field crew for the save-time
+    // self-assign, worker-style creators for the lead default. Cheap single
+    // query under the self-read policy — always fetch (gating on assignWorkers
+    // broke the lead default for custom roles that got that capability).
+    if (!business || !user) { setMyEmployeeId(null); return; }
     supabase.from('employees').select('id').eq('business_id', business.id).eq('user_id', user.id).limit(1).maybeSingle()
       .then(({ data }: { data: { id: string } | null }) => setMyEmployeeId(data?.id ?? null));
-  }, [canAssign, business?.id, user?.id]);
+  }, [business?.id, user?.id]);
 
   const [clients, setClients] = useState<Client[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -261,7 +257,9 @@ function NuevoTrabajoContent() {
   // Crew visibility (migration 044). New jobs default to "Privado" — the
   // owner-side scheduler — and flip on when they're ready for the crew.
   const [publishedToCrew, setPublishedToCrew] = useState(false);
-  const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress' | 'completed'>('scheduled');
+  // New jobs default to "completed" for EVERY role — most entries log finished
+  // work. Anyone with the schedule permission can flip it in the picker.
+  const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress' | 'completed'>('completed');
   // The job's status when the edit form loaded — used to detect a real status
   // change on save (so we stamp the pipeline timestamp only when it actually moves).
   const [loadedStatus, setLoadedStatus] = useState<string | null>(null);
@@ -285,13 +283,14 @@ function NuevoTrabajoContent() {
   const [manualWorkers, setManualWorkers] = useState<string[]>(['']);
   const [leadEmployeeId, setLeadEmployeeId] = useState<string | null>(null);
 
-  // A worker-style creator (can create jobs but isn't a dispatcher) defaults
-  // to being the job lead on NEW jobs — "the person adding the job leads it".
-  // Prefilled once, not forced: they can change or clear it in the picker.
-  // Field creators are excluded (their save path already self-assigns as lead).
+  // Whoever enters a NEW job defaults as its lead — "the person adding the job
+  // leads it". Prefilled once, not forced: they can change or clear it in the
+  // picker. Field creators are excluded (their save path self-assigns as lead).
   const leadDefaulted = useRef(false);
   useEffect(() => {
-    if (leadDefaulted.current || sourceId || !creatorStaff || canAssign || restrictedCreator) return;
+    if (leadDefaulted.current || sourceId || !creatorStaff || restrictedCreator) return;
+    // Applies to EVERY role (dispatchers included) — whoever enters the job
+    // defaults as its lead, provided they have a linked employee row.
     if (business?.job_crew_mode === false) return;
     if (!myEmployeeId || !employees.some((e) => e.id === myEmployeeId)) return;
     if (leadEmployeeId || assignedEmployees.length > 0) return;

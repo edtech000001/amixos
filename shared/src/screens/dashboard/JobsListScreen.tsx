@@ -26,6 +26,10 @@ import {
   Trash2,
   Archive,
   X,
+  Flag,
+  History,
+  ArrowDownAZ,
+  CalendarClock,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
@@ -34,6 +38,7 @@ import { DateRangeSheet } from '../../ui/DateRangeSheet';
 import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
 import { Fab } from '../../ui/Fab';
 import { SkeletonList } from '../../ui/Skeleton';
+import { ChipScroll } from '../../ui/ChipScroll';
 import { formatDateLong, formatTime12h } from '../../lib/format';
 import { formatProjectDuration } from '../../lib/duration';
 import { searchMatches, usStateName } from '../../lib/usStates';
@@ -90,6 +95,8 @@ export interface JobListItem {
   archivedAt?: string | null;
   /** Assignment marked is_lead (migration 033) — drives sort/group by lead. */
   leadName?: string | null;
+  /** jobs.updated_at — drives the "Recently updated" sort. */
+  updatedAt?: string | null;
   delegatedToBusinessName?: string | null;
   delegatedFromBusinessName?: string | null;
   // Crew visibility (migration 044). false = scheduler-only; shown as a
@@ -467,6 +474,10 @@ export function JobsListScreen({
     recent: Clock,
     status: ListChecks,
     startDate: Calendar,
+    endDate: CalendarClock,
+    priority: Flag,
+    updated: History,
+    title: ArrowDownAZ,
     client: User,
     lead: Users,
   };
@@ -972,11 +983,7 @@ export function JobsListScreen({
         />
         {/* Date-range filter now lives in a bottom sheet (DateRangeSheet,
             rendered at the screen root) for one-hand reach. */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerClassName="gap-1 pb-1"
-        >
+        <ChipScroll contentContainerClassName="gap-1 pb-1">
           {/* "All" reset — an icon. Active (highlighted) when no status filter
              is applied; tapping it clears the selection back to all. */}
           <Pressable
@@ -1025,7 +1032,7 @@ export function JobsListScreen({
               </Pressable>
             );
           })}
-        </ScrollView>
+        </ChipScroll>
       </View>
 
       {/* Selection banner — ✕ / count / Todos, same as the clients list. */}
@@ -1130,23 +1137,31 @@ export function JobsListScreen({
         animationType="fade"
         onRequestClose={() => setSortMenuOpen(false)}
       >
-        <Pressable
-          onPress={() => setSortMenuOpen(false)}
-          className="flex-1 bg-black/40 justify-end"
-        >
-          <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-6 pt-3 pb-10">
-            <View className="self-center w-10 h-1 rounded-full bg-border mb-4" />
-            <View className="flex-row items-center justify-between mb-5">
+        {/* Canonical sheet structure (see CLAUDE.md): absolute backdrop
+            Pressable FIRST, card as plain sibling — the card's ScrollView
+            gets drags natively (7 sort + 5 group rows overflow small phones). */}
+        <View className="flex-1 justify-end">
+          <Pressable
+            onPress={() => setSortMenuOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+            className="bg-black/40"
+          />
+          {/* Compact rows so all 12 options fit without scrolling on most
+              phones; the ScrollView + visible indicator cover small screens. */}
+          <View className="bg-card rounded-t-3xl px-6 pt-3 pb-6" style={{ maxHeight: '85%' }}>
+            <View className="self-center w-10 h-1 rounded-full bg-border mb-3" />
+            <View className="flex-row items-center justify-between mb-3">
               <Text className="text-base font-bold text-ink">{t.sort.title}</Text>
               <Pressable onPress={() => setSortMenuOpen(false)} hitSlop={8}>
                 <Text className="text-sm font-semibold text-primary">{full.common.buttons.done}</Text>
               </Pressable>
             </View>
 
-            <Text className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-2.5">
+            <ScrollView>
+            <Text className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-1.5">
               {t.sort.sortByTitle}
             </Text>
-            <View className="gap-1 mb-6">
+            <View className="gap-0.5 mb-4">
               {JOB_SORT_KEYS.map(k => {
                 const selected = sortBy === k;
                 const Icon = SORT_ICON[k];
@@ -1154,26 +1169,26 @@ export function JobsListScreen({
                   <Pressable
                     key={k}
                     onPress={() => setSortBy(k)}
-                    className={`flex-row items-center gap-3 px-3 py-3 rounded-2xl ${
+                    className={`flex-row items-center gap-3 px-3 py-1.5 rounded-2xl ${
                       selected ? 'bg-primary/10' : 'active:bg-surface'
                     }`}
                   >
-                    <View className={`w-9 h-9 rounded-xl items-center justify-center ${selected ? 'bg-primary' : 'bg-border-soft'}`}>
-                      <Icon size={18} color={selected ? '#FFFFFF' : '#6B7280'} />
+                    <View className={`w-8 h-8 rounded-xl items-center justify-center ${selected ? 'bg-primary' : 'bg-border-soft'}`}>
+                      <Icon size={16} color={selected ? '#FFFFFF' : '#6B7280'} />
                     </View>
-                    <Text className={`flex-1 text-base ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>
+                    <Text className={`flex-1 text-[15px] ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>
                       {t.sort.by[k]}
                     </Text>
-                    {selected ? <Check size={20} color={c.primary} /> : null}
+                    {selected ? <Check size={18} color={c.primary} /> : null}
                   </Pressable>
                 );
               })}
             </View>
 
-            <Text className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-2.5">
+            <Text className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-1.5">
               {t.sort.groupByTitle}
             </Text>
-            <View className="gap-1">
+            <View className="gap-0.5">
               {JOB_GROUP_KEYS.map(k => {
                 const selected = groupBy === k;
                 const Icon = GROUP_ICON[k];
@@ -1181,23 +1196,24 @@ export function JobsListScreen({
                   <Pressable
                     key={k}
                     onPress={() => setGroupBy(k)}
-                    className={`flex-row items-center gap-3 px-3 py-3 rounded-2xl ${
+                    className={`flex-row items-center gap-3 px-3 py-1.5 rounded-2xl ${
                       selected ? 'bg-primary/10' : 'active:bg-surface'
                     }`}
                   >
-                    <View className={`w-9 h-9 rounded-xl items-center justify-center ${selected ? 'bg-primary' : 'bg-border-soft'}`}>
-                      <Icon size={18} color={selected ? '#FFFFFF' : '#6B7280'} />
+                    <View className={`w-8 h-8 rounded-xl items-center justify-center ${selected ? 'bg-primary' : 'bg-border-soft'}`}>
+                      <Icon size={16} color={selected ? '#FFFFFF' : '#6B7280'} />
                     </View>
-                    <Text className={`flex-1 text-base ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>
+                    <Text className={`flex-1 text-[15px] ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>
                       {t.sort.group[k]}
                     </Text>
-                    {selected ? <Check size={20} color={c.primary} /> : null}
+                    {selected ? <Check size={18} color={c.primary} /> : null}
                   </Pressable>
                 );
               })}
             </View>
-          </Pressable>
-        </Pressable>
+            </ScrollView>
+          </View>
+        </View>
       </RNModal>
 
       {/* New job/proposal action sheet — bottom sheet, one-handed reach.
