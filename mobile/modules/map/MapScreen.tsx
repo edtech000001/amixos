@@ -647,7 +647,7 @@ export default function MapScreen() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => router.navigate('/dashboard/mas' as never)}
           hitSlop={12}
           className="p-2 -ml-2 rounded-lg active:bg-border-soft"
         >

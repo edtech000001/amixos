@@ -951,7 +951,7 @@ export default function EquipmentScreen() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
-        <Pressable onPress={() => router.back()} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
+        <Pressable onPress={() => router.navigate('/dashboard/mas' as never)} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
           <ChevronLeft size={22} color={c.ink} />
         </Pressable>
         <View className="ml-1 flex-1">

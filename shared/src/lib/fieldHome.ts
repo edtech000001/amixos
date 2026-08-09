@@ -244,7 +244,7 @@ export async function fetchFieldHome(
       // the Payroll page uses so the figure reconciles with Nómina.
       supabase
         .from('jobs')
-        .select('scheduled_date, total_hours, driver_employee_ids, driver_hours, job_assignments(employee_id)')
+        .select('scheduled_date, total_hours, driver_employee_ids, driver_hours, job_assignments(employee_id, crew)')
         .eq('business_id', businessId)
         .gte('scheduled_date', windowStartStr),
       // Which recent periods this worker has already been paid for.
@@ -262,14 +262,16 @@ export async function fetchFieldHome(
         total_hours: number | null;
         driver_employee_ids: string[] | null;
         driver_hours: number | null;
-        job_assignments: { employee_id: string | null }[];
+        job_assignments: { employee_id: string | null; crew?: boolean | null }[];
       }>
     ).map((j) => ({
       scheduled_date: j.scheduled_date,
       total_hours: j.total_hours,
       driver_employee_ids: j.driver_employee_ids,
       driver_hours: j.driver_hours,
+      // crew=false rows are lead-only (migration 189) — no hour credit.
       assignmentEmployeeIds: (j.job_assignments ?? [])
+        .filter((a) => a.crew !== false)
         .map((a) => a.employee_id)
         .filter((x): x is string => !!x),
     }));

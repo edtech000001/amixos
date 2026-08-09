@@ -360,7 +360,9 @@ export function computePayrollRows(opts: {
   const filtered = includeZero
     ? rows
     : rows.filter(r => r.hours > 0 || r.payType === 'salary');
-  return filtered.sort((a, b) => b.pay - a.pay);
+  // A→Z by name — with dozens of workers, finding a person beats seeing the
+  // biggest check first. The screens keep their own paid-last regrouping.
+  return filtered.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // Overtime threshold is per WEEK — scale it to the period length so
@@ -503,7 +505,9 @@ export function computePayrollRowsFromAggregates(opts: {
   const filtered = includeZero
     ? rows
     : rows.filter(r => r.hours > 0 || r.payType === 'salary');
-  return filtered.sort((a, b) => b.pay - a.pay);
+  // A→Z by name — with dozens of workers, finding a person beats seeing the
+  // biggest check first. The screens keep their own paid-last regrouping.
+  return filtered.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // ── Per-worker breakdown (which projects the hours came from) ────────────────
@@ -513,6 +517,9 @@ export interface PayrollBreakdownJob {
   jobId: string | null;
   title: string | null;
   date: string | null;
+  /** The job's lead (is_lead assignment; worker_name for manual crews) —
+   *  served by the breakdown RPCs (migration 188). Absent on old snapshots. */
+  lead?: string | null;
   /** Crew hours (job total_hours) credited because they were on the crew. */
   workedHours: number;
   /** Driving hours (job driver_hours) credited because they drove. */

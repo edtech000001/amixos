@@ -317,7 +317,8 @@ export function PayrollScreen({
 
   const insets = useSafeAreaInsets();
   const [payRow, setPayRow] = useState<PayrollScreenRow | null>(null);
-  const [method, setMethod] = useState<PayMethod>('cash');
+  // Check is the default — it's how these crews get paid most of the time.
+  const [method, setMethod] = useState<PayMethod>('check');
   const [checkNumber, setCheckNumber] = useState('');
   const [bonus, setBonus] = useState('');
 
@@ -420,7 +421,7 @@ export function PayrollScreen({
 
   const openPay = (row: PayrollScreenRow) => {
     setPayRow(row);
-    setMethod('cash');
+    setMethod('check');
     setCheckNumber('');
     setBonus('');
     setLoanDeduct('');
@@ -669,14 +670,21 @@ export function PayrollScreen({
                 </Pressable>
               ) : null;
               return (
-                <View key={r.employeeId} className={`${gridTwoCol ? 'w-[48.5%]' : 'w-full flex-row items-center'} bg-card rounded-2xl border border-border-soft shadow-sm p-3.5 mb-3`}>
+                // The WHOLE card opens the hours breakdown — the action badge
+                // (Mark paid / payment chip) nests its own Pressable, so taps
+                // on it never fall through to the card.
+                <Pressable
+                  key={r.employeeId}
+                  onPress={() => setDetailRow(r)}
+                  className={`${gridTwoCol ? 'w-[48.5%]' : 'w-full flex-row items-center'} bg-card rounded-2xl border border-border-soft shadow-sm p-3.5 mb-3 active:opacity-80`}
+                >
                   <View className={gridTwoCol ? '' : 'flex-1 min-w-0'}>
-                    <Pressable onPress={() => setDetailRow(r)} className="active:opacity-60">
+                    <View>
                       <Text className="text-[11px] text-faint">
                         {fmt(r.payRate)}{r.payType === 'hourly' ? '/h' : ''} · {Math.round(r.hours * 100) / 100} h
                       </Text>
                       <Text className="text-sm font-semibold text-ink mt-0.5" numberOfLines={1}>{r.name}</Text>
-                    </Pressable>
+                    </View>
                     {isPartial(r) ? (
                       <Text className="text-xl font-bold text-amber-600 mt-1">
                         {fmt(checkBaseOf(r))}
@@ -693,19 +701,21 @@ export function PayrollScreen({
                     {gridTwoCol && action ? <View className="mt-2">{action}</View> : null}
                   </View>
                   {!gridTwoCol && action ? <View className="ml-3 shrink-0">{action}</View> : null}
-                </View>
+                </Pressable>
               );
             })}
           </View>
         ) : (
           <View className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
             {sortedRows.map((r, i) => (
-              <View
+              // The WHOLE row opens the hours breakdown — the payment badge
+              // below nests its own Pressable, so its taps don't fall through.
+              <Pressable
                 key={r.employeeId}
-                className={`px-4 py-3.5 flex-row items-center gap-3 ${i < sortedRows.length - 1 ? 'border-b border-border-soft' : ''}`}
+                onPress={() => setDetailRow(r)}
+                className={`px-4 py-3.5 flex-row items-center gap-3 active:bg-surface ${i < sortedRows.length - 1 ? 'border-b border-border-soft' : ''}`}
               >
-                {/* Name/hours area opens the hours breakdown. */}
-                <Pressable onPress={() => setDetailRow(r)} className="flex-1 min-w-0 flex-row items-center gap-1.5 active:opacity-60">
+                <View className="flex-1 min-w-0 flex-row items-center gap-1.5">
                   <View className="flex-1 min-w-0">
                     <Text className="text-sm font-semibold text-ink" numberOfLines={1}>{r.name}</Text>
                     <Text className="text-xs text-faint">
@@ -715,7 +725,7 @@ export function PayrollScreen({
                     </Text>
                   </View>
                   <ChevronRight size={14} color={c.faint} />
-                </Pressable>
+                </View>
                 <View className="items-end">
                   {isPartial(r) ? (
                     <View className="items-end">
@@ -749,7 +759,7 @@ export function PayrollScreen({
                     </Pressable>
                   ) : null}
                 </View>
-              </View>
+              </Pressable>
             ))}
           </View>
         )}
@@ -1383,7 +1393,7 @@ export function PayrollScreen({
                     onPress={() => setDetailRow(null)}
                     style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
                   />
-          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]">
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[90%]">
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>
@@ -1415,9 +1425,16 @@ export function PayrollScreen({
               ))}
             </View>
 
-            <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-2">{t.projectsHeading}</Text>
+            <Text className="text-sm font-bold text-muted uppercase tracking-wide mb-2">
+              {t.projectsHeading}
+              {detailRow?.breakdown?.jobs.length ? (
+                <Text className="text-ink"> · {detailRow.breakdown.jobs.length}</Text>
+              ) : null}
+            </Text>
             {detailRow?.breakdown && detailRow.breakdown.jobs.length > 0 ? (
-              <ScrollView className="max-h-72">
+              // shrink (not a fixed max-h): the list takes all the height the
+              // 90% sheet allows, so long periods show far more jobs at once.
+              <ScrollView className="shrink">
                 <View className="gap-2">
                   {detailRow.breakdown.jobs.map((j, i) => (
                     <View key={j.jobId ?? i} className="flex-row items-center gap-3 rounded-2xl border border-border-soft px-3 py-2.5">
@@ -1427,7 +1444,11 @@ export function PayrollScreen({
                         className="flex-1 min-w-0 active:opacity-60"
                       >
                         <Text className="text-sm font-semibold text-ink" numberOfLines={1}>{j.title || t.untitledJob}</Text>
-                        {j.date ? <Text className="text-[11px] text-faint">{fmtDay(j.date)}</Text> : null}
+                        {j.date || j.lead ? (
+                          <Text className="text-[11px] text-faint" numberOfLines={1}>
+                            {[j.date ? fmtDay(j.date) : null, j.lead].filter(Boolean).join(' · ')}
+                          </Text>
+                        ) : null}
                       </Pressable>
                       <View className="items-end">
                         {j.workedHours > 0 ? (

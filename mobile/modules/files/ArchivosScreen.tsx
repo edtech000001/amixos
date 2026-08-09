@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import {
-  ChevronLeft, ChevronRight, FileText, Folder, FolderOpen, FolderPlus,
+  ChevronLeft, ChevronRight, CornerUpLeft, FileText, Folder, FolderOpen, FolderPlus,
   FilePlus2, Link2, Trash2, Pencil, ExternalLink, Upload, Lock,
   Users as UsersIcon, Check, X, FolderInput, Plus,
 } from 'lucide-react-native';
@@ -117,10 +117,11 @@ export default function ArchivosScreen() {
     folders.filter(f => f.category_id === categoryId && f.parent_folder_id === folderId).length +
     entries.filter(e => e.category_id === categoryId && e.folder_id === folderId).length;
 
-  const goBack = () => {
-    if (stack.length > 1) { setStack(s => s.slice(0, -1)); clearSelection(); }
-    else router.back();
-  };
+  // Header arrow = leave the module (always). Folder navigation has its own
+  // up-arrow in the breadcrumb bar — mixing both into one button meant several
+  // taps to exit from a deep folder, and 'back' changing meaning per depth.
+  const goBack = () => router.navigate('/dashboard/mas' as never);
+  const folderUp = () => { setStack(s => s.slice(0, -1)); clearSelection(); };
   const enterCategory = (c: FileCategory) => setStack(s => [...s, { categoryId: c.id, folderId: null, label: c.name }]);
   const enterFolder = (f: FileFolder) => setStack(s => [...s, { categoryId: f.category_id, folderId: f.id, label: f.name }]);
 
@@ -212,6 +213,9 @@ export default function ArchivosScreen() {
          huge gap under the header. flex-wrap handles deep paths. */}
       {stack.length > 1 ? (
         <View className="flex-row flex-wrap items-center gap-1 px-4 py-2.5 border-b border-border-soft">
+          <Pressable onPress={folderUp} hitSlop={8} className="mr-1.5 p-1.5 rounded-lg bg-border-soft active:bg-border">
+            <CornerUpLeft size={14} color={c.muted} />
+          </Pressable>
           {stack.map((crumb, i) => (
             <Pressable key={i} onPress={() => { setStack(s => s.slice(0, i + 1)); clearSelection(); }} className="flex-row items-center gap-1">
               {i > 0 ? <ChevronRight size={12} color={c.faint} /> : null}

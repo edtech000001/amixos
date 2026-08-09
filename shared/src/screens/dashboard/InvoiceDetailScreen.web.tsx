@@ -419,7 +419,7 @@ export function InvoiceDetailScreen({
         {/* Internal notes — app-only, tinted amber to signal it's private and
            never shown to the client. */}
         {invoice.internalNotes ? (
-          <div className="bg-amber-500/10 rounded-2xl border border-amber-200 shadow-sm p-5">
+          <div className="bg-amber-500/10 rounded-2xl border border-amber-500/30 shadow-sm p-5">
             <p className="text-[11px] text-amber-600 font-semibold uppercase tracking-wide">{t.internalNotes}</p>
             <p className="text-sm text-ink mt-1 whitespace-pre-wrap">{invoice.internalNotes}</p>
           </div>
@@ -429,7 +429,7 @@ export function InvoiceDetailScreen({
            (legacy / imported / simple mark-paid) — the ledger card inside the
            totals already covers rows with method/date/photo. */}
         {invoice.status === 'paid' && payments.length === 0 && (invoice.paidAt || invoice.paymentMethod) ? (
-          <div className="bg-emerald-500/10 rounded-2xl border border-emerald-200 shadow-sm p-5">
+          <div className="bg-emerald-500/10 rounded-2xl border border-emerald-500/30 shadow-sm p-5">
             <p className="text-[11px] text-emerald-600 font-semibold uppercase tracking-wide">{tInv.payments.title}</p>
             <div className="mt-1.5 space-y-0.5 text-sm text-ink">
               {invoice.paidAt ? <p>{tInv.payments.dateLabel}: {formatDate(invoice.paidAt)}</p> : null}

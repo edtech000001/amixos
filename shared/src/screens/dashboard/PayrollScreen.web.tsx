@@ -301,7 +301,8 @@ export function PayrollScreen({
   };
 
   const [payRow, setPayRow] = useState<PayrollScreenRow | null>(null);
-  const [method, setMethod] = useState<PayMethod>('cash');
+  // Check is the default — it's how these crews get paid most of the time.
+  const [method, setMethod] = useState<PayMethod>('check');
   const [checkNumber, setCheckNumber] = useState('');
   const [bonus, setBonus] = useState('');
 
@@ -404,7 +405,7 @@ export function PayrollScreen({
 
   const openPay = (row: PayrollScreenRow) => {
     setPayRow(row);
-    setMethod('cash');
+    setMethod('check');
     setCheckNumber('');
     setBonus('');
     setLoanDeduct('');
@@ -625,8 +626,11 @@ export function PayrollScreen({
         ) : view === 'grid' ? (
           <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
             {sortedRows.map(r => (
-              <div key={r.employeeId} className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 flex flex-col gap-1.5">
-                <button type="button" onClick={() => setDetailRow(r)} className="text-left group">
+              // Whole card opens the hours breakdown; the payment buttons stop
+              // propagation so their clicks don't also open it.
+              <div key={r.employeeId} onClick={() => setDetailRow(r)}
+                className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 flex flex-col gap-1.5 cursor-pointer hover:border-border">
+                <button type="button" className="text-left group">
                   <p className="text-xs text-faint">
                     {fmt(r.payRate)}{r.payType === 'hourly' ? '/h' : ''} · {Math.round(r.hours * 100) / 100} h
                     {(r.overtimeHours ?? 0) > 0 ? ` · ${Math.round((r.overtimeHours ?? 0) * 100) / 100} h ${t.otShort}` : ''}
@@ -650,7 +654,7 @@ export function PayrollScreen({
                   {(r.payments?.length ?? 0) > 0 ? (
                     <button
                       type="button"
-                      onClick={() => canManage && openPay(r)}
+                      onClick={e => { e.stopPropagation(); if (canManage) openPay(r); }}
                       disabled={!canManage}
                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${isPartial(r) ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:hover:bg-amber-100' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:hover:bg-emerald-100'}`}
                       title={t.methodHeading}
@@ -663,7 +667,7 @@ export function PayrollScreen({
                       </span>
                     </button>
                   ) : canManage ? (
-                    <button type="button" onClick={() => openPay(r)} disabled={busy} className="text-xs font-semibold text-primary hover:underline">
+                    <button type="button" onClick={e => { e.stopPropagation(); openPay(r); }} disabled={busy} className="text-xs font-semibold text-primary hover:underline">
                       {t.markPaid}
                     </button>
                   ) : null}
@@ -674,9 +678,9 @@ export function PayrollScreen({
         ) : (
           <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
             {sortedRows.map((r, i) => (
-              <div key={r.employeeId} className={`px-5 py-3.5 flex items-center gap-4 ${i < sortedRows.length - 1 ? 'border-b border-border-soft' : ''}`}>
-                {/* Name/hours area opens the hours breakdown. */}
-                <button type="button" onClick={() => setDetailRow(r)} className="flex-1 min-w-0 flex items-center gap-2 text-left group">
+              <div key={r.employeeId} onClick={() => setDetailRow(r)}
+                className={`px-5 py-3.5 flex items-center gap-4 cursor-pointer hover:bg-surface ${i < sortedRows.length - 1 ? 'border-b border-border-soft' : ''}`}>
+                <button type="button" className="flex-1 min-w-0 flex items-center gap-2 text-left group">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-ink truncate group-hover:text-primary">{r.name}</p>
                     <p className="text-xs text-faint">
@@ -704,7 +708,7 @@ export function PayrollScreen({
                   {(r.payments?.length ?? 0) > 0 ? (
                     <button
                       type="button"
-                      onClick={() => canManage && openPay(r)}
+                      onClick={e => { e.stopPropagation(); if (canManage) openPay(r); }}
                       disabled={!canManage}
                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${isPartial(r) ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:hover:bg-amber-100' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:hover:bg-emerald-100'}`}
                       title={t.methodHeading}
@@ -717,7 +721,7 @@ export function PayrollScreen({
                       </span>
                     </button>
                   ) : canManage ? (
-                    <button type="button" onClick={() => openPay(r)} disabled={busy} className="text-xs font-semibold text-primary hover:underline">
+                    <button type="button" onClick={e => { e.stopPropagation(); openPay(r); }} disabled={busy} className="text-xs font-semibold text-primary hover:underline">
                       {t.markPaid}
                     </button>
                   ) : null}
@@ -1236,7 +1240,12 @@ export function PayrollScreen({
               ))}
             </div>
 
-            <p className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">{t.projectsHeading}</p>
+            <p className="text-sm font-bold text-muted uppercase tracking-wide mb-2">
+              {t.projectsHeading}
+              {detailRow.breakdown?.jobs.length ? (
+                <span className="text-ink"> · {detailRow.breakdown.jobs.length}</span>
+              ) : null}
+            </p>
             {detailRow.breakdown && detailRow.breakdown.jobs.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {detailRow.breakdown.jobs.map((j, i) => (
@@ -1248,7 +1257,11 @@ export function PayrollScreen({
                       className="flex-1 min-w-0 text-left group disabled:cursor-default"
                     >
                       <p className={`text-sm font-semibold text-ink truncate ${j.jobId && onJobPress ? 'group-hover:text-primary' : ''}`}>{j.title || t.untitledJob}</p>
-                      {j.date && <p className="text-[11px] text-faint">{fmtDay(j.date)}</p>}
+                      {(j.date || j.lead) && (
+                        <p className="text-[11px] text-faint truncate">
+                          {[j.date ? fmtDay(j.date) : null, j.lead].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
                     </button>
                     <div className="text-right shrink-0">
                       {j.workedHours > 0 && (

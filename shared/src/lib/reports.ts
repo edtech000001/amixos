@@ -28,7 +28,7 @@ export interface ReportJob {
   scheduled_date?: string | null; total_hours?: number | null;
   driver_employee_ids?: string[] | null; driver_hours?: number | null;
   custom_fields?: Record<string, unknown> | null;
-  job_assignments?: { employee_id: string | null }[];
+  job_assignments?: { employee_id: string | null; crew?: boolean | null }[];
 }
 export interface ReportLocation { id: string; name: string; }
 export interface ReportClient { id: string; created_at: string; }
@@ -103,7 +103,7 @@ export async function fetchReportsData(
       return q;
     }),
     fetchAllById<ReportJob>((afterId, pageSize) => {
-      let q = supabase.from('jobs').select('id, status, total_amount, created_at, client_id, location_id, scheduled_date, total_hours, driver_employee_ids, driver_hours, custom_fields, job_assignments(employee_id)').eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+      let q = supabase.from('jobs').select('id, status, total_amount, created_at, client_id, location_id, scheduled_date, total_hours, driver_employee_ids, driver_hours, custom_fields, job_assignments(employee_id, crew)').eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
       if (afterId) q = q.gt('id', afterId);
       return q;
     }),
@@ -308,7 +308,8 @@ export function computeReports(
       driver_employee_ids: j.driver_employee_ids ?? null,
       driver_hours: j.driver_hours ?? null,
       custom_fields: j.custom_fields ?? null,
-      assignmentEmployeeIds: (j.job_assignments ?? []).map(a => a.employee_id).filter((x): x is string => !!x),
+      // crew=false rows are lead-only (migration 189) — no hour credit.
+      assignmentEmployeeIds: (j.job_assignments ?? []).filter(a => a.crew !== false).map(a => a.employee_id).filter((x): x is string => !!x),
     })),
     period: { startStr: rangeStart ? toYMD(rangeStart) : '1900-01-01', endStr: toYMD(rangeEnd) },
     includeZero: false,

@@ -295,9 +295,8 @@ function NuevoTrabajoContent() {
     if (!myEmployeeId || !employees.some((e) => e.id === myEmployeeId)) return;
     if (leadEmployeeId || assignedEmployees.length > 0) return;
     leadDefaulted.current = true;
+    // Lead only — crew membership (paid hours) stays an explicit choice.
     setLeadEmployeeId(myEmployeeId);
-    // The lead is always part of the crew (mirrors setLead).
-    setAssignedEmployees((prev) => (prev.includes(myEmployeeId) ? prev : [...prev, myEmployeeId]));
   }, [sourceId, creatorStaff, canAssign, restrictedCreator, myEmployeeId, employees, leadEmployeeId, assignedEmployees, business?.job_crew_mode]);
   // Optional drivers — any employees paid extra driverHours (each) on top of
   // the job's total hours. Multi-select, like crew.
@@ -913,7 +912,7 @@ function NuevoTrabajoContent() {
           })));
         }
         if (assigns) {
-          setAssignedEmployees(assigns.filter((a: any) => a.employee_id).map((a: any) => a.employee_id));
+          setAssignedEmployees(assigns.filter((a: any) => a.employee_id && a.crew !== false).map((a: any) => a.employee_id));
           const manual = assigns.filter((a: any) => !a.employee_id && a.worker_name).map((a: any) => a.worker_name);
           if (manual.length > 0) setManualWorkers(manual);
           const lead = assigns.find((a: any) => a.is_lead && a.employee_id);
@@ -1222,19 +1221,17 @@ function NuevoTrabajoContent() {
   }, [sourceId]);
 
   const toggleEmployee = (id: string) => {
-    setAssignedEmployees(prev => {
-      const next = prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id];
-      if (!next.includes(id) && leadEmployeeId === id) setLeadEmployeeId(null);
-      return next;
-    });
+    // Removing the lead from the crew is allowed — they stay lead (unpaid on
+    // this job); the save path writes them as a crew=false assignment row.
+    setAssignedEmployees(prev =>
+      prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]);
   };
 
-  // The job lead lives in its own picker. Choosing a lead also assigns them to
-  // the job (the lead is always part of the crew). Clearing leaves nobody lead.
+  // The job lead lives in its own picker. Leading is NOT crew membership: a
+  // lead who should also be PAID for the job must be checked in the crew too
+  // (e.g. the owner leads without billing hours). Clearing leaves nobody lead.
   const setLead = (id: string) => {
-    if (!id) { setLeadEmployeeId(null); return; }
-    setLeadEmployeeId(id);
-    setAssignedEmployees(prev => (prev.includes(id) ? prev : [...prev, id]));
+    setLeadEmployeeId(id || null);
   };
 
   const updateItem = (id: string, field: keyof LineItem, value: any) =>
@@ -1528,17 +1525,27 @@ function NuevoTrabajoContent() {
         // Replace assignments — include is_lead so the Project Leader is
         // recorded for the post-job actuals flow.
         if (editId) await supabase.from('job_assignments').delete().eq('job_id', finalJobId);
-        const validLeadId =
-          leadEmployeeId && assignedEmployees.includes(leadEmployeeId) ? leadEmployeeId : null;
         const assignments: any[] = [];
         assignedEmployees.forEach(empId => {
           const emp = employees.find(e => e.id === empId);
           if (emp) assignments.push({
             job_id: finalJobId, employee_id: empId,
             worker_name: `${emp.first_name} ${emp.last_name}`,
-            is_lead: empId === validLeadId,
+            is_lead: empId === leadEmployeeId,
+            crew: true,
           });
         });
+        // A lead OUTSIDE the crew gets a crew=false row: shown as lead
+        // everywhere, credited zero hours in payroll (migration 189).
+        if (leadEmployeeId && !assignments.some(a => a.is_lead)) {
+          const lead = employees.find(e => e.id === leadEmployeeId);
+          if (lead) assignments.push({
+            job_id: finalJobId, employee_id: leadEmployeeId,
+            worker_name: `${lead.first_name} ${lead.last_name}`,
+            is_lead: true,
+            crew: false,
+          });
+        }
         manualWorkers.filter(w => w.trim()).forEach(name => {
           assignments.push({ job_id: finalJobId, worker_name: name.trim() });
         });
@@ -1550,12 +1557,12 @@ function NuevoTrabajoContent() {
           const creatorName = (user?.name ?? '').trim();
           if (myEmployeeId) {
             if (!assignments.some(a => a.employee_id === myEmployeeId)) {
-              assignments.push({ job_id: finalJobId, employee_id: myEmployeeId, worker_name: creatorName, is_lead: !alreadyLead });
+              assignments.push({ job_id: finalJobId, employee_id: myEmployeeId, worker_name: creatorName, is_lead: !alreadyLead, crew: true });
             }
           } else if (!alreadyLead && creatorName) {
             // No linked employee record yet (e.g. an invite not yet reconciled)
             // — still record the creator's NAME as lead so it's never blank.
-            assignments.push({ job_id: finalJobId, worker_name: creatorName, is_lead: true });
+            assignments.push({ job_id: finalJobId, worker_name: creatorName, is_lead: true, crew: true });
           }
         }
         if (assignments.length > 0) {

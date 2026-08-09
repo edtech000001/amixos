@@ -1319,10 +1319,10 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
   const allJobs: PayrollJob[] = (await fetchAllById<{
     id: string; title: string | null; scheduled_date: string | null; total_hours: number | null;
     driver_employee_ids: string[] | null; driver_hours: number | null;
-    job_assignments: { employee_id: string | null }[];
+    job_assignments: { employee_id: string | null; crew?: boolean | null }[];
   }>((afterId, pageSize) => {
     let q = ctx.supabase.from('jobs')
-      .select('id, title, scheduled_date, total_hours, driver_employee_ids, driver_hours, job_assignments(employee_id)')
+      .select('id, title, scheduled_date, total_hours, driver_employee_ids, driver_hours, job_assignments(employee_id, crew)')
       .eq('business_id', ctx.businessId).not('scheduled_date', 'is', null).order('id', { ascending: true }).limit(pageSize);
     if (afterId) q = q.gt('id', afterId);
     return q;
@@ -1334,7 +1334,8 @@ export async function runPayrollImport(ctx: ImportRunCtx): Promise<ImportResult>
       total_hours: j.total_hours,
       driver_employee_ids: j.driver_employee_ids,
       driver_hours: j.driver_hours,
-      assignmentEmployeeIds: (j.job_assignments ?? []).map(a => a.employee_id).filter((x): x is string => !!x),
+      // crew=false rows are lead-only (migration 189) — no hour credit.
+      assignmentEmployeeIds: (j.job_assignments ?? []).filter(a => a.crew !== false).map(a => a.employee_id).filter((x): x is string => !!x),
     }));
   const allTimesheets: PayrollTimesheet[] = await fetchAllById<{ id: string; employee_id: string | null; hours_worked: number | null; work_date: string | null }>((afterId, pageSize) => {
     let q = ctx.supabase.from('timesheets').select('id, employee_id, hours_worked, work_date').eq('business_id', ctx.businessId).order('id', { ascending: true }).limit(pageSize);

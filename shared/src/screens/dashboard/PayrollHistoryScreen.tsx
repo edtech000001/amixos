@@ -311,7 +311,11 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
                               className="flex-1 min-w-0 active:opacity-60"
                             >
                               <Text className="text-sm font-semibold text-ink" numberOfLines={1}>{j.title || t.untitledJob}</Text>
-                              {j.date ? <Text className="text-[11px] text-faint">{fmtDay(j.date)}</Text> : null}
+                              {j.date || j.lead ? (
+                                <Text className="text-[11px] text-faint" numberOfLines={1}>
+                                  {[j.date ? fmtDay(j.date) : null, j.lead].filter(Boolean).join(' · ')}
+                                </Text>
+                              ) : null}
                             </Pressable>
                             <View className="items-end">
                               {j.workedHours > 0 ? (

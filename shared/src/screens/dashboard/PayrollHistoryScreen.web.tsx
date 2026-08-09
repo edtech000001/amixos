@@ -391,7 +391,11 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
                             className="flex-1 min-w-0 text-left group disabled:cursor-default"
                           >
                             <p className={`text-sm font-semibold text-ink truncate ${j.jobId && onJobPress ? 'group-hover:text-primary' : ''}`}>{j.title || t.untitledJob}</p>
-                            {j.date && <p className="text-[11px] text-faint">{fmtDay(j.date)}</p>}
+                            {(j.date || j.lead) && (
+                              <p className="text-[11px] text-faint truncate">
+                                {[j.date ? fmtDay(j.date) : null, j.lead].filter(Boolean).join(' · ')}
+                              </p>
+                            )}
                           </button>
                           <div className="text-right shrink-0">
                             {j.workedHours > 0 && (

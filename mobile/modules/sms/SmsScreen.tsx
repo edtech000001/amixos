@@ -131,7 +131,7 @@ export default function SmsScreen() {
         onConnect={onConnect}
         onDisconnect={onDisconnect}
         onSend={onSend}
-        onBack={() => router.back()}
+        onBack={() => router.navigate('/dashboard/mas' as never)}
       />
     </SafeAreaView>
   );
