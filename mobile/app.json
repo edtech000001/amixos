@@ -3,7 +3,7 @@
     "name": "Amixos",
     "slug": "amixos",
     "scheme": "amixos",
-    "version": "0.1.49",
+    "version": "0.1.50",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
