@@ -428,13 +428,14 @@ export function InvoiceDetailScreen({
         {/* Payment summary for a paid invoice with no itemized ledger rows
            (legacy / imported / simple mark-paid) — the ledger card inside the
            totals already covers rows with method/date/photo. */}
+        {/* Standard card (not a tinted panel) so it reads like every other
+           section; the emerald lives only in the heading, like the ledger. */}
         {invoice.status === 'paid' && payments.length === 0 && (invoice.paidAt || invoice.paymentMethod) ? (
-          <div className="bg-emerald-500/10 rounded-2xl border border-emerald-500/30 shadow-sm p-5">
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
             <p className="text-[11px] text-emerald-600 font-semibold uppercase tracking-wide">{tInv.payments.title}</p>
-            <div className="mt-1.5 space-y-0.5 text-sm text-ink">
-              {invoice.paidAt ? <p>{tInv.payments.dateLabel}: {formatDate(invoice.paidAt)}</p> : null}
-              {invoice.paymentMethod ? <p>{tInv.payments.methodLabel}: {invoice.paymentMethod}</p> : null}
-            </div>
+            <p className="mt-1.5 text-sm text-ink">
+              {[invoice.paymentMethod, invoice.paidAt ? formatDate(invoice.paidAt) : null].filter(Boolean).join(' · ')}
+            </p>
           </div>
         ) : null}
 

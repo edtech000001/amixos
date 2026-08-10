@@ -12,6 +12,17 @@
 
 import { createSupabaseClient } from '@/lib/supabase';
 import { useOutboxStore, type OutboxOp } from './outbox';
+
+/** Lazy require — avoids a static cycle syncRunner → auth store → …. */
+function currentAuthUserId(): string | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { useAuthStore } = require('@/lib/auth/store') as typeof import('@/lib/auth/store');
+    return useAuthStore.getState().user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
 import { useNetworkStore, onReconnect } from './network';
 import { isNetworkError, isDuplicateError, isAuthError } from './util';
 
@@ -76,7 +87,13 @@ export async function drainOutbox(): Promise<void> {
     while (true) {
       if (!useNetworkStore.getState().isOnline) break;
       const store = useOutboxStore.getState();
-      const next = store.ops.find((o) => o.status === 'pending');
+      // Shared-device guard: replay only ops queued by the CURRENT user (or
+      // untagged legacy ops). Another account's edits stay parked until that
+      // person signs back in; with nobody signed in, nothing drains.
+      const uid = currentAuthUserId();
+      const next = store.ops.find(
+        (o) => o.status === 'pending' && (!o.userId || (uid !== null && o.userId === uid)),
+      );
       if (!next) break;
 
       store.patch(next.id, { status: 'syncing' });

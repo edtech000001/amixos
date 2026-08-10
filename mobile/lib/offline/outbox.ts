@@ -25,6 +25,10 @@ export interface OutboxOp {
   id: string;
   /** Owning business, for display/scoping. */
   businessId: string | null;
+  /** Auth user who queued it. The runner replays ONLY the signed-in user's
+   *  ops — on a shared device, another account's queued edits stay parked
+   *  until that person signs back in. Absent on legacy ops (replay freely). */
+  userId?: string | null;
   table: string;
   op: OutboxOpType;
   payload: Record<string, unknown>;
@@ -50,6 +54,7 @@ export interface OutboxOp {
 }
 
 export type NewOutboxOp = Pick<OutboxOp, 'businessId' | 'table' | 'op' | 'payload' | 'label'> &
+  Partial<Pick<OutboxOp, 'userId'>> &
   Partial<Pick<OutboxOp, 'match' | 'createdAt' | 'localUri' | 'bucket' | 'storagePath' | 'contentType'>>;
 
 interface OutboxState {
@@ -60,6 +65,23 @@ interface OutboxState {
   /** Reset every errored op back to pending (used on reconnect / manual retry). */
   retryErrors: () => void;
   clearAll: () => void;
+}
+
+/** Resolved lazily (require) to avoid a static import cycle with the auth
+ *  store, which is irrelevant at module-init time anyway. */
+function currentUserId(): string | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { useAuthStore } = require('../auth/store') as typeof import('../auth/store');
+    return useAuthStore.getState().user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Ops the given user may act on: their own + untagged legacy ops. */
+export function opsForUser(ops: OutboxOp[], userId: string | null | undefined): OutboxOp[] {
+  return ops.filter((o) => !o.userId || o.userId === userId);
 }
 
 let seq = 0;
@@ -81,6 +103,7 @@ export const useOutboxStore = create<OutboxState>()(
           attempts: 0,
           status: 'pending',
           businessId: op.businessId,
+          userId: op.userId ?? currentUserId(),
           table: op.table,
           op: op.op,
           payload: op.payload,

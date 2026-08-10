@@ -419,14 +419,15 @@ export function InvoiceDetailScreen({
          (legacy / imported / simple mark-paid) — the ledger card below already
          covers rows with method/date/photo. */}
       {invoice.status === 'paid' && payments.length === 0 && (invoice.paidAt || invoice.paymentMethod) ? (
-        <View className="bg-emerald-500/10 rounded-2xl border border-emerald-500/30 shadow-sm p-4 mb-4">
+        // Standard card (not a tinted panel) so it reads like every other
+        // section; the emerald lives only in the heading, like the ledger list.
+        <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-4">
           <Text className="text-[11px] text-emerald-600 font-semibold uppercase tracking-wide">{tInv.payments.title}</Text>
-          {invoice.paidAt ? (
-            <Text className="text-sm text-ink mt-1">{tInv.payments.dateLabel}: {formatDate(invoice.paidAt)}</Text>
-          ) : null}
-          {invoice.paymentMethod ? (
-            <Text className="text-sm text-ink mt-0.5">{tInv.payments.methodLabel}: {invoice.paymentMethod}</Text>
-          ) : null}
+          <Text className="text-sm text-ink mt-1">
+            {[invoice.paymentMethod, invoice.paidAt ? formatDate(invoice.paidAt) : null]
+              .filter(Boolean)
+              .join(' · ')}
+          </Text>
         </View>
       ) : null}
 

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import {
   setActiveRolePermissions,
@@ -255,6 +256,59 @@ interface AuthStore {
 
 const supabase = createSupabaseClient();
 
+// ─── Offline cold-start support ─────────────────────────────────────────────
+// Access tokens live ~1 hour. Reopening the app OFFLINE with an expired token
+// makes the refresh fail, Supabase reports "no session", and the user lands on
+// a login screen they can't pass without signal — which defeats the whole
+// offline cache. The pieces below let the launch flow distinguish "signed out"
+// from "can't reach the server" and quietly restore the real session later.
+
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+
+/** ANY HTTP response (even an error status) proves the server is reachable —
+ *  only a transport failure/timeout means offline. */
+async function isSupabaseReachable(): Promise<boolean> {
+  if (!SUPABASE_URL) return true;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 4000);
+    await fetch(`${SUPABASE_URL}/auth/v1/health`, { signal: ctrl.signal });
+    clearTimeout(t);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Retry loop while running on a cached identity: once the server is reachable,
+// getSession() re-reads the stored refresh token and refreshes — success fires
+// TOKEN_REFRESHED (back to a live session), a genuinely revoked token fires
+// SIGNED_OUT (normal logout). Until then the app keeps working from cache.
+let offlineRetry: ReturnType<typeof setInterval> | null = null;
+function stopOfflineSessionRetry() {
+  if (offlineRetry) { clearInterval(offlineRetry); offlineRetry = null; }
+}
+async function tryRestoreSession(): Promise<void> {
+  if (!(await isSupabaseReachable())) return;
+  const { data } = await supabase.auth.getSession();
+  if (data.session || useAuthStore.getState().status !== 'authenticated') {
+    stopOfflineSessionRetry();
+  }
+}
+function startOfflineSessionRetry() {
+  if (offlineRetry) return;
+  offlineRetry = setInterval(() => { void tryRestoreSession(); }, 25000);
+}
+
+// INITIAL_SESSION can fire before zustand finishes rehydrating from
+// AsyncStorage — the offline-hold decision needs the persisted user, so it
+// awaits hydration (with a cap so a broken storage never hangs the launch).
+let resolveHydration: (() => void) | null = null;
+const hydrationDone = new Promise<void>((res) => { resolveHydration = res; });
+function awaitHydration(): Promise<void> {
+  return Promise.race([hydrationDone, new Promise<void>((res) => setTimeout(res, 3000))]);
+}
+
 export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
@@ -496,6 +550,23 @@ export const useAuthStore = create<AuthStore>()(
               });
               void get().refetchBusiness();
             } else {
+              // No session at launch. An expired token that can't refresh
+              // OFFLINE lands here too — that must not bounce a field worker
+              // to a login screen they can't pass without signal. With a
+              // persisted identity and an unreachable server, stay on the
+              // cached data; the retry loop restores the real session when
+              // the network returns (or signs out if it was truly revoked).
+              await awaitHydration();
+              const cachedUser = get().user;
+              if (cachedUser && !(await isSupabaseReachable())) {
+                set({
+                  status: 'authenticated',
+                  businessLoaded: true,
+                  businessLoadError: get().businesses.length === 0,
+                });
+                startOfflineSessionRetry();
+                break;
+              }
               set({ user: null, business: null, businessLoaded: true, status: 'logged_out' });
             }
             break;
@@ -524,6 +595,9 @@ export const useAuthStore = create<AuthStore>()(
           case 'USER_UPDATED':
             if (session?.user) {
               set({ user: { id: session.user.id, email: session.user.email ?? '', name: displayNameFromUser(session.user) } });
+              // Coming back from an offline cold start with nothing cached —
+              // now that the session is live again, load the real data.
+              if (get().businessLoadError || !get().businessLoaded) void get().refetchBusiness();
             }
             break;
           case 'PASSWORD_RECOVERY':
@@ -575,6 +649,7 @@ export const useAuthStore = create<AuthStore>()(
           // immediately; the background refetch still runs on INITIAL_SESSION.
           if (state.business) state.businessLoaded = true;
         }
+        resolveHydration?.();
         setTimeout(() => useAuthStore.getState()._setHydrated(), 0);
       },
     },
@@ -585,6 +660,13 @@ export const useAuthStore = create<AuthStore>()(
 // Subscribing inside useEffect would create duplicate listeners on remount.
 supabase.auth.onAuthStateChange((event, session) => {
   void useAuthStore.getState()._handleAuthEvent(event, session);
+});
+
+// Foreground nudge: while running on a cached identity (offline cold start),
+// probe as soon as the app becomes active so the session restores the moment
+// there's signal again, instead of waiting for the next interval tick.
+AppState.addEventListener('change', (st) => {
+  if (st === 'active' && offlineRetry) void tryRestoreSession();
 });
 
 // Re-resolve branches when "Ver como" starts/stops: the active + home branch
@@ -599,10 +681,20 @@ subscribeImpersonation(() => {
 // corruption, etc.), fall back to logged_out so the user isn't stuck on a
 // spinner forever.
 setTimeout(() => {
-  const s = useAuthStore.getState().status;
-  if (s === 'unknown' || s === 'loading') {
+  void (async () => {
+    const st = useAuthStore.getState();
+    if (st.status !== 'unknown' && st.status !== 'loading') return;
+    if (st.user && !(await isSupabaseReachable())) {
+      useAuthStore.setState({
+        status: 'authenticated',
+        businessLoaded: true,
+        businessLoadError: st.businesses.length === 0,
+      });
+      startOfflineSessionRetry();
+      return;
+    }
     useAuthStore.setState({ status: 'logged_out' });
-  }
+  })();
 }, 15000);
 
 // Backwards-compat hook for existing dashboard consumers reading `useApp()`.

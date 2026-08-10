@@ -879,9 +879,17 @@ export default function FacturaDetailRoute() {
     return token;
   };
 
+  // PDF config matches web print semantics: a DRAFT renders with the CURRENT
+  // business design (web re-captures on every print); a sent/paid invoice
+  // keeps its frozen snapshot so restyling never changes a delivered document.
+  const pdfConfig = () =>
+    invoice?.status === 'draft'
+      ? resolveConfig(null, business?.invoice_template ?? null)
+      : templateConfig;
+
   const exportPdf = async () => {
     if (!invoice) return;
-    const vm = buildInvoiceViewModel(templateConfig, invoice, branding);
+    const vm = buildInvoiceViewModel(pdfConfig(), invoice, branding);
     const uri = await renderInvoicePdf(buildInvoiceHtml(vm), invoice.invoiceNumber);
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
@@ -974,7 +982,7 @@ export default function FacturaDetailRoute() {
         // renderer as the "Export PDF" action). Link-only skips PDF generation.
         let attachments: string[] = [];
         if (includePdf) {
-          const vm = buildInvoiceViewModel(templateConfig, invoice, branding);
+          const vm = buildInvoiceViewModel(pdfConfig(), invoice, branding);
           const uri = await renderInvoicePdf(buildInvoiceHtml(vm), invoice.invoiceNumber);
           attachments = [uri];
         }

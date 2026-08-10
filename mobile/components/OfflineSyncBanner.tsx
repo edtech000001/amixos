@@ -13,10 +13,11 @@
 import { useMemo, useState } from 'react';
 import { View, Text, Pressable, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { CloudOff, RefreshCw, AlertCircle, X, Clock } from 'lucide-react-native';
-import { useOutboxStore, pendingCount, errorCount, type OutboxOp } from '@/lib/offline/outbox';
+import { useOutboxStore, pendingCount, errorCount, opsForUser, type OutboxOp } from '@/lib/offline/outbox';
 import { useNetworkStore } from '@/lib/offline/network';
 import { retryAndDrain } from '@/lib/offline/syncRunner';
 import { useThemeColors } from '@/lib/ThemeProvider';
+import { useAuthStore } from '@/lib/auth/store';
 
 function plural(n: number, one: string, many: string): string {
   return n === 1 ? one : many;
@@ -34,8 +35,12 @@ export function OfflineSyncBanner() {
   const isOnline = useNetworkStore((s) => s.isOnline);
   const [open, setOpen] = useState(false);
 
-  const pending = pendingCount(ops);
-  const errors = errorCount(ops);
+  // Another account's parked ops must not show as "pending" here — they can
+  // only sync once that person signs back in.
+  const userId = useAuthStore((s) => s.user?.id ?? null);
+  const myOps = opsForUser(ops, userId);
+  const pending = pendingCount(myOps);
+  const errors = errorCount(myOps);
 
   const banner = useMemo<Banner | null>(() => {
     if (errors > 0) {
@@ -121,7 +126,7 @@ export function OfflineSyncBanner() {
           time; an always-mounted root Modal can block other screens' modals
           (e.g. the timesheet sheet) from presenting. */}
       {open && (
-        <DetailSheet open onClose={() => setOpen(false)} ops={ops} hasErrors={errors > 0} />
+        <DetailSheet open onClose={() => setOpen(false)} ops={myOps} hasErrors={errors > 0} />
       )}
     </>
   );
