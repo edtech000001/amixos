@@ -101,6 +101,8 @@ export interface InvoicePaymentRow {
   photoPath?: string | null;
   /** Signed URL for the photo, resolved by the caller for display. */
   photoUrl?: string | null;
+  /** Display rotation in degrees (0/90/180/270), migration 190. */
+  photoRotation?: number;
 }
 
 export interface InvoiceDetailScreenProps {
@@ -161,7 +163,7 @@ export interface InvoiceDetailScreenProps {
   /** Delete a recorded payment (caller confirms + reverts status if needed). */
   onDeletePayment?: (payment: InvoicePaymentRow) => void;
   /** View a payment's photo full-size (thumbnail tapped in the ledger). */
-  onViewPaymentPhoto?: (url: string) => void;
+  onViewPaymentPhoto?: (payment: InvoicePaymentRow) => void;
   /** Revert a paid invoice to sent (caller confirms + clears payments). */
   onUndoPaid?: () => void;
   /** Open a client's detail (the billed name becomes a link). */
@@ -574,8 +576,11 @@ export function InvoiceDetailScreen({
                   </Text>
                   <View className="flex-row items-center gap-2">
                     {p.photoUrl && onViewPaymentPhoto ? (
-                      <Pressable onPress={() => onViewPaymentPhoto(p.photoUrl!)} hitSlop={6} className="active:opacity-60">
-                        <Image source={{ uri: p.photoUrl }} style={{ width: 22, height: 22, borderRadius: 4 }} />
+                      <Pressable onPress={() => onViewPaymentPhoto(p)} hitSlop={6} className="active:opacity-60">
+                        <Image
+                          source={{ uri: p.photoUrl }}
+                          style={{ width: 30, height: 30, borderRadius: 5, transform: [{ rotate: `${p.photoRotation ?? 0}deg` }] }}
+                        />
                       </Pressable>
                     ) : null}
                     <Text className="text-sm text-emerald-700">−{fmt(p.amount)}</Text>

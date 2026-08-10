@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { Alert, Share, View, Text, Pressable, ScrollView, Modal as RNModal, Linking, TextInput, KeyboardAvoidingView, Platform, Image } from 'react-native';
-import { X, Camera } from 'lucide-react-native';
+import { X, Camera, RotateCw } from 'lucide-react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
@@ -475,21 +475,30 @@ export default function FacturaDetailRoute() {
   // null. Otherwise we OMIT photo_path entirely so payments still record on DBs
   // where migration 174 (the photo column) hasn't been run yet.
   const [payPhotoRemoved, setPayPhotoRemoved] = useState(false);
-  const [viewPhotoUrl, setViewPhotoUrl] = useState<string | null>(null);
+  // Full-screen payment-photo viewer: id + rotation ride along so the rotate
+  // button can persist (invoice_payments.photo_rotation, migration 190).
+  const [viewPhoto, setViewPhoto] = useState<{ id: string; url: string; rotation: number } | null>(null);
+  const rotateViewPhoto = async () => {
+    if (!viewPhoto) return;
+    const next = (viewPhoto.rotation + 90) % 360;
+    setViewPhoto({ ...viewPhoto, rotation: next });
+    setPayments((prev) => prev.map((p) => (p.id === viewPhoto.id ? { ...p, photoRotation: next } : p)));
+    await supabase.from('invoice_payments').update({ photo_rotation: next }).eq('id', viewPhoto.id);
+  };
 
   const loadPayments = async () => {
     const { data } = await supabase
       .from('invoice_payments')
-      .select('id, amount, method, paid_on, photo_path')
+      .select('id, amount, method, paid_on, photo_path, photo_rotation')
       .eq('invoice_id', id)
       .order('paid_on')
       .order('created_at');
-    const rows = (data ?? []) as { id: string; amount: number; method: string | null; paid_on: string; photo_path: string | null }[];
+    const rows = (data ?? []) as { id: string; amount: number; method: string | null; paid_on: string; photo_path: string | null; photo_rotation: number | null }[];
     // Sign each photo path for display (short-lived URLs).
     const signed = await Promise.all(
       rows.map(r => (r.photo_path ? signedUrl(supabase, r.photo_path).catch(() => null) : Promise.resolve(null))),
     );
-    setPayments(rows.map((r, i) => ({ id: r.id, amount: r.amount, method: r.method, paidOn: r.paid_on, photoPath: r.photo_path, photoUrl: signed[i] })));
+    setPayments(rows.map((r, i) => ({ id: r.id, amount: r.amount, method: r.method, paidOn: r.paid_on, photoPath: r.photo_path, photoUrl: signed[i], photoRotation: r.photo_rotation ?? 0 })));
   };
 
   const pickPaymentPhoto = async () => {
@@ -574,7 +583,12 @@ export default function FacturaDetailRoute() {
         const arrayBuffer = await new Response(blob).arrayBuffer();
         const { error: upErr } = await supabase.storage.from(INVOICE_PAYMENT_BUCKET).upload(path, arrayBuffer, { upsert: false, contentType: 'image/jpeg' });
         if (!upErr) photoPath = path;
-      } catch { /* keep going without the photo */ }
+        else Alert.alert('', `No se pudo subir la foto (el pago se guarda sin ella): ${upErr.message}`);
+      } catch {
+        // The payment still records — but say so, or a broken upload path can
+        // silently eat every check photo (exactly what happened pre-190).
+        Alert.alert('', 'No se pudo subir la foto (el pago se guarda sin ella).');
+      }
     }
     // Only touch photo_path when a photo was added or removed this session, so
     // payments still save where migration 174 isn't applied yet.
@@ -1055,7 +1069,7 @@ export default function FacturaDetailRoute() {
         onRecordPayment={canEdit ? openRecordPayment : undefined}
         onEditPayment={canEdit ? openEditPayment : undefined}
         onDeletePayment={canEdit ? deletePayment : undefined}
-        onViewPaymentPhoto={setViewPhotoUrl}
+        onViewPaymentPhoto={(p) => p.photoUrl && setViewPhoto({ id: p.id, url: p.photoUrl, rotation: p.photoRotation ?? 0 })}
         onUndoPaid={canEdit ? undoPaid : undefined}
         onClientPress={(clientId) => router.push(`/dashboard/clientes/${clientId}?from=invoice&invoice=${id}` as never)}
         jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
@@ -1337,9 +1351,31 @@ export default function FacturaDetailRoute() {
       </RNModal>
 
       {/* Payment photo viewer */}
-      <RNModal visible={!!viewPhotoUrl} transparent animationType="fade" onRequestClose={() => setViewPhotoUrl(null)}>
-        <Pressable onPress={() => setViewPhotoUrl(null)} className="flex-1 bg-black/90 items-center justify-center p-4">
-          {viewPhotoUrl ? <Image source={{ uri: viewPhotoUrl }} resizeMode="contain" style={{ width: '100%', height: '80%' }} /> : null}
+      <RNModal visible={!!viewPhoto} transparent animationType="fade" onRequestClose={() => setViewPhoto(null)}>
+        <Pressable onPress={() => setViewPhoto(null)} className="flex-1 bg-black/90 items-center justify-center p-4">
+          {viewPhoto ? (
+            <Image
+              source={{ uri: viewPhoto.url }}
+              resizeMode="contain"
+              style={{ width: '100%', height: '80%', transform: [{ rotate: `${viewPhoto.rotation}deg` }] }}
+            />
+          ) : null}
+          {/* Action bar — nested Pressables keep taps off the close backdrop. */}
+          <View className="absolute bottom-12 left-0 right-0 flex-row justify-center gap-4">
+            <Pressable
+              onPress={() => void rotateViewPhoto()}
+              className="flex-row items-center gap-2 bg-white/15 px-5 py-3 rounded-full active:bg-white/25"
+            >
+              <RotateCw size={18} color="#FFFFFF" />
+              <Text className="text-white text-sm font-semibold">90°</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setViewPhoto(null)}
+              className="flex-row items-center gap-2 bg-white/15 px-5 py-3 rounded-full active:bg-white/25"
+            >
+              <X size={18} color="#FFFFFF" />
+            </Pressable>
+          </View>
         </Pressable>
       </RNModal>
 

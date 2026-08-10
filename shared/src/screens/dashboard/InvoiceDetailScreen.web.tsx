@@ -104,6 +104,8 @@ export interface InvoicePaymentRow {
   photoPath?: string | null;
   /** Signed URL for the photo, resolved by the caller for display. */
   photoUrl?: string | null;
+  /** Display rotation in degrees (0/90/180/270), migration 190. */
+  photoRotation?: number;
 }
 
 export interface InvoiceDetailScreenProps {
@@ -160,7 +162,7 @@ export interface InvoiceDetailScreenProps {
   /** Edit a recorded payment (opens the record sheet pre-filled). */
   onEditPayment?: (payment: InvoicePaymentRow) => void;
   /** View a payment's photo full-size (thumbnail clicked in the ledger). */
-  onViewPaymentPhoto?: (url: string) => void;
+  onViewPaymentPhoto?: (payment: InvoicePaymentRow) => void;
   /** Delete a recorded payment (caller confirms + reverts status if needed). */
   onDeletePayment?: (payment: InvoicePaymentRow) => void;
   /** Revert a paid invoice to sent (caller confirms + clears payments). */
@@ -585,7 +587,9 @@ export function InvoiceDetailScreen({
                     <span className="flex items-center gap-2">
                       {p.photoUrl && onViewPaymentPhoto ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={p.photoUrl} alt="" onClick={() => onViewPaymentPhoto(p.photoUrl!)} className="w-6 h-6 rounded object-cover cursor-pointer border border-border" />
+                        <img src={p.photoUrl} alt="" onClick={() => onViewPaymentPhoto(p)}
+                          style={{ transform: `rotate(${p.photoRotation ?? 0}deg)` }}
+                          className="w-8 h-8 rounded object-cover cursor-pointer border border-border" />
                       ) : null}
                       <span className="text-sm text-emerald-700">−{fmt(p.amount)}</span>
                       {onEditPayment && canEdit ? (

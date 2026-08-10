@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
+import { RotateCw, X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useLang } from '@/i18n/LangProvider';
@@ -141,7 +142,16 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   // True once an existing photo is removed — otherwise we OMIT photo_path so
   // payments still record where migration 174 hasn't been applied yet.
   const [payPhotoRemoved, setPayPhotoRemoved] = useState(false);
-  const [viewPhotoUrl, setViewPhotoUrl] = useState<string | null>(null);
+  // Full-screen payment-photo viewer: id + rotation ride along so the rotate
+  // button can persist (invoice_payments.photo_rotation, migration 190).
+  const [viewPhoto, setViewPhoto] = useState<{ id: string; url: string; rotation: number } | null>(null);
+  const rotateViewPhoto = async () => {
+    if (!viewPhoto) return;
+    const next = (viewPhoto.rotation + 90) % 360;
+    setViewPhoto({ ...viewPhoto, rotation: next });
+    setPayments(prev => prev.map(p => (p.id === viewPhoto.id ? { ...p, photoRotation: next } : p)));
+    await supabase.from('invoice_payments').update({ photo_rotation: next }).eq('id', viewPhoto.id);
+  };
 
   // ── Jobs attached to this invoice (Phase 2 management) ──────────────
   const tj = full.dashboard.jobs;
@@ -438,15 +448,15 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const loadPayments = async () => {
     const { data } = await supabase
       .from('invoice_payments')
-      .select('id, amount, method, paid_on, photo_path')
+      .select('id, amount, method, paid_on, photo_path, photo_rotation')
       .eq('invoice_id', id)
       .order('paid_on')
       .order('created_at');
-    const rows = (data ?? []) as { id: string; amount: number; method: string | null; paid_on: string; photo_path: string | null }[];
+    const rows = (data ?? []) as { id: string; amount: number; method: string | null; paid_on: string; photo_path: string | null; photo_rotation: number | null }[];
     const signed = await Promise.all(
       rows.map(r => (r.photo_path ? signedUrl(supabase, r.photo_path).catch(() => null) : Promise.resolve(null))),
     );
-    setPayments(rows.map((r, i) => ({ id: r.id, amount: r.amount, method: r.method, paidOn: r.paid_on, photoPath: r.photo_path, photoUrl: signed[i] })));
+    setPayments(rows.map((r, i) => ({ id: r.id, amount: r.amount, method: r.method, paidOn: r.paid_on, photoPath: r.photo_path, photoUrl: signed[i], photoRotation: r.photo_rotation ?? 0 })));
   };
 
   const mapInvoice = (raw: RawInvoice, tpls: InvoiceFieldTemplate[]): InvoiceDetail => {
@@ -649,7 +659,12 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         const path = paymentPhotoPath(business.id, uid);
         const { error: upErr } = await supabase.storage.from(INVOICE_PAYMENT_BUCKET).upload(path, payPhotoFile, { upsert: false, contentType: payPhotoFile.type || 'image/jpeg' });
         if (!upErr) photoPath = path;
-      } catch { /* keep going without the photo */ }
+        else void alertMessage({ message: `No se pudo subir la foto (el pago se guarda sin ella): ${upErr.message}` });
+      } catch {
+        // The payment still records — but say so, or a broken upload path can
+        // silently eat every check photo (exactly what happened pre-190).
+        void alertMessage({ message: 'No se pudo subir la foto (el pago se guarda sin ella).' });
+      }
     }
     // Only touch photo_path when a photo was added or removed this session, so
     // payments still save where migration 174 isn't applied yet.
@@ -921,7 +936,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         onRecordPayment={canEdit ? openRecordPayment : undefined}
         onEditPayment={canEdit ? openEditPayment : undefined}
         onDeletePayment={canEdit ? setDelPayment : undefined}
-        onViewPaymentPhoto={setViewPhotoUrl}
+        onViewPaymentPhoto={(p) => p.photoUrl && setViewPhoto({ id: p.id, url: p.photoUrl, rotation: p.photoRotation ?? 0 })}
         onUndoPaid={canEdit ? () => setUndoPaidOpen(true) : undefined}
         onClientPress={(clientId) => router.push(`/dashboard/clientes/${clientId}?from=invoice&invoice=${id}`)}
         jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
@@ -1189,10 +1204,27 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       </Modal>
 
       {/* Payment photo viewer (lightbox) */}
-      {viewPhotoUrl ? (
-        <div onClick={() => setViewPhotoUrl(null)} className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 cursor-zoom-out">
+      {viewPhoto ? (
+        <div onClick={() => setViewPhoto(null)} className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 cursor-zoom-out">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={viewPhotoUrl} alt="" className="max-w-full max-h-full object-contain" />
+          <img src={viewPhoto.url} alt="" className="max-w-full max-h-full object-contain"
+            style={{ transform: `rotate(${viewPhoto.rotation}deg)` }} />
+          <div className="absolute bottom-10 left-0 right-0 flex justify-center gap-3">
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); void rotateViewPhoto(); }}
+              className="flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white px-5 py-2.5 rounded-full text-sm font-semibold"
+            >
+              <RotateCw size={16} /> 90°
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewPhoto(null)}
+              className="flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white px-4 py-2.5 rounded-full"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
       ) : null}
 

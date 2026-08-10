@@ -899,9 +899,15 @@ export function buildInvoiceViewModel(
   const fmtDate = (iso: string) => formatDateLong(iso, dateLoc);
 
   const businessLines = [
-    // Street address first, then city/state — standard mailing-address order.
+    // Street address first, then "City, ST ZIP" — standard mailing order
+    // (same format as the client Bill To below).
     branding.address ?? '',
-    [branding.city, branding.state].filter(Boolean).join(', '),
+    [
+      [branding.city, branding.state].map(s => (s ?? '').trim()).filter(Boolean).join(', '),
+      (branding.postalCode ?? '').trim(),
+    ]
+      .filter(Boolean)
+      .join(' '),
     branding.phone ?? '',
     branding.email ?? '',
     branding.website ?? '',
