@@ -468,6 +468,14 @@ export default function FacturaDetailRoute() {
   // Optional payment photo (e.g. a check picture). `payPhotoUri` = a newly
   // picked local image (pending upload); `payPhotoPath` = the stored path when
   // editing a payment that already has one. Viewer holds the tapped photo url.
+  // Best-effort Storage cleanup. SQL triggers can no longer delete storage
+  // objects (storage.protect_delete), so every point where a payment photo
+  // loses its last reference removes the file via the Storage API instead.
+  const removePaymentPhotos = (paths: Array<string | null | undefined>) => {
+    const clean = paths.filter((p): p is string => !!p);
+    if (clean.length) void supabase.storage.from(INVOICE_PAYMENT_BUCKET).remove(clean).then(() => {}, () => {});
+  };
+
   const [payPhotoUri, setPayPhotoUri] = useState<string | null>(null);
   const [payPhotoPath, setPayPhotoPath] = useState<string | null>(null);
   const [payPhotoExistingUrl, setPayPhotoExistingUrl] = useState<string | null>(null);
@@ -478,6 +486,7 @@ export default function FacturaDetailRoute() {
   // Full-screen payment-photo viewer: id + rotation ride along so the rotate
   // button can persist (invoice_payments.photo_rotation, migration 190).
   const [viewPhoto, setViewPhoto] = useState<{ id: string; url: string; rotation: number } | null>(null);
+  const [viewZoom, setViewZoom] = useState(false);
   const rotateViewPhoto = async () => {
     if (!viewPhoto) return;
     const next = (viewPhoto.rotation + 90) % 360;
@@ -594,10 +603,17 @@ export default function FacturaDetailRoute() {
     // payments still save where migration 174 isn't applied yet.
     const writePhoto = !!payPhotoUri || payPhotoRemoved;
     if (payEditId) {
+      // Previous photo from the ROW (the remove handler nulls payPhotoPath).
+      const prevPath = payments.find((pp) => pp.id === payEditId)?.photoPath ?? null;
       const { error } = await supabase.from('invoice_payments')
         .update({ amount, method, paid_on: payDate || new Date().toISOString().slice(0, 10), ...(writePhoto ? { photo_path: photoPath } : {}) })
         .eq('id', payEditId);
-      if (error) { setPayBusy(false); return; }
+      if (error) {
+        // Row write failed after a successful upload → don't strand the file.
+        if (photoPath && photoPath !== prevPath) removePaymentPhotos([photoPath]);
+        setPayBusy(false); return;
+      }
+      if (writePhoto && prevPath && prevPath !== photoPath) removePaymentPhotos([prevPath]);
       await syncInvoiceToPayments(payments.map(p => (p.id === payEditId ? { ...p, amount, method, paidOn: payDate } : p)));
       void logAudit(supabase, business.id, 'invoice.payment_edited', 'invoice', id, {
         invoice_number: invoice.invoiceNumber, amount, method,
@@ -647,6 +663,7 @@ export default function FacturaDetailRoute() {
       onConfirm: async () => {
         if (!business || !invoice) return;
         await supabase.from('invoice_payments').delete().eq('invoice_id', id);
+        removePaymentPhotos(payments.map((p) => p.photoPath));
         await supabase.from('invoices')
           .update({ status: 'sent', paid_at: null, payment_method: null })
           .eq('id', id);
@@ -667,6 +684,7 @@ export default function FacturaDetailRoute() {
       onConfirm: async () => {
         if (!business || !invoice) return;
         await supabase.from('invoice_payments').delete().eq('id', p.id);
+        removePaymentPhotos([p.photoPath]);
         const rest = payments.filter(x => x.id !== p.id);
         const paid = rest.reduce((sum, x) => sum + x.amount, 0);
         const methods = Array.from(new Set(rest.map(x => x.method).filter(Boolean))) as string[];
@@ -845,6 +863,8 @@ export default function FacturaDetailRoute() {
           Alert.alert('', tInv.errorDelete);
           return;
         }
+        // Payments cascade with the invoice — clear their photos too.
+        removePaymentPhotos(payments.map((p) => p.photoPath));
         router.replace('/dashboard/facturas' as never);
       })(),
     });
@@ -1069,7 +1089,7 @@ export default function FacturaDetailRoute() {
         onRecordPayment={canEdit ? openRecordPayment : undefined}
         onEditPayment={canEdit ? openEditPayment : undefined}
         onDeletePayment={canEdit ? deletePayment : undefined}
-        onViewPaymentPhoto={(p) => p.photoUrl && setViewPhoto({ id: p.id, url: p.photoUrl, rotation: p.photoRotation ?? 0 })}
+        onViewPaymentPhoto={(p) => { if (p.photoUrl) { setViewZoom(false); setViewPhoto({ id: p.id, url: p.photoUrl, rotation: p.photoRotation ?? 0 }); } }}
         onUndoPaid={canEdit ? undoPaid : undefined}
         onClientPress={(clientId) => router.push(`/dashboard/clientes/${clientId}?from=invoice&invoice=${id}` as never)}
         jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
@@ -1354,11 +1374,15 @@ export default function FacturaDetailRoute() {
       <RNModal visible={!!viewPhoto} transparent animationType="fade" onRequestClose={() => setViewPhoto(null)}>
         <Pressable onPress={() => setViewPhoto(null)} className="flex-1 bg-black/90 items-center justify-center p-4">
           {viewPhoto ? (
-            <Image
-              source={{ uri: viewPhoto.url }}
-              resizeMode="contain"
-              style={{ width: '100%', height: '80%', transform: [{ rotate: `${viewPhoto.rotation}deg` }] }}
-            />
+            // Tapping the PHOTO toggles zoom — only the backdrop/X close (a
+            // tap on a plain Image would fall through to the close backdrop).
+            <Pressable onPress={() => setViewZoom((z) => !z)} style={{ width: '100%', height: '80%' }}>
+              <Image
+                source={{ uri: viewPhoto.url }}
+                resizeMode="contain"
+                style={{ width: '100%', height: '100%', transform: [{ rotate: `${viewPhoto.rotation}deg` }, { scale: viewZoom ? 2.2 : 1 }] }}
+              />
+            </Pressable>
           ) : null}
           {/* Action bar — nested Pressables keep taps off the close backdrop. */}
           <View className="absolute bottom-12 left-0 right-0 flex-row justify-center gap-4">

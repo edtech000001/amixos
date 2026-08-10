@@ -136,6 +136,14 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   // Optional payment photo (e.g. a check picture). `payPhotoFile` = a newly
   // chosen file (pending upload); `payPhotoPath` = the stored path when editing;
   // `payPhotoExistingUrl` = the signed URL to preview it. Viewer = tapped photo.
+
+  // Best-effort Storage cleanup. SQL triggers can no longer delete storage
+  // objects (storage.protect_delete), so every point where a payment photo
+  // loses its last reference removes the file via the Storage API instead.
+  const removePaymentPhotos = (paths: Array<string | null | undefined>) => {
+    const clean = paths.filter((p): p is string => !!p);
+    if (clean.length) void supabase.storage.from(INVOICE_PAYMENT_BUCKET).remove(clean).then(() => {}, () => {});
+  };
   const [payPhotoFile, setPayPhotoFile] = useState<File | null>(null);
   const [payPhotoPath, setPayPhotoPath] = useState<string | null>(null);
   const [payPhotoExistingUrl, setPayPhotoExistingUrl] = useState<string | null>(null);
@@ -145,6 +153,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   // Full-screen payment-photo viewer: id + rotation ride along so the rotate
   // button can persist (invoice_payments.photo_rotation, migration 190).
   const [viewPhoto, setViewPhoto] = useState<{ id: string; url: string; rotation: number } | null>(null);
+  const [viewZoom, setViewZoom] = useState(false);
   const rotateViewPhoto = async () => {
     if (!viewPhoto) return;
     const next = (viewPhoto.rotation + 90) % 360;
@@ -670,10 +679,17 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     // payments still save where migration 174 isn't applied yet.
     const writePhoto = !!payPhotoFile || payPhotoRemoved;
     if (payEditId) {
+      // Previous photo from the ROW (the remove handler nulls payPhotoPath).
+      const prevPath = payments.find(pp => pp.id === payEditId)?.photoPath ?? null;
       const { error } = await supabase.from('invoice_payments')
         .update({ amount, method, paid_on: payDate || new Date().toISOString().slice(0, 10), ...(writePhoto ? { photo_path: photoPath } : {}) })
         .eq('id', payEditId);
-      if (error) { setPayBusy(false); return; }
+      if (error) {
+        // Row write failed after a successful upload → don't strand the file.
+        if (photoPath && photoPath !== prevPath) removePaymentPhotos([photoPath]);
+        setPayBusy(false); return;
+      }
+      if (writePhoto && prevPath && prevPath !== photoPath) removePaymentPhotos([prevPath]);
       await syncInvoiceToPayments(payments.map(p => p.id === payEditId ? { ...p, amount, method, paidOn: payDate } : p));
       void logAudit(supabase, business.id, 'invoice.payment_edited', 'invoice', id, {
         invoice_number: invoice.invoiceNumber, amount, method,
@@ -716,6 +732,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     if (!business || !invoice || !delPayment) return;
     setPayBusy(true);
     await supabase.from('invoice_payments').delete().eq('id', delPayment.id);
+    removePaymentPhotos([delPayment.photoPath]);
     const rest = payments.filter(p => p.id !== delPayment.id);
     const paid = rest.reduce((sum, p) => sum + p.amount, 0);
     const methods = Array.from(new Set(rest.map(p => p.method).filter(Boolean))) as string[];
@@ -742,6 +759,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     if (!business || !invoice) return;
     setPayBusy(true);
     await supabase.from('invoice_payments').delete().eq('invoice_id', id);
+    removePaymentPhotos(payments.map(p => p.photoPath));
     await supabase.from('invoices')
       .update({ status: 'sent', paid_at: null, payment_method: null })
       .eq('id', id);
@@ -774,6 +792,8 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       setDeleting(false);
       return;
     }
+    // Payments cascade with the invoice — clear their photos too.
+    removePaymentPhotos(payments.map(p => p.photoPath));
     router.push('/dashboard/facturas');
   };
 
@@ -936,7 +956,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         onRecordPayment={canEdit ? openRecordPayment : undefined}
         onEditPayment={canEdit ? openEditPayment : undefined}
         onDeletePayment={canEdit ? setDelPayment : undefined}
-        onViewPaymentPhoto={(p) => p.photoUrl && setViewPhoto({ id: p.id, url: p.photoUrl, rotation: p.photoRotation ?? 0 })}
+        onViewPaymentPhoto={(p) => { if (p.photoUrl) { setViewZoom(false); setViewPhoto({ id: p.id, url: p.photoUrl, rotation: p.photoRotation ?? 0 }); } }}
         onUndoPaid={canEdit ? () => setUndoPaidOpen(true) : undefined}
         onClientPress={(clientId) => router.push(`/dashboard/clientes/${clientId}?from=invoice&invoice=${id}`)}
         jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
@@ -1206,9 +1226,12 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       {/* Payment photo viewer (lightbox) */}
       {viewPhoto ? (
         <div onClick={() => setViewPhoto(null)} className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 cursor-zoom-out">
+          {/* Clicking the PHOTO toggles zoom — only the backdrop/X close. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={viewPhoto.url} alt="" className="max-w-full max-h-full object-contain"
-            style={{ transform: `rotate(${viewPhoto.rotation}deg)` }} />
+          <img src={viewPhoto.url} alt=""
+            onClick={e => { e.stopPropagation(); setViewZoom(z => !z); }}
+            className={`max-w-full max-h-full object-contain transition-transform ${viewZoom ? 'cursor-zoom-out' : 'cursor-zoom-in'}`}
+            style={{ transform: `rotate(${viewPhoto.rotation}deg) scale(${viewZoom ? 2.2 : 1})` }} />
           <div className="absolute bottom-10 left-0 right-0 flex justify-center gap-3">
             <button
               type="button"
