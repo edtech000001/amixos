@@ -153,7 +153,7 @@ export default function FacturaDetailRoute() {
     equipment: tj.new.itemTypeEquipment,
     other: tj.new.itemTypeOther,
   };
-  const [attachedJobs, setAttachedJobs] = useState<{ id: string; title: string }[]>([]);
+  const [attachedJobs, setAttachedJobs] = useState<{ id: string; title: string; job_state?: string | null }[]>([]);
   const [invClientId, setInvClientId] = useState<string | null>(null);
   const [priceItems, setPriceItems] = useState<PriceSheetItem[]>([]);
   const [clientTierId, setClientTierId] = useState<string | null>(null);
@@ -171,6 +171,8 @@ export default function FacturaDetailRoute() {
   const [manualDesc, setManualDesc] = useState('');
   const [manualQty, setManualQty] = useState('1');
   const [manualRate, setManualRate] = useState('');
+  // Optional "date performed" for manual lines (YYYY-MM-DD).
+  const [manualDate, setManualDate] = useState('');
 
   // Amount input filter: digits + decimals + one optional leading minus, so a
   // manual line can be a deduction (e.g. "-500" to reduce the total).
@@ -184,6 +186,7 @@ export default function FacturaDetailRoute() {
   const [editDesc, setEditDesc] = useState('');
   const [editQty, setEditQty] = useState('1');
   const [editRate, setEditRate] = useState('');
+  const [editDate, setEditDate] = useState('');
 
   const editManual = (index: number) => {
     const li = invoice?.lineItems[index];
@@ -192,6 +195,7 @@ export default function FacturaDetailRoute() {
     setEditDesc(li.description ?? '');
     setEditQty(String(li.qty ?? 1));
     setEditRate(li.rate != null ? String(li.rate) : '');
+    setEditDate(li.service_date ?? '');
     setEditOpen(true);
   };
 
@@ -206,6 +210,7 @@ export default function FacturaDetailRoute() {
       description: desc,
       qty: parseFloat(editQty) || 1,
       rate: parseFloat(editRate) || 0,
+      serviceDate: editDate || null,
     });
     setEditOpen(false);
     setEditIndex(null);
@@ -228,7 +233,7 @@ export default function FacturaDetailRoute() {
   };
 
   const loadJobs = useCallback(async () => {
-    const { data } = await supabase.from('jobs').select('id, title').eq('invoice_id', id).order('created_at');
+    const { data } = await supabase.from('jobs').select('id, title, job_state').eq('invoice_id', id).order('created_at');
     setAttachedJobs((data ?? []) as { id: string; title: string }[]);
   }, [id, supabase]);
 
@@ -437,7 +442,7 @@ export default function FacturaDetailRoute() {
     setAddOpen(true);
   };
 
-  const closeAdd = () => { setAddOpen(false); setLinkIndex(null); };
+  const closeAdd = () => { setAddOpen(false); setLinkIndex(null); setManualDate(''); };
 
   useEffect(() => {
     if (!addOpen) return;
@@ -465,7 +470,7 @@ export default function FacturaDetailRoute() {
     setJobBusy(true);
     // Manual line first, so the subsequent job fetch already includes it.
     if (hasManual) {
-      await addManualLineItem(supabase, { invoiceId: id, description: desc, qty: parseFloat(manualQty) || 1, rate });
+      await addManualLineItem(supabase, { invoiceId: id, description: desc, qty: parseFloat(manualQty) || 1, rate, serviceDate: manualDate || null });
     }
     if (addPicked.size > 0) {
       const inv = await fetchInvoiceRow();
@@ -1126,6 +1131,7 @@ export default function FacturaDetailRoute() {
         onUndoPaid={canEdit ? undoPaid : undefined}
         onClientPress={(clientId) => router.push(`/dashboard/clientes/${clientId}?from=invoice&invoice=${id}` as never)}
         jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
+        jobStates={Object.fromEntries(attachedJobs.filter(j => j.job_state).map(j => [j.id, j.job_state as string]))}
       />
 
       <JobPreviewSheet
@@ -1208,6 +1214,9 @@ export default function FacturaDetailRoute() {
                   className="bg-card border border-border rounded-xl pl-6 pr-3 py-2.5 text-sm text-ink"
                 />
               </View>
+            </View>
+            <View className="mb-4">
+              <DatePicker label={jobsT.serviceDateLabel} value={manualDate} onChange={setManualDate} />
             </View>
             </>) : null}
 
@@ -1308,6 +1317,9 @@ export default function FacturaDetailRoute() {
                   className="bg-card border border-border rounded-xl pl-6 pr-3 py-2.5 text-sm text-ink"
                 />
               </View>
+            </View>
+            <View className="mb-4">
+              <DatePicker label={jobsT.serviceDateLabel} value={editDate} onChange={setEditDate} />
             </View>
             <Pressable onPress={doEditSave} disabled={jobBusy || !editDesc.trim()} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
               <Text className="text-sm font-semibold text-white">{tc.buttons.save}</Text>

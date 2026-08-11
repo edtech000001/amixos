@@ -50,6 +50,9 @@ export interface InvoiceLineItem {
   /** Hand-edited on the invoice: the draft rebuild keeps this job's lines
    *  as-is instead of re-deriving them from job_items. */
   edited?: boolean;
+  /** Date the work was performed (manual lines — linked jobs carry their own
+   *  dates). Shown inline + appended to the printed description. */
+  service_date?: string | null;
   /** This line is a flat add-on/surcharge (e.g. a $600 loading fee) that
    *  autoprice split off its base job line. It carries the base line's job_id
    *  so it moves/removes with the job, but the UI shows its own description
@@ -155,6 +158,8 @@ export async function createInvoiceFromJobs(
     notesLabel: string;
     /** Business's configured starting invoice number (businesses.invoice_start_number). */
     startNumber?: number;
+    /** Ajustes → Facturas default due window (business.invoice_due_days). */
+    dueDays?: number | null;
     /** Drop the item-type prefix on lines (businesses.job_item_types_enabled = false). */
     hideItemTypes?: boolean;
     /** Tax percentage for the new invoice (businesses.invoice_tax_rate). */
@@ -208,7 +213,7 @@ export async function createInvoiceFromJobs(
       status: 'draft',
       language: lang,
       issue_date: today(),
-      due_date: plusDays(30),
+      due_date: plusDays(opts.dueDays ?? 30),
       line_items: lineItems,
       subtotal_amount: subtotal,
       tax_rate: taxRate,
@@ -250,6 +255,8 @@ export async function createInvoicesFromJobs(
     itemTypeLabels: Record<string, string>;
     notesLabel: string;
     startNumber?: number;
+    /** Ajustes → Facturas default due window (business.invoice_due_days). */
+    dueDays?: number | null;
     hideItemTypes?: boolean;
     taxRate?: number;
     /** Job custom-field key to use as the qty for no-items lines (invoice_qty_field). */
@@ -312,7 +319,7 @@ export async function createInvoicesFromJobs(
         status: 'draft',
         language: lang,
         issue_date: today(),
-        due_date: plusDays(30),
+        due_date: plusDays(opts.dueDays ?? 30),
         line_items: lineItems,
         subtotal_amount: subtotal,
         tax_rate: taxRate,
@@ -426,7 +433,7 @@ export async function rebuildInvoiceLineItems(
  *  job-driven rebuild. */
 export async function addManualLineItem(
   supabase: Supa,
-  opts: { invoiceId: string; description: string; qty: number; rate: number },
+  opts: { invoiceId: string; description: string; qty: number; rate: number; serviceDate?: string | null },
 ): Promise<{ ok: boolean }> {
   const { data: inv } = await supabase
     .from('invoices')
@@ -436,7 +443,7 @@ export async function addManualLineItem(
   if (!inv) return { ok: false };
   const next: InvoiceLineItem[] = [
     ...((inv.line_items ?? []) as InvoiceLineItem[]),
-    { description: opts.description, qty: opts.qty, rate: opts.rate },
+    { description: opts.description, qty: opts.qty, rate: opts.rate, ...(opts.serviceDate ? { service_date: opts.serviceDate } : {}) },
   ];
   const { subtotal, tax, total } = computeTotals(next, inv.tax_rate ?? 0, inv.discount ?? 0);
   await supabase
@@ -451,7 +458,7 @@ export async function addManualLineItem(
  *  though this is only used for manual lines. */
 export async function updateLineItemAt(
   supabase: Supa,
-  opts: { invoiceId: string; index: number; description: string; qty: number; rate: number },
+  opts: { invoiceId: string; index: number; description: string; qty: number; rate: number; serviceDate?: string | null },
 ): Promise<void> {
   const { data: inv } = await supabase
     .from('invoices')
@@ -465,7 +472,7 @@ export async function updateLineItemAt(
     i === opts.index
       // A hand-set rate no longer matches the auto-priced add-on breakdown, so
       // drop the stale "+add-on" note.
-      ? { ...li, description: opts.description, qty: opts.qty, rate: opts.rate, addonNote: null, ...(li.job_id ? { edited: true } : {}) }
+      ? { ...li, description: opts.description, qty: opts.qty, rate: opts.rate, addonNote: null, ...(opts.serviceDate !== undefined ? { service_date: opts.serviceDate } : {}), ...(li.job_id ? { edited: true } : {}) }
       : li,
   );
   const { subtotal, tax, total } = computeTotals(next, inv.tax_rate ?? 0, inv.discount ?? 0);

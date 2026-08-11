@@ -29,6 +29,7 @@ export const EDITABLE_CAPS: CapabilityKey[] = [
   'createEstimates',
   'clockInOut',
   'scheduleJobs',
+  'completedByDefault',
   'switchLocations',
 ];
 

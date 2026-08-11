@@ -172,7 +172,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     equipment: tj.new.itemTypeEquipment,
     other: tj.new.itemTypeOther,
   };
-  const [attachedJobs, setAttachedJobs] = useState<{ id: string; title: string; status: string }[]>([]);
+  const [attachedJobs, setAttachedJobs] = useState<{ id: string; title: string; status: string; job_state?: string | null }[]>([]);
   const [invClientId, setInvClientId] = useState<string | null>(null);
   // Autoprice: active price-sheet items + the invoice client's tier.
   const [priceItems, setPriceItems] = useState<PriceSheetItem[]>([]);
@@ -195,6 +195,8 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const [manualDesc, setManualDesc] = useState('');
   const [manualQty, setManualQty] = useState('1');
   const [manualRate, setManualRate] = useState('');
+  // Optional "date performed" for manual lines (YYYY-MM-DD).
+  const [manualDate, setManualDate] = useState('');
 
   // Amount input filter: digits + decimals + one optional leading minus, so a
   // manual line can be a deduction (e.g. "-500" to reduce the total).
@@ -205,6 +207,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const [editDesc, setEditDesc] = useState('');
   const [editQty, setEditQty] = useState('1');
   const [editRate, setEditRate] = useState('');
+  const [editDate, setEditDate] = useState('');
 
   const removeManual = async (index: number) => {
     if (!(await confirm({ message: tInv.jobsSection.removeItemConfirm, destructive: true }))) return;
@@ -221,6 +224,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     setEditDesc(li.description ?? '');
     setEditQty(String(li.qty ?? 1));
     setEditRate(li.rate != null ? String(li.rate) : '');
+    setEditDate(li.service_date ?? '');
   };
 
   const doEditSave = async () => {
@@ -234,6 +238,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       description: desc,
       qty: parseFloat(editQty) || 1,
       rate: parseFloat(editRate) || 0,
+      serviceDate: editDate || null,
     });
     setEditIndex(null);
     await reloadInvoice();
@@ -243,10 +248,10 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const loadJobs = useCallback(async () => {
     const { data } = await supabase
       .from('jobs')
-      .select('id, title, status')
+      .select('id, title, status, job_state')
       .eq('invoice_id', id)
       .order('created_at');
-    setAttachedJobs((data ?? []) as { id: string; title: string; status: string }[]);
+    setAttachedJobs((data ?? []) as { id: string; title: string; status: string; job_state?: string | null }[]);
   }, [id, supabase]);
 
   // Re-fetch the invoice row (after a job add/remove/move changes totals).
@@ -438,7 +443,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     setAddOpen(true);
   };
 
-  const closeAdd = () => { setAddOpen(false); setLinkIndex(null); };
+  const closeAdd = () => { setAddOpen(false); setLinkIndex(null); setManualDate(''); };
 
   // Re-query as the search term changes (debounced) while the picker is open.
   useEffect(() => {
@@ -467,7 +472,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     setJobBusy(true);
     // Manual line first, so the subsequent job fetch already includes it.
     if (hasManual) {
-      await addManualLineItem(supabase, { invoiceId: id, description: desc, qty: parseFloat(manualQty) || 1, rate });
+      await addManualLineItem(supabase, { invoiceId: id, description: desc, qty: parseFloat(manualQty) || 1, rate, serviceDate: manualDate || null });
     }
     if (addPicked.size > 0) {
       const inv = await fetchInvoiceRow();
@@ -994,6 +999,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         onUndoPaid={canEdit ? () => setUndoPaidOpen(true) : undefined}
         onClientPress={(clientId) => router.push(`/dashboard/clientes/${clientId}?from=invoice&invoice=${id}`)}
         jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
+        jobStates={Object.fromEntries(attachedJobs.filter(j => j.job_state).map(j => [j.id, j.job_state as string]))}
       />
 
       <JobPreviewSheet
@@ -1084,6 +1090,13 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                     className="w-full rounded-xl border border-border bg-card pl-6 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
                   />
                 </div>
+                <input
+                  type="date"
+                  value={manualDate}
+                  onChange={e => setManualDate(e.target.value)}
+                  title={tInv.jobsSection.serviceDateLabel}
+                  className="rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                />
               </div>
             </div>
           </div>
@@ -1166,6 +1179,13 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                 className="w-full rounded-xl border border-border bg-card pl-6 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
               />
             </div>
+            <input
+              type="date"
+              value={editDate}
+              onChange={e => setEditDate(e.target.value)}
+              title={tInv.jobsSection.serviceDateLabel}
+              className="rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+            />
           </div>
           <Button onClick={doEditSave} loading={jobBusy} disabled={!editDesc.trim()} fullWidth>{tc.buttons.save}</Button>
         </div>

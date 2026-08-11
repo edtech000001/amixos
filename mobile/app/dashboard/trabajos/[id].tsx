@@ -896,7 +896,7 @@ export default function JobDetailRoute() {
         status: 'draft',
         language: invoiceLang,
         issue_date: new Date().toISOString().split('T')[0],
-        due_date: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+        due_date: new Date(Date.now() + (business.invoice_due_days ?? 30) * 86400000).toISOString().split('T')[0],
         line_items: lineItems,
         subtotal_amount: subtotal,
         tax_rate: taxRate,

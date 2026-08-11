@@ -452,6 +452,7 @@ export default function TrabajosTab() {
             jobIds,
             invoiceTemplate: business.invoice_template,
             startNumber: business.invoice_start_number,
+            dueDays: business.invoice_due_days,
             hideItemTypes: business.job_item_types_enabled === false,
             taxRate: business.invoice_tax_rate ?? 0,
             qtyField: business.invoice_qty_field,

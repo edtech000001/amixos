@@ -58,6 +58,8 @@ export interface InvoiceDetailLineItem {
   addon?: boolean;
   /** Per-unit add-ons folded into this line's rate, as a small indicator. */
   addonNote?: string | null;
+  /** Date the work was performed (manual lines). */
+  service_date?: string | null;
 }
 
 export interface InvoiceDetail {
@@ -175,6 +177,9 @@ export interface InvoiceDetailScreenProps {
    *  stored line description (imports can glue description+name together);
    *  the printed document still uses the stored description. */
   jobTitles?: Record<string, string>;
+  /** jobId → US state (jobs.job_state) — shown inline on job-backed lines so
+   *  multi-state invoices read at a glance. */
+  jobStates?: Record<string, string>;
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
@@ -231,6 +236,7 @@ export function InvoiceDetailScreen({
   onUndoPaid,
   onClientPress,
   jobTitles,
+  jobStates,
 }: InvoiceDetailScreenProps) {
   const { t: ui, locale } = useLang();
   const tInv = ui.dashboard.invoices;
@@ -488,11 +494,15 @@ export function InvoiceDetailScreen({
                     {jid && onJobPress && !isAddon ? (
                       <button onClick={() => onJobPress(jid)} className="block text-sm font-medium text-primary hover:underline truncate text-left max-w-full">
                         {title}
+                        {jobStates?.[jid] ? <span className="ml-2 text-xs font-normal text-faint">{jobStates[jid]}</span> : null}
                       </button>
                     ) : (
                       <p className={isAddon ? 'text-sm text-muted truncate' : 'text-sm text-ink truncate'}>{isAddon ? `+ ${title}` : title}</p>
                     )}
-                    <p className="text-xs text-faint mt-0.5">{q} × {fmt(r)}</p>
+                    <p className="text-xs text-faint mt-0.5">
+                      {q} × {fmt(r)}
+                      {li.service_date ? ` · ${formatDate(li.service_date)}` : ''}
+                    </p>
                     {li.addonNote ? <p className="text-[11px] text-faint mt-0.5">{li.addonNote}</p> : null}
                   </div>
                   <div className="flex items-center gap-3 shrink-0">

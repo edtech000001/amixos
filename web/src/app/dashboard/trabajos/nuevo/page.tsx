@@ -258,9 +258,16 @@ function NuevoTrabajoContent() {
   // Crew visibility (migration 044). New jobs default to "Privado" — the
   // owner-side scheduler — and flip on when they're ready for the crew.
   const [publishedToCrew, setPublishedToCrew] = useState(false);
-  // New jobs default to "completed" for EVERY role — most entries log finished
-  // work. Anyone with the schedule permission can flip it in the picker.
-  const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress' | 'completed'>('completed');
+  const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress' | 'completed'>('scheduled');
+  // New jobs default to "completed" only for roles with the role-editor toggle
+  // ("Mark jobs as completed by default") and for field creators (their flow
+  // records finished work). Everyone else starts at "scheduled". Default only —
+  // the status stays changeable where the role may.
+  const defaultsCompleted = restrictedCreator || can.completedByDefault(currentRole);
+  useEffect(() => {
+    if (sourceId || !defaultsCompleted) return;
+    setStatus('completed');
+  }, [sourceId, defaultsCompleted]);
   // The job's status when the edit form loaded — used to detect a real status
   // change on save (so we stamp the pipeline timestamp only when it actually moves).
   const [loadedStatus, setLoadedStatus] = useState<string | null>(null);

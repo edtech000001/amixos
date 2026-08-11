@@ -45,7 +45,7 @@ function CheckBox({ checked, disabled, onPress }: { checked: boolean; disabled?:
     <Pressable
       onPress={disabled ? undefined : onPress}
       className={`w-6 h-6 rounded-md border items-center justify-center ${
-        checked ? 'bg-primary border-primary' : 'bg-card border-border'
+        checked ? 'bg-primary border-primary' : 'bg-surface border-2 border-muted/40'
       } ${disabled ? 'opacity-50' : ''}`}
     >
       {checked ? <Check size={15} color="#FFFFFF" /> : null}

@@ -780,6 +780,9 @@ export interface InvoiceDocLineItem {
   description: string;
   qty: number;
   rate: number;
+  /** Date the work was performed (manual lines) — appended to the printed
+   *  description as "· <date>". Snake case: raw line_items jsonb flows here. */
+  service_date?: string | null;
 }
 export interface InvoiceDocData {
   invoiceNumber: string;
@@ -938,7 +941,7 @@ export function buildInvoiceViewModel(
     const qty = Number(l.qty) || 0;
     const rate = Number(l.rate) || 0;
     return {
-      description: l.description,
+      description: l.service_date ? `${l.description} · ${fmtDate(l.service_date)}` : l.description,
       qty: String(qty),
       rate: fmtMoney(rate),
       total: fmtMoney(qty * rate),

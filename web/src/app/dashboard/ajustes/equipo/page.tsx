@@ -160,7 +160,7 @@ export default function RolesSettingsPage() {
         disabled={!editable}
         onClick={() => onChange(!checked)}
         className={`w-6 h-6 rounded-md border flex items-center justify-center transition-colors ${
-          checked ? 'bg-primary border-primary' : 'bg-card border-border'
+          checked ? 'bg-primary border-primary' : 'bg-surface border-2 border-muted/40'
         } ${editable ? 'hover:border-primary' : 'opacity-60 cursor-not-allowed'}`}
       >
         {checked ? <Check size={15} className="text-white" /> : null}

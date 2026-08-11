@@ -55,6 +55,8 @@ export interface InvoiceDetailLineItem {
   addon?: boolean;
   /** Per-unit add-ons folded into this line's rate, as a small indicator. */
   addonNote?: string | null;
+  /** Date the work was performed (manual lines). */
+  service_date?: string | null;
 }
 
 export interface InvoiceDetail {
@@ -175,6 +177,9 @@ export interface InvoiceDetailScreenProps {
    *  stored line description (imports can glue description+name together);
    *  the printed document still uses the stored description. */
   jobTitles?: Record<string, string>;
+  /** jobId → US state (jobs.job_state) — shown inline on job-backed lines so
+   *  multi-state invoices read at a glance. */
+  jobStates?: Record<string, string>;
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
@@ -232,6 +237,7 @@ export function InvoiceDetailScreen({
   onUndoPaid,
   onClientPress,
   jobTitles,
+  jobStates,
 }: InvoiceDetailScreenProps) {
   const { t: ui, locale } = useLang();
   const c = useThemeColors();
@@ -473,12 +479,18 @@ export function InvoiceDetailScreen({
                   <View className="flex-1 pr-3">
                     {jid && onJobPress && !isAddon ? (
                       <Pressable onPress={() => onJobPress(jid)} hitSlop={4}>
-                        <Text className="text-sm font-medium text-primary">{title}</Text>
+                        <Text className="text-sm font-medium text-primary">
+                          {title}
+                          {jobStates?.[jid] ? <Text className="text-xs font-normal text-faint">  {jobStates[jid]}</Text> : null}
+                        </Text>
                       </Pressable>
                     ) : (
                       <Text className={isAddon ? 'text-sm text-muted' : 'text-sm text-ink'}>{isAddon ? `+ ${title}` : title}</Text>
                     )}
-                    <Text className="text-xs text-faint mt-0.5">{q} × {fmt(r)}</Text>
+                    <Text className="text-xs text-faint mt-0.5">
+                      {q} × {fmt(r)}
+                      {li.service_date ? ` · ${formatDate(li.service_date)}` : ''}
+                    </Text>
                     {li.addonNote ? <Text className="text-[11px] text-faint mt-0.5">{li.addonNote}</Text> : null}
                   </View>
                   <Text className="text-sm font-semibold text-ink">{fmt(q * r)}</Text>

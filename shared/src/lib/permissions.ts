@@ -101,9 +101,12 @@ export type CapabilityKey =
   | 'clockInOut'            // show the clock in/out card on the field home
   | 'scheduleJobs'          // field crew may schedule/change job status (vs
                             // completed-only: record finished work, no scheduling)
-  | 'switchLocations';      // multi-location: may switch/view other branches
+  | 'switchLocations'       // multi-location: may switch/view other branches
                             // (false = locked to their own home branch across
                             // the whole app; enforced in UI + RLS)
+  | 'completedByDefault';   // NEW jobs this role creates start as "completed"
+                            // instead of "scheduled" (crews that log finished
+                            // work). Default only — status stays editable.
 
 export interface RolePermissions {
   resources: Record<ResourceKey, ResourcePerm>;
@@ -119,7 +122,7 @@ const caps = (overrides: Partial<Record<CapabilityKey, boolean>>): Record<Capabi
   viewAuditLog: false, viewAllTimesheets: false, writeOwnTimesheet: false, delegateJob: false,
   logCompletedJob: false, assignWorkers: false, manageFiles: false, manageIntegrations: false,
   manageAssignmentFields: false, createEstimates: false, clockInOut: false,
-  scheduleJobs: false, switchLocations: false,
+  scheduleJobs: false, switchLocations: false, completedByDefault: false,
   ...overrides,
 });
 
@@ -362,6 +365,8 @@ export const can = {
   // crew only if granted the scheduleJobs cap — otherwise they may only RECORD
   // completed work (jobs they create are forced to "completed").
   scheduleJobs:     (role: Role | null) => res(role, 'jobs')?.view === 'all' || cap(role, 'scheduleJobs'),
+  // Role-editor toggle: NEW jobs default to "completed" for this role.
+  completedByDefault: (role: Role | null) => cap(role, 'completedByDefault'),
   // Estimates/proposals: requires job-create AND the createEstimates capability
   // (a per-role toggle so a business can let a role make work orders but not
   // estimates — e.g. field crew by default).

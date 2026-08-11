@@ -93,7 +93,7 @@ export type DashboardDict = {
     scopeAssigned: string;
     scopeAll: string;
     resourceNames: { jobs: string; clients: string; invoices: string; employees: string; calendar: string; inventory: string; equipment: string; reports: string };
-    capNames: { manageSettings: string; manageMembers: string; viewAuditLog: string; viewAllTimesheets: string; assignWorkers: string; createEstimates: string; clockInOut: string; scheduleJobs: string; switchLocations: string };
+    capNames: { manageSettings: string; manageMembers: string; viewAuditLog: string; viewAllTimesheets: string; assignWorkers: string; createEstimates: string; clockInOut: string; scheduleJobs: string; completedByDefault: string; switchLocations: string };
     newRole: string;
     newRoleTitle: string;
     roleNameLabel: string;
@@ -301,6 +301,7 @@ export type DashboardDict = {
       removeBtn: string;
       moveBtn: string;
       clearPricesBtn: string;
+      serviceDateLabel: string;
       clearPricesConfirm: string;
       linkBtn: string;
       linkTitle: string;
@@ -2765,7 +2766,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       scopeAssigned: 'Asignados',
       scopeAll: 'Todos',
       resourceNames: { jobs: 'Trabajos', clients: 'Clientes', invoices: 'Facturas', employees: 'Empleados', calendar: 'Calendario', inventory: 'Inventario', equipment: 'Equipos', reports: 'Reportes' },
-      capNames: { manageSettings: 'Ajustes del negocio', manageMembers: 'Gestionar equipo y roles', viewAuditLog: 'Ver actividad', viewAllTimesheets: 'Ver todas las horas', assignWorkers: 'Asignar trabajadores a cualquier trabajo', createEstimates: 'Permitir estimados', clockInOut: 'Marcar entrada/salida', scheduleJobs: 'Programar trabajos (no solo completados)', switchLocations: 'Cambiar entre sucursales (si no, se limita a la suya)' },
+      capNames: { manageSettings: 'Ajustes del negocio', manageMembers: 'Gestionar equipo y roles', viewAuditLog: 'Ver actividad', viewAllTimesheets: 'Ver todas las horas', assignWorkers: 'Asignar trabajadores a cualquier trabajo', createEstimates: 'Permitir estimados', clockInOut: 'Marcar entrada/salida', scheduleJobs: 'Programar trabajos (no solo completados)', completedByDefault: 'Marcar trabajos como completados por defecto', switchLocations: 'Cambiar entre sucursales (si no, se limita a la suya)' },
       newRole: 'Nuevo rol',
       newRoleTitle: 'Crear rol personalizado',
       roleNameLabel: 'Nombre del rol',
@@ -2965,6 +2966,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         removeBtn: 'Quitar',
         moveBtn: 'Mover',
         clearPricesBtn: 'Borrar precios',
+        serviceDateLabel: 'Fecha del trabajo (opcional)',
         clearPricesConfirm: '¿Borrar todos los precios de esta factura? Las líneas vuelven a $0 para que puedas volver a usar Autoprecio.',
         linkBtn: 'Vincular',
         linkTitle: 'Vincular a un trabajo',
@@ -5416,7 +5418,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       scopeAssigned: 'Assigned',
       scopeAll: 'All',
       resourceNames: { jobs: 'Jobs', clients: 'Clients', invoices: 'Invoices', employees: 'Employees', calendar: 'Calendar', inventory: 'Inventory', equipment: 'Equipment', reports: 'Reports' },
-      capNames: { manageSettings: 'Business settings', manageMembers: 'Manage team & roles', viewAuditLog: 'View activity', viewAllTimesheets: 'View all hours', assignWorkers: 'Assign workers to any job', createEstimates: 'Allow estimates', clockInOut: 'Clock in/out', scheduleJobs: 'Schedule jobs (not just completed)', switchLocations: 'Switch between branches (else limited to their own)' },
+      capNames: { manageSettings: 'Business settings', manageMembers: 'Manage team & roles', viewAuditLog: 'View activity', viewAllTimesheets: 'View all hours', assignWorkers: 'Assign workers to any job', createEstimates: 'Allow estimates', clockInOut: 'Clock in/out', scheduleJobs: 'Schedule jobs (not just completed)', completedByDefault: 'Mark jobs as completed by default', switchLocations: 'Switch between branches (else limited to their own)' },
       newRole: 'New role',
       newRoleTitle: 'Create custom role',
       roleNameLabel: 'Role name',
@@ -5616,6 +5618,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         removeBtn: 'Remove',
         moveBtn: 'Move',
         clearPricesBtn: 'Clear prices',
+        serviceDateLabel: 'Date performed (optional)',
         clearPricesConfirm: 'Clear all prices on this invoice? Lines reset to $0 so you can re-run Autoprice.',
         linkBtn: 'Link',
         linkTitle: 'Link to a job',
