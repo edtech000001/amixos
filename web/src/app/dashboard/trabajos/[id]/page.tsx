@@ -26,7 +26,7 @@ import { parseJobLayout, fieldsInSection, type JobLayoutSection } from '@amixos/
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { memberNameMap } from '@amixos/shared/lib/memberNames';
-import { removeJobFromInvoice, placeholderQtyFor } from '@amixos/shared/lib/invoicing';
+import { insertInvoiceUnique, removeJobFromInvoice, placeholderQtyFor } from '@amixos/shared/lib/invoicing';
 import { can } from '@amixos/shared/lib/permissions';
 import { rowToPriceSheetItem, autopriceLine, suggestPriceItem, matchingAddons, extractQuantity, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { formatDateLong, formatDateTimeLong, formatTime12h, formatStamp, formatNumberGrouped, todayLocalISO } from '@amixos/shared/lib/format';
@@ -418,7 +418,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       });
     }
 
-    const { data: invoice, error } = await supabase.from('invoices').insert({
+    // insertInvoiceUnique: count-based numbers collide after a delete — walk
+    // forward to the next free number instead of failing silently.
+    const { data: invoice, error } = await insertInvoiceUnique(supabase, {
       business_id: business.id,
       client_id: job.client_id,
       invoice_number: invNum,
@@ -437,12 +439,13 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       // Leave notes empty — the invoice already links to its job; auto-filling
       // "Jobs: <title>" here just printed clutter the user didn't ask for.
       notes: null,
-    }).select().single();
+    });
 
     if (!error && invoice) {
       await supabase.from('jobs').update({ status: 'invoiced', invoice_id: invoice.id, invoiced_at: new Date().toISOString() }).eq('id', id);
       void logAudit(supabase, business.id, 'invoice.created', 'invoice', invoice.id, {
-        invoice_number: invNum,
+        // The saved number can differ from invNum after a collision bump.
+        invoice_number: invoice.invoice_number ?? invNum,
         total_amount: invoiceTotal,
         from_job_id: id,
       });

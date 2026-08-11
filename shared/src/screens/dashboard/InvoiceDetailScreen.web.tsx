@@ -180,6 +180,9 @@ export interface InvoiceDetailScreenProps {
   /** jobId → US state (jobs.job_state) — shown inline on job-backed lines so
    *  multi-state invoices read at a glance. */
   jobStates?: Record<string, string>;
+  /** jobId → the job's date (scheduled/performed) — shown inline on
+   *  job-backed lines, read-only (the job owns its date). */
+  jobDates?: Record<string, string>;
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
@@ -237,13 +240,13 @@ export function InvoiceDetailScreen({
   onClientPress,
   jobTitles,
   jobStates,
+  jobDates,
 }: InvoiceDetailScreenProps) {
   const { t: ui, locale } = useLang();
   const tInv = ui.dashboard.invoices;
   const tStatus = ui.dashboard.invoiceStatus;
   // Hooks must run before the early returns below (Rules of Hooks).
   // null = auto (expand short lists, collapse 3+); a click pins the choice.
-  const [paymentsToggle, setPaymentsToggle] = useState<boolean | null>(null);
 
   if (loading) {
     return (
@@ -284,7 +287,6 @@ export function InvoiceDetailScreen({
     ? (daysSince(invoice.sentAt) === 0 ? tInv.sentToday : tInv.sentAgo.replace('{{n}}', String(daysSince(invoice.sentAt))))
     : null;
   const paidSoFar = payments.reduce((sum, p) => sum + p.amount, 0);
-  const paymentsExpanded = paymentsToggle ?? payments.length <= 2;
   const balanceDue = Math.max(0, invoice.totalAmount - paidSoFar);
   // Overdue is just a sent invoice past its due date — it still needs the
   // Mark paid / Undo actions and the partial-payment UI.
@@ -444,14 +446,52 @@ export function InvoiceDetailScreen({
         {/* Payment summary for a paid invoice with no itemized ledger rows
            (legacy / imported / simple mark-paid) — the ledger card inside the
            totals already covers rows with method/date/photo. */}
-        {/* Standard card (not a tinted panel) so it reads like every other
-           section; the emerald lives only in the heading, like the ledger. */}
-        {invoice.status === 'paid' && payments.length === 0 && (invoice.paidAt || invoice.paymentMethod) ? (
+        {/* PAYMENTS card — THE payments display: every ledger row with photo /
+           edit / delete (the totals card keeps a one-line summary). Legacy
+           invoices (pre-192 backfill) fall back to the stamped method/date. */}
+        {payments.length > 0 || (invoice.status === 'paid' && (invoice.paidAt || invoice.paymentMethod)) ? (
           <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
-            <p className="text-[11px] text-emerald-600 font-semibold uppercase tracking-wide">{tInv.payments.title}</p>
-            <p className="mt-1.5 text-sm text-ink">
-              {[invoice.paymentMethod, invoice.paidAt ? formatDate(invoice.paidAt) : null].filter(Boolean).join(' · ')}
-            </p>
+            <p className="text-[11px] text-emerald-600 font-semibold uppercase tracking-wide mb-2">{tInv.payments.title}</p>
+            {payments.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                {payments.map(p => (
+                  <div key={p.id} className="flex items-center justify-between group">
+                    <span className="text-sm text-ink">{p.method ?? '—'} · {formatDate(p.paidOn)}</span>
+                    <span className="flex items-center gap-2">
+                      {p.photoUrl && onViewPaymentPhoto ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.photoUrl} alt="" onClick={() => onViewPaymentPhoto(p)}
+                          style={{ transform: `rotate(${p.photoRotation ?? 0}deg)` }}
+                          className="w-8 h-8 rounded object-cover cursor-pointer border border-border" />
+                      ) : null}
+                      <span className="text-sm text-emerald-700">−{fmt(p.amount)}</span>
+                      {onEditPayment && canEdit ? (
+                        <button type="button" onClick={() => onEditPayment(p)} disabled={updating}
+                          className="p-1 rounded-lg text-faint hover:text-primary hover:bg-primary/10 opacity-0 group-hover:opacity-100 transition">
+                          <Pencil size={13} />
+                        </button>
+                      ) : null}
+                      {onDeletePayment && canEdit ? (
+                        <button type="button" onClick={() => onDeletePayment(p)} disabled={updating}
+                          className="p-1 rounded-lg text-faint hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition">
+                          <Trash2 size={13} />
+                        </button>
+                      ) : null}
+                    </span>
+                  </div>
+                ))}
+                {invoice.status !== 'paid' ? (
+                  <div className="flex justify-between pt-1.5 border-t border-border-soft">
+                    <span className="text-sm font-semibold text-amber-700">{tInv.payments.remaining}</span>
+                    <span className="text-sm font-semibold text-amber-700">{fmt(balanceDue)}</span>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="text-sm text-ink">
+                {[invoice.paymentMethod, invoice.paidAt ? formatDate(invoice.paidAt) : null].filter(Boolean).join(' · ')}
+              </p>
+            )}
           </div>
         ) : null}
 
@@ -501,7 +541,10 @@ export function InvoiceDetailScreen({
                     )}
                     <p className="text-xs text-faint mt-0.5">
                       {q} × {fmt(r)}
-                      {li.service_date ? ` · ${formatDate(li.service_date)}` : ''}
+                      {(() => {
+                        const d = li.service_date ?? (jid && !isAddon ? jobDates?.[jid] : null);
+                        return d ? ` · ${formatDate(d)}` : '';
+                      })()}
                     </p>
                     {li.addonNote ? <p className="text-[11px] text-faint mt-0.5">{li.addonNote}</p> : null}
                   </div>
@@ -583,58 +626,13 @@ export function InvoiceDetailScreen({
               <span className="text-base font-bold text-primary">{fmt(invoice.totalAmount)}</span>
             </div>
             {payments.length > 0 ? (
-              <div className="pt-2 border-t border-border-soft flex flex-col gap-1.5">
-                {/* Summary row toggles the detail rows so many partials don't
-                   swamp the totals card. */}
-                <button
-                  type="button"
-                  onClick={() => setPaymentsToggle(!paymentsExpanded)}
-                  className="flex items-center justify-between w-full"
-                >
-                  <span className="flex items-center gap-1 text-sm font-medium text-muted">
-                    {tInv.payments.title} ({payments.length})
-                    <ChevronDown size={14} className={`text-faint transition-transform ${paymentsExpanded ? 'rotate-180' : ''}`} />
-                  </span>
+              <div className="pt-2 border-t border-border-soft flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-muted">{tInv.payments.title} ({payments.length})</span>
                   <span className="text-sm font-medium text-emerald-700">−{fmt(paidSoFar)}</span>
-                </button>
-                {paymentsExpanded ? payments.map(p => (
-                  <div key={p.id} className="flex items-center justify-between group pl-2">
-                    <span className="text-sm text-muted">
-                      {p.method ?? '—'} · {formatDate(p.paidOn)}
-                    </span>
-                    <span className="flex items-center gap-2">
-                      {p.photoUrl && onViewPaymentPhoto ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={p.photoUrl} alt="" onClick={() => onViewPaymentPhoto(p)}
-                          style={{ transform: `rotate(${p.photoRotation ?? 0}deg)` }}
-                          className="w-8 h-8 rounded object-cover cursor-pointer border border-border" />
-                      ) : null}
-                      <span className="text-sm text-emerald-700">−{fmt(p.amount)}</span>
-                      {onEditPayment && canEdit ? (
-                        <button
-                          type="button"
-                          onClick={() => onEditPayment(p)}
-                          disabled={updating}
-                          className="p-1 rounded-lg text-faint hover:text-primary hover:bg-primary/10 opacity-0 group-hover:opacity-100 transition"
-                        >
-                          <Pencil size={13} />
-                        </button>
-                      ) : null}
-                      {onDeletePayment && canEdit ? (
-                        <button
-                          type="button"
-                          onClick={() => onDeletePayment(p)}
-                          disabled={updating}
-                          className="p-1 rounded-lg text-faint hover:text-red-500 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      ) : null}
-                    </span>
-                  </div>
-                )) : null}
+                </div>
                 {invoice.status !== 'paid' ? (
-                  <div className="flex justify-between pt-1">
+                  <div className="flex justify-between">
                     <span className="text-sm font-semibold text-amber-700">{tInv.payments.remaining}</span>
                     <span className="text-sm font-semibold text-amber-700">{fmt(balanceDue)}</span>
                   </div>

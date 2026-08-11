@@ -204,29 +204,25 @@ export async function createInvoiceFromJobs(
     .eq('business_id', opts.businessId);
   const invoiceNumber = nextInvoiceNumber(lang, opts.startNumber, count ?? 0);
 
-  const { data: invoice, error } = await supabase
-    .from('invoices')
-    .insert({
-      business_id: opts.businessId,
-      client_id: clientId,
-      invoice_number: invoiceNumber,
-      status: 'draft',
-      language: lang,
-      issue_date: today(),
-      due_date: plusDays(opts.dueDays ?? 30),
-      line_items: lineItems,
-      subtotal_amount: subtotal,
-      tax_rate: taxRate,
-      tax_amount: tax,
-      discount,
-      total_amount: total,
-      // Notes are the user's to write — don't auto-fill with job titles.
-      notes: null,
-      // Branch: inherit from the covered jobs (all one client, ~one branch).
-      location_id: (jobs[0] as any)?.location_id ?? null,
-    })
-    .select()
-    .single();
+  const { data: invoice, error } = await insertInvoiceUnique(supabase, {
+    business_id: opts.businessId,
+    client_id: clientId,
+    invoice_number: invoiceNumber,
+    status: 'draft',
+    language: lang,
+    issue_date: today(),
+    due_date: plusDays(opts.dueDays ?? 30),
+    line_items: lineItems,
+    subtotal_amount: subtotal,
+    tax_rate: taxRate,
+    tax_amount: tax,
+    discount,
+    total_amount: total,
+    // Notes are the user's to write — don't auto-fill with job titles.
+    notes: null,
+    // Branch: inherit from the covered jobs (all one client, ~one branch).
+    location_id: (jobs[0] as any)?.location_id ?? null,
+  });
 
   if (error || !invoice) return { ok: false, error: 'insert_failed' };
 
@@ -310,27 +306,23 @@ export async function createInvoicesFromJobs(
     const invoiceNumber = nextInvoiceNumber(lang, opts.startNumber, seq);
     seq += 1;
 
-    const { data: invoice, error } = await supabase
-      .from('invoices')
-      .insert({
-        business_id: opts.businessId,
-        client_id: clientId,
-        invoice_number: invoiceNumber,
-        status: 'draft',
-        language: lang,
-        issue_date: today(),
-        due_date: plusDays(opts.dueDays ?? 30),
-        line_items: lineItems,
-        subtotal_amount: subtotal,
-        tax_rate: taxRate,
-        tax_amount: tax,
-        discount,
-        total_amount: total,
-        notes: null,
-        location_id: (groupJobs[0] as any)?.location_id ?? null,
-      })
-      .select()
-      .single();
+    const { data: invoice, error } = await insertInvoiceUnique(supabase, {
+      business_id: opts.businessId,
+      client_id: clientId,
+      invoice_number: invoiceNumber,
+      status: 'draft',
+      language: lang,
+      issue_date: today(),
+      due_date: plusDays(opts.dueDays ?? 30),
+      line_items: lineItems,
+      subtotal_amount: subtotal,
+      tax_rate: taxRate,
+      tax_amount: tax,
+      discount,
+      total_amount: total,
+      notes: null,
+      location_id: (groupJobs[0] as any)?.location_id ?? null,
+    });
 
     // Partial failure: keep the invoices already created (visible in the list),
     // surface the error so the caller can tell the user.
@@ -825,3 +817,39 @@ export async function autopriceInvoice(
     .eq('id', opts.invoiceId);
   return { matched, alreadyPriced, unmatched, ambiguous: [] };
 }
+
+/** Increment the trailing digit run of an invoice number, preserving padding:
+ *  "INV-258662" → "INV-258663", "INV-0099" → "INV-0100". No digits → append. */
+export function bumpInvoiceNumber(n: string): string {
+  const m = n.match(/^(.*?)(\d+)$/);
+  if (!m) return `${n}-2`;
+  const next = String(Number(m[2]) + 1).padStart(m[2].length, '0');
+  return `${m[1]}${next}`;
+}
+
+/** Insert an invoice, retrying with a bumped number on a unique-number
+ *  collision (23505). The auto-number is COUNT-based, so deleting any invoice
+ *  makes the next generated number collide with an existing row — this walks
+ *  forward until a free number is found instead of failing the save. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function insertInvoiceUnique(
+  supabase: Supa,
+  row: Record<string, unknown>,
+  maxTries = 50,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<{ data: any | null; error: any | null }> {
+  let number = String(row.invoice_number ?? '');
+  for (let i = 0; i < maxTries; i++) {
+    const { data, error } = await supabase
+      .from('invoices')
+      .insert({ ...row, invoice_number: number })
+      .select()
+      .single();
+    if (!error) return { data, error: null };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((error as any).code !== '23505') return { data: null, error };
+    number = bumpInvoiceNumber(number);
+  }
+  return { data: null, error: { message: 'invoice_number_exhausted' } };
+}
+

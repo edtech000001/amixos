@@ -24,6 +24,7 @@ import {
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { insertInvoiceUnique } from '@amixos/shared/lib/invoicing';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
@@ -550,10 +551,6 @@ export default function NuevaFacturaRoute() {
   const save = async (status: 'draft' | 'sent') => {
     if (!business) return;
     const validLines = lines.filter((l) => l.description.trim());
-    if (validLines.length === 0) {
-      setError(t.errorAtLeastOne);
-      return;
-    }
     // Required standard fields (configured in Settings → Facturas).
     const req = business.invoice_field_required ?? {};
     const standardChecks: { key: string; label: string; filled: boolean }[] = [
@@ -618,13 +615,16 @@ export default function NuevaFacturaRoute() {
       }
       invoiceId = editId;
     } else {
-      const { data, error: insErr } = await supabase
-        .from('invoices')
+      // insertInvoiceUnique: the auto-number is count-based, so after deleting
+      // an invoice the next number collides with an existing row — walk
+      // forward to the next free number instead of failing the save.
+      const { data, error: insErr } = await insertInvoiceUnique(supabase, {
+        business_id: business.id, status,
         // File a manual invoice under the branch you're working in, else your
         // own home branch.
-        .insert({ business_id: business.id, status, location_id: activeLocationId ?? myHomeLocationId ?? null, ...payload })
-        .select()
-        .single();
+        location_id: activeLocationId ?? myHomeLocationId ?? null,
+        ...payload,
+      });
       if (insErr || !data) {
         setError(t.errorSave);
         setSaving(false);

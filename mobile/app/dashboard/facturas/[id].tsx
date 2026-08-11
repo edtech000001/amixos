@@ -153,7 +153,7 @@ export default function FacturaDetailRoute() {
     equipment: tj.new.itemTypeEquipment,
     other: tj.new.itemTypeOther,
   };
-  const [attachedJobs, setAttachedJobs] = useState<{ id: string; title: string; job_state?: string | null }[]>([]);
+  const [attachedJobs, setAttachedJobs] = useState<{ id: string; title: string; job_state?: string | null; scheduled_date?: string | null }[]>([]);
   const [invClientId, setInvClientId] = useState<string | null>(null);
   const [priceItems, setPriceItems] = useState<PriceSheetItem[]>([]);
   const [clientTierId, setClientTierId] = useState<string | null>(null);
@@ -187,6 +187,9 @@ export default function FacturaDetailRoute() {
   const [editQty, setEditQty] = useState('1');
   const [editRate, setEditRate] = useState('');
   const [editDate, setEditDate] = useState('');
+  // Only MANUAL lines carry their own date — a linked job's date belongs to
+  // the job (shown read-only on the line, edited on the job itself).
+  const [editIsManual, setEditIsManual] = useState(false);
 
   const editManual = (index: number) => {
     const li = invoice?.lineItems[index];
@@ -196,6 +199,7 @@ export default function FacturaDetailRoute() {
     setEditQty(String(li.qty ?? 1));
     setEditRate(li.rate != null ? String(li.rate) : '');
     setEditDate(li.service_date ?? '');
+    setEditIsManual(!li.job_id);
     setEditOpen(true);
   };
 
@@ -210,7 +214,7 @@ export default function FacturaDetailRoute() {
       description: desc,
       qty: parseFloat(editQty) || 1,
       rate: parseFloat(editRate) || 0,
-      serviceDate: editDate || null,
+      serviceDate: editIsManual ? (editDate || null) : undefined,
     });
     setEditOpen(false);
     setEditIndex(null);
@@ -233,7 +237,7 @@ export default function FacturaDetailRoute() {
   };
 
   const loadJobs = useCallback(async () => {
-    const { data } = await supabase.from('jobs').select('id, title, job_state').eq('invoice_id', id).order('created_at');
+    const { data } = await supabase.from('jobs').select('id, title, job_state, scheduled_date').eq('invoice_id', id).order('created_at');
     setAttachedJobs((data ?? []) as { id: string; title: string }[]);
   }, [id, supabase]);
 
@@ -1132,6 +1136,7 @@ export default function FacturaDetailRoute() {
         onClientPress={(clientId) => router.push(`/dashboard/clientes/${clientId}?from=invoice&invoice=${id}` as never)}
         jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
         jobStates={Object.fromEntries(attachedJobs.filter(j => j.job_state).map(j => [j.id, j.job_state as string]))}
+        jobDates={Object.fromEntries(attachedJobs.filter(j => j.scheduled_date).map(j => [j.id, j.scheduled_date as string]))}
       />
 
       <JobPreviewSheet
@@ -1318,9 +1323,11 @@ export default function FacturaDetailRoute() {
                 />
               </View>
             </View>
-            <View className="mb-4">
-              <DatePicker label={jobsT.serviceDateLabel} value={editDate} onChange={setEditDate} />
-            </View>
+            {editIsManual ? (
+              <View className="mb-4">
+                <DatePicker label={jobsT.serviceDateLabel} value={editDate} onChange={setEditDate} />
+              </View>
+            ) : null}
             <Pressable onPress={doEditSave} disabled={jobBusy || !editDesc.trim()} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
               <Text className="text-sm font-semibold text-white">{tc.buttons.save}</Text>
             </Pressable>

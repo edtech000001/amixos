@@ -172,7 +172,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     equipment: tj.new.itemTypeEquipment,
     other: tj.new.itemTypeOther,
   };
-  const [attachedJobs, setAttachedJobs] = useState<{ id: string; title: string; status: string; job_state?: string | null }[]>([]);
+  const [attachedJobs, setAttachedJobs] = useState<{ id: string; title: string; status: string; job_state?: string | null; scheduled_date?: string | null }[]>([]);
   const [invClientId, setInvClientId] = useState<string | null>(null);
   // Autoprice: active price-sheet items + the invoice client's tier.
   const [priceItems, setPriceItems] = useState<PriceSheetItem[]>([]);
@@ -208,6 +208,9 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const [editQty, setEditQty] = useState('1');
   const [editRate, setEditRate] = useState('');
   const [editDate, setEditDate] = useState('');
+  // Only MANUAL lines carry their own date — a linked job's date belongs to
+  // the job (shown read-only on the line, edited on the job itself).
+  const [editIsManual, setEditIsManual] = useState(false);
 
   const removeManual = async (index: number) => {
     if (!(await confirm({ message: tInv.jobsSection.removeItemConfirm, destructive: true }))) return;
@@ -225,6 +228,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     setEditQty(String(li.qty ?? 1));
     setEditRate(li.rate != null ? String(li.rate) : '');
     setEditDate(li.service_date ?? '');
+    setEditIsManual(!li.job_id);
   };
 
   const doEditSave = async () => {
@@ -238,7 +242,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       description: desc,
       qty: parseFloat(editQty) || 1,
       rate: parseFloat(editRate) || 0,
-      serviceDate: editDate || null,
+      serviceDate: editIsManual ? (editDate || null) : undefined,
     });
     setEditIndex(null);
     await reloadInvoice();
@@ -248,10 +252,10 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const loadJobs = useCallback(async () => {
     const { data } = await supabase
       .from('jobs')
-      .select('id, title, status, job_state')
+      .select('id, title, status, job_state, scheduled_date')
       .eq('invoice_id', id)
       .order('created_at');
-    setAttachedJobs((data ?? []) as { id: string; title: string; status: string; job_state?: string | null }[]);
+    setAttachedJobs((data ?? []) as { id: string; title: string; status: string; job_state?: string | null; scheduled_date?: string | null }[]);
   }, [id, supabase]);
 
   // Re-fetch the invoice row (after a job add/remove/move changes totals).
@@ -1000,6 +1004,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         onClientPress={(clientId) => router.push(`/dashboard/clientes/${clientId}?from=invoice&invoice=${id}`)}
         jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
         jobStates={Object.fromEntries(attachedJobs.filter(j => j.job_state).map(j => [j.id, j.job_state as string]))}
+        jobDates={Object.fromEntries(attachedJobs.filter(j => j.scheduled_date).map(j => [j.id, j.scheduled_date as string]))}
       />
 
       <JobPreviewSheet
@@ -1090,12 +1095,14 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                     className="w-full rounded-xl border border-border bg-card pl-6 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted mb-1">{tInv.jobsSection.serviceDateLabel}</label>
                 <input
                   type="date"
                   value={manualDate}
                   onChange={e => setManualDate(e.target.value)}
-                  title={tInv.jobsSection.serviceDateLabel}
-                  className="rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                  className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
                 />
               </div>
             </div>
@@ -1179,14 +1186,18 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                 className="w-full rounded-xl border border-border bg-card pl-6 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
               />
             </div>
-            <input
-              type="date"
-              value={editDate}
-              onChange={e => setEditDate(e.target.value)}
-              title={tInv.jobsSection.serviceDateLabel}
-              className="rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
-            />
           </div>
+          {editIsManual ? (
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1">{tInv.jobsSection.serviceDateLabel}</label>
+              <input
+                type="date"
+                value={editDate}
+                onChange={e => setEditDate(e.target.value)}
+                className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+              />
+            </div>
+          ) : null}
           <Button onClick={doEditSave} loading={jobBusy} disabled={!editDesc.trim()} fullWidth>{tc.buttons.save}</Button>
         </div>
       </Modal>

@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { insertInvoiceUnique } from '@amixos/shared/lib/invoicing';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { InvoiceLang } from '@amixos/shared';
@@ -407,7 +408,6 @@ function NuevaFacturaContent() {
 
   const save = async (status: 'draft' | 'sent') => {
     if (!business) return;
-    if (lines.every(l => !l.description.trim())) { setError(t.errorAtLeastOne); return; }
     // Required standard fields (configured in Settings → Facturas).
     const req = business.invoice_field_required ?? {};
     const standardChecks: { key: string; label: string; filled: boolean }[] = [
@@ -470,12 +470,16 @@ function NuevaFacturaContent() {
       if (upErr) { setError(t.errorSave); setSaving(false); return; }
       invoiceId = editId;
     } else {
-      const { data, error: e } = await supabase.from('invoices')
+      // insertInvoiceUnique: the auto-number is count-based, so after deleting
+      // an invoice the next number collides with an existing row — walk
+      // forward to the next free number instead of failing the save.
+      const { data, error: e } = await insertInvoiceUnique(supabase, {
+        business_id: business.id, status,
         // File a manual invoice under the branch you're working in, else your
         // own home branch.
-        .insert({ business_id: business.id, status, location_id: activeLocationId ?? myHomeLocationId ?? null, ...payload })
-        .select()
-        .single();
+        location_id: activeLocationId ?? myHomeLocationId ?? null,
+        ...payload,
+      });
       if (e || !data) { setError(t.errorSave); setSaving(false); return; }
       invoiceId = data.id;
     }
