@@ -105,6 +105,7 @@ import { diffById, isDirty, isTempId, newTempId } from '@amixos/shared/lib/draft
 import { SortableList } from '@/components/dashboard/SortableList';
 import { PricingModal } from '@/components/PricingModal';
 import { PLANS } from '@amixos/shared/lib/plans';
+import { normalizeImageFile } from '@/lib/imageFile';
 import {
   activePlanKey,
   isTrialExpired,
@@ -620,8 +621,9 @@ export default function AjustesPage() {
 
   // Logo upload is immediate (pick → upload → persist → refetch), separate
   // from the form's Save button — same bucket path as onboarding.
-  const onPickLogo = async (file: File | null) => {
-    if (!file || !business) return;
+  const onPickLogo = async (rawFile: File | null) => {
+    if (!rawFile || !business) return;
+    const file = await normalizeImageFile(rawFile);
     if (file.size > 2 * 1024 * 1024) {
       setBizMsgIsError(true);
       setBizMsg(t.business.logoSizeError);

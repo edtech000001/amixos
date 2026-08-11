@@ -71,7 +71,7 @@ export function InventoryScreen({
   const { t: full } = useLang();
   const t = full.dashboard.inventory;
 
-  const [search, setSearch] = usePersistedSearch('search.inventory');
+  const [search, setSearch, debouncedSearch] = usePersistedSearch('search.inventory');
   const [filter, setFilter] = useState<Filter>('todos');
 
   // In server mode `items` is ALREADY the search/segment-filtered page(s), so we
@@ -87,11 +87,7 @@ export function InventoryScreen({
   }, [items, search, filter, serverMode]);
 
   // Server mode: report search + segment UP (debounced) so the wrapper re-queries.
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  useEffect(() => {
-    const id = setTimeout(() => setDebouncedSearch(search), 250);
-    return () => clearTimeout(id);
-  }, [search]);
+  // debouncedSearch comes from usePersistedSearch (restore-aware).
   useEffect(() => {
     if (!serverMode || !onFiltersChange) return;
     onFiltersChange({ search: debouncedSearch, lowStockOnly: filter === 'bajo_stock' });

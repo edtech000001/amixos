@@ -184,8 +184,13 @@ export function ClientsListScreen({
   // Server mode: report search + group changes UP so the wrapper re-queries.
   // Search is debounced so we don't fire a query per keystroke. Gated on `ready`
   // so the first query uses the restored group-by.
+  // Search arrives as a PROP (container owns/persists it). Debounce only once
+  // the user has actually typed — the container's async restore must apply
+  // instantly or the list briefly shows unfiltered rows before "reapplying".
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchTypedRef = useRef(false);
   useEffect(() => {
+    if (!searchTypedRef.current) { setDebouncedSearch(search); return; }
     const id = setTimeout(() => setDebouncedSearch(search), 250);
     return () => clearTimeout(id);
   }, [search]);
@@ -380,7 +385,7 @@ export function ClientsListScreen({
         <Input
           placeholder={t.searchPlaceholder}
           value={search}
-          onChangeText={onSearchChange}
+          onChangeText={(v) => { searchTypedRef.current = true; onSearchChange(v); }}
           onClear={() => onSearchChange('')}
           leftIcon={<Search size={16} color={c.faint} />}
           // Search is case-insensitive — turn off iOS smart-capitalize +

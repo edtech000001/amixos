@@ -19,8 +19,13 @@ import { kvGet, kvSet } from './kvStore';
  */
 export function usePersistedSearch(
   key: string | null | undefined,
-): [string, (v: string) => void] {
+): [string, (v: string) => void, string] {
   const [value, setValue] = useState('');
+  // Debounced companion for query-driving consumers. RESTORES apply instantly
+  // (debounce is for typing) — otherwise returning to a list briefly shows
+  // the unfiltered rows, then "reapplies" the saved search 250ms later.
+  const [debounced, setDebounced] = useState('');
+  const restoringRef = useRef(false);
   // Tracks which key the current value was hydrated for, so we only persist
   // once the saved value has been restored (avoids writing '' over a real one).
   const hydratedForKey = useRef<string | null>(null);
@@ -34,6 +39,7 @@ export function usePersistedSearch(
     hydratedForKey.current = null;
     void kvGet(key).then((saved) => {
       if (!active) return;
+      restoringRef.current = true;
       setValue(saved ?? '');
       hydratedForKey.current = key;
     });
@@ -47,5 +53,15 @@ export function usePersistedSearch(
     void kvSet(key, value);
   }, [key, value]);
 
-  return [value, setValue];
+  useEffect(() => {
+    if (restoringRef.current) {
+      restoringRef.current = false;
+      setDebounced(value);
+      return;
+    }
+    const id = setTimeout(() => setDebounced(value), 250);
+    return () => clearTimeout(id);
+  }, [value]);
+
+  return [value, setValue, debounced];
 }

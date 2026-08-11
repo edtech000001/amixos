@@ -17,6 +17,7 @@ import {
   type JobPhoto,
 } from '@amixos/shared/lib/jobPhotos';
 import { useSignedUrls } from '@amixos/shared/lib/storageUrls';
+import { normalizeImageFiles } from '@/lib/imageFile';
 
 interface Props {
   jobId: string;
@@ -82,7 +83,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
   useEffect(() => { void load(); }, [load]);
 
   const onFilesChosen = async (ev: React.ChangeEvent<HTMLInputElement>) => {
-    const files = ev.target.files;
+    const files = ev.target.files ? await normalizeImageFiles(Array.from(ev.target.files)) : null;
     if (!files || files.length === 0) return;
     if (photos.length + files.length > MAX_PHOTOS_PER_JOB) {
       setError(t.limitHit.replace('{{max}}', String(MAX_PHOTOS_PER_JOB)));

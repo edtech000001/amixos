@@ -60,6 +60,7 @@ import { useSignedUrls } from '@amixos/shared/lib/storageUrls';
 import { formatDateLong, formatDateTimeLong, formatPhoneInput } from '@amixos/shared/lib/format';
 import { nextRotation } from '@amixos/shared/lib/jobPhotos';
 import { can } from '@amixos/shared/lib/permissions';
+import { normalizeImageFiles } from '@/lib/imageFile';
 import {
   groupEquipment,
   parseEquipmentGroupKey,
@@ -597,7 +598,7 @@ export default function EquipmentModule() {
   const onFileChosen = async (ev: React.ChangeEvent<HTMLInputElement>) => {
     const files = ev.target.files;
     if (!files || files.length === 0 || !business) return;
-    const picked = Array.from(files);
+    const picked = await normalizeImageFiles(Array.from(files));
     // Cap counts the live photos (edit) or the queued ones (add).
     const existing = selected ? photos.length : pendingPhotos.length;
     if (existing + picked.length > MAX_PHOTOS_PER_EQUIPMENT) {

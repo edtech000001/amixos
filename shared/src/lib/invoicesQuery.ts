@@ -1,3 +1,4 @@
+import { fullNameOrArms } from './nameSearch';
 // Server-side paginated + searched + status-filtered invoices loading.
 //
 // The scalable alternative to loading every invoice and filtering client-side:
@@ -80,7 +81,7 @@ async function resolveSearchIds(
   const like = `%${escLike(term)}%`;
   const [clientsRes, jobsRes] = await Promise.all([
     supabase.from('clients').select('id').eq('business_id', businessId)
-      .or(`first_name.ilike.${like},last_name.ilike.${like},company.ilike.${like}`).limit(ID_CAP),
+      .or([`first_name.ilike.${like}`, `last_name.ilike.${like}`, `company.ilike.${like}`, ...fullNameOrArms(term)].join(',')).limit(ID_CAP),
     // Jobs matched by ref/title → the invoices they were billed to.
     supabase.from('jobs').select('invoice_id').eq('business_id', businessId)
       .not('invoice_id', 'is', null).or(`external_ref.ilike.${like},title.ilike.${like}`).limit(ID_CAP),

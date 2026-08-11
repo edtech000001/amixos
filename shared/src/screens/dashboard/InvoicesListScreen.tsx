@@ -5,6 +5,7 @@ import { FileText, Search, Calendar, Layers, XCircle, List, Building2, MapPin, C
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
+import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
 import { Fab } from '../../ui/Fab';
 import { formatDateLong, daysOverdue, daysSince } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
@@ -33,6 +34,9 @@ export interface InvoiceListItem {
 }
 
 export interface InvoicesListScreenProps {
+  /** Business payroll config — powers the pay-period presets in the date
+   *  filter (same quick chips as the jobs list). */
+  payPeriod?: { frequency: unknown; anchorDate: unknown; customDays?: unknown };
   loading: boolean;
   invoices: InvoiceListItem[];
   onInvoicePress: (id: string) => void;
@@ -68,7 +72,7 @@ export interface InvoicesListScreenProps {
 }
 
 // Selectable status filters (multi-select). "All" is the icon reset, not a key.
-const STATUS_KEYS = ['draft', 'sent', 'paid', 'overdue', 'total_loss'] as const;
+const STATUS_KEYS = ['draft', 'sent', 'overdue', 'paid', 'total_loss'] as const;
 type StatusKey = (typeof STATUS_KEYS)[number];
 type GroupKey = 'none' | 'status' | 'company' | 'state';
 
@@ -94,6 +98,7 @@ function fmt(n: number) {
 }
 
 export function InvoicesListScreen({
+  payPeriod,
   loading,
   invoices,
   onInvoicePress,
@@ -122,7 +127,7 @@ export function InvoicesListScreen({
   const statusSet = useMemo(() => new Set<string>(statuses), [statuses]);
   const toggleStatus = (k: StatusKey) =>
     setStatuses(prev => (prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]));
-  const [search, setSearch] = usePersistedSearch(businessId ? `search.invoices.${businessId}` : null);
+  const [search, setSearch, debouncedSearch] = usePersistedSearch(businessId ? `search.invoices.${businessId}` : null);
   // Issue-date range filter.
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
@@ -275,11 +280,7 @@ export function InvoicesListScreen({
   // Server mode: report filter changes UP so the wrapper re-queries. Search is
   // debounced so we don't fire a query per keystroke. Gated on `ready` so the
   // first query uses the restored group-by, not the pre-restore default.
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  useEffect(() => {
-    const id = setTimeout(() => setDebouncedSearch(search), 250);
-    return () => clearTimeout(id);
-  }, [search]);
+  // debouncedSearch comes from usePersistedSearch (restore-aware).
   useEffect(() => {
     if (!serverMode || !onFiltersChange || !ready) return;
     onFiltersChange({ search: debouncedSearch, statuses, groupBy, dateFrom, dateTo });
@@ -623,6 +624,7 @@ export function InvoicesListScreen({
       toLabel={tdate.to}
       clearLabel={tdate.clear}
       applyLabel={tdate.apply}
+      presets={buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets, payPeriod)}
     />
     </View>
   );

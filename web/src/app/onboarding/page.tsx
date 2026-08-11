@@ -12,6 +12,7 @@ import {
 } from '@amixos/shared/screens/onboarding/OnboardingScreen';
 import { useLang } from '@/i18n/LangProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { normalizeImageFile } from '@/lib/imageFile';
 
 export default function OnboardingPage() {
   const supabase = createSupabaseClient();
@@ -74,7 +75,8 @@ export default function OnboardingPage() {
     pendingResolveRef.current = null;
     if (!resolve) return;
 
-    const file = e.target.files?.[0];
+    const rawFile = e.target.files?.[0];
+    const file = rawFile ? await normalizeImageFile(rawFile) : undefined;
     if (!file) {
       resolve(null); // cancelled
       return;

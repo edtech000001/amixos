@@ -11,6 +11,7 @@ import { formatDateLong, daysOverdue, daysSince } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { INVOICES_FILTERS_KEY, parseInvoicesFilters } from '../../lib/invoicesFilters';
+import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
 
 export interface InvoiceListItem {
   id: string;
@@ -31,6 +32,9 @@ export interface InvoiceListItem {
 }
 
 export interface InvoicesListScreenProps {
+  /** Business payroll config — powers the pay-period presets in the date
+   *  filter (same quick chips as the jobs list). */
+  payPeriod?: { frequency: unknown; anchorDate: unknown; customDays?: unknown };
   loading: boolean;
   invoices: InvoiceListItem[];
   onInvoicePress: (id: string) => void;
@@ -66,7 +70,7 @@ export interface InvoicesListScreenProps {
 }
 
 // Selectable status filters (multi-select). "All" is the icon reset, not a key.
-const STATUS_KEYS = ['draft', 'sent', 'paid', 'overdue', 'total_loss'] as const;
+const STATUS_KEYS = ['draft', 'sent', 'overdue', 'paid', 'total_loss'] as const;
 type StatusKey = (typeof STATUS_KEYS)[number];
 type GroupKey = 'none' | 'status' | 'company' | 'state';
 
@@ -84,6 +88,7 @@ function fmt(n: number) {
 }
 
 export function InvoicesListScreen({
+  payPeriod,
   loading,
   invoices,
   onInvoicePress,
@@ -104,13 +109,14 @@ export function InvoicesListScreen({
   const t = full.dashboard.invoices;
   const tg = t.group;
   const tdate = full.dashboard.jobs.dateFilter; // reuse the jobs date-filter labels
+  const dateRangePresets = buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets, payPeriod);
   const tStatus = full.dashboard.invoiceStatus;
 
   const [statuses, setStatuses] = useState<StatusKey[]>([]);
   const statusSet = useMemo(() => new Set<string>(statuses), [statuses]);
   const toggleStatus = (k: StatusKey) =>
     setStatuses(prev => (prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]));
-  const [search, setSearch] = usePersistedSearch(businessId ? `search.invoices.${businessId}` : null);
+  const [search, setSearch, debouncedSearch] = usePersistedSearch(businessId ? `search.invoices.${businessId}` : null);
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
   const [dateOpen, setDateOpen] = useState(false);
@@ -248,11 +254,7 @@ export function InvoicesListScreen({
   // Server mode: report filter changes UP so the wrapper re-queries. Search is
   // debounced so we don't fire a query per keystroke. Gated on `hydrated` so the
   // first query uses the restored group-by, not the pre-restore default.
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  useEffect(() => {
-    const id = setTimeout(() => setDebouncedSearch(search), 250);
-    return () => clearTimeout(id);
-  }, [search]);
+  // debouncedSearch comes from usePersistedSearch (restore-aware).
   useEffect(() => {
     if (!serverMode || !onFiltersChange || !hydrated) return;
     onFiltersChange({ search: debouncedSearch, statuses, groupBy, dateFrom, dateTo });
@@ -403,6 +405,22 @@ export function InvoicesListScreen({
               <div className="fixed inset-0 z-10" onClick={() => setDateOpen(false)} />
               <div className="absolute right-0 top-full mt-2 z-20 w-72 bg-card rounded-2xl border border-border-soft shadow-lg p-4">
                 <p className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-2">{tdate.title}</p>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {dateRangePresets.map(pr => {
+                    const active = dateFrom === pr.from && dateTo === pr.to;
+                    return (
+                      <button
+                        key={pr.label}
+                        onClick={() => { setDateFrom(pr.from); setDateTo(pr.to); }}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                          active ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
+                        }`}
+                      >
+                        {pr.label}
+                      </button>
+                    );
+                  })}
+                </div>
                 <label className="block text-xs font-medium text-muted mb-1">{tdate.from}</label>
                 <input
                   type="date"

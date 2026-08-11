@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react';
-import { View, Text, Pressable, ScrollView, Image } from 'react-native';
+import { View, Text, Pressable, ScrollView, Image, Modal as RNModal } from 'react-native';
 import {
   ArrowLeft,
+  MoreHorizontal,
   ChevronDown,
   Printer,
   Link2,
@@ -132,6 +133,8 @@ export interface InvoiceDetailScreenProps {
   /** Autoprice: fill in unpriced ($0) lines from the price sheet. Hidden when
    *  not provided (no price-sheet items or a sent/paid invoice). */
   onAutoprice?: () => void;
+  /** Autoname (gated pilot): normalize the linked jobs' titles. */
+  onAutoname?: () => void;
   /** Reset all lines to unpriced ($0) so Autoprice can re-run clean. */
   onClearPrices?: () => void;
   /** Show the amber "please verify pricing" note after an autoprice run. */
@@ -206,6 +209,7 @@ export function InvoiceDetailScreen({
   onPrint,
   onShareLink,
   onAutoprice,
+  onAutoname,
   onClearPrices,
   autopriceVerify,
   onEdit,
@@ -232,6 +236,10 @@ export function InvoiceDetailScreen({
   const { t: ui, locale } = useLang();
   const c = useThemeColors();
   const tInv = ui.dashboard.invoices;
+  // Overflow actions sheet — the header keeps only print/edit/delete; the
+  // occasional actions (autoprice / clear prices / share link) live here so
+  // six cramped icons stop squeezing the invoice number onto two lines.
+  const [moreOpen, setMoreOpen] = useState(false);
   const tStatus = ui.dashboard.invoiceStatus;
   // Hooks must run before the early returns below (Rules of Hooks).
   // null = auto (expand short lists, collapse 3+); a tap pins the choice.
@@ -319,16 +327,7 @@ export function InvoiceDetailScreen({
             </Text>
           </View>
         </View>
-        <View className="flex-row items-center gap-0.5 shrink-0">
-          {onAutoprice && canEdit ? (
-            <Pressable onPress={onAutoprice} className="p-2 rounded-xl bg-primary/10 active:opacity-80 mr-0.5" accessibilityLabel={ui.dashboard.jobs.detail.autopriceBtn}><DollarSign size={18} color={c.primary} /></Pressable>
-          ) : null}
-          {onClearPrices && canEdit ? (
-            <Pressable onPress={onClearPrices} className="p-2 rounded-xl active:bg-border-soft mr-0.5" accessibilityLabel={tInv.jobsSection.clearPricesBtn}><Eraser size={18} color={c.muted} /></Pressable>
-          ) : null}
-          {onShareLink ? (
-            <Pressable onPress={onShareLink} className="p-2 rounded-xl active:bg-border-soft"><Link2 size={18} color={c.muted} /></Pressable>
-          ) : null}
+        <View className="flex-row items-center gap-1 shrink-0">
           {onPrint ? (
             <Pressable onPress={onPrint} className="p-2 rounded-xl active:bg-border-soft"><Printer size={18} color={c.muted} /></Pressable>
           ) : null}
@@ -337,6 +336,11 @@ export function InvoiceDetailScreen({
           ) : null}
           {onDelete ? (
             <Pressable onPress={onDelete} className="p-2 rounded-xl active:bg-red-500/10"><Trash2 size={18} color={c.danger} /></Pressable>
+          ) : null}
+          {((onAutoprice || onAutoname || onClearPrices) && canEdit) || onShareLink ? (
+            <Pressable onPress={() => setMoreOpen(true)} className="p-2 rounded-xl active:bg-border-soft" accessibilityLabel={tInv.moreActionsTitle}>
+              <MoreHorizontal size={18} color={c.muted} />
+            </Pressable>
           ) : null}
         </View>
       </View>
@@ -660,6 +664,46 @@ export function InvoiceDetailScreen({
       ) : null}
 
       {footerSlot}
+
+      {/* Overflow actions sheet — canonical bottom-sheet structure (absolute
+         backdrop first, card as sibling; see CLAUDE.md). */}
+      <RNModal visible={moreOpen} transparent animationType="fade" onRequestClose={() => setMoreOpen(false)}>
+        <View className="flex-1 justify-end">
+          <Pressable
+            onPress={() => setMoreOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+            className="bg-black/40"
+          />
+          <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10">
+            <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
+            <Text className="text-base font-bold text-ink mb-2">{tInv.moreActionsTitle}</Text>
+            {onAutoprice && canEdit ? (
+              <Pressable onPress={() => { setMoreOpen(false); onAutoprice(); }} className="flex-row items-center gap-3 py-3.5 border-b border-border-soft active:opacity-60">
+                <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center"><DollarSign size={18} color={c.primary} /></View>
+                <Text className="text-base text-ink font-medium">{ui.dashboard.jobs.detail.autopriceBtn}</Text>
+              </Pressable>
+            ) : null}
+            {onAutoname && canEdit ? (
+              <Pressable onPress={() => { setMoreOpen(false); onAutoname(); }} className="flex-row items-center gap-3 py-3.5 border-b border-border-soft active:opacity-60">
+                <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center"><Pencil size={18} color={c.primary} /></View>
+                <Text className="text-base text-ink font-medium">{tInv.autonameBtn}</Text>
+              </Pressable>
+            ) : null}
+            {onClearPrices && canEdit ? (
+              <Pressable onPress={() => { setMoreOpen(false); onClearPrices(); }} className="flex-row items-center gap-3 py-3.5 border-b border-border-soft active:opacity-60">
+                <View className="w-9 h-9 rounded-xl bg-border-soft items-center justify-center"><Eraser size={18} color={c.muted} /></View>
+                <Text className="text-base text-ink font-medium">{tInv.jobsSection.clearPricesBtn}</Text>
+              </Pressable>
+            ) : null}
+            {onShareLink ? (
+              <Pressable onPress={() => { setMoreOpen(false); onShareLink(); }} className="flex-row items-center gap-3 py-3.5 active:opacity-60">
+                <View className="w-9 h-9 rounded-xl bg-border-soft items-center justify-center"><Link2 size={18} color={c.muted} /></View>
+                <Text className="text-base text-ink font-medium">{tInv.shareLinkAction}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      </RNModal>
 
       {/* Last edited — bottom of the page. */}
       {invoice.updatedAt && invoice.updatedAt !== invoice.createdAt ? (

@@ -313,6 +313,7 @@ export default function FacturasTab() {
   return (
     <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       <InvoicesListScreen
+        payPeriod={business ? { frequency: business.payroll_frequency, anchorDate: business.payroll_anchor_date, customDays: business.payroll_custom_days } : undefined}
         loading={loading}
         invoices={invoices}
         onInvoicePress={(id) => router.push(`/dashboard/facturas/${id}`)}

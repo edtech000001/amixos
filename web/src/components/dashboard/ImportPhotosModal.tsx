@@ -24,6 +24,7 @@ import {
   jobPhotoPath,
   jobPhotoFilename,
 } from '@amixos/shared/lib/jobPhotos';
+import { normalizeImageFiles } from '@/lib/imageFile';
 import {
   buildPhotoMatcher,
   removePendingName,
@@ -126,8 +127,9 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
     await supabase.from('jobs').update({ import_photo_names: remaining }).eq('id', jobId);
   };
 
-  const onFiles = async (files: File[]) => {
-    if (files.length === 0) return;
+  const onFiles = async (rawFiles: File[]) => {
+    if (rawFiles.length === 0) return;
+    const files = await normalizeImageFiles(rawFiles);
     const matcher = buildPhotoMatcher(pendingJobs);
     const base: Picked[] = files.map(file => ({ file, match: matcher.match(file.name), status: 'pending' as const }));
     const jobIds = Array.from(new Set(base.filter(p => p.match).map(p => p.match!.jobId)));

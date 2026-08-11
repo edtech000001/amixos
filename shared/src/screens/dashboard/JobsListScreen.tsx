@@ -346,6 +346,9 @@ export function JobsListScreen({
           setTabs(Array.isArray(s?.tabs) ? s.tabs.filter((k): k is StatusTabKey => (STATUS_TAB_KEYS as readonly string[]).includes(k)) : []);
         }
         setSearch(typeof s?.search === 'string' ? s.search : '');
+        // Prime the debounced copy (see the web variant): the first filter
+        // report must carry the restored term, not a stale empty debounce.
+        setDebouncedSearch(typeof s?.search === 'string' ? s.search : '');
         setSortBy(s?.sortBy ?? 'recent');
         setGroupBy(s?.groupBy ?? 'none');
         setDateFrom(s?.dateFrom ?? null);
@@ -680,8 +683,10 @@ export function JobsListScreen({
     }
     void doCreateInvoice();
   };
-  // Archive: on the Archivados tab the pill restores instead. Only completed
-  // jobs archive (that's the "never invoicing this" case).
+  // Archive: on the Archivados tab the pill restores instead. Only COMPLETED
+  // jobs archive: invoiced/cancelled are already hidden from the default view
+  // under their own tabs, so completed is the one closed state that still
+  // clutters the working list — archive is its "never invoicing this" exit.
   const archivedTabActive = tabs.includes('archived');
   const allArchivable = selectedJobs.length > 0 && selectedJobs.every(j =>
     archivedTabActive ? !!j.archivedAt : j.status === 'completed' && !j.archivedAt);
@@ -1305,8 +1310,11 @@ export function JobsListScreen({
         {/* Bulk-archive pill — stacked above delete on the left. */}
         {onBulkArchive ? (
           <Pressable
-            onPress={runBulkArchive}
-            disabled={!allArchivable || bulkArchiving}
+            onPress={() => {
+              if (!allArchivable && !bulkArchiving) { Alert.alert('', t.archiveDisabledHint); return; }
+              void runBulkArchive();
+            }}
+            disabled={bulkArchiving}
             className="absolute bottom-48 left-5 flex-row items-center gap-2 px-5 h-12 rounded-full"
             style={{
               backgroundColor: !allArchivable || bulkArchiving ? '#D1D5DB' : '#374151',

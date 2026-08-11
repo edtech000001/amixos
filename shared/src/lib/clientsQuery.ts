@@ -18,6 +18,8 @@
 // COMPLETE total order to page through — the screen re-sorts the accumulated rows
 // with localeCompare on every render, so the displayed order is always correct.)
 
+import { fullNameOrArms } from './nameSearch';
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 type AnySupabase = { from: (table: string) => any };
@@ -84,6 +86,8 @@ async function searchOrClause(
     `phone_cell.ilike.${like}`, `phone_office.ilike.${like}`,
     `email_office.ilike.${like}`, `email_home.ilike.${like}`, `email.ilike.${like}`,
     `city.ilike.${like}`, `state.ilike.${like}`,
+    // Multi-word terms: match as first+last split across the words.
+    ...fullNameOrArms(term),
   ];
   if (contactIds.length) ors.push(`id.in.(${contactIds.join(',')})`);
   return ors.join(',');

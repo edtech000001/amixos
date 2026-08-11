@@ -360,6 +360,7 @@ export default function FacturasPage() {
       />
     )}
     <InvoicesListScreen
+        payPeriod={business ? { frequency: business.payroll_frequency, anchorDate: business.payroll_anchor_date, customDays: business.payroll_custom_days } : undefined}
       loading={loading}
       invoices={invoices}
       onInvoicePress={(id) => { saveScrollAnchor('invoices-list', id); router.push(`/dashboard/facturas/${id}`); }}

@@ -17,6 +17,8 @@
 // and crew/lead names live on other tables, so we resolve those to id lists in
 // tiny lookups, then OR them with the job's own ilike fields in one query.
 
+import { fullNameOrArms } from './nameSearch';
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 type AnySupabase = { from: (table: string) => any; rpc: (fn: string, params?: any) => any };
@@ -129,11 +131,11 @@ export async function resolveSearchIds(
   const like = `%${escLike(term)}%`;
   const [clientsRes, empRes, crewByNameRes, codeJobIds] = await Promise.all([
     supabase.from('clients').select('id').eq('business_id', businessId)
-      .or(`first_name.ilike.${like},last_name.ilike.${like},company.ilike.${like}`).limit(ID_CAP),
+      .or([`first_name.ilike.${like}`, `last_name.ilike.${like}`, `company.ilike.${like}`, ...fullNameOrArms(term)].join(',')).limit(ID_CAP),
     // employees_roster (view, migration 178): readable by every member, so
     // search-by-crew-name works for roles without the Employees permission.
     supabase.from('employees_roster').select('id').eq('business_id', businessId)
-      .or(`first_name.ilike.${like},last_name.ilike.${like}`).limit(200),
+      .or([`first_name.ilike.${like}`, `last_name.ilike.${like}`, ...fullNameOrArms(term)].join(',')).limit(200),
     supabase.from('job_assignments').select('job_id').eq('business_id', businessId)
       .ilike('worker_name', like).limit(ID_CAP),
     resolveShortCodeIds(supabase, businessId, term),

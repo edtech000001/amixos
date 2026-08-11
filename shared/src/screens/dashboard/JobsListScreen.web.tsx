@@ -323,6 +323,11 @@ export function JobsListScreen({
       typeof window !== 'undefined' ? window.localStorage.getItem(filtersKey) : null,
     );
     setSearch(saved?.search ?? '');
+    // Prime the DEBOUNCED copy too: the report effect fires on hydration, and
+    // if the debounce hasn't caught up it reports an empty search — the
+    // container briefly shows the unfiltered list, then "reapplies" the
+    // search 250ms later. Debounce is for typing, not restoration.
+    setDebouncedSearch(saved?.search ?? '');
     // A ?tab deep link wins over saved tabs.
     if (initialTab === 'all') {
       setTabs((saved?.tabs ?? []).filter((k): k is StatusTabKey => (STATUS_TAB_KEYS as readonly string[]).includes(k)));
@@ -649,8 +654,10 @@ export function JobsListScreen({
     if (invoiceClientCount > 1) { setMultiConfirm(true); return; }
     void doCreateInvoice();
   };
-  // Archive: on the Archivados tab the button restores instead. Only
-  // completed jobs archive (that's the "never invoicing this" case).
+  // Archive: on the Archivados tab the button restores instead. Only COMPLETED
+  // jobs archive: invoiced/cancelled are already hidden from the default view
+  // under their own tabs, so completed is the one closed state that still
+  // clutters the working list — archive is its "never invoicing this" exit.
   const archivedTabActive = tabs.includes('archived');
   const allArchivable = selectedJobs.length > 0 && selectedJobs.every(j =>
     archivedTabActive ? !!j.archivedAt : j.status === 'completed' && !j.archivedAt);
@@ -1240,7 +1247,9 @@ export function JobsListScreen({
               <button
                 onClick={runBulkArchive}
                 disabled={!allArchivable || bulkArchiving}
-                title={t.confirmArchiveBulk.replace('{{count}}', String(selectedJobs.length))}
+                title={allArchivable
+                  ? t.confirmArchiveBulk.replace('{{count}}', String(selectedJobs.length))
+                  : t.archiveDisabledHint}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-gray-700 text-white hover:bg-gray-800 disabled:opacity-40"
               >
                 <Archive size={15} /> {archivedTabActive ? t.bulkUnarchive : t.bulkArchive}{selectedJobs.length > 0 ? ` · ${selectedJobs.length}` : ''}

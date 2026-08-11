@@ -7,6 +7,7 @@ import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { signedUrl } from '@amixos/shared/lib/storageUrls';
 import { INVOICE_PAYMENT_BUCKET, paymentPhotoPath } from '@amixos/shared/lib/invoicePayments';
+import { autonameEnabled, autonameJobTitle, detectAutonameType } from '@amixos/shared/lib/autoname';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -238,6 +239,37 @@ export default function FacturaDetailRoute() {
       .eq('id', id)
       .single();
     return data as { id: string; status: string; line_items: unknown; tax_rate: number; discount: number; invoice_number: string; client_id: string | null } | null;
+  };
+
+
+  // Autoname (gated pilot): normalize the linked jobs' titles from their
+  // description/repair-type keywords, then keep the stored line-item
+  // descriptions (the printed document) in step.
+  const runAutoname = async () => {
+    if (!invoice || !business) return;
+    setJobBusy(true);
+    try {
+      const jobIds = Array.from(new Set(invoice.lineItems.map((li) => li.job_id).filter((x): x is string => !!x)));
+      const { data } = jobIds.length
+        ? await supabase.from('jobs').select('id, title, description, custom_fields').in('id', jobIds)
+        : { data: [] };
+      const renames = new Map<string, string>();
+      for (const j of (data ?? []) as { id: string; title: string | null; description: string | null; custom_fields: Record<string, unknown> | null }[]) {
+        const to = autonameJobTitle(j.title ?? '', detectAutonameType({ title: j.title, description: j.description, customFields: j.custom_fields }), j.description);
+        if (to && to !== j.title) renames.set(j.id, to);
+      }
+      if (renames.size === 0) { Alert.alert('', tInv.autonameNone); return; }
+      for (const [jid, to] of Array.from(renames.entries())) await supabase.from('jobs').update({ title: to }).eq('id', jid);
+      const { data: invRow } = await supabase.from('invoices').select('line_items').eq('id', id).single();
+      const items = ((invRow?.line_items ?? []) as { job_id?: string | null; addon?: boolean }[]).map((it) =>
+        it.job_id && renames.has(it.job_id) && !it.addon ? { ...it, description: renames.get(it.job_id) } : it);
+      await supabase.from('invoices').update({ line_items: items }).eq('id', id);
+      void logAudit(supabase, business.id, 'invoice.autoname', 'invoice', id, { invoice_number: invoice.invoiceNumber, renamed: renames.size });
+      await reloadInvoice();
+      Alert.alert('', tInv.autonameDone.replace('{{count}}', String(renames.size)));
+    } finally {
+      setJobBusy(false);
+    }
   };
 
   const reloadInvoice = useCallback(async () => {
@@ -579,7 +611,7 @@ export default function FacturaDetailRoute() {
   const submitPayment = async () => {
     if (!business || !invoice) return;
     const amount = parseFloat(payAmount);
-    if (!amount || amount <= 0) return;
+    if (!Number.isFinite(amount) || amount < 0) return;
     setPayBusy(true);
     const method = (payMethodKey === 'other' ? payMethodOther.trim() : tInv.payments.methods[payMethodKey]) || null;
     // Upload a newly-picked photo (keep the existing path when editing untouched).
@@ -1074,6 +1106,7 @@ export default function FacturaDetailRoute() {
         onEdit={invoice && canEdit ? () => router.replace(`/dashboard/facturas/nueva?edit=${id}` as never) : undefined}
         onDelete={invoice && canDelete ? confirmDelete : undefined}
         onAutoprice={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? runAutoprice : undefined}
+        onAutoname={autonameEnabled(business?.id) && canEdit ? runAutoname : undefined}
         onClearPrices={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? clearPrices : undefined}
         autopriceVerify={showInvVerify}
         onMoveJob={canEdit ? openMove : undefined}
@@ -1360,7 +1393,7 @@ export default function FacturaDetailRoute() {
 
             <Pressable
               onPress={submitPayment}
-              disabled={payBusy || !parseFloat(payAmount)}
+              disabled={payBusy || !(parseFloat(payAmount) >= 0)}
               className="mt-4 py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50"
             >
               <Text className="text-sm font-semibold text-white">{payEditId ? tc.buttons.save : tInv.payments.recordBtn}</Text>

@@ -89,8 +89,10 @@ export function formatTime12h(input: string | Date | null | undefined): string {
     m = input.getMinutes();
   }
   const ampm = h >= 12 ? 'PM' : 'AM';
+  // Non-breaking space: "1:02 AM" must never wrap between the time and the
+  // meridiem ("…, 1:02\nAM · by …" read terribly on narrow headers).
   const h12 = h % 12 || 12;
-  return `${h12}:${pad(m)} ${ampm}`;
+  return `${h12}:${pad(m)}\u00A0${ampm}`;
 }
 
 /**

@@ -29,6 +29,7 @@ import { formatTime12h, formatPhoneInput, formatDateLong } from '@amixos/shared/
 import { detectJobConflicts, fetchJobsForConflictCheck, hasHardConflict, type ExistingAssignedJob, type JobConflict } from '@amixos/shared/lib/jobConflicts';
 import { Modal } from '@/components/ui/Modal';
 import { evaluateOperatingHours, normalizeOperatingHours } from '@amixos/shared/lib/operatingHours';
+import { normalizeImageFiles } from '@/lib/imageFile';
 
 interface Client { id: string; first_name: string; last_name: string; company: string | null; job_address?: string; city?: string; state?: string; contacts?: { name: string; role: string | null }[]; }
 interface Employee { id: string; first_name: string; last_name: string; role: string; }
@@ -1271,8 +1272,8 @@ function NuevoTrabajoContent() {
     allDay ? null : timeEnd,
   );
 
-  const addPendingPhotos = (ev: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(ev.target.files ?? []);
+  const addPendingPhotos = async (ev: React.ChangeEvent<HTMLInputElement>) => {
+    const files = await normalizeImageFiles(Array.from(ev.target.files ?? []));
     if (files.length) {
       setPendingPhotos(prev =>
         [...prev, ...files.map(file => ({ file, url: URL.createObjectURL(file) }))].slice(0, MAX_PHOTOS_PER_JOB),

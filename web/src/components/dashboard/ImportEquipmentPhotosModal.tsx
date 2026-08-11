@@ -17,6 +17,7 @@ import { resizeImage } from '@/components/jobs/JobPhotosSection';
 import { EQUIPMENT_BUCKET, MAX_PHOTOS_PER_EQUIPMENT, equipmentPhotoPath } from '@amixos/shared/lib/equipment';
 import { logImportRun } from '@amixos/shared/lib/importRunners';
 import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
+import { normalizeImageFiles } from '@/lib/imageFile';
 import {
   buildPhotoMatcher,
   removePendingName,
@@ -107,8 +108,9 @@ export function ImportEquipmentPhotosModal({ open, businessId, onClose }: Props)
     await supabase.from('equipment').update({ import_photo_names: remaining }).eq('id', equipmentId);
   };
 
-  const onFiles = async (files: File[]) => {
-    if (files.length === 0) return;
+  const onFiles = async (rawFiles: File[]) => {
+    if (rawFiles.length === 0) return;
+    const files = await normalizeImageFiles(rawFiles);
     const matcher = buildPhotoMatcher(pending);
     const base: Picked[] = files.map(file => ({ file, match: matcher.match(file.name), status: 'pending' as const }));
     const ids = Array.from(new Set(base.filter(p => p.match).map(p => p.match!.jobId)));

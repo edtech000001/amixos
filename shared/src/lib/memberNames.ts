@@ -32,10 +32,28 @@ export async function memberNameMap(
     if (e.user_id && name) empName[e.user_id] = name;
   }
 
+  // Email-derived fallbacks read poorly on "created by" lines
+  // ("thepivotbuilders.construction") — prettify: local part, separators to
+  // spaces, words capitalized ("Thepivotbuilders Construction").
+  const prettify = (raw: string): string => {
+    const local = raw.split('@')[0] ?? raw;
+    return local
+      .split(/[._\-+]+/)
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  };
+
   const map: Record<string, string> = { ...empName };
   for (const m of (members ?? []) as { user_id: string; email: string | null; display_name: string | null }[]) {
     if (!m.user_id) continue;
-    const label = empName[m.user_id] || m.display_name?.trim() || m.email || '';
+    const display = m.display_name?.trim() ?? '';
+    // Auth display names often ARE the email local part (signup default) —
+    // treat those as email-ish and prettify them too.
+    const label =
+      empName[m.user_id] ||
+      (display && !/^[\w.+-]+$/.test(display) ? display : '') ||
+      prettify(display || m.email || '');
     if (label) map[m.user_id] = label;
   }
   return map;

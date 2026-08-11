@@ -26,11 +26,13 @@ import { can } from '@amixos/shared/lib/permissions';
 import { resolveConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
 import { signedUrl } from '@amixos/shared/lib/storageUrls';
 import { INVOICE_PAYMENT_BUCKET, paymentPhotoPath } from '@amixos/shared/lib/invoicePayments';
+import { autonameEnabled, autonameJobTitle, detectAutonameType } from '@amixos/shared/lib/autoname';
 import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
 import { rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { secureShareToken } from '@amixos/shared/lib/shareToken';
+import { normalizeImageFile } from '@/lib/imageFile';
 
 const PAY_METHODS = ['cash', 'check', 'card', 'transfer', 'zelle', 'cashapp', 'venmo', 'paypal', 'moneyOrder', 'other'] as const;
 type PayMethodKey = (typeof PAY_METHODS)[number];
@@ -248,6 +250,37 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   }, [id, supabase]);
 
   // Re-fetch the invoice row (after a job add/remove/move changes totals).
+
+  // Autoname (gated pilot): normalize the linked jobs' titles from their
+  // description/repair-type keywords, then keep the stored line-item
+  // descriptions (the printed document) in step.
+  const runAutoname = async () => {
+    if (!invoice || !business) return;
+    setJobBusy(true);
+    try {
+      const jobIds = Array.from(new Set(invoice.lineItems.map(li => li.job_id).filter((x): x is string => !!x)));
+      const { data } = jobIds.length
+        ? await supabase.from('jobs').select('id, title, description, custom_fields').in('id', jobIds)
+        : { data: [] };
+      const renames = new Map<string, string>();
+      for (const j of (data ?? []) as { id: string; title: string | null; description: string | null; custom_fields: Record<string, unknown> | null }[]) {
+        const to = autonameJobTitle(j.title ?? '', detectAutonameType({ title: j.title, description: j.description, customFields: j.custom_fields }), j.description);
+        if (to && to !== j.title) renames.set(j.id, to);
+      }
+      if (renames.size === 0) { void alertMessage({ message: tInv.autonameNone }); return; }
+      for (const [jid, to] of Array.from(renames.entries())) await supabase.from('jobs').update({ title: to }).eq('id', jid);
+      const { data: invRow } = await supabase.from('invoices').select('line_items').eq('id', id).single();
+      const items = ((invRow?.line_items ?? []) as { job_id?: string | null; addon?: boolean }[]).map(it =>
+        it.job_id && renames.has(it.job_id) && !it.addon ? { ...it, description: renames.get(it.job_id) } : it);
+      await supabase.from('invoices').update({ line_items: items }).eq('id', id);
+      void logAudit(supabase, business.id, 'invoice.autoname', 'invoice', id, { invoice_number: invoice.invoiceNumber, renamed: renames.size });
+      await reloadInvoice();
+      void alertMessage({ message: tInv.autonameDone.replace('{{count}}', String(renames.size)) });
+    } finally {
+      setJobBusy(false);
+    }
+  };
+
   const reloadInvoice = useCallback(async () => {
     const { data } = await supabase.from('invoices')
       .select('*, clients(id, first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code), invoice_clients(clients(id, first_name, last_name, email, email_office, email_home, phone_cell, company, address, city, state, zip_code))')
@@ -657,7 +690,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const submitPayment = async () => {
     if (!business || !invoice) return;
     const amount = parseFloat(payAmount);
-    if (!amount || amount <= 0) return;
+    if (!Number.isFinite(amount) || amount < 0) return;
     setPayBusy(true);
     const method = paymentMethodLabel() || null;
     // Upload a newly-chosen photo; keep the existing path otherwise.
@@ -941,6 +974,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         onEdit={invoice && canEdit ? () => router.push(`/dashboard/facturas/nueva?edit=${id}`) : undefined}
         onDelete={invoice && canDelete ? () => setDeleteOpen(true) : undefined}
         onAutoprice={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? runAutoprice : undefined}
+        onAutoname={autonameEnabled(business?.id) && canEdit ? runAutoname : undefined}
         onClearPrices={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? clearPrices : undefined}
         autopriceVerify={showInvVerify}
         onMoveJob={canEdit ? openMove : undefined}
@@ -1204,7 +1238,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                 <img src={payPhotoFile ? URL.createObjectURL(payPhotoFile) : payPhotoExistingUrl!} alt="" className="w-14 h-14 rounded-lg object-cover border border-border" />
                 <label className="text-sm text-primary font-semibold cursor-pointer hover:underline">
                   {tInv.payments.changePhoto}
-                  <input type="file" accept="image/*" className="hidden" onChange={e => setPayPhotoFile(e.target.files?.[0] ?? null)} />
+                  <input type="file" accept="image/*" className="hidden" onChange={async e => { const f = e.target.files?.[0]; setPayPhotoFile(f ? await normalizeImageFile(f) : null); }} />
                 </label>
                 <button type="button" onClick={() => { setPayPhotoFile(null); setPayPhotoPath(null); setPayPhotoExistingUrl(null); setPayPhotoRemoved(true); }} className="text-sm text-red-600 font-semibold hover:underline">
                   {tInv.payments.removePhoto}
@@ -1213,11 +1247,11 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
             ) : (
               <label className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-surface px-3 py-2.5 text-sm text-muted font-medium cursor-pointer hover:bg-border-soft">
                 {tInv.payments.addPhoto}
-                <input type="file" accept="image/*" className="hidden" onChange={e => setPayPhotoFile(e.target.files?.[0] ?? null)} />
+                <input type="file" accept="image/*" className="hidden" onChange={async e => { const f = e.target.files?.[0]; setPayPhotoFile(f ? await normalizeImageFile(f) : null); }} />
               </label>
             )}
           </div>
-          <Button onClick={submitPayment} loading={payBusy} disabled={!parseFloat(payAmount)} fullWidth>
+          <Button onClick={submitPayment} loading={payBusy} disabled={!(parseFloat(payAmount) >= 0)} fullWidth>
             {payEditId ? tc.buttons.save : tInv.payments.recordBtn}
           </Button>
         </div>

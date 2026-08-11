@@ -281,6 +281,11 @@ export type DashboardDict = {
     emailBody: string;
     sendNoEmail: string;
     createdLabel: string;
+    moreActionsTitle: string;
+    shareLinkAction: string;
+    autonameBtn: string;
+    autonameDone: string;
+    autonameNone: string;
     lastEditedLabel: string;
     byUser: string;
     print: string;
@@ -600,6 +605,7 @@ export type DashboardDict = {
     bulkUnarchive: string;
     bulkMoveClient: string;
     confirmArchiveBulk: string;
+    archiveDisabledHint: string;
     archivedBadge: string;
     confirmDeleteBulk: string;
     batchInvoice: {
@@ -2941,6 +2947,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
       emailBody: 'Hola,\n\nAdjunto encontrarás tu factura.\nPuedes verla aquí: {{link}}\n\nGracias por tu preferencia.',
       sendNoEmail: 'Este cliente no tiene un correo guardado.',
       createdLabel: 'Creada',
+      moreActionsTitle: 'Más acciones',
+      shareLinkAction: 'Compartir enlace',
+      autonameBtn: 'Autonombre',
+      autonameDone: '{{count}} nombre(s) de trabajo actualizados.',
+      autonameNone: 'Los nombres ya están correctos.',
       lastEditedLabel: 'Última edición',
       byUser: 'por {{name}}',
       print: 'Imprimir / PDF',
@@ -3258,6 +3269,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       bulkUnarchive: 'Desarchivar',
       bulkMoveClient: 'Mover a cliente',
       confirmArchiveBulk: '¿Archivar {{count}} trabajo(s)? Se ocultan de las listas pero siguen contando en reportes y horas.',
+      archiveDisabledHint: 'Solo se archivan trabajos cerrados (completados, facturados, cancelados) que no estén ya archivados. Quita los demás de la selección.',
       archivedBadge: 'Archivado',
       confirmDeleteBulk: '¿Eliminar {{count}} trabajo(s) permanentemente? Se borrarán también sus fotos, líneas y asignaciones.',
       batchInvoice: {
@@ -5586,6 +5598,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
       emailBody: 'Hi,\n\nPlease find your invoice attached.\nYou can view it here: {{link}}\n\nThank you for your business.',
       sendNoEmail: 'This client has no email on file.',
       createdLabel: 'Created',
+      moreActionsTitle: 'More actions',
+      shareLinkAction: 'Share link',
+      autonameBtn: 'Autoname',
+      autonameDone: '{{count}} job name(s) updated.',
+      autonameNone: 'Names already look good.',
       lastEditedLabel: 'Last edited',
       byUser: 'by {{name}}',
       print: 'Print / PDF',
@@ -5903,6 +5920,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       bulkUnarchive: 'Unarchive',
       bulkMoveClient: 'Move to client',
       confirmArchiveBulk: 'Archive {{count}} job(s)? They are hidden from lists but still count in reports and hours.',
+      archiveDisabledHint: "Only closed jobs (completed, invoiced, cancelled) that aren't already archived can be archived. Unselect the others.",
       archivedBadge: 'Archived',
       confirmDeleteBulk: 'Delete {{count}} job(s) permanently? Their photos, line items, and assignments will be removed too.',
       batchInvoice: {

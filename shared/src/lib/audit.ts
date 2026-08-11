@@ -26,6 +26,7 @@ export type AuditAction =
   | 'invoice.payment'
   | 'invoice.payment_deleted'
   | 'invoice.payment_edited'
+  | 'invoice.autoname'
   | 'invoice.unpaid'
   | 'invoice.paid'
   | 'invoice.voided'
@@ -119,6 +120,7 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, { es: string; en: string }>
   'invoice.payment':     { es: 'Pago registrado',           en: 'Payment recorded' },
   'invoice.payment_deleted': { es: 'Pago eliminado',        en: 'Payment deleted' },
   'invoice.payment_edited': { es: 'Pago editado',           en: 'Payment edited' },
+  'invoice.autoname':      { es: 'Nombres de trabajos normalizados', en: 'Job names normalized' },
   'invoice.unpaid':      { es: 'Factura marcada como no pagada', en: 'Invoice marked unpaid' },
   'invoice.paid':        { es: 'Factura pagada',           en: 'Invoice paid' },
   'invoice.voided':      { es: 'Factura anulada',          en: 'Invoice voided' },
