@@ -1,3 +1,4 @@
+import { todayLocalISO } from '@amixos/shared/lib/format';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, View, Text, Pressable, TextInput, ScrollView, Modal as RNModal } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -372,7 +373,7 @@ export default function TrabajosTab() {
 
   const updateStatus = async (id: string, status: string) => {
     const update: any = { status };
-    if (status === 'completed') update.completed_date = new Date().toISOString().split('T')[0];
+    if (status === 'completed') update.completed_date = todayLocalISO();
     if (status === 'sent') update.sent_at = new Date().toISOString();
     if (status === 'accepted') update.accepted_at = new Date().toISOString();
     if (status === 'declined') update.declined_at = new Date().toISOString();

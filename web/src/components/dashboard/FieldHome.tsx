@@ -113,13 +113,15 @@ export function FieldHome() {
   const fmtTime = (iso: string) =>
     new Intl.DateTimeFormat(t.dateLocale, { hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
 
-  const fmtDate = (dateStr: string | null) => {
+  const fmtDate = (dateStr: string | null, opts?: { absolute?: boolean }) => {
     if (!dateStr) return f.noDate;
     const date = new Date(`${dateStr}T00:00:00`);
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const diff = Math.round((date.getTime() - today.getTime()) / 86400000);
-    if (diff === 0) return t.home.upcomingJobs.today;
-    if (diff === 1) return t.home.upcomingJobs.tomorrow;
+    if (!opts?.absolute) {
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const diff = Math.round((date.getTime() - today.getTime()) / 86400000);
+      if (diff === 0) return t.home.upcomingJobs.today;
+      if (diff === 1) return t.home.upcomingJobs.tomorrow;
+    }
     return new Intl.DateTimeFormat(t.dateLocale, { day: 'numeric', month: 'short' }).format(date);
   };
 
@@ -159,7 +161,9 @@ export function FieldHome() {
               )}
             </div>
             <div className="flex flex-col items-end gap-1.5 shrink-0">
-              <span className="text-[11px] font-semibold text-primary bg-primary/10 px-2 py-1 rounded-lg">{fmtDate(job.status === 'completed' ? (job.completedDate ?? job.scheduledDate) : job.scheduledDate)}</span>
+              <span className="text-[11px] font-semibold text-primary bg-primary/10 px-2 py-1 rounded-lg">{job.status === 'completed' || job.status === 'invoiced'
+                ? fmtDate(job.completedDate ?? job.scheduledDate, { absolute: true })
+                : fmtDate(job.scheduledDate)}</span>
               <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${JOB_STATUS_PILL[job.status] ?? 'bg-border-soft text-muted'}`}>
                 {t.jobs.statuses[statusKey] ?? job.status}
               </span>

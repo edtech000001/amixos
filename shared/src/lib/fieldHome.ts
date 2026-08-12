@@ -151,10 +151,10 @@ export async function fetchFieldHome(
   const oldestPeriod = getPayrollPeriod(freq, now, -(ACTIVE_HOURS_LOOKBACK_PERIODS - 1), anchor, customDays);
   const windowStartStr = [oldestPeriod.startStr, weekStartStr, monthStartStr].sort()[0];
 
-  // Last 7 days for "recent projects completed".
-  const recentSince = new Date(now); recentSince.setHours(0, 0, 0, 0);
-  recentSince.setDate(recentSince.getDate() - 6);
-  const recentSinceStr = ymdLocal(recentSince);
+  // "Recently completed" spans the CURRENT pay period — the crew reads it as
+  // "what am I getting paid for this check", so it must match Payroll exactly
+  // (a fixed 7-day lookback drifted from the period boundaries).
+  const currentPeriod = getPayrollPeriod(freq, now, 0, anchor, customDays);
 
   const [jobsRes, employeeRes, timesheetRes, completedRes, recentRes] = await Promise.all([
     supabase
@@ -186,17 +186,18 @@ export async function fetchFieldHome(
       .from('jobs')
       .select('id', { count: 'exact', head: true })
       .eq('business_id', businessId)
-      .eq('status', 'completed')
+      .in('status', ['completed', 'invoiced'])
       .gte('completed_date', monthStartStr),
-    // Recent completed (last 7 days), most recent first.
+    // Recently completed — the current pay period, most recent first.
     supabase
       .from('jobs')
       .select(
         'id, title, status, scheduled_date, completed_date, time_start, job_address, job_city, job_state, clients(first_name, last_name), job_assignments(is_lead, employees(user_id))',
       )
       .eq('business_id', businessId)
-      .eq('status', 'completed')
-      .gte('completed_date', recentSinceStr)
+      .in('status', ['completed', 'invoiced'])
+      .gte('completed_date', currentPeriod.startStr)
+      .lte('completed_date', currentPeriod.endStr)
       .order('completed_date', { ascending: false }),
   ]);
 

@@ -3,7 +3,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
-import { useAuthStore } from '@/lib/auth/store';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { can } from '@amixos/shared/lib/permissions';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
@@ -24,8 +23,7 @@ interface ApiResult {
 export default function SmsScreen() {
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business } = useApp();
-  const currentRole = useAuthStore(s => s.currentRole);
+  const { business, currentRole } = useApp();
   const [status, setStatus] = useState<SmsStatus | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [clients, setClients] = useState<SmsClientOption[]>([]);

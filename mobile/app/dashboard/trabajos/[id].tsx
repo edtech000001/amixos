@@ -265,7 +265,9 @@ export default function JobDetailRoute() {
   }, [from, navigation, routeKey]);
   const supabase = createSupabaseClient();
   const c = useThemeColors();
-  const { business } = useApp();
+  // currentRole from useApp is impersonation-aware — under "Ver como" it is
+  // the TARGET member's role, so every can.* gate previews faithfully.
+  const { business, currentRole } = useApp();
   // Labor/Material/Equipment/Other categories on job line items — hidden when
   // the business turns them off (billed flat / by qty × rate instead).
   const showItemTypes = business?.job_item_types_enabled !== false;
@@ -346,7 +348,6 @@ export default function JobDetailRoute() {
     );
   };
   const setActiveBusiness = useAuthStore((s) => s.setActiveBusiness);
-  const currentRole = useAuthStore((s) => s.currentRole);
   const authUser = useAuthStore((s) => s.user);
   const tw = full.dashboard.workspaces;
 
@@ -786,7 +787,7 @@ export default function JobDetailRoute() {
     setUpdatingStatus(true);
     const now = new Date().toISOString();
     const update: Record<string, string | null> = { status: newStatus, ...(extra ?? {}) };
-    if (newStatus === 'completed') update.completed_date = now.split('T')[0];
+    if (newStatus === 'completed') update.completed_date = todayLocalISO();
     if (newStatus === 'sent') update.sent_at = now;
     if (newStatus === 'accepted') update.accepted_at = now;
     if (newStatus === 'declined') update.declined_at = now;
@@ -1438,7 +1439,9 @@ export default function JobDetailRoute() {
             </Pressable>
           ) : null}
 
-          {canChangeStatus && job.status === 'invoiced' && job.invoice_id ? (
+          {/* Detaching from an invoice EDITS the invoice — job-status rights
+             (which assigned field crew have) aren't enough. */}
+          {canChangeStatus && can.editInvoice(currentRole) && job.status === 'invoiced' && job.invoice_id ? (
             <Pressable
               onPress={unInvoice}
               disabled={unInvoicing}

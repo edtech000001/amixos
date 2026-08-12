@@ -1,5 +1,6 @@
 'use client';
 
+import { todayLocalISO } from '@amixos/shared/lib/format';
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -432,7 +433,7 @@ export default function TrabajosPage() {
 
   const updateStatus = async (id: string, status: string) => {
     const update: any = { status };
-    if (status === 'completed') update.completed_date = new Date().toISOString().split('T')[0];
+    if (status === 'completed') update.completed_date = todayLocalISO();
     if (status === 'sent') update.sent_at = new Date().toISOString();
     if (status === 'accepted') update.accepted_at = new Date().toISOString();
     if (status === 'declined') update.declined_at = new Date().toISOString();

@@ -54,7 +54,7 @@ import { usStateName } from '@amixos/shared/lib/usStates';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
 import { parseHiddenFields, isJobFieldHidden, jobSectionHasVisibleField, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, type JobSectionKey, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
-import { formatTime12h, formatPhoneInput, formatDateLong } from '@amixos/shared/lib/format';
+import { formatTime12h, formatPhoneInput, formatDateLong, todayLocalISO } from '@amixos/shared/lib/format';
 import { detectJobConflicts, fetchJobsForConflictCheck, hasHardConflict, type ExistingAssignedJob, type JobConflict } from '@amixos/shared/lib/jobConflicts';
 import { confirm } from '@amixos/shared/ui/confirmBus';
 import { UserPlus, AlertTriangle } from 'lucide-react-native';
@@ -1703,7 +1703,7 @@ export default function NuevoTrabajoRoute() {
           const createStamps: Record<string, unknown> = {};
           if (status === 'scheduled' || status === 'in_progress' || status === 'completed') createStamps.scheduled_at = nowIso;
           if (status === 'in_progress' || status === 'completed') createStamps.in_progress_at = nowIso;
-          if (status === 'completed') { createStamps.completed_at = nowIso; createStamps.completed_date = nowIso.split('T')[0]; }
+          if (status === 'completed') { createStamps.completed_at = nowIso; createStamps.completed_date = todayLocalISO(); }
           const payload = { id: jobId, business_id: business.id, status, created_by: user?.id ?? null, ...jobData, ...createStamps };
           const insRes = await queuedInsert({
             table: 'jobs',

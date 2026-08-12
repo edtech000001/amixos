@@ -82,13 +82,15 @@ export function FieldHomeScreen({
   const fmtTime = (iso: string) =>
     new Intl.DateTimeFormat(t.dateLocale, { hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
 
-  const fmtDate = (dateStr: string | null) => {
+  const fmtDate = (dateStr: string | null, opts?: { absolute?: boolean }) => {
     if (!dateStr) return f.noDate;
     const date = new Date(`${dateStr}T00:00:00`);
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const diff = Math.round((date.getTime() - today.getTime()) / 86400000);
-    if (diff === 0) return t.home.upcomingJobs.today;
-    if (diff === 1) return t.home.upcomingJobs.tomorrow;
+    if (!opts?.absolute) {
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const diff = Math.round((date.getTime() - today.getTime()) / 86400000);
+      if (diff === 0) return t.home.upcomingJobs.today;
+      if (diff === 1) return t.home.upcomingJobs.tomorrow;
+    }
     return new Intl.DateTimeFormat(t.dateLocale, { day: 'numeric', month: 'short' }).format(date);
   };
 
@@ -123,7 +125,9 @@ export function FieldHomeScreen({
             </View>
             <View className="items-end gap-1.5">
               <View className="bg-primary/10 px-2 py-1 rounded-lg">
-                <Text className="text-[11px] font-semibold text-primary">{fmtDate(job.status === 'completed' ? (job.completedDate ?? job.scheduledDate) : job.scheduledDate)}</Text>
+                <Text className="text-[11px] font-semibold text-primary">{job.status === 'completed' || job.status === 'invoiced'
+                    ? fmtDate(job.completedDate ?? job.scheduledDate, { absolute: true })
+                    : fmtDate(job.scheduledDate)}</Text>
               </View>
               <View className={`px-2 py-0.5 rounded-full ${JOB_STATUS_PILL_BG[job.status] ?? 'bg-border-soft'}`}>
                 <Text className={`text-[10px] font-semibold ${JOB_STATUS_PILL_TEXT[job.status] ?? 'text-muted'}`}>

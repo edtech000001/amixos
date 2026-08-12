@@ -251,7 +251,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     setUpdatingStatus(true);
     const now = new Date().toISOString();
     const update: any = { status: newStatus, ...(extra ?? {}) };
-    if (newStatus === 'completed') update.completed_date = now.split('T')[0];
+    if (newStatus === 'completed') update.completed_date = todayLocalISO();
     if (newStatus === 'sent') update.sent_at = now;
     if (newStatus === 'accepted') update.accepted_at = now;
     if (newStatus === 'declined') update.declined_at = now;
@@ -1115,8 +1115,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               </div>
             )}
 
-            {/* Un-invoice — undo an accidental "facturado". */}
-            {job.status === 'invoiced' && job.invoice_id && (
+            {/* Un-invoice — undo an accidental "facturado". Detaching EDITS the
+               invoice, so it needs the invoice permission, not job rights. */}
+            {can.editInvoice(currentRole) && job.status === 'invoiced' && job.invoice_id && (
               <>
                 <Button variant="secondary" size="sm" onClick={() => { window.location.href = `/dashboard/facturas/${job.invoice_id}?from=job&job=${job.id}`; }}>
                   <FileText size={14} className="mr-1.5"/> {td.viewInvoiceBtn}
