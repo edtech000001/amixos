@@ -343,10 +343,6 @@ export function InvoiceDetailScreen({
                 </View>
               ) : null}
             </View>
-            <Text className="text-xs text-faint mt-1">
-              {tInv.createdLabel}: {formatDateTimeLong(invoice.createdAt, dateLoc)}
-              {invoice.createdByName ? ` · ${tInv.byUser.replace('{{name}}', invoice.createdByName)}` : ''}
-            </Text>
           </View>
         </View>
         <View className="flex-row items-center gap-1 shrink-0">
@@ -366,6 +362,13 @@ export function InvoiceDetailScreen({
           ) : null}
         </View>
       </View>
+
+      {/* Created — full width so it stays on ONE line (inside the header
+         column it wrapped between the time and the author). */}
+      <Text className="text-xs text-faint -mt-2 mb-4" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+        {tInv.createdLabel}: {formatDateTimeLong(invoice.createdAt, dateLoc)}
+        {invoice.createdByName ? ` · ${tInv.byUser.replace('{{name}}', invoice.createdByName)}` : ''}
+      </Text>
 
       {/* Quick total */}
       <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 flex-row items-center gap-3 mb-4">
