@@ -2006,7 +2006,12 @@ export default function NuevoTrabajoRoute() {
              detail page now so this form stays focused on scheduling. */}
 
           {/* Notes (section hideable in job mode) */}
-          {(isProposal || secVisible('notes') || customFieldsFor('notes').length > 0) && (
+          {/* Mirror the fields' own gates: internal notes are role-gated (field
+             creators never see them) — an empty card must not render. */}
+          {(isProposal
+            || !fHidden('worker_notes')
+            || (!restrictedCreator && !fHidden('internal_notes'))
+            || customFieldsFor('notes').length > 0) && (
           <Section title={t.notesHeading} icon={<FileText size={14} color={c.primary} />}>
             {isProposal ? (
               <View className="mb-3">

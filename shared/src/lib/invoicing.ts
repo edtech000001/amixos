@@ -53,6 +53,9 @@ export interface InvoiceLineItem {
   /** Date the work was performed (manual lines — linked jobs carry their own
    *  dates). Shown inline + appended to the printed description. */
   service_date?: string | null;
+  /** Temporarily excluded: kept on the invoice (dimmed in-app) but omitted
+   *  from totals AND the printed document until re-enabled. */
+  excluded?: boolean;
   /** This line is a flat add-on/surcharge (e.g. a $600 loading fee) that
    *  autoprice split off its base job line. It carries the base line's job_id
    *  so it moves/removes with the job, but the UI shows its own description
@@ -117,7 +120,8 @@ export function computeTotals(
   // binary noise (….125 computes as .124999… in floats) without altering
   // the decimal value — source data has ≤4 decimals, 6 is lossless.
   const dec = (n: number) => Number(n.toFixed(6));
-  const subtotal = dec(lineItems.reduce((s, i) => s + dec((Number(i.qty) || 0) * (Number(i.rate) || 0)), 0));
+  // Excluded lines contribute nothing until re-enabled.
+  const subtotal = dec(lineItems.reduce((s, i) => (i.excluded ? s : s + dec((Number(i.qty) || 0) * (Number(i.rate) || 0))), 0));
   const tax = dec(subtotal * ((taxRate ?? 0) / 100));
   const total = dec(subtotal + tax - (discount ?? 0));
   return { subtotal, tax, total };
@@ -172,7 +176,7 @@ export async function createInvoiceFromJobs(
 
   const { data: jobs } = await supabase
     .from('jobs')
-    .select('id, title, client_id, custom_fields, location_id')
+    .select('id, title, client_id, custom_fields, location_id, scheduled_date')
     .in('id', opts.jobIds);
   if (!jobs?.length) return { ok: false, error: 'no_jobs' };
 
@@ -185,9 +189,10 @@ export async function createInvoiceFromJobs(
     .select('*')
     .in('job_id', opts.jobIds);
 
-  // Preserve the order the caller passed the jobs in.
+  // Chronological by job date (undated last); ties keep the caller's order.
   const byId = new Map<string, any>(jobs.map((j: any) => [j.id, j]));
-  const orderedJobs: any[] = opts.jobIds.map(id => byId.get(id)).filter(Boolean);
+  const orderedJobs: any[] = opts.jobIds.map(id => byId.get(id)).filter(Boolean)
+    .sort((a: any, b: any) => (a.scheduled_date ?? '9999').localeCompare(b.scheduled_date ?? '9999'));
   const lineItems: InvoiceLineItem[] = [];
   for (const j of orderedJobs) {
     lineItems.push(...lineItemsForJob(j.id, j.title ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels, { hideTypes: opts.hideItemTypes, placeholderQty: placeholderQtyFor(j, opts.qtyField) }));
@@ -263,7 +268,7 @@ export async function createInvoicesFromJobs(
 
   const { data: jobs } = await supabase
     .from('jobs')
-    .select('id, title, client_id, custom_fields, location_id')
+    .select('id, title, client_id, custom_fields, location_id, scheduled_date')
     .in('id', opts.jobIds);
   if (!jobs?.length) return { ok: false, error: 'no_jobs' };
 
@@ -273,8 +278,8 @@ export async function createInvoicesFromJobs(
     .in('job_id', opts.jobIds);
   const allItems = (jobItems ?? []) as JobItemRow[];
 
-  // Group jobs by client, preserving the caller's job order within each group
-  // and the order clients first appear.
+  // Group jobs by client (clients keep first-appearance order); within each
+  // group jobs go chronologically by date, undated last.
   const byId = new Map<string, any>((jobs as any[]).map(j => [j.id, j]));
   const groups = new Map<string, any[]>();
   for (const id of opts.jobIds) {
@@ -283,6 +288,9 @@ export async function createInvoicesFromJobs(
     const key = j.client_id ?? '\u0000'; // null client → shared "no client" bucket
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(j);
   }
+  Array.from(groups.values()).forEach(g => {
+    g.sort((a, b) => (a.scheduled_date ?? '9999').localeCompare(b.scheduled_date ?? '9999'));
+  });
 
   const lang = invoiceDefaultLanguage(opts.invoiceTemplate);
   const { count } = await supabase
@@ -443,6 +451,83 @@ export async function addManualLineItem(
     .update({ line_items: next, subtotal_amount: subtotal, tax_amount: tax, total_amount: total })
     .eq('id', opts.invoiceId);
   return { ok: true };
+}
+
+/** Reorder the STORED line items chronologically: job-backed groups (main
+ *  line + its add-ons stay together) by the job's scheduled date, manual
+ *  lines by their service_date; undated lines sink last. Ties keep their
+ *  current relative order. Totals are unchanged; the printed/shared document
+ *  follows since it renders the stored order. */
+export async function sortInvoiceLinesByDate(
+  supabase: Supa,
+  opts: { invoiceId: string },
+): Promise<void> {
+  const { data: inv } = await supabase
+    .from('invoices')
+    .select('id, line_items')
+    .eq('id', opts.invoiceId)
+    .single();
+  if (!inv) return;
+  const items = (inv.line_items ?? []) as InvoiceLineItem[];
+  if (items.length < 2) return;
+
+  const jobIds = Array.from(new Set(items.map(i => i.job_id).filter((x): x is string => !!x)));
+  const dates = new Map<string, string>();
+  if (jobIds.length) {
+    const { data: jobs } = await supabase
+      .from('jobs')
+      .select('id, scheduled_date')
+      .in('id', jobIds);
+    for (const j of (jobs ?? []) as { id: string; scheduled_date: string | null }[]) {
+      if (j.scheduled_date) dates.set(j.id, j.scheduled_date);
+    }
+  }
+
+  // Group: a job's main line + its add-on lines move as one unit.
+  type Group = { date: string; items: InvoiceLineItem[] };
+  const groups: Group[] = [];
+  const groupByJob = new Map<string, Group>();
+  for (const li of items) {
+    if (li.job_id) {
+      let g = groupByJob.get(li.job_id);
+      if (!g) {
+        g = { date: dates.get(li.job_id) ?? '9999-12-31', items: [] };
+        groupByJob.set(li.job_id, g);
+        groups.push(g);
+      }
+      g.items.push(li);
+    } else {
+      groups.push({ date: li.service_date ?? '9999-12-31', items: [li] });
+    }
+  }
+  const sorted = groups
+    .map((g, i) => ({ g, i }))
+    .sort((a, b) => a.g.date.localeCompare(b.g.date) || a.i - b.i)
+    .flatMap(({ g }) => g.items);
+  await supabase.from('invoices').update({ line_items: sorted }).eq('id', opts.invoiceId);
+}
+
+/** Toggle a line's temporary exclusion and recompute totals. The line stays
+ *  attached (and dimmed in the app) so it can be re-enabled later; while
+ *  excluded it is absent from totals and the printed/shared document. */
+export async function setLineItemExcluded(
+  supabase: Supa,
+  opts: { invoiceId: string; index: number; excluded: boolean },
+): Promise<void> {
+  const { data: inv } = await supabase
+    .from('invoices')
+    .select('id, line_items, tax_rate, discount')
+    .eq('id', opts.invoiceId)
+    .single();
+  if (!inv) return;
+  const items = (inv.line_items ?? []) as InvoiceLineItem[];
+  if (opts.index < 0 || opts.index >= items.length) return;
+  const next = items.map((li, i) => (i === opts.index ? { ...li, excluded: opts.excluded } : li));
+  const { subtotal, tax, total } = computeTotals(next, inv.tax_rate ?? 0, inv.discount ?? 0);
+  await supabase
+    .from('invoices')
+    .update({ line_items: next, subtotal_amount: subtotal, tax_amount: tax, total_amount: total })
+    .eq('id', opts.invoiceId);
 }
 
 /** Update a single hand-entered (manual) line item by index and recompute

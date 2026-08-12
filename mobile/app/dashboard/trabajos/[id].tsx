@@ -1629,7 +1629,8 @@ export default function JobDetailRoute() {
             </Pressable>
           ) : null}
 
-          {job.internal_notes ? (
+          {/* Office-side note — hidden from assigned-only roles entirely. */}
+          {job.internal_notes && can.seeInternalJobNotes(currentRole) ? (
             <View>
               <Text className="text-xs text-muted mb-1">{td.internalNote}</Text>
               <Text className="text-sm text-ink">{job.internal_notes}</Text>

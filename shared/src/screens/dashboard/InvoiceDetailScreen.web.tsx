@@ -7,6 +7,8 @@
 import { useState } from 'react';
 import {
   ArrowLeft,
+  Eye,
+  EyeOff,
   ChevronDown,
   Printer,
   Link2,
@@ -58,6 +60,8 @@ export interface InvoiceDetailLineItem {
   addon?: boolean;
   /** Per-unit add-ons folded into this line's rate, as a small indicator. */
   addonNote?: string | null;
+  /** Temporarily excluded from totals + the printed document (dimmed row). */
+  excluded?: boolean;
   /** Date the work was performed (manual lines). */
   service_date?: string | null;
 }
@@ -148,10 +152,15 @@ export interface InvoiceDetailScreenProps {
   onMoveJob?: (jobId: string) => void;
   onRemoveJob?: (jobId: string) => void;
   onAddJob?: () => void;
+  /** Reorder the stored lines chronologically (job dates / service dates). */
+  onSortLines?: () => void;
   /** Remove a hand-entered (manual) line item by its index. */
   onRemoveManualItem?: (index: number) => void;
   /** Edit a hand-entered (manual) line item by its index. */
   onEditManualItem?: (index: number) => void;
+  /** Toggle a line's temporary exclusion (eye icon): kept on the invoice but
+   *  omitted from totals + the printed document until re-enabled. */
+  onToggleLineExcluded?: (index: number, excluded: boolean) => void;
   /** Link an imported/manual line (no job) to an existing job. */
   onLinkLine?: (index: number) => void;
   /** Open a job's detail (line-item title becomes a link). */
@@ -221,6 +230,7 @@ export function InvoiceDetailScreen({
   onMoveJob,
   onRemoveJob,
   onAddJob,
+  onSortLines,
   onAutoprice,
   onAutoname,
   onClearPrices,
@@ -228,6 +238,7 @@ export function InvoiceDetailScreen({
   onRemoveManualItem,
   onEditManualItem,
   onLinkLine,
+  onToggleLineExcluded,
   onJobPress,
   jobBusy,
   onSendInvoice,
@@ -529,7 +540,7 @@ export function InvoiceDetailScreen({
               const showActions = editable && canEdit && !!jid && !isAddon && !!onRemoveJob && !seen.has(jid);
               if (jid) seen.add(jid);
               return (
-                <div key={idx} className="flex items-center justify-between gap-3 py-2.5 border-b border-border">
+                <div key={idx} className={`flex items-center justify-between gap-3 py-2.5 border-b border-border ${li.excluded ? 'opacity-40' : ''}`}>
                   <div className="flex-1 pr-3 min-w-0">
                     {jid && onJobPress && !isAddon ? (
                       <button onClick={() => onJobPress(jid)} className="block text-sm font-medium text-primary hover:underline truncate text-left max-w-full">
@@ -588,18 +599,36 @@ export function InvoiceDetailScreen({
                         ) : null}
                       </>
                     ) : null}
-                    <p className="text-sm font-semibold text-ink w-24 text-right">{fmt(q * r)}</p>
+                    {onToggleLineExcluded && canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => onToggleLineExcluded(idx, !li.excluded)}
+                        disabled={jobBusy}
+                        title={li.excluded ? undefined : tInv.jobsSection.excludeHint}
+                        className="p-1 rounded-lg text-faint hover:text-primary hover:bg-primary/10 disabled:opacity-40"
+                      >
+                        {li.excluded ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    ) : null}
+                    <p className={`text-sm font-semibold w-24 text-right ${li.excluded ? 'text-faint line-through' : 'text-ink'}`}>{fmt(q * r)}</p>
                   </div>
                 </div>
               );
             });
           })()}
 
-          {editable && onAddJob && canEdit ? (
-            <button onClick={onAddJob} disabled={jobBusy} className="mt-3 text-sm font-semibold text-primary hover:underline disabled:opacity-40">
-              + {tInv.jobsSection.addBtn}
-            </button>
-          ) : null}
+          <div className="flex items-center gap-5">
+            {editable && onAddJob && canEdit ? (
+              <button onClick={onAddJob} disabled={jobBusy} className="mt-3 text-sm font-semibold text-primary hover:underline disabled:opacity-40">
+                + {tInv.jobsSection.addBtn}
+              </button>
+            ) : null}
+            {onSortLines && canEdit && invoice.lineItems.length > 1 ? (
+              <button onClick={onSortLines} disabled={jobBusy} className="mt-3 text-sm font-semibold text-muted hover:text-primary hover:underline disabled:opacity-40">
+                {tInv.jobsSection.sortByDateBtn}
+              </button>
+            ) : null}
+          </div>
 
           {autopriceVerify ? (
             <div className="mt-3 rounded-xl bg-amber-500/10 border border-amber-100 px-3 py-2 text-xs text-amber-700">

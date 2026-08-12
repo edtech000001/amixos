@@ -2127,7 +2127,12 @@ function NuevoTrabajoContent() {
         )}
 
         {/* ── Notas (section hideable in job mode) */}
-        {(isEditProposal || !fHidden('internal_notes') || customFieldsFor('notes').length > 0) && (
+        {/* Mirror the fields' own gates: internal notes are role-gated (field
+           creators never see them) — an empty card must not render. */}
+        {(isEditProposal
+          || !fHidden('worker_notes')
+          || (!restrictedCreator && !fHidden('internal_notes'))
+          || customFieldsFor('notes').length > 0) && (
         <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
           <div className="flex items-center gap-2 mb-3">
             <FileText size={15} className="text-primary"/>

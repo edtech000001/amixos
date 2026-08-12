@@ -367,6 +367,9 @@ export const can = {
   scheduleJobs:     (role: Role | null) => res(role, 'jobs')?.view === 'all' || cap(role, 'scheduleJobs'),
   // Role-editor toggle: NEW jobs default to "completed" for this role.
   completedByDefault: (role: Role | null) => cap(role, 'completedByDefault'),
+  // Internal job notes are office-side: any role limited to ASSIGNED jobs
+  // (field, worker-style customs) neither writes nor READS them.
+  seeInternalJobNotes: (role: Role | null) => res(role, 'jobs')?.view === 'all',
   // Estimates/proposals: requires job-create AND the createEstimates capability
   // (a per-role toggle so a business can let a role make work orders but not
   // estimates — e.g. field crew by default).

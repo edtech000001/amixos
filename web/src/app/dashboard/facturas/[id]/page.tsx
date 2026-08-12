@@ -27,7 +27,7 @@ import { resolveConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceT
 import { signedUrl } from '@amixos/shared/lib/storageUrls';
 import { INVOICE_PAYMENT_BUCKET, paymentPhotoPath } from '@amixos/shared/lib/invoicePayments';
 import { autonameEnabled, autonameJobTitle, detectAutonameType } from '@amixos/shared/lib/autoname';
-import { removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
+import { sortInvoiceLinesByDate, setLineItemExcluded, removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
 import { rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
@@ -288,6 +288,23 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     } finally {
       setJobBusy(false);
     }
+  };
+
+  // Eye toggle: temporarily exclude a line — totals + the printed document
+  // omit it until re-enabled (e.g. hold back a subcontractor offset line).
+  const toggleLineExcluded = async (index: number, excluded: boolean) => {
+    setJobBusy(true);
+    await setLineItemExcluded(supabase, { invoiceId: id, index, excluded });
+    await reloadInvoice();
+    setJobBusy(false);
+  };
+
+  // Reorder stored lines chronologically — the printed document follows.
+  const sortLines = async () => {
+    setJobBusy(true);
+    await sortInvoiceLinesByDate(supabase, { invoiceId: id });
+    await reloadInvoice();
+    setJobBusy(false);
   };
 
   const reloadInvoice = useCallback(async () => {
@@ -992,6 +1009,8 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         onRemoveManualItem={canEdit ? removeManual : undefined}
         onEditManualItem={canEdit ? editManual : undefined}
         onLinkLine={canEdit ? openLink : undefined}
+        onToggleLineExcluded={canEdit ? toggleLineExcluded : undefined}
+        onSortLines={canEdit ? sortLines : undefined}
         onJobPress={(jobId) => setPreviewJobId(jobId)}
         jobBusy={jobBusy}
         onSendInvoice={canEdit ? sendInvoice : undefined}

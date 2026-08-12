@@ -302,6 +302,8 @@ export type DashboardDict = {
       moveBtn: string;
       clearPricesBtn: string;
       serviceDateLabel: string;
+      excludeHint: string;
+      sortByDateBtn: string;
       clearPricesConfirm: string;
       linkBtn: string;
       linkTitle: string;
@@ -2967,6 +2969,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         moveBtn: 'Mover',
         clearPricesBtn: 'Borrar precios',
         serviceDateLabel: 'Fecha del trabajo (opcional)',
+        excludeHint: 'Excluir de la factura (temporal — los totales y el documento la omiten)',
+        sortByDateBtn: 'Ordenar por fecha',
         clearPricesConfirm: '¿Borrar todos los precios de esta factura? Las líneas vuelven a $0 para que puedas volver a usar Autoprecio.',
         linkBtn: 'Vincular',
         linkTitle: 'Vincular a un trabajo',
@@ -5619,6 +5623,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         moveBtn: 'Move',
         clearPricesBtn: 'Clear prices',
         serviceDateLabel: 'Date performed (optional)',
+        excludeHint: 'Exclude from invoice (temporary — totals and the document omit it)',
+        sortByDateBtn: 'Sort by date',
         clearPricesConfirm: 'Clear all prices on this invoice? Lines reset to $0 so you can re-run Autoprice.',
         linkBtn: 'Link',
         linkTitle: 'Link to a job',

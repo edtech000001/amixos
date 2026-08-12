@@ -937,7 +937,8 @@ export function buildInvoiceViewModel(
     };
   });
 
-  const items = invoice.lineItems.map(l => {
+  // Temporarily-excluded lines never reach the document (any renderer).
+  const items = invoice.lineItems.filter(l => !(l as { excluded?: boolean }).excluded).map(l => {
     const qty = Number(l.qty) || 0;
     const rate = Number(l.rate) || 0;
     return {

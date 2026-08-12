@@ -1351,7 +1351,8 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           )}
 
           {/* Internal notes */}
-          {job.internal_notes && (
+          {/* Office-side note — hidden from assigned-only roles entirely. */}
+          {job.internal_notes && can.seeInternalJobNotes(currentRole) && (
             <div className="bg-amber-500/10 border border-amber-200 rounded-2xl p-5">
               <h2 className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-2">{td.internalNote}</h2>
               <p className="text-sm text-ink whitespace-pre-wrap">{job.internal_notes}</p>

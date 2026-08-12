@@ -3,6 +3,8 @@ import { View, Text, Pressable, ScrollView, Image, Modal as RNModal } from 'reac
 import {
   ArrowLeft,
   MoreHorizontal,
+  Eye,
+  EyeOff,
   ChevronDown,
   Printer,
   Link2,
@@ -55,6 +57,8 @@ export interface InvoiceDetailLineItem {
   addon?: boolean;
   /** Per-unit add-ons folded into this line's rate, as a small indicator. */
   addonNote?: string | null;
+  /** Temporarily excluded from totals + the printed document (dimmed row). */
+  excluded?: boolean;
   /** Date the work was performed (manual lines). */
   service_date?: string | null;
 }
@@ -148,10 +152,15 @@ export interface InvoiceDetailScreenProps {
   onMoveJob?: (jobId: string) => void;
   onRemoveJob?: (jobId: string) => void;
   onAddJob?: () => void;
+  /** Reorder the stored lines chronologically (job dates / service dates). */
+  onSortLines?: () => void;
   /** Remove a hand-entered (manual) line item by its index. */
   onRemoveManualItem?: (index: number) => void;
   /** Edit a hand-entered (manual) line item by its index. */
   onEditManualItem?: (index: number) => void;
+  /** Toggle a line's temporary exclusion (eye icon): kept on the invoice but
+   *  omitted from totals + the printed document until re-enabled. */
+  onToggleLineExcluded?: (index: number, excluded: boolean) => void;
   /** Link an imported/manual line (no job) to an existing job. */
   onLinkLine?: (index: number) => void;
   /** Open a job's detail (line-item title becomes tappable). */
@@ -226,9 +235,11 @@ export function InvoiceDetailScreen({
   onMoveJob,
   onRemoveJob,
   onAddJob,
+  onSortLines,
   onRemoveManualItem,
   onEditManualItem,
   onLinkLine,
+  onToggleLineExcluded,
   onJobPress,
   jobBusy,
   onSendInvoice,
@@ -517,7 +528,7 @@ export function InvoiceDetailScreen({
             const showActions = editable && canEdit && !!jid && !isAddon && !!onRemoveJob && !seen.has(jid);
             if (jid) seen.add(jid);
             return (
-              <View key={idx} className="py-2.5 border-b border-border">
+              <View key={idx} className={`py-2.5 border-b border-border ${li.excluded ? 'opacity-40' : ''}`}>
                 <View className="flex-row items-center justify-between">
                   <View className="flex-1 pr-3">
                     {jid && onJobPress && !isAddon ? (
@@ -539,7 +550,14 @@ export function InvoiceDetailScreen({
                     </Text>
                     {li.addonNote ? <Text className="text-[11px] text-faint mt-0.5">{li.addonNote}</Text> : null}
                   </View>
-                  <Text className="text-sm font-semibold text-ink">{fmt(q * r)}</Text>
+                  <View className="flex-row items-center gap-2">
+                    {onToggleLineExcluded && canEdit ? (
+                      <Pressable onPress={() => onToggleLineExcluded(idx, !li.excluded)} disabled={jobBusy} hitSlop={8} className="p-1 active:opacity-60">
+                        {li.excluded ? <EyeOff size={15} color={c.faint} /> : <Eye size={15} color={c.faint} />}
+                      </Pressable>
+                    ) : null}
+                    <Text className={`text-sm font-semibold ${li.excluded ? 'text-faint line-through' : 'text-ink'}`}>{fmt(q * r)}</Text>
+                  </View>
                 </View>
                 {showActions ? (
                   <View className="flex-row justify-end gap-4 mt-1.5">
@@ -584,11 +602,18 @@ export function InvoiceDetailScreen({
           });
         })()}
 
-        {editable && onAddJob && canEdit ? (
-          <Pressable onPress={onAddJob} disabled={jobBusy} className="self-start py-2 mt-1" hitSlop={6}>
-            <Text className="text-sm font-semibold text-primary">+ {tInv.jobsSection.addBtn}</Text>
-          </Pressable>
-        ) : null}
+        <View className="flex-row items-center gap-5">
+          {editable && onAddJob && canEdit ? (
+            <Pressable onPress={onAddJob} disabled={jobBusy} className="self-start py-2 mt-1" hitSlop={6}>
+              <Text className="text-sm font-semibold text-primary">+ {tInv.jobsSection.addBtn}</Text>
+            </Pressable>
+          ) : null}
+          {onSortLines && canEdit && invoice.lineItems.length > 1 ? (
+            <Pressable onPress={onSortLines} disabled={jobBusy} className="self-start py-2 mt-1" hitSlop={6}>
+              <Text className="text-sm font-semibold text-muted">{tInv.jobsSection.sortByDateBtn}</Text>
+            </Pressable>
+          ) : null}
+        </View>
 
         {autopriceVerify ? (
           <View className="mt-2 rounded-xl bg-amber-500/10 border border-amber-100 px-3 py-2">
