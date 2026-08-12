@@ -290,11 +290,15 @@ export default function FacturaDetailRoute() {
     setJobBusy(false);
   };
 
-  // Reorder stored lines chronologically — the printed document follows.
+  // Reorder stored lines by date — the printed document follows. First press
+  // sorts newest-first; pressing again flips the direction.
+  const [sortLinesDir, setSortLinesDir] = useState<'asc' | 'desc' | null>(null);
   const sortLines = async () => {
+    const dir = sortLinesDir === 'desc' ? 'asc' : 'desc';
     setJobBusy(true);
-    await sortInvoiceLinesByDate(supabase, { invoiceId: id });
+    await sortInvoiceLinesByDate(supabase, { invoiceId: id, direction: dir });
     await reloadInvoice();
+    setSortLinesDir(dir);
     setJobBusy(false);
   };
 
@@ -1143,6 +1147,7 @@ export default function FacturaDetailRoute() {
         onLinkLine={canEdit ? openLink : undefined}
         onToggleLineExcluded={canEdit ? toggleLineExcluded : undefined}
         onSortLines={canEdit ? sortLines : undefined}
+        sortLinesDir={sortLinesDir}
         onJobPress={(jobId) => setPreviewJobId(jobId)}
         jobBusy={jobBusy}
         onSendInvoice={canEdit ? sendInvoice : undefined}

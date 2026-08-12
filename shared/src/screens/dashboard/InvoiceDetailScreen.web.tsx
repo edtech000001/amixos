@@ -152,8 +152,10 @@ export interface InvoiceDetailScreenProps {
   onMoveJob?: (jobId: string) => void;
   onRemoveJob?: (jobId: string) => void;
   onAddJob?: () => void;
-  /** Reorder the stored lines chronologically (job dates / service dates). */
+  /** Reorder the stored lines by date. Repeated presses flip the direction. */
   onSortLines?: () => void;
+  /** Last applied direction — renders the ↓/↑ hint on the button. */
+  sortLinesDir?: 'asc' | 'desc' | null;
   /** Remove a hand-entered (manual) line item by its index. */
   onRemoveManualItem?: (index: number) => void;
   /** Edit a hand-entered (manual) line item by its index. */
@@ -231,6 +233,7 @@ export function InvoiceDetailScreen({
   onRemoveJob,
   onAddJob,
   onSortLines,
+  sortLinesDir,
   onAutoprice,
   onAutoname,
   onClearPrices,
@@ -625,7 +628,7 @@ export function InvoiceDetailScreen({
             ) : null}
             {onSortLines && canEdit && invoice.lineItems.length > 1 ? (
               <button onClick={onSortLines} disabled={jobBusy} className="mt-3 text-sm font-semibold text-muted hover:text-primary hover:underline disabled:opacity-40">
-                {tInv.jobsSection.sortByDateBtn}
+                {tInv.jobsSection.sortByDateBtn}{sortLinesDir ? (sortLinesDir === 'desc' ? ' ↓' : ' ↑') : ''}
               </button>
             ) : null}
           </div>

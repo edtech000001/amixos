@@ -152,8 +152,10 @@ export interface InvoiceDetailScreenProps {
   onMoveJob?: (jobId: string) => void;
   onRemoveJob?: (jobId: string) => void;
   onAddJob?: () => void;
-  /** Reorder the stored lines chronologically (job dates / service dates). */
+  /** Reorder the stored lines by date. Repeated presses flip the direction. */
   onSortLines?: () => void;
+  /** Last applied direction — renders the ↓/↑ hint on the button. */
+  sortLinesDir?: 'asc' | 'desc' | null;
   /** Remove a hand-entered (manual) line item by its index. */
   onRemoveManualItem?: (index: number) => void;
   /** Edit a hand-entered (manual) line item by its index. */
@@ -236,6 +238,7 @@ export function InvoiceDetailScreen({
   onRemoveJob,
   onAddJob,
   onSortLines,
+  sortLinesDir,
   onRemoveManualItem,
   onEditManualItem,
   onLinkLine,
@@ -610,7 +613,7 @@ export function InvoiceDetailScreen({
           ) : null}
           {onSortLines && canEdit && invoice.lineItems.length > 1 ? (
             <Pressable onPress={onSortLines} disabled={jobBusy} className="self-start py-2 mt-1" hitSlop={6}>
-              <Text className="text-sm font-semibold text-muted">{tInv.jobsSection.sortByDateBtn}</Text>
+              <Text className="text-sm font-semibold text-muted">{tInv.jobsSection.sortByDateBtn}{sortLinesDir ? (sortLinesDir === 'desc' ? ' ↓' : ' ↑') : ''}</Text>
             </Pressable>
           ) : null}
         </View>

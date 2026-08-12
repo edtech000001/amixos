@@ -189,10 +189,10 @@ export async function createInvoiceFromJobs(
     .select('*')
     .in('job_id', opts.jobIds);
 
-  // Chronological by job date (undated last); ties keep the caller's order.
+  // Newest job first (undated last); ties keep the caller's order.
   const byId = new Map<string, any>(jobs.map((j: any) => [j.id, j]));
   const orderedJobs: any[] = opts.jobIds.map(id => byId.get(id)).filter(Boolean)
-    .sort((a: any, b: any) => (a.scheduled_date ?? '9999').localeCompare(b.scheduled_date ?? '9999'));
+    .sort((a: any, b: any) => (b.scheduled_date ?? '0000').localeCompare(a.scheduled_date ?? '0000'));
   const lineItems: InvoiceLineItem[] = [];
   for (const j of orderedJobs) {
     lineItems.push(...lineItemsForJob(j.id, j.title ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels, { hideTypes: opts.hideItemTypes, placeholderQty: placeholderQtyFor(j, opts.qtyField) }));
@@ -279,7 +279,7 @@ export async function createInvoicesFromJobs(
   const allItems = (jobItems ?? []) as JobItemRow[];
 
   // Group jobs by client (clients keep first-appearance order); within each
-  // group jobs go chronologically by date, undated last.
+  // group jobs go newest-first by date, undated last.
   const byId = new Map<string, any>((jobs as any[]).map(j => [j.id, j]));
   const groups = new Map<string, any[]>();
   for (const id of opts.jobIds) {
@@ -289,7 +289,7 @@ export async function createInvoicesFromJobs(
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(j);
   }
   Array.from(groups.values()).forEach(g => {
-    g.sort((a, b) => (a.scheduled_date ?? '9999').localeCompare(b.scheduled_date ?? '9999'));
+    g.sort((a, b) => (b.scheduled_date ?? '0000').localeCompare(a.scheduled_date ?? '0000'));
   });
 
   const lang = invoiceDefaultLanguage(opts.invoiceTemplate);
@@ -460,7 +460,7 @@ export async function addManualLineItem(
  *  follows since it renders the stored order. */
 export async function sortInvoiceLinesByDate(
   supabase: Supa,
-  opts: { invoiceId: string },
+  opts: { invoiceId: string; direction?: 'asc' | 'desc' },
 ): Promise<void> {
   const { data: inv } = await supabase
     .from('invoices')
@@ -500,9 +500,10 @@ export async function sortInvoiceLinesByDate(
       groups.push({ date: li.service_date ?? '9999-12-31', items: [li] });
     }
   }
+  const dir = opts.direction === 'asc' ? 1 : -1; // default: newest first
   const sorted = groups
     .map((g, i) => ({ g, i }))
-    .sort((a, b) => a.g.date.localeCompare(b.g.date) || a.i - b.i)
+    .sort((a, b) => dir * a.g.date.localeCompare(b.g.date) || a.i - b.i)
     .flatMap(({ g }) => g.items);
   await supabase.from('invoices').update({ line_items: sorted }).eq('id', opts.invoiceId);
 }
