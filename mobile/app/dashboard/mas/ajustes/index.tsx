@@ -28,13 +28,29 @@ import { can } from '@amixos/shared/lib/permissions';
 import { SUPPORT_EMAIL, buildSupportMailto } from '@amixos/shared/lib/support';
 
 // Build identifier for the footer — app version (app.json) + native build
-// number. Helps support pin down which build a user is on (mobile installs lag
-// behind releases). Falls back to just the version if no build number.
+// number, PLUS the running OTA update's identity. The app version can't
+// change per-OTA (runtimeVersion policy = appVersion: bumping it would orphan
+// installed builds from updates), so the update id + publish date is what
+// tells you an `eas update` actually landed. Shows nothing extra when running
+// the bundle embedded in the binary (or Metro in dev).
 const APP_VERSION = (() => {
   const v = Constants.expoConfig?.version;
   if (!v) return '';
   const build = Application.nativeBuildVersion;
-  return build ? `v${v} (build ${build})` : `v${v}`;
+  let s = build ? `v${v} (build ${build})` : `v${v}`;
+  try {
+    // Lazy require: keeps this screen safe if expo-updates is ever absent.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Updates = require('expo-updates') as typeof import('expo-updates');
+    if (Updates.updateId && !Updates.isEmbeddedLaunch) {
+      const d = Updates.createdAt;
+      const stamp = d
+        ? ` ${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        : '';
+      s += `\nOTA ${Updates.updateId.slice(0, 8)}${stamp}`;
+    }
+  } catch { /* embedded / dev — no OTA line */ }
+  return s;
 })();
 
 interface SettingsItem {
