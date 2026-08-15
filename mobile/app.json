@@ -78,9 +78,7 @@
       }
     },
     "owner": "edvinramirez56",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "updates": {
       "url": "https://u.expo.dev/183b523e-43ee-4c85-8bdd-1e1851020cab"
     }
