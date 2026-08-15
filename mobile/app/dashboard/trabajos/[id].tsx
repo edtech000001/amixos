@@ -1803,7 +1803,9 @@ export default function JobDetailRoute() {
 
       {/* Job-items editor */}
       <RNModal visible={itemsEditOpen} transparent animationType="slide" onRequestClose={() => setItemsEditOpen(false)}>
-        <View className="flex-1 bg-black/40 justify-end">
+        {/* Keyboard shrinks the sheet instead of covering it — without this the
+            iOS keyboard sat on top of the description/qty inputs. */}
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 bg-black/40 justify-end">
           <View className="bg-card rounded-t-3xl pt-3" style={{ maxHeight: '88%' }}>
             <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">
@@ -1877,7 +1879,7 @@ export default function JobDetailRoute() {
               <Button onPress={saveItems} loading={savingItems} className="flex-1">{full.common.buttons.save}</Button>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </RNModal>
 
       {/* Delegate target picker */}
