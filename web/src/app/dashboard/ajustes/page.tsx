@@ -2525,6 +2525,7 @@ export default function AjustesPage() {
                             const firstInSec = i === 0;
                             const lastInSec = i === keys.length - 1;
                             return (
+                              <div>
                               <div className="flex items-center gap-2 px-4 py-3 bg-card">
                                 <button type="button" {...attributes} {...listeners}
                                   className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-faint hover:text-muted hover:bg-surface transition-colors shrink-0"
@@ -2589,6 +2590,25 @@ export default function AjustesPage() {
                                     </button>
                                   </>
                                 )}
+                              </div>
+                              {/* End-date sub-toggle: hiding it collapses the job
+                                  form's Date row to ONE picker (one-day-job
+                                  businesses). Same job_field_hidden map under the
+                                  pseudo-key 'end_date'; not draggable — it's part
+                                  of the Date row. */}
+                              {key === 'scheduled_date' && !jobHidden['scheduled_date'] && (
+                                <div className="flex items-center gap-2 pl-12 pr-4 py-2.5 bg-card border-t border-border-soft">
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-sm text-ink">{tJobNew.endDateLabel}</span>
+                                    <p className="text-xs text-faint mt-0.5">{tJobNew.endDateHint}</p>
+                                  </div>
+                                  <button onClick={() => toggleJobFieldHidden('end_date')}
+                                    className="p-1.5 rounded-lg hover:bg-border-soft transition-colors shrink-0"
+                                    aria-label={jobHidden['end_date'] ? (locale === 'en' ? 'Show field' : 'Mostrar campo') : (locale === 'en' ? 'Hide field' : 'Ocultar campo')}>
+                                    {jobHidden['end_date'] ? <EyeOff size={15} className="text-faint"/> : <Eye size={15} className="text-muted"/>}
+                                  </button>
+                                </div>
+                              )}
                               </div>
                             );
                             }}

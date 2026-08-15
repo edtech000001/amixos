@@ -911,6 +911,7 @@ export type DashboardDict = {
       allDayLabel: string;
       dateLabel: string;
       endDateLabel: string;
+      endDateHint: string;
       dateFieldLabel: string;
       timeFieldLabel: string;
       estimatedHoursLabel: string;
@@ -3779,6 +3780,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         allDayLabel: 'Todo el día',
         dateLabel: 'Fecha de inicio',
         endDateLabel: 'Fecha de fin',
+        endDateHint: 'Ocúltala para usar una sola fecha (trabajos de un día).',
         dateFieldLabel: 'Fecha',
         timeFieldLabel: 'Hora',
         estimatedHoursLabel: 'Horas estimadas',
@@ -6650,6 +6652,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         allDayLabel: 'All day',
         dateLabel: 'Start date',
         endDateLabel: 'Finish date',
+        endDateHint: 'Hide it to use a single date (one-day jobs).',
         dateFieldLabel: 'Date',
         timeFieldLabel: 'Time',
         estimatedHoursLabel: 'Estimated hours',

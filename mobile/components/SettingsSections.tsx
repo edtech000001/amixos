@@ -1731,6 +1731,7 @@ export function TrabajosFieldsSection() {
                   const label = isCustom ? (tpl?.field_label ?? key) : (FIELD_LABELS[key] ?? key);
                   const lastInSec = i === keys.length - 1;
                   return (
+                    <View>
                     <View className={`flex-row items-center gap-2 px-4 py-3 ${lastInSec ? '' : 'border-b border-border-soft'}`}>
                       {/* Drag affordance — the whole row is the long-press
                          target; this grip just signals "hold to reorder". */}
@@ -1778,6 +1779,22 @@ export function TrabajosFieldsSection() {
                           </Pressable>
                         </>
                       )}
+                    </View>
+                    {/* End-date sub-toggle: hiding it collapses the job form's
+                        Date row to ONE picker (one-day-job businesses). Rides
+                        the same job_field_hidden map under the pseudo-key
+                        'end_date'; not draggable — it's part of the Date row. */}
+                    {key === 'scheduled_date' && !hidden['scheduled_date'] ? (
+                      <View className={`flex-row items-center gap-2 pl-12 pr-4 py-2.5 border-t border-border-soft ${lastInSec ? '' : 'border-b'}`}>
+                        <View className="flex-1">
+                          <Text className="text-sm text-ink">{tJobNew.endDateLabel}</Text>
+                          <Text className="text-[11px] text-faint mt-0.5">{tJobNew.endDateHint}</Text>
+                        </View>
+                        <Pressable onPress={() => toggleHidden('end_date')} className="p-2 rounded-lg active:bg-border-soft">
+                          {hidden['end_date'] ? <EyeOff size={16} color={c.faint} /> : <Eye size={16} color={c.muted} />}
+                        </Pressable>
+                      </View>
+                    ) : null}
                     </View>
                   );
                   }}

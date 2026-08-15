@@ -506,9 +506,11 @@ function NuevoTrabajoContent() {
                 <Input label={t.issueDateLabel} type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)}/>
                 <Input label={t.expiryDateLabel} type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)}/>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className={`grid ${fHidden('end_date') ? 'grid-cols-1' : 'grid-cols-2'} gap-3`}>
                 <Input label={t.projectStartLabel} type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)}/>
-                <Input label={t.endDateLabel} type="date" value={endDate} onChange={e => setEndDate(e.target.value)}/>
+                {!fHidden('end_date') && (
+                  <Input label={t.endDateLabel} type="date" value={endDate} onChange={e => setEndDate(e.target.value)}/>
+                )}
               </div>
               {totalTimeText && (
                 <p className="text-xs text-muted text-right">
@@ -646,13 +648,18 @@ function NuevoTrabajoContent() {
     // ── Schedule section keys ──
     if (k === 'scheduled_date') {
       // "Date" is a single toggle that shows/hides both start AND end date.
+      // Hiding 'end_date' (Ajustes → Trabajos sub-toggle) collapses it to ONE
+      // full-width picker for one-day-job businesses.
       if (fHidden('scheduled_date')) return null;
+      const singleDate = fHidden('end_date');
       return (
-        <div key={k} className="grid grid-cols-2 gap-3 mt-3">
-          <Input label={jrl('scheduled_date', t.dateLabel)} type="date" value={scheduledDate}
+        <div key={k} className={`grid ${singleDate ? 'grid-cols-1' : 'grid-cols-2'} gap-3 mt-3`}>
+          <Input label={jrl('scheduled_date', singleDate ? t.dateFieldLabel : t.dateLabel)} type="date" value={scheduledDate}
             onChange={e => setScheduledDate(e.target.value)}/>
-          <Input label={t.endDateLabel} type="date" value={endDate}
-            onChange={e => setEndDate(e.target.value)}/>
+          {!singleDate && (
+            <Input label={t.endDateLabel} type="date" value={endDate}
+              onChange={e => setEndDate(e.target.value)}/>
+          )}
         </div>
       );
     }
@@ -1338,7 +1345,7 @@ function NuevoTrabajoContent() {
         coordinates: (mapLink.trim() || jobLat != null) ? 'x' : '',
         // 'Fecha' is ONE requirable unit covering start AND end date
         // (jobSections: scheduled_date represents both pickers).
-        scheduled_date: scheduledDate && endDate ? 'x' : '',
+        scheduled_date: scheduledDate && (fHidden('end_date') || endDate) ? 'x' : '',
         time_start: timeStart,
         time_end: timeEnd,
         total_hours: effectiveTotalHours != null ? 'x' : '',
@@ -1399,7 +1406,7 @@ function NuevoTrabajoContent() {
           discount: +discount.toFixed(2),
           total_amount: +total.toFixed(2),
           scheduled_date: scheduledDate || null,
-          end_date: endDate || null,
+          end_date: fHidden('end_date') ? null : (endDate || null),
           published_to_crew: restrictedCreator ? true : publishedToCrew,
           custom_fields: customFields,
         };
@@ -1454,7 +1461,7 @@ function NuevoTrabajoContent() {
           job_lat: jobLat,
           job_lng: jobLng,
           scheduled_date: scheduledDate || null,
-          end_date: endDate || null,
+          end_date: fHidden('end_date') ? null : (endDate || null),
           all_day: allDay,
           time_start: allDay ? null : (timeStart || null),
           time_end: allDay ? null : (timeEnd || null),

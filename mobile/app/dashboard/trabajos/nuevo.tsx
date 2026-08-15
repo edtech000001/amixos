@@ -783,9 +783,11 @@ export default function NuevoTrabajoRoute() {
                     onChange={setScheduledDate}
                   />
                 </View>
-                <View className="flex-1">
-                  <DatePicker label={t.endDateLabel} value={endDate} onChange={setEndDate} />
-                </View>
+                {!fHidden('end_date') ? (
+                  <View className="flex-1">
+                    <DatePicker label={t.endDateLabel} value={endDate} onChange={setEndDate} />
+                  </View>
+                ) : null}
               </View>
               {totalTimeText ? (
                 <View className="flex-row justify-end items-baseline gap-1.5">
@@ -982,15 +984,20 @@ export default function NuevoTrabajoRoute() {
     // ── Schedule section keys ──
     if (k === 'scheduled_date') {
       // "Date" is a single toggle that shows/hides both start AND end date.
+      // Hiding 'end_date' (Ajustes → Trabajos sub-toggle) collapses it to ONE
+      // full-width picker for one-day-job businesses.
       if (fHidden('scheduled_date')) return null;
+      const singleDate = fHidden('end_date');
       return (
         <View key={k} className="flex-row gap-3 mt-3">
           <View className="flex-1">
-            <DatePicker label={jrl('scheduled_date', t.dateLabel)} value={scheduledDate} onChange={setScheduledDate} />
+            <DatePicker label={jrl('scheduled_date', singleDate ? t.dateFieldLabel : t.dateLabel)} value={scheduledDate} onChange={setScheduledDate} />
           </View>
-          <View className="flex-1">
-            <DatePicker label={t.endDateLabel} value={endDate} onChange={setEndDate} />
-          </View>
+          {!singleDate ? (
+            <View className="flex-1">
+              <DatePicker label={t.endDateLabel} value={endDate} onChange={setEndDate} />
+            </View>
+          ) : null}
         </View>
       );
     }
@@ -1538,8 +1545,9 @@ export default function NuevoTrabajoRoute() {
         job_state: state,
         coordinates: (mapLink.trim() || jobLat != null) ? 'x' : '',
         // 'Fecha' is ONE requirable unit covering start AND end date
-        // (jobSections: scheduled_date represents both pickers).
-        scheduled_date: scheduledDate && endDate ? 'x' : '',
+        // (jobSections: scheduled_date represents both pickers). In
+        // single-date mode (end_date hidden) only the start is required.
+        scheduled_date: scheduledDate && (fHidden('end_date') || endDate) ? 'x' : '',
         time_start: timeStart,
         time_end: timeEnd,
         total_hours: effectiveTotalHours != null ? 'x' : '',
@@ -1622,7 +1630,7 @@ export default function NuevoTrabajoRoute() {
           issue_date: issueDate,
           expiry_date: expiryDate || null,
           scheduled_date: scheduledDate || null,
-          end_date: endDate || null,
+          end_date: fHidden('end_date') ? null : (endDate || null),
         };
 
         if (editId) {
@@ -1660,7 +1668,7 @@ export default function NuevoTrabajoRoute() {
           description: description.trim() || null,
           priority,
           scheduled_date: scheduledDate || null,
-          end_date: endDate || null,
+          end_date: fHidden('end_date') ? null : (endDate || null),
           all_day: allDay,
           time_start: allDay ? null : (timeStart || null),
           time_end: allDay ? null : (timeEnd || null),
