@@ -15,6 +15,9 @@ export type DashboardDict = {
     ajustes: string;
     mas: string;
     logout: string;
+    /** Section header for enabled INDUSTRY modules (registry category
+     *  'industry') — each is effectively its own app inside Amixos. */
+    appsSection: string;
     // Short one-liners shown under each label on mobile's Más list. Keeps
     // that menu visually consistent with Ajustes (card with description).
     descriptions: {
@@ -92,7 +95,7 @@ export type DashboardDict = {
     scopeNone: string;
     scopeAssigned: string;
     scopeAll: string;
-    resourceNames: { jobs: string; clients: string; invoices: string; employees: string; calendar: string; inventory: string; equipment: string; reports: string };
+    resourceNames: { jobs: string; clients: string; invoices: string; employees: string; calendar: string; inventory: string; equipment: string; rentals: string; reports: string };
     capNames: { manageSettings: string; manageMembers: string; viewAuditLog: string; viewAllTimesheets: string; assignWorkers: string; createEstimates: string; clockInOut: string; scheduleJobs: string; completedByDefault: string; switchLocations: string };
     newRole: string;
     newRoleTitle: string;
@@ -2324,6 +2327,222 @@ export type DashboardDict = {
         valid: string;
         noPlate: string;
       };
+      filters: {
+        title: string;
+        all: string;
+        plateExpired: string;
+        plateExpiring: string;
+        policyExpired: string;
+        policyExpiring: string;
+      };
+    };
+    rentals: {
+      title: string;
+      subtitle: string;
+      saveError: string;
+      tabs: { overview: string; properties: string; tenants: string };
+      propertiesCount: string;
+      searchPlaceholder: string;
+      addProperty: string;
+      editProperty: string;
+      deleteConfirmTitle: string;
+      deleteConfirmBody: string;
+      emptyTitle: string;
+      emptyHint: string;
+      propertyForm: {
+        nameLabel: string;
+        namePlaceholder: string;
+        addressLabel: string;
+        cityLabel: string;
+        stateLabel: string;
+        zipLabel: string;
+        typeLabel: string;
+        unitCountLabel: string;
+        unitCountHint: string;
+        purchaseDateLabel: string;
+        purchasePriceLabel: string;
+        notesLabel: string;
+        statusLabel: string;
+        branchLabel: string;
+      };
+      propertyTypes: { house: string; duplex: string; apartment: string; commercial: string; land: string; other: string };
+      propertyStatus: { active: string; inactive: string };
+      photos: {
+        heading: string;
+        addBtn: string;
+        takePhoto: string;
+        chooseFromLibrary: string;
+        uploading: string;
+        limitHit: string;
+        deleteConfirm: string;
+      };
+      detailTabs: { overview: string; leases: string; ledger: string; expenses: string; maintenance: string; photos: string };
+      tenants: {
+        title: string;
+        addBtn: string;
+        editTitle: string;
+        empty: string;
+        deleteConfirmTitle: string;
+        deleteConfirmBody: string;
+        copyFromClient: string;
+        activeLease: string;
+        form: {
+          firstNameLabel: string;
+          lastNameLabel: string;
+          phoneLabel: string;
+          emailLabel: string;
+          emergencyNameLabel: string;
+          emergencyPhoneLabel: string;
+          emergencyRelationLabel: string;
+          emergencyRelationPlaceholder: string;
+          notesLabel: string;
+        };
+      };
+      leases: {
+        title: string;
+        addBtn: string;
+        editTitle: string;
+        empty: string;
+        endBtn: string;
+        renewBtn: string;
+        renewTitle: string;
+        endConfirmTitle: string;
+        endConfirmBody: string;
+        deleteConfirmTitle: string;
+        deleteConfirmBody: string;
+        monthToMonth: string;
+        endsInDays: string;
+        endedBadge: string;
+        expiredBadge: string;
+        form: {
+          tenantLabel: string;
+          tenantPlaceholder: string;
+          unitLabel: string;
+          unitPlaceholder: string;
+          startLabel: string;
+          endLabel: string;
+          endHint: string;
+          rentLabel: string;
+          dueDayLabel: string;
+          dueDayHint: string;
+          depositLabel: string;
+          notesLabel: string;
+        };
+        docs: {
+          heading: string;
+          addBtn: string;
+          empty: string;
+          uploading: string;
+          tooLarge: string;
+          limitHit: string;
+          deleteConfirm: string;
+        };
+      };
+      ledger: {
+        title: string;
+        balanceLabel: string;
+        depositLabel: string;
+        statusPaid: string;
+        statusPartial: string;
+        statusUnpaid: string;
+        statusLate: string;
+        daysLate: string;
+        recordPaymentBtn: string;
+        editChargeTitle: string;
+        chargeAmountLabel: string;
+        noCharges: string;
+        paidOfAmount: string;
+      };
+      payments: {
+        recordTitle: string;
+        editTitle: string;
+        amountLabel: string;
+        fullAmountBtn: string;
+        methodLabel: string;
+        methodPlaceholder: string;
+        dateLabel: string;
+        photoLabel: string;
+        addPhoto: string;
+        changePhoto: string;
+        removePhoto: string;
+        noteLabel: string;
+        recordBtn: string;
+        deleteConfirmTitle: string;
+        deleteConfirmBody: string;
+      };
+      expenses: {
+        title: string;
+        addBtn: string;
+        editTitle: string;
+        empty: string;
+        totalLabel: string;
+        deleteConfirmTitle: string;
+        deleteConfirmBody: string;
+        fromMaintenance: string;
+        form: {
+          dateLabel: string;
+          amountLabel: string;
+          categoryLabel: string;
+          vendorLabel: string;
+          vendorPlaceholder: string;
+          noteLabel: string;
+          receiptLabel: string;
+          addReceipt: string;
+          changeReceipt: string;
+          removeReceipt: string;
+        };
+        categories: {
+          repairs: string;
+          utilities: string;
+          property_tax: string;
+          insurance: string;
+          mortgage: string;
+          hoa: string;
+          management: string;
+          other: string;
+        };
+      };
+      maintenance: {
+        title: string;
+        addBtn: string;
+        editTitle: string;
+        empty: string;
+        deleteConfirmTitle: string;
+        deleteConfirmBody: string;
+        statusOpen: string;
+        statusInProgress: string;
+        statusDone: string;
+        createExpenseToggle: string;
+        createExpenseHint: string;
+        form: {
+          titleLabel: string;
+          titlePlaceholder: string;
+          descriptionLabel: string;
+          statusLabel: string;
+          reportedLabel: string;
+          completedLabel: string;
+          costLabel: string;
+          fixedByLabel: string;
+          fixedByPlaceholder: string;
+          employeeLabel: string;
+        };
+      };
+      overview: {
+        monthTitle: string;
+        collectedLabel: string;
+        outstandingLabel: string;
+        overdueLabel: string;
+        occupancyLabel: string;
+        occupiedOf: string;
+        incomeLabel: string;
+        expensesLabel: string;
+        netLabel: string;
+        noLeases: string;
+        propertyColumn: string;
+        tenantColumn: string;
+        rentColumn: string;
+        statusColumn: string;
+      };
     };
   };
   assistant: {
@@ -2693,6 +2912,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       ajustes: 'Ajustes',
       mas: 'Más',
       logout: 'Cerrar sesión',
+      appsSection: 'Apps',
       descriptions: {
         clientes: 'Tu lista de clientes y contactos.',
         trabajos: 'Trabajos, cotizaciones y su progreso.',
@@ -2767,7 +2987,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       scopeNone: 'No',
       scopeAssigned: 'Asignados',
       scopeAll: 'Todos',
-      resourceNames: { jobs: 'Trabajos', clients: 'Clientes', invoices: 'Facturas', employees: 'Empleados', calendar: 'Calendario', inventory: 'Inventario', equipment: 'Equipos', reports: 'Reportes' },
+      resourceNames: { jobs: 'Trabajos', clients: 'Clientes', invoices: 'Facturas', employees: 'Empleados', calendar: 'Calendario', inventory: 'Inventario', equipment: 'Equipos', rentals: 'Propiedades en renta', reports: 'Reportes' },
       capNames: { manageSettings: 'Ajustes del negocio', manageMembers: 'Gestionar equipo y roles', viewAuditLog: 'Ver actividad', viewAllTimesheets: 'Ver todas las horas', assignWorkers: 'Asignar trabajadores a cualquier trabajo', createEstimates: 'Permitir estimados', clockInOut: 'Marcar entrada/salida', scheduleJobs: 'Programar trabajos (no solo completados)', completedByDefault: 'Marcar trabajos como completados por defecto', switchLocations: 'Cambiar entre sucursales (si no, se limita a la suya)' },
       newRole: 'Nuevo rol',
       newRoleTitle: 'Crear rol personalizado',
@@ -4952,7 +5172,223 @@ export const dashboard: Record<Locale, DashboardDict> = {
             valid: 'Vigentes',
             noPlate: 'Sin placa',
           },
+          filters: {
+            title: 'Filtro rápido',
+            all: 'Todo',
+            plateExpired: 'Placa vencida',
+            plateExpiring: 'Placa por vencer',
+            policyExpired: 'Póliza vencida',
+            policyExpiring: 'Póliza por vencer',
+          },
         },
+      rentals: {
+        title: 'Propiedades en renta',
+        subtitle: 'Inquilinos, rentas, contratos y mantenimiento.',
+        saveError: 'No se pudo guardar. Intenta de nuevo.',
+        tabs: { overview: 'Resumen', properties: 'Propiedades', tenants: 'Inquilinos' },
+        propertiesCount: '{{count}} propiedades',
+        searchPlaceholder: 'Buscar por nombre o dirección…',
+        addProperty: 'Agregar propiedad',
+        editProperty: 'Editar propiedad',
+        deleteConfirmTitle: '¿Eliminar propiedad?',
+        deleteConfirmBody: 'Se eliminarán también sus contratos, cobros, pagos, gastos y mantenimiento. Esta acción no se puede deshacer.',
+        emptyTitle: 'Sin propiedades todavía',
+        emptyHint: 'Agrega tu primera propiedad para empezar a llevar rentas y gastos.',
+        propertyForm: {
+          nameLabel: 'Nombre',
+          namePlaceholder: 'Casa Calle 5, Duplex Norte…',
+          addressLabel: 'Dirección',
+          cityLabel: 'Ciudad',
+          stateLabel: 'Estado',
+          zipLabel: 'Código postal',
+          typeLabel: 'Tipo',
+          unitCountLabel: 'Número de unidades',
+          unitCountHint: 'Unidades o cuartos que se rentan por separado (ej. 5 cuartos = 5). Déjalo vacío si se renta completa.',
+          purchaseDateLabel: 'Fecha de compra',
+          purchasePriceLabel: 'Precio de compra',
+          notesLabel: 'Notas',
+          statusLabel: 'Estado de la propiedad',
+          branchLabel: 'Sucursal',
+        },
+        propertyTypes: { house: 'Casa', duplex: 'Dúplex', apartment: 'Apartamentos', commercial: 'Comercial', land: 'Terreno', other: 'Otro' },
+        propertyStatus: { active: 'Activa', inactive: 'Inactiva' },
+        photos: {
+          heading: 'Fotos',
+          addBtn: 'Agregar',
+          takePhoto: 'Tomar foto',
+          chooseFromLibrary: 'Elegir de la galería',
+          uploading: 'Subiendo…',
+          limitHit: 'Máximo {{max}} fotos por propiedad.',
+          deleteConfirm: '¿Eliminar esta foto?',
+        },
+        detailTabs: { overview: 'Resumen', leases: 'Contratos', ledger: 'Pagos', expenses: 'Gastos', maintenance: 'Mantenimiento', photos: 'Fotos' },
+        tenants: {
+          title: 'Inquilinos',
+          addBtn: 'Agregar inquilino',
+          editTitle: 'Editar inquilino',
+          empty: 'Sin inquilinos todavía.',
+          deleteConfirmTitle: '¿Eliminar inquilino?',
+          deleteConfirmBody: 'Se eliminarán también sus contratos y su historial de pagos. Esta acción no se puede deshacer.',
+          copyFromClient: 'Copiar de cliente',
+          activeLease: 'Contrato activo',
+          form: {
+            firstNameLabel: 'Nombre',
+            lastNameLabel: 'Apellido',
+            phoneLabel: 'Teléfono',
+            emailLabel: 'Correo',
+            emergencyNameLabel: 'Contacto de emergencia',
+            emergencyPhoneLabel: 'Teléfono de emergencia',
+            emergencyRelationLabel: 'Parentesco',
+            emergencyRelationPlaceholder: 'Madre, esposo, amigo…',
+            notesLabel: 'Notas',
+          },
+        },
+        leases: {
+          title: 'Contratos',
+          addBtn: 'Nuevo contrato',
+          editTitle: 'Editar contrato',
+          empty: 'Sin contratos en esta propiedad.',
+          endBtn: 'Terminar contrato',
+          renewBtn: 'Renovar',
+          renewTitle: 'Renovar contrato',
+          endConfirmTitle: '¿Terminar contrato?',
+          endConfirmBody: 'El contrato se marcará como terminado y ya no generará cobros de renta.',
+          deleteConfirmTitle: '¿Eliminar contrato?',
+          deleteConfirmBody: 'Se eliminarán también sus cobros, pagos y documentos. Esta acción no se puede deshacer.',
+          monthToMonth: 'Mes a mes',
+          endsInDays: 'Vence en {{days}} días',
+          endedBadge: 'Terminado',
+          expiredBadge: 'Vencido',
+          form: {
+            tenantLabel: 'Inquilino',
+            tenantPlaceholder: 'Selecciona un inquilino',
+            unitLabel: 'Unidad',
+            unitPlaceholder: 'Apto 2, Unidad B… (opcional)',
+            startLabel: 'Inicio del contrato',
+            endLabel: 'Fin del contrato',
+            endHint: 'Déjalo vacío si es mes a mes.',
+            rentLabel: 'Renta mensual',
+            dueDayLabel: 'Día de pago',
+            dueDayHint: 'Día del mes en que vence la renta.',
+            depositLabel: 'Depósito',
+            notesLabel: 'Notas',
+          },
+          docs: {
+            heading: 'Documentos del contrato',
+            addBtn: 'Subir documento',
+            empty: 'Sin documentos. Sube el contrato firmado (PDF o foto).',
+            uploading: 'Subiendo…',
+            tooLarge: 'El archivo supera el límite de 50 MB.',
+            limitHit: 'Máximo {{max}} documentos por contrato.',
+            deleteConfirm: '¿Eliminar este documento?',
+          },
+        },
+        ledger: {
+          title: 'Historial de renta',
+          balanceLabel: 'Saldo pendiente',
+          depositLabel: 'Depósito',
+          statusPaid: 'Pagado',
+          statusPartial: 'Parcial',
+          statusUnpaid: 'Pendiente',
+          statusLate: 'Atrasado',
+          daysLate: '{{days}} días de atraso',
+          recordPaymentBtn: 'Registrar pago',
+          editChargeTitle: 'Editar cobro',
+          chargeAmountLabel: 'Monto del cobro',
+          noCharges: 'Aún no hay cobros generados.',
+          paidOfAmount: '{{paid}} de {{total}}',
+        },
+        payments: {
+          recordTitle: 'Registrar pago',
+          editTitle: 'Editar pago',
+          amountLabel: 'Monto',
+          fullAmountBtn: 'Monto completo',
+          methodLabel: 'Método de pago',
+          methodPlaceholder: 'Efectivo, Zelle, cheque #1024…',
+          dateLabel: 'Fecha de pago',
+          photoLabel: 'Foto del pago',
+          addPhoto: 'Agregar foto (ej. cheque)',
+          changePhoto: 'Cambiar',
+          removePhoto: 'Quitar',
+          noteLabel: 'Nota',
+          recordBtn: 'Registrar pago',
+          deleteConfirmTitle: '¿Eliminar pago?',
+          deleteConfirmBody: 'El monto volverá a quedar pendiente en el cobro.',
+        },
+        expenses: {
+          title: 'Gastos',
+          addBtn: 'Agregar gasto',
+          editTitle: 'Editar gasto',
+          empty: 'Sin gastos registrados.',
+          totalLabel: 'Total',
+          deleteConfirmTitle: '¿Eliminar gasto?',
+          deleteConfirmBody: 'Esta acción no se puede deshacer.',
+          fromMaintenance: 'De mantenimiento',
+          form: {
+            dateLabel: 'Fecha',
+            amountLabel: 'Monto',
+            categoryLabel: 'Categoría',
+            vendorLabel: 'Proveedor',
+            vendorPlaceholder: 'Plomería García, CFE…',
+            noteLabel: 'Nota',
+            receiptLabel: 'Recibo',
+            addReceipt: 'Agregar foto del recibo',
+            changeReceipt: 'Cambiar',
+            removeReceipt: 'Quitar',
+          },
+          categories: {
+            repairs: 'Reparaciones',
+            utilities: 'Servicios',
+            property_tax: 'Impuesto predial',
+            insurance: 'Seguro',
+            mortgage: 'Hipoteca',
+            hoa: 'HOA',
+            management: 'Administración',
+            other: 'Otro',
+          },
+        },
+        maintenance: {
+          title: 'Mantenimiento',
+          addBtn: 'Agregar',
+          editTitle: 'Editar mantenimiento',
+          empty: 'Sin registros de mantenimiento.',
+          deleteConfirmTitle: '¿Eliminar registro?',
+          deleteConfirmBody: 'Esta acción no se puede deshacer.',
+          statusOpen: 'Abierto',
+          statusInProgress: 'En progreso',
+          statusDone: 'Terminado',
+          createExpenseToggle: 'Registrar como gasto',
+          createExpenseHint: 'Al terminar, el costo se agrega a los gastos de la propiedad.',
+          form: {
+            titleLabel: 'Problema',
+            titlePlaceholder: 'Fuga en el baño, calentador…',
+            descriptionLabel: 'Descripción',
+            statusLabel: 'Estado',
+            reportedLabel: 'Reportado el',
+            completedLabel: 'Terminado el',
+            costLabel: 'Costo',
+            fixedByLabel: 'Reparado por',
+            fixedByPlaceholder: 'Nombre o empresa',
+            employeeLabel: 'Empleado',
+          },
+        },
+        overview: {
+          monthTitle: 'Rentas de {{month}}',
+          collectedLabel: 'Cobrado',
+          outstandingLabel: 'Pendiente',
+          overdueLabel: 'Atrasados',
+          occupancyLabel: 'Ocupación',
+          occupiedOf: '{{occupied}} de {{capacity}} unidades',
+          incomeLabel: 'Ingresos',
+          expensesLabel: 'Gastos',
+          netLabel: 'Neto',
+          noLeases: 'Sin contratos activos este mes.',
+          propertyColumn: 'Propiedad',
+          tenantColumn: 'Inquilino',
+          rentColumn: 'Renta',
+          statusColumn: 'Estado',
+        },
+      },
     },
     assistant: {
       title: 'Ami',
@@ -5347,6 +5783,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       ajustes: 'Settings',
       mas: 'More',
       logout: 'Sign out',
+      appsSection: 'Apps',
       descriptions: {
         clientes: 'Your clients and contacts.',
         trabajos: 'Jobs, proposals, and their progress.',
@@ -5421,7 +5858,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       scopeNone: 'No',
       scopeAssigned: 'Assigned',
       scopeAll: 'All',
-      resourceNames: { jobs: 'Jobs', clients: 'Clients', invoices: 'Invoices', employees: 'Employees', calendar: 'Calendar', inventory: 'Inventory', equipment: 'Equipment', reports: 'Reports' },
+      resourceNames: { jobs: 'Jobs', clients: 'Clients', invoices: 'Invoices', employees: 'Employees', calendar: 'Calendar', inventory: 'Inventory', equipment: 'Equipment', rentals: 'Rental properties', reports: 'Reports' },
       capNames: { manageSettings: 'Business settings', manageMembers: 'Manage team & roles', viewAuditLog: 'View activity', viewAllTimesheets: 'View all hours', assignWorkers: 'Assign workers to any job', createEstimates: 'Allow estimates', clockInOut: 'Clock in/out', scheduleJobs: 'Schedule jobs (not just completed)', completedByDefault: 'Mark jobs as completed by default', switchLocations: 'Switch between branches (else limited to their own)' },
       newRole: 'New role',
       newRoleTitle: 'Create custom role',
@@ -7606,7 +8043,223 @@ export const dashboard: Record<Locale, DashboardDict> = {
             valid: 'Current',
             noPlate: 'No plate',
           },
+          filters: {
+            title: 'Quick filter',
+            all: 'All',
+            plateExpired: 'Plate expired',
+            plateExpiring: 'Plate expiring soon',
+            policyExpired: 'Policy expired',
+            policyExpiring: 'Policy expiring soon',
+          },
         },
+      rentals: {
+        title: 'Rental Properties',
+        subtitle: 'Tenants, rent, leases, and maintenance.',
+        saveError: 'Could not save. Please try again.',
+        tabs: { overview: 'Overview', properties: 'Properties', tenants: 'Tenants' },
+        propertiesCount: '{{count}} properties',
+        searchPlaceholder: 'Search by name or address…',
+        addProperty: 'Add property',
+        editProperty: 'Edit property',
+        deleteConfirmTitle: 'Delete property?',
+        deleteConfirmBody: 'Its leases, charges, payments, expenses, and maintenance will also be deleted. This cannot be undone.',
+        emptyTitle: 'No properties yet',
+        emptyHint: 'Add your first property to start tracking rent and expenses.',
+        propertyForm: {
+          nameLabel: 'Name',
+          namePlaceholder: '5th St House, North Duplex…',
+          addressLabel: 'Address',
+          cityLabel: 'City',
+          stateLabel: 'State',
+          zipLabel: 'ZIP code',
+          typeLabel: 'Type',
+          unitCountLabel: 'Number of units',
+          unitCountHint: 'Units or rooms rented separately (e.g. 5 rooms = 5). Leave empty if rented as a whole.',
+          purchaseDateLabel: 'Purchase date',
+          purchasePriceLabel: 'Purchase price',
+          notesLabel: 'Notes',
+          statusLabel: 'Property status',
+          branchLabel: 'Branch',
+        },
+        propertyTypes: { house: 'House', duplex: 'Duplex', apartment: 'Apartments', commercial: 'Commercial', land: 'Land', other: 'Other' },
+        propertyStatus: { active: 'Active', inactive: 'Inactive' },
+        photos: {
+          heading: 'Photos',
+          addBtn: 'Add',
+          takePhoto: 'Take photo',
+          chooseFromLibrary: 'Choose from library',
+          uploading: 'Uploading…',
+          limitHit: 'Maximum {{max}} photos per property.',
+          deleteConfirm: 'Delete this photo?',
+        },
+        detailTabs: { overview: 'Overview', leases: 'Leases', ledger: 'Payments', expenses: 'Expenses', maintenance: 'Maintenance', photos: 'Photos' },
+        tenants: {
+          title: 'Tenants',
+          addBtn: 'Add tenant',
+          editTitle: 'Edit tenant',
+          empty: 'No tenants yet.',
+          deleteConfirmTitle: 'Delete tenant?',
+          deleteConfirmBody: 'Their leases and payment history will also be deleted. This cannot be undone.',
+          copyFromClient: 'Copy from client',
+          activeLease: 'Active lease',
+          form: {
+            firstNameLabel: 'First name',
+            lastNameLabel: 'Last name',
+            phoneLabel: 'Phone',
+            emailLabel: 'Email',
+            emergencyNameLabel: 'Emergency contact',
+            emergencyPhoneLabel: 'Emergency phone',
+            emergencyRelationLabel: 'Relationship',
+            emergencyRelationPlaceholder: 'Mother, spouse, friend…',
+            notesLabel: 'Notes',
+          },
+        },
+        leases: {
+          title: 'Leases',
+          addBtn: 'New lease',
+          editTitle: 'Edit lease',
+          empty: 'No leases on this property.',
+          endBtn: 'End lease',
+          renewBtn: 'Renew',
+          renewTitle: 'Renew lease',
+          endConfirmTitle: 'End lease?',
+          endConfirmBody: 'The lease will be marked as ended and will no longer generate rent charges.',
+          deleteConfirmTitle: 'Delete lease?',
+          deleteConfirmBody: 'Its charges, payments, and documents will also be deleted. This cannot be undone.',
+          monthToMonth: 'Month to month',
+          endsInDays: 'Ends in {{days}} days',
+          endedBadge: 'Ended',
+          expiredBadge: 'Expired',
+          form: {
+            tenantLabel: 'Tenant',
+            tenantPlaceholder: 'Select a tenant',
+            unitLabel: 'Unit',
+            unitPlaceholder: 'Apt 2, Unit B… (optional)',
+            startLabel: 'Lease start',
+            endLabel: 'Lease end',
+            endHint: 'Leave empty for month to month.',
+            rentLabel: 'Monthly rent',
+            dueDayLabel: 'Due day',
+            dueDayHint: 'Day of the month rent is due.',
+            depositLabel: 'Deposit',
+            notesLabel: 'Notes',
+          },
+          docs: {
+            heading: 'Lease documents',
+            addBtn: 'Upload document',
+            empty: 'No documents. Upload the signed lease (PDF or photo).',
+            uploading: 'Uploading…',
+            tooLarge: 'File exceeds the 50 MB limit.',
+            limitHit: 'Maximum {{max}} documents per lease.',
+            deleteConfirm: 'Delete this document?',
+          },
+        },
+        ledger: {
+          title: 'Rent history',
+          balanceLabel: 'Outstanding balance',
+          depositLabel: 'Deposit',
+          statusPaid: 'Paid',
+          statusPartial: 'Partial',
+          statusUnpaid: 'Due',
+          statusLate: 'Late',
+          daysLate: '{{days}} days late',
+          recordPaymentBtn: 'Record payment',
+          editChargeTitle: 'Edit charge',
+          chargeAmountLabel: 'Charge amount',
+          noCharges: 'No charges generated yet.',
+          paidOfAmount: '{{paid}} of {{total}}',
+        },
+        payments: {
+          recordTitle: 'Record payment',
+          editTitle: 'Edit payment',
+          amountLabel: 'Amount',
+          fullAmountBtn: 'Full amount',
+          methodLabel: 'Payment method',
+          methodPlaceholder: 'Cash, Zelle, check #1024…',
+          dateLabel: 'Payment date',
+          photoLabel: 'Payment photo',
+          addPhoto: 'Add photo (e.g. check)',
+          changePhoto: 'Change',
+          removePhoto: 'Remove',
+          noteLabel: 'Note',
+          recordBtn: 'Record payment',
+          deleteConfirmTitle: 'Delete payment?',
+          deleteConfirmBody: 'The amount will become due on the charge again.',
+        },
+        expenses: {
+          title: 'Expenses',
+          addBtn: 'Add expense',
+          editTitle: 'Edit expense',
+          empty: 'No expenses recorded.',
+          totalLabel: 'Total',
+          deleteConfirmTitle: 'Delete expense?',
+          deleteConfirmBody: 'This cannot be undone.',
+          fromMaintenance: 'From maintenance',
+          form: {
+            dateLabel: 'Date',
+            amountLabel: 'Amount',
+            categoryLabel: 'Category',
+            vendorLabel: 'Vendor',
+            vendorPlaceholder: 'García Plumbing, utility co…',
+            noteLabel: 'Note',
+            receiptLabel: 'Receipt',
+            addReceipt: 'Add receipt photo',
+            changeReceipt: 'Change',
+            removeReceipt: 'Remove',
+          },
+          categories: {
+            repairs: 'Repairs',
+            utilities: 'Utilities',
+            property_tax: 'Property tax',
+            insurance: 'Insurance',
+            mortgage: 'Mortgage',
+            hoa: 'HOA',
+            management: 'Management',
+            other: 'Other',
+          },
+        },
+        maintenance: {
+          title: 'Maintenance',
+          addBtn: 'Add',
+          editTitle: 'Edit maintenance',
+          empty: 'No maintenance records.',
+          deleteConfirmTitle: 'Delete record?',
+          deleteConfirmBody: 'This cannot be undone.',
+          statusOpen: 'Open',
+          statusInProgress: 'In progress',
+          statusDone: 'Done',
+          createExpenseToggle: 'Record as expense',
+          createExpenseHint: 'When done, the cost is added to the property\'s expenses.',
+          form: {
+            titleLabel: 'Issue',
+            titlePlaceholder: 'Bathroom leak, water heater…',
+            descriptionLabel: 'Description',
+            statusLabel: 'Status',
+            reportedLabel: 'Reported on',
+            completedLabel: 'Completed on',
+            costLabel: 'Cost',
+            fixedByLabel: 'Fixed by',
+            fixedByPlaceholder: 'Name or company',
+            employeeLabel: 'Employee',
+          },
+        },
+        overview: {
+          monthTitle: '{{month}} rent',
+          collectedLabel: 'Collected',
+          outstandingLabel: 'Outstanding',
+          overdueLabel: 'Overdue',
+          occupancyLabel: 'Occupancy',
+          occupiedOf: '{{occupied}} of {{capacity}} units',
+          incomeLabel: 'Income',
+          expensesLabel: 'Expenses',
+          netLabel: 'Net',
+          noLeases: 'No active leases this month.',
+          propertyColumn: 'Property',
+          tenantColumn: 'Tenant',
+          rentColumn: 'Rent',
+          statusColumn: 'Status',
+        },
+      },
     },
     assistant: {
       title: 'Ami',

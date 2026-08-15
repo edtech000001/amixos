@@ -69,11 +69,18 @@ export function Sidebar() {
   // after the core nav. Coming-soon modules are filtered out even if
   // pre-enabled in the DB — they have nothing real to navigate to.
   const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
-  // Equipment is role-gated (its own permission); other modules stay visible to
-  // any member where enabled.
+  // Equipment/rentals are role-gated (their own permissions); other modules
+  // stay visible to any member where enabled.
   const liveModules = enabledModules.filter(
-    m => m.status === 'available' && (m.id !== 'equipment' || can.viewEquipment(currentRole)),
+    m => m.status === 'available'
+      && (m.id !== 'equipment' || can.viewEquipment(currentRole))
+      && (m.id !== 'rentals' || can.viewRentals(currentRole)),
   );
+  // Tool modules (map, inventory, equipment…) stay inline with the core nav;
+  // INDUSTRY modules are full apps of their own and get a labeled "Apps"
+  // section between the tools and the store.
+  const toolModules = liveModules.filter(m => m.category !== 'industry');
+  const industryApps = liveModules.filter(m => m.category === 'industry');
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname.startsWith(href);
@@ -109,7 +116,7 @@ export function Sidebar() {
             </Link>
           );
         })}
-        {liveModules.map(m => {
+        {toolModules.map(m => {
           const href = `/dashboard/modulos/${m.id}`;
           const active = isActive(href);
           const Icon = m.icon;
@@ -135,6 +142,36 @@ export function Sidebar() {
             </Link>
           );
         })}
+        {industryApps.length > 0 ? (
+          <>
+            <p className="px-3 pt-4 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-faint">
+              {t.appsSection}
+            </p>
+            {industryApps.map(m => {
+              const href = `/dashboard/modulos/${m.id}`;
+              const active = isActive(href);
+              const Icon = m.icon;
+              const entry = (modulesDict as unknown as Record<string, { name: string } | undefined>)[m.i18nKey];
+              const name = entry?.name ?? m.id;
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => setOpen(false)}
+                  className={clsx(
+                    'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                    active
+                      ? 'bg-primary text-white shadow-sm'
+                      : 'text-muted hover:bg-border-soft hover:text-ink',
+                  )}
+                >
+                  <Icon size={18} />
+                  {name}
+                </Link>
+              );
+            })}
+          </>
+        ) : null}
       </nav>
 
       {/* Bottom — Tienda + Ajustes + Logout grouped as admin-ish surfaces.

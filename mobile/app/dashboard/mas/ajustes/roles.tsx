@@ -61,9 +61,12 @@ export default function RolesScreen() {
   // equipment module is active for this business.
   const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
   const equipmentActive = enabledModules.some(m => m.id === 'equipment');
+  const rentalsActive = enabledModules.some(m => m.id === 'rentals');
   const resourceKeys = useMemo(
-    () => RESOURCE_KEYS.filter(r => r !== 'equipment' || equipmentActive),
-    [equipmentActive],
+    () => RESOURCE_KEYS.filter(
+      r => (r !== 'equipment' || equipmentActive) && (r !== 'rentals' || rentalsActive),
+    ),
+    [equipmentActive, rentalsActive],
   );
   const multiLocation = (locations?.length ?? 0) > 1;
   const { t: full, locale } = useLang();

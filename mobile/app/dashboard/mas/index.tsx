@@ -44,7 +44,7 @@ export default function MasMenu() {
   const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
   const liveModules = enabledModules.filter(m => m.status === 'available');
 
-  const moduleItems: MenuItem[] = liveModules.map(m => {
+  const toModuleItem = (m: (typeof liveModules)[number]): MenuItem => {
     const entry = (modulesDict as unknown as Record<string, { name: string; description: string } | undefined>)[m.i18nKey];
     return {
       key: `module-${m.id}`,
@@ -52,11 +52,18 @@ export default function MasMenu() {
       description: entry?.description ?? '',
       icon: m.icon,
       path: `/dashboard/mas/modulos/${m.id}`,
-      // Equipment is role-gated (its own permission); field/viewer-without-view
-      // don't see the card. Other modules stay visible to any member.
-      show: m.id === 'equipment' ? can.viewEquipment(currentRole) : true,
+      // Equipment/rentals are role-gated (their own permissions); members
+      // without view don't see the card. Other modules stay visible to any member.
+      show: m.id === 'equipment' ? can.viewEquipment(currentRole)
+        : m.id === 'rentals' ? can.viewRentals(currentRole)
+        : true,
     };
-  });
+  };
+  // Tool modules stay in the main group; INDUSTRY modules are full apps of
+  // their own and get a labeled "Apps" group between the tools and Tienda.
+  const moduleItems: MenuItem[] = liveModules.filter(m => m.category !== 'industry').map(toModuleItem);
+  const appItems: MenuItem[] = liveModules.filter(m => m.category === 'industry').map(toModuleItem)
+    .filter(item => item.show !== false);
 
   // Apps the user can pin to the dock but hasn't — surfaced here so removing
   // one from the dock (Navegación) never makes it unreachable. Pinned apps are
@@ -148,6 +155,14 @@ export default function MasMenu() {
         ) : null}
 
         {renderGroup(mainItems)}
+        {appItems.length > 0 ? (
+          <View className="mt-5">
+            <Text className="text-xs font-bold text-muted uppercase tracking-wide px-1 mb-2">
+              {sb.appsSection}
+            </Text>
+            {renderGroup(appItems)}
+          </View>
+        ) : null}
         <View className="mt-4">{renderGroup(settingsItems)}</View>
       </ScrollView>
     </SafeAreaView>

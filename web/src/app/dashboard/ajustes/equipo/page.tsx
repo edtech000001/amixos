@@ -54,7 +54,10 @@ export default function RolesSettingsPage() {
   // equipment module is active for this business.
   const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
   const equipmentActive = enabledModules.some(m => m.id === 'equipment');
-  const resourceKeys = RESOURCE_KEYS.filter(r => r !== 'equipment' || equipmentActive);
+  const rentalsActive = enabledModules.some(m => m.id === 'rentals');
+  const resourceKeys = RESOURCE_KEYS.filter(
+    r => (r !== 'equipment' || equipmentActive) && (r !== 'rentals' || rentalsActive),
+  );
   const multiLocation = (locations?.length ?? 0) > 1;
   const { t: full, locale } = useLang();
   const t = full.dashboard.roles;

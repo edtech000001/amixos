@@ -91,6 +91,18 @@ export function usStateName(value: string, locale: Locale): string {
 }
 
 /**
+ * Best-effort normalization of a free-text state into its 2-letter
+ * abbreviation ("Nebraska" → "NE", "ne" → "NE"). Unknown values pass through
+ * unchanged — used when hydrating legacy free-text rows into a state picker.
+ */
+export function toUsStateAbbr(raw: string | null | undefined): string {
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed) return '';
+  if (trimmed.length === 2) return trimmed.toUpperCase();
+  return US_STATE_NAME_TO_ABBR[trimmed.toLowerCase()] ?? trimmed;
+}
+
+/**
  * Build the list of extra search terms implied by a query. If the query
  * matches a state name as a prefix (e.g., "nebr" → Nebraska), the state's
  * abbreviation gets added ("ne"). If the query is exactly a 2-letter abbr

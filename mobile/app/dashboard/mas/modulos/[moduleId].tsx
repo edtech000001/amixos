@@ -11,6 +11,7 @@ import InventoryModuleScreen from '@/modules/inventory/InventoryScreen';
 import EquipmentScreen from '@/modules/equipment/EquipmentScreen';
 import ArchivosScreen from '@/modules/files/ArchivosScreen';
 import SmsScreen from '@/modules/sms/SmsScreen';
+import RentalsScreen from '@/modules/rentals/RentalsScreen';
 
 // Real module components register here. Unlike web, mobile can't lazy-
 // download chunks — Apple/Google forbid remote JS — so every module is
@@ -22,6 +23,7 @@ const MODULE_COMPONENTS: Record<string, ComponentType> = {
   equipment: EquipmentScreen,
   files: ArchivosScreen,
   messaging: SmsScreen,
+  rentals: RentalsScreen,
 };
 
 export default function ModuleRoute() {

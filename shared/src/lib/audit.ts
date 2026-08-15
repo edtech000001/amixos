@@ -54,7 +54,18 @@ export type AuditAction =
   | 'payroll.payments_cleared'
   // Worker loans
   | 'loan.given'
-  | 'loan.repaid';
+  | 'loan.repaid'
+  // Rentals module
+  | 'rental_property.created'
+  | 'rental_property.updated'
+  | 'rental_property.deleted'
+  | 'rental_tenant.created'
+  | 'rental_tenant.updated'
+  | 'rental_tenant.deleted'
+  | 'rental_lease.created'
+  | 'rental_lease.updated'
+  | 'rental_lease.deleted'
+  | 'rental_payment.recorded';
 
 export type EntityType =
   | 'import'
@@ -66,7 +77,11 @@ export type EntityType =
   | 'invite'
   | 'business'
   | 'module'
-  | 'employee';
+  | 'employee'
+  | 'rental_property'
+  | 'rental_tenant'
+  | 'rental_lease'
+  | 'rental_payment';
 
 // Accept any Supabase client variant — web and mobile create slightly
 // different generic instantiations and the strict shape pinning was tripping
@@ -142,4 +157,14 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, { es: string; en: string }>
   'payroll.payments_cleared': { es: 'Pagos de nómina eliminados', en: 'Payroll payments deleted' },
   'loan.given':          { es: 'Préstamo otorgado', en: 'Loan given' },
   'loan.repaid':         { es: 'Abono a préstamo', en: 'Loan repayment' },
+  'rental_property.created': { es: 'Propiedad en renta creada',      en: 'Rental property created' },
+  'rental_property.updated': { es: 'Propiedad en renta actualizada', en: 'Rental property updated' },
+  'rental_property.deleted': { es: 'Propiedad en renta eliminada',   en: 'Rental property deleted' },
+  'rental_tenant.created':   { es: 'Inquilino creado',               en: 'Tenant created' },
+  'rental_tenant.updated':   { es: 'Inquilino actualizado',          en: 'Tenant updated' },
+  'rental_tenant.deleted':   { es: 'Inquilino eliminado',            en: 'Tenant deleted' },
+  'rental_lease.created':    { es: 'Contrato de renta creado',       en: 'Lease created' },
+  'rental_lease.updated':    { es: 'Contrato de renta actualizado',  en: 'Lease updated' },
+  'rental_lease.deleted':    { es: 'Contrato de renta eliminado',    en: 'Lease deleted' },
+  'rental_payment.recorded': { es: 'Pago de renta registrado',       en: 'Rent payment recorded' },
 };

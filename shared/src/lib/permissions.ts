@@ -52,6 +52,7 @@ export type ResourceKey =
   | 'calendar'
   | 'inventory'
   | 'equipment'
+  | 'rentals'
   | 'reports';
 
 export interface ResourcePerm {
@@ -75,6 +76,7 @@ export const RESOURCE_ACTIONS: Record<
   calendar:  { create: true,  edit: true,  delete: true,  assignedView: false },
   inventory: { create: true,  edit: true,  delete: true,  assignedView: false },
   equipment: { create: true,  edit: true,  delete: true,  assignedView: false },
+  rentals:   { create: true,  edit: true,  delete: true,  assignedView: false },
   reports:   { create: false, edit: false, delete: false, assignedView: false },
 };
 
@@ -129,7 +131,7 @@ const caps = (overrides: Partial<Record<CapabilityKey, boolean>>): Record<Capabi
 const ALL_RESOURCES = (view: ViewScope, c: boolean, e: boolean, d: boolean): Record<ResourceKey, ResourcePerm> => ({
   jobs: R(view, c, e, d), clients: R(view, c, e, d), invoices: R(view, c, e, d),
   employees: R(view, c, e, d), calendar: R(view, c, e, d), inventory: R(view, c, e, d),
-  equipment: R(view, c, e, d), reports: R(view, c, e, d),
+  equipment: R(view, c, e, d), rentals: R(view, c, e, d), reports: R(view, c, e, d),
 });
 
 // ─── Default permissions per role ──────────────────────────────────────────
@@ -164,6 +166,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
       calendar: R('all', true, true, true),
       inventory: R('all', true, true, true),
       equipment: R('all', true, true, true),
+      rentals: R('all', true, true, true),
       reports: R('all'),
     },
     caps: caps({
@@ -180,6 +183,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
       calendar: R('all', true, true, true),
       inventory: R('all', true, true, true),
       equipment: R('all', true, true, true),
+      rentals: R('all', true, true, true),
       reports: R('none'),
     },
     caps: caps({
@@ -201,6 +205,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
       calendar: R('none'),
       inventory: R('none'),
       equipment: R('none'),
+      rentals: R('none'),
       reports: R('none'),
     },
     // Clock in/out on by default for crew (the only role with the card); a
@@ -216,6 +221,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, RolePermissions> = {
       calendar: R('all', false, false, false),
       inventory: R('all', false, false, false),
       equipment: R('all', false, false, false),
+      rentals: R('all', false, false, false),
       reports: R('all'),
     },
     caps: caps({ viewAllTimesheets: true, switchLocations: true }),
@@ -413,6 +419,14 @@ export const can = {
   // active; the role editor hides the toggle otherwise). Field default = none.
   viewEquipment: (role: Role | null) => res(role, 'equipment')?.view === 'all',
   editEquipment: (role: Role | null) => !!res(role, 'equipment')?.edit,
+
+  // Rentals — its own resource (only meaningful when the rentals module is
+  // active). Gates tenant PII too: a rentals-only custom role works the whole
+  // module without any Clientes access. Field default = none.
+  viewRentals:   (role: Role | null) => res(role, 'rentals')?.view === 'all',
+  createRentals: (role: Role | null) => !!res(role, 'rentals')?.create,
+  editRentals:   (role: Role | null) => !!res(role, 'rentals')?.edit,
+  deleteRentals: (role: Role | null) => !!res(role, 'rentals')?.delete,
 
   // Files / document library — everyone reads (RLS + crew_visible decide what
   // a field crew actually sees); writers manage categories/sections/uploads.

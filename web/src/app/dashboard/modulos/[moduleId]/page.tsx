@@ -20,6 +20,7 @@ const EquipmentModule = nextDynamic(() => import('@/modules/equipment'), { ssr: 
 const InventoryModule = nextDynamic(() => import('@/modules/inventory'), { ssr: false });
 const FilesModule = nextDynamic(() => import('@/modules/files'), { ssr: false });
 const SmsModule = nextDynamic(() => import('@/modules/sms'), { ssr: false });
+const RentalsModule = nextDynamic(() => import('@/modules/rentals'), { ssr: false });
 
 const MODULE_COMPONENTS: Record<string, ComponentType> = {
   map: MapModule,
@@ -27,6 +28,7 @@ const MODULE_COMPONENTS: Record<string, ComponentType> = {
   inventory: InventoryModule,
   files: FilesModule,
   messaging: SmsModule,
+  rentals: RentalsModule,
 };
 
 export default function ModulePage({ params }: { params: { moduleId: string } }) {
