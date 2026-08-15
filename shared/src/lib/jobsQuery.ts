@@ -315,28 +315,39 @@ export async function fetchJobGroupIndex(
 }
 
 /** Per-tab counts for the badges — ONE grouped scan via the job_tab_counts RPC
- *  (migration 181), replacing ten parallel count:'exact' queries. Returns every
- *  tab; 'all' spans archived + every status, matching the client's semantics.
+ *  (migration 181; date range added in 195), replacing ten parallel
+ *  count:'exact' queries. Returns every tab; 'all' spans archived + every
+ *  status, matching the client's semantics. When a date range is active the
+ *  counts are range-filtered (scheduled_date, same as the page query) so the
+ *  header total and badges match the rows shown.
  *  SECURITY INVOKER — counts reflect exactly what the caller's RLS allows. */
 export async function fetchJobTabCounts(
   supabase: AnySupabase,
-  params: Pick<JobsQueryParams, 'businessId' | 'locationId' | 'search'>,
+  params: Pick<JobsQueryParams, 'businessId' | 'locationId' | 'search' | 'dateFrom' | 'dateTo'>,
   searchIds?: SearchIds | null,
 ): Promise<Record<string, number>> {
   const term = params.search?.trim() ?? '';
   const ids = term
     ? (searchIds ?? (await resolveSearchIds(supabase, params.businessId, term)))
     : null;
-  const { data, error } = await supabase.rpc('job_tab_counts', {
+  const baseArgs = {
     p_business_id: params.businessId,
     p_location_id: params.locationId ?? null,
     p_search_term: term || null,
     p_client_ids: ids?.clientIds ?? null,
     p_crew_job_ids: ids?.crewJobIds ?? null,
-  });
-  if (error) throw new Error(error.message);
+  };
+  const hasRange = !!(params.dateFrom || params.dateTo);
+  // Date args only when a range is set: on a DB where migration 195 hasn't
+  // run, the 7-arg call 404s — retry date-less so counts still load (they're
+  // just unfiltered, the pre-195 behavior).
+  let res = await supabase.rpc('job_tab_counts', hasRange
+    ? { ...baseArgs, p_date_from: params.dateFrom ?? null, p_date_to: params.dateTo ?? null }
+    : baseArgs);
+  if (res.error && hasRange) res = await supabase.rpc('job_tab_counts', baseArgs);
+  if (res.error) throw new Error(res.error.message);
   const out: Record<string, number> = {};
-  for (const row of (data ?? []) as { tab: string; cnt: number | string }[]) {
+  for (const row of (res.data ?? []) as { tab: string; cnt: number | string }[]) {
     out[row.tab] = Number(row.cnt);
   }
   return out;

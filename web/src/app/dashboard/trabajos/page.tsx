@@ -208,7 +208,7 @@ export default function TrabajosPage() {
       searchIdsRef.current = ids;
       const [page, counts] = await Promise.all([
         fetchJobsPage<RawJob>(supabase, JOB_LIST_SELECT, { ...params, pageSize: 50 }, ids),
-        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search }, ids),
+        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search, dateFrom: params.dateFrom, dateTo: params.dateTo }, ids),
       ]);
       if (seq !== loadSeqRef.current) return;
       setRawJobs(page.jobs);
@@ -239,7 +239,7 @@ export default function TrabajosPage() {
       searchIdsRef.current = ids;
       const [pageRes, counts] = await Promise.all([
         fetchJobsPageSorted<RawJob>(supabase, JOB_LIST_SELECT, { ...params, sortBy: sortKey, offset: 0, pageSize: 50 }, ids),
-        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search }, ids),
+        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search, dateFrom: params.dateFrom, dateTo: params.dateTo }, ids),
       ]);
       if (seq !== loadSeqRef.current) return;
       setServerCounts(counts);
@@ -338,7 +338,7 @@ export default function TrabajosPage() {
       searchIdsRef.current = ids;
       const [index, counts] = await Promise.all([
         fetchJobGroupIndex(supabase, { businessId: params.businessId, groupBy, tabs: params.tabs, search: params.search, locationId: params.locationId, dateFrom: params.dateFrom, dateTo: params.dateTo }, ids),
-        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search }, ids),
+        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search, dateFrom: params.dateFrom, dateTo: params.dateTo }, ids),
       ]);
       if (seq !== loadSeqRef.current) return;
       setServerCounts(counts);
