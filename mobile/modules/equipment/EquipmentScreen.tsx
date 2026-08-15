@@ -87,8 +87,10 @@ import { nextRotation } from '@amixos/shared/lib/jobPhotos';
 import {
   groupEquipment,
   parseEquipmentGroupKey,
+  equipmentMatchesQuickFilter,
   EQUIPMENT_GROUP_KEY,
   type EquipmentGroupKey,
+  type EquipmentQuickFilter,
 } from '@amixos/shared/lib/equipmentGroups';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -342,6 +344,16 @@ export default function EquipmentScreen() {
     { key: 'property', label: t.groups.property, Icon: Wallet },
     { key: 'expiration', label: t.groups.expiration, Icon: CalendarClock },
   ];
+  // Quick filter — transient (not persisted) so a forgotten filter can't
+  // quietly hide equipment on the next visit. Lives in the group-by sheet.
+  const [quickFilter, setQuickFilter] = useState<EquipmentQuickFilter>('all');
+  const filterOptions: { key: EquipmentQuickFilter; label: string }[] = [
+    { key: 'all', label: t.filters.all },
+    { key: 'plate_expired', label: t.filters.plateExpired },
+    { key: 'plate_expiring', label: t.filters.plateExpiring },
+    { key: 'policy_expired', label: t.filters.policyExpired },
+    { key: 'policy_expiring', label: t.filters.policyExpiring },
+  ];
 
   const sheetScrim = {
     position: 'absolute' as const,
@@ -469,14 +481,16 @@ export default function EquipmentScreen() {
     if (!business) return;
     const seq = ++loadSeqRef.current;
     const searching = debouncedSearch.trim().length > 0;
-    const needsAll = equipmentNeedsAll(groupBy, searching);
+    // A quick filter buckets client-side, so (like grouping) it needs every
+    // matching row — a filtered page-1 would silently miss later pages.
+    const needsAll = equipmentNeedsAll(groupBy, searching) || quickFilter !== 'all';
     const base: EquipmentQueryParams = { businessId: business.id, locationId: activeLocationId ?? null, search: debouncedSearch };
     paramsRef.current = base;
     modeRef.current = needsAll ? 'all' : 'page';
     setLoading(true);
     cursorRef.current = null;
     setHasMore(false);
-    const isDefault = !searching && groupBy === 'none';
+    const isDefault = !searching && groupBy === 'none' && quickFilter === 'all';
     try {
       if (isDefault) {
         // Cache-first: paint the last snapshot instantly, then fetch fresh.
@@ -572,7 +586,7 @@ export default function EquipmentScreen() {
     if (!business || !ready) return;
     void runQuery();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [business, ready, debouncedSearch, groupBy, activeLocationId]);
+  }, [business, ready, debouncedSearch, groupBy, quickFilter, activeLocationId]);
 
   const loadPhotosFor = useCallback(async (equipmentId: string) => {
     const { data } = await supabase
@@ -590,16 +604,19 @@ export default function EquipmentScreen() {
   };
 
   const filtered = useMemo(() => {
+    const base = quickFilter === 'all'
+      ? equipment
+      : equipment.filter((e) => equipmentMatchesQuickFilter(e, quickFilter));
     const q = search.trim().toLowerCase();
-    if (!q) return equipment;
-    return equipment.filter((e) =>
+    if (!q) return base;
+    return base.filter((e) =>
       e.name.toLowerCase().includes(q) ||
       (e.make ?? '').toLowerCase().includes(q) ||
       (e.model ?? '').toLowerCase().includes(q) ||
       (e.plate_number ?? '').toLowerCase().includes(q) ||
       (e.equipment_type ?? '').toLowerCase().includes(q),
     );
-  }, [equipment, search]);
+  }, [equipment, search, quickFilter]);
 
   // Grouped sections (or a single flat section when grouping is off / searching).
   const sections = useMemo(
@@ -957,17 +974,17 @@ export default function EquipmentScreen() {
         <View className="ml-1 flex-1">
           <Text className="text-lg font-semibold text-ink">{t.title}</Text>
           <Text className="text-xs text-muted">
-            {t.countTotal.replace('{{count}}', String(serverTotal))} · {t.subtitle}
+            {t.countTotal.replace('{{count}}', String(quickFilter !== 'all' ? filtered.length : serverTotal))} · {t.subtitle}
           </Text>
         </View>
-        {/* Group-by — icon-only, highlighted when active (matches clients). */}
+        {/* Group-by + quick filter — icon-only, highlighted when active. */}
         <Pressable
           onPress={() => setGroupMenuOpen(true)}
           className={`p-2.5 rounded-xl border active:opacity-80 ${
-            groupBy !== 'none' ? 'bg-primary/10 border-primary' : 'bg-card border-border'
+            groupBy !== 'none' || quickFilter !== 'all' ? 'bg-primary/10 border-primary' : 'bg-card border-border'
           }`}
         >
-          <Layers size={18} color={groupBy !== 'none' ? c.primary : c.muted} />
+          <Layers size={18} color={groupBy !== 'none' || quickFilter !== 'all' ? c.primary : c.muted} />
         </Pressable>
       </View>
 
@@ -988,6 +1005,20 @@ export default function EquipmentScreen() {
             </Pressable>
           ) : null}
         </View>
+        {/* Active quick filter — always visible so a filtered list can't read
+            as "missing equipment"; tap the X to clear. */}
+        {quickFilter !== 'all' ? (
+          <View className="flex-row mt-2">
+            <View className="flex-row items-center gap-1.5 bg-primary/10 border border-primary/30 rounded-full pl-3 pr-2 py-1.5">
+              <Text className="text-xs font-semibold text-primary">
+                {filterOptions.find((o) => o.key === quickFilter)?.label}
+              </Text>
+              <Pressable onPress={() => setQuickFilter('all')} hitSlop={8} className="active:opacity-60">
+                <X size={14} color={c.primary} />
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
       </View>
 
       {/* List — SectionList virtualizes rows (+ their images) for large fleets. */}
@@ -1671,6 +1702,24 @@ export default function EquipmentScreen() {
                       {o.label}
                     </Text>
                     {active ? <Check size={20} color={c.primary} /> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+            {/* Quick filter — pill row (composes with any grouping). */}
+            <Text className="text-lg font-bold text-ink px-1 mt-4 mb-3">{t.filters.title}</Text>
+            <View className="flex-row flex-wrap gap-2 px-1 pb-1">
+              {filterOptions.map((o) => {
+                const active = quickFilter === o.key;
+                return (
+                  <Pressable
+                    key={o.key}
+                    onPress={() => { setQuickFilter(o.key); setGroupMenuOpen(false); }}
+                    className={`px-3.5 py-2 rounded-full border ${
+                      active ? 'bg-primary border-primary' : 'bg-card border-border active:bg-surface'
+                    }`}
+                  >
+                    <Text className={`text-sm font-medium ${active ? 'text-white' : 'text-ink'}`}>{o.label}</Text>
                   </Pressable>
                 );
               })}

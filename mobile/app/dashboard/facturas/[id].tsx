@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { Alert, Share, View, Text, Pressable, ScrollView, Modal as RNModal, Linking, TextInput, KeyboardAvoidingView, Platform, Image } from 'react-native';
-import { X, Camera, RotateCw } from 'lucide-react-native';
+import { X, Camera, ImagePlus, RotateCw } from 'lucide-react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
@@ -539,6 +539,9 @@ export default function FacturaDetailRoute() {
   };
 
   const [payPhotoUri, setPayPhotoUri] = useState<string | null>(null);
+  // Camera/library chooser — an in-modal overlay (iOS won't present a second
+  // RNModal over the payment sheet).
+  const [payPhotoChooserOpen, setPayPhotoChooserOpen] = useState(false);
   const [payPhotoPath, setPayPhotoPath] = useState<string | null>(null);
   const [payPhotoExistingUrl, setPayPhotoExistingUrl] = useState<string | null>(null);
   // True once the user removes an existing photo — lets submit write photo_path:
@@ -572,17 +575,17 @@ export default function FacturaDetailRoute() {
     setPayments(rows.map((r, i) => ({ id: r.id, amount: r.amount, method: r.method, paidOn: r.paid_on, photoPath: r.photo_path, photoUrl: signed[i], photoRotation: r.photo_rotation ?? 0 })));
   };
 
-  const pickPaymentPhoto = async () => {
-    // Camera first (it's usually a physical check); fall back to the library.
-    const cam = await ImagePicker.requestCameraPermissionsAsync();
-    if (cam.granted) {
-      const r = await ImagePicker.launchCameraAsync({ quality: 0.6 });
-      if (!r.canceled && r.assets[0]) setPayPhotoUri(r.assets[0].uri);
-      return;
-    }
-    const lib = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!lib.granted) return;
-    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.6 });
+  const pickPaymentPhoto = async (source: 'camera' | 'library') => {
+    setPayPhotoChooserOpen(false);
+    const perm =
+      source === 'camera'
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return;
+    const r =
+      source === 'camera'
+        ? await ImagePicker.launchCameraAsync({ quality: 0.6 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.6 });
     if (!r.canceled && r.assets[0]) setPayPhotoUri(r.assets[0].uri);
   };
 
@@ -599,6 +602,7 @@ export default function FacturaDetailRoute() {
     setPayPhotoPath(null);
     setPayPhotoExistingUrl(null);
     setPayPhotoRemoved(false);
+    setPayPhotoChooserOpen(false);
     setPayOpen(true);
   };
 
@@ -613,6 +617,7 @@ export default function FacturaDetailRoute() {
     setPayPhotoPath(p.photoPath ?? null);
     setPayPhotoExistingUrl(p.photoUrl ?? null);
     setPayPhotoRemoved(false);
+    setPayPhotoChooserOpen(false);
     setPayOpen(true);
   };
 
@@ -1423,11 +1428,11 @@ export default function FacturaDetailRoute() {
               {payPhotoUri || payPhotoExistingUrl ? (
                 <View className="flex-row items-center gap-3">
                   <Image source={{ uri: payPhotoUri ?? payPhotoExistingUrl ?? '' }} style={{ width: 56, height: 56, borderRadius: 8 }} />
-                  <Pressable onPress={pickPaymentPhoto} className="active:opacity-60"><Text className="text-sm text-primary font-semibold">{tInv.payments.changePhoto}</Text></Pressable>
+                  <Pressable onPress={() => setPayPhotoChooserOpen(true)} className="active:opacity-60"><Text className="text-sm text-primary font-semibold">{tInv.payments.changePhoto}</Text></Pressable>
                   <Pressable onPress={() => { setPayPhotoUri(null); setPayPhotoPath(null); setPayPhotoExistingUrl(null); setPayPhotoRemoved(true); }} className="active:opacity-60"><Text className="text-sm text-red-600 font-semibold">{tInv.payments.removePhoto}</Text></Pressable>
                 </View>
               ) : (
-                <Pressable onPress={pickPaymentPhoto} className="flex-row items-center gap-2 bg-border-soft rounded-xl py-2.5 px-3 active:opacity-80">
+                <Pressable onPress={() => setPayPhotoChooserOpen(true)} className="flex-row items-center gap-2 bg-border-soft rounded-xl py-2.5 px-3 active:opacity-80">
                   <Camera size={18} color={c.muted} />
                   <Text className="text-sm text-muted font-medium">{tInv.payments.addPhoto}</Text>
                 </Pressable>
@@ -1443,6 +1448,41 @@ export default function FacturaDetailRoute() {
             </Pressable>
           </Pressable>
         </Pressable>
+
+        {/* Camera / library chooser — an in-modal absolute overlay, NOT a
+            nested RNModal (iOS silently refuses to present a second one). */}
+        {payPhotoChooserOpen ? (
+          <View className="justify-end" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+            <Pressable onPress={() => setPayPhotoChooserOpen(false)} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
+            <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
+              <View className="items-center mb-3">
+                <View className="w-10 h-1 bg-border rounded-full" />
+              </View>
+              <View className="bg-surface rounded-2xl overflow-hidden">
+                <Pressable
+                  onPress={() => pickPaymentPhoto('camera')}
+                  className="flex-row items-center gap-3 px-5 py-4 active:bg-border-soft border-b border-border-soft"
+                >
+                  <Camera size={18} color={c.primary} />
+                  <Text className="text-sm font-semibold text-ink">{tj.detail.photos.takePhoto}</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => pickPaymentPhoto('library')}
+                  className="flex-row items-center gap-3 px-5 py-4 active:bg-border-soft"
+                >
+                  <ImagePlus size={18} color={c.primary} />
+                  <Text className="text-sm font-semibold text-ink">{tj.detail.photos.chooseFromLibrary}</Text>
+                </Pressable>
+              </View>
+              <Pressable
+                onPress={() => setPayPhotoChooserOpen(false)}
+                className="mt-3 items-center py-3.5 rounded-2xl bg-border-soft active:bg-border"
+              >
+                <Text className="text-sm font-semibold text-ink">{tc.buttons.cancel}</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
         </KeyboardAvoidingView>
       </RNModal>
 

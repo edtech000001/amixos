@@ -64,8 +64,10 @@ import { normalizeImageFiles } from '@/lib/imageFile';
 import {
   groupEquipment,
   parseEquipmentGroupKey,
+  equipmentMatchesQuickFilter,
   EQUIPMENT_GROUP_KEY,
   type EquipmentGroupKey,
+  type EquipmentQuickFilter,
 } from '@amixos/shared/lib/equipmentGroups';
 
 interface EmployeeOption {
@@ -262,14 +264,16 @@ export default function EquipmentModule() {
   const runQuery = async () => {
     if (!business) return;
     const seq = ++loadSeqRef.current;
-    const needsAll = equipmentNeedsAll(groupBy, debouncedSearch.trim().length > 0);
+    // A quick filter buckets client-side, so (like grouping) it needs every
+    // matching row — a filtered page-1 would silently miss later pages.
+    const needsAll = equipmentNeedsAll(groupBy, debouncedSearch.trim().length > 0) || quickFilter !== 'all';
     const base: EquipmentQueryParams = { businessId: business.id, locationId: activeLocationId ?? null, search: debouncedSearch };
     paramsRef.current = base;
     modeRef.current = needsAll ? 'all' : 'page';
     setLoading(true);
     cursorRef.current = null;
     setHasMore(false);
-    const isDefault = !debouncedSearch.trim() && groupBy === 'none';
+    const isDefault = !debouncedSearch.trim() && groupBy === 'none' && quickFilter === 'all';
     try {
       // Cache-first for the default view: paint the last snapshot instantly.
       const cacheKey = `equipment_v2_${business.id}_${activeLocationId ?? 'all'}`;
@@ -371,17 +375,25 @@ export default function EquipmentModule() {
     return e ? `${e.first_name} ${e.last_name}` : null;
   };
 
+  // Quick filter — transient (not persisted) so a forgotten filter can't
+  // quietly hide equipment on the next visit. Lives in the group-by dropdown.
+  const [quickFilter, setQuickFilter] = useState<EquipmentQuickFilter>('all');
+
   const filtered = useMemo(() => {
+    const base = quickFilter === 'all'
+      ? equipment
+      : equipment.filter(e => equipmentMatchesQuickFilter(e, quickFilter));
     const q = search.trim().toLowerCase();
-    if (!q) return equipment;
-    return equipment.filter(e =>
+    if (!q) return base;
+    return base.filter(e =>
       e.name.toLowerCase().includes(q) ||
       (e.make ?? '').toLowerCase().includes(q) ||
       (e.model ?? '').toLowerCase().includes(q) ||
       (e.plate_number ?? '').toLowerCase().includes(q) ||
       (e.equipment_type ?? '').toLowerCase().includes(q),
     );
-  }, [equipment, search]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [equipment, search, quickFilter]);
 
   // Group-by — persists across navigation + refresh, scoped per business so it
   // doesn't carry across companies.
@@ -403,7 +415,7 @@ export default function EquipmentModule() {
     if (!business || !groupHydrated) return;
     void runQuery();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [business, groupHydrated, debouncedSearch, groupBy, activeLocationId]);
+  }, [business, groupHydrated, debouncedSearch, groupBy, quickFilter, activeLocationId]);
   // Infinite scroll (flat/search view): load the next page when the sentinel nears view.
   useEffect(() => {
     const el = sentinelRef.current;
@@ -423,6 +435,13 @@ export default function EquipmentModule() {
     { key: 'type', label: t.groups.type, Icon: Tag },
     { key: 'property', label: t.groups.property, Icon: Wallet },
     { key: 'expiration', label: t.groups.expiration, Icon: CalendarClock },
+  ];
+  const filterOptions: { key: EquipmentQuickFilter; label: string }[] = [
+    { key: 'all', label: t.filters.all },
+    { key: 'plate_expired', label: t.filters.plateExpired },
+    { key: 'plate_expiring', label: t.filters.plateExpiring },
+    { key: 'policy_expired', label: t.filters.policyExpired },
+    { key: 'policy_expiring', label: t.filters.policyExpiring },
   ];
   const sections = useMemo(
     () =>
@@ -721,7 +740,7 @@ export default function EquipmentModule() {
           <div>
             <h1 className="text-2xl font-bold text-ink">{t.title}</h1>
             <p className="text-xs text-muted">
-              {t.countTotal.replace('{{count}}', String(serverTotal))} · {t.subtitle}
+              {t.countTotal.replace('{{count}}', String(quickFilter !== 'all' ? filtered.length : serverTotal))} · {t.subtitle}
             </p>
           </div>
         </div>
@@ -743,13 +762,23 @@ export default function EquipmentModule() {
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
-        {/* Group-by dropdown */}
+        {/* Active quick filter — visible outside the menu so a filtered list
+            can't read as "missing equipment"; click the X to clear. */}
+        {quickFilter !== 'all' ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 pl-3 pr-1.5 py-1.5 text-xs font-semibold text-primary">
+            {filterOptions.find(o => o.key === quickFilter)?.label}
+            <button onClick={() => setQuickFilter('all')} className="rounded-full p-0.5 hover:bg-primary/10">
+              <X size={13} />
+            </button>
+          </span>
+        ) : null}
+        {/* Group-by + quick-filter dropdown */}
         <div className="relative">
           <button
             onClick={() => setGroupMenuOpen(o => !o)}
             onBlur={() => setTimeout(() => setGroupMenuOpen(false), 150)}
             className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm font-medium ${
-              groupBy === 'none'
+              groupBy === 'none' && quickFilter === 'all'
                 ? 'border-border bg-card text-ink hover:bg-surface'
                 : 'border-primary/30 bg-primary/10 text-primary'
             }`}
@@ -776,6 +805,23 @@ export default function EquipmentModule() {
                   </button>
                 );
               })}
+              <p className="px-2.5 py-1.5 mt-1 border-t border-border-soft text-[11px] font-semibold uppercase tracking-wide text-faint">{t.filters.title}</p>
+              <div className="flex flex-wrap gap-1.5 px-2 pb-1.5">
+                {filterOptions.map(o => {
+                  const active = quickFilter === o.key;
+                  return (
+                    <button
+                      key={o.key}
+                      onMouseDown={() => { setQuickFilter(o.key); setGroupMenuOpen(false); }}
+                      className={`px-2.5 py-1.5 rounded-full border text-xs font-medium ${
+                        active ? 'bg-primary border-primary text-white' : 'bg-card border-border text-ink hover:bg-surface'
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           ) : null}
         </div>

@@ -35,6 +35,41 @@ export function parseEquipmentGroupKey(raw: string | null | undefined): Equipmen
   return VALID.includes(raw as EquipmentGroupKey) ? (raw as EquipmentGroupKey) : 'none';
 }
 
+// ── Quick filters ───────────────────────────────────────────────────────────
+// Live alongside group-by in the same picker (web dropdown / mobile sheet).
+// Transient by design — not persisted, so a forgotten filter can't quietly
+// hide equipment on the next visit.
+
+export type EquipmentQuickFilter =
+  | 'all'
+  | 'plate_expired'
+  | 'plate_expiring'
+  | 'policy_expired'
+  | 'policy_expiring';
+
+interface FilterableEquipment {
+  plate_expiration: string | null;   // ISO date
+  insurance_expiration: string | null; // ISO date
+}
+
+/** "Expiring soon" = within this many days (matches the expiration grouping). */
+const EXPIRING_SOON_DAYS = 30;
+
+export function equipmentMatchesQuickFilter(
+  e: FilterableEquipment,
+  filter: EquipmentQuickFilter,
+): boolean {
+  if (filter === 'all') return true;
+  const days = plateExpirationDays(
+    filter === 'plate_expired' || filter === 'plate_expiring'
+      ? e.plate_expiration
+      : e.insurance_expiration,
+  );
+  if (days === null) return false;
+  if (filter === 'plate_expired' || filter === 'policy_expired') return days < 0;
+  return days >= 0 && days <= EXPIRING_SOON_DAYS;
+}
+
 export interface EquipmentGroupLabels {
   unassigned: string;
   noType: string;
