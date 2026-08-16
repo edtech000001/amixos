@@ -506,6 +506,11 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           <Button variant="secondary" size="sm" onClick={onShareCsv}>
             <Share2 size={14} className="mr-1.5"/> CSV
           </Button>
+          <Link href={`/dashboard/precios/generar?client=${id}`} title={full.dashboard.settings.priceSheet.generateForClientBtn}>
+            <Button variant="secondary" size="sm">
+              <FileText size={14} className="mr-1.5"/> {full.dashboard.settings.priceSheet.title}
+            </Button>
+          </Link>
           {canEdit && (
             <Button variant="secondary" size="sm" onClick={() => { setEditError(''); setEditModal(true); }}>
               <Pencil size={14} className="mr-1.5"/> {tc.buttons.edit}

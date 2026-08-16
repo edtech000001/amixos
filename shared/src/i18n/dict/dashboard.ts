@@ -1473,6 +1473,12 @@ export type DashboardDict = {
       forClient: string;
       forState: string;
       selectClientPlaceholder: string;
+      searchClientPlaceholder: string;
+      noClientMatches: string;
+      emailBtn: string;
+      emailSubject: string;
+      emailBody: string;
+      generateForClientBtn: string;
       preparedFor: string;
       sheetTitle: string;
       additionalCharges: string;
@@ -4361,6 +4367,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         forClient: 'Cliente',
         forState: 'Estado',
         selectClientPlaceholder: 'Elegir cliente…',
+        searchClientPlaceholder: 'Buscar cliente por nombre o empresa…',
+        noClientMatches: 'Sin resultados.',
+        emailBtn: 'Enviar por correo',
+        emailSubject: 'Lista de precios – {{business}}',
+        emailBody: 'Hola {{name}},\n\nTe comparto nuestra lista de precios actualizada (adjunta en PDF).\n\nSaludos,\n{{business}}',
+        generateForClientBtn: 'Generar lista de precios',
         preparedFor: 'Preparado para',
         sheetTitle: 'Hoja de precios',
         additionalCharges: 'Cargos adicionales',
@@ -7257,6 +7269,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         forClient: 'Client',
         forState: 'State',
         selectClientPlaceholder: 'Choose a client…',
+        searchClientPlaceholder: 'Search client by name or company…',
+        noClientMatches: 'No matches.',
+        emailBtn: 'Email',
+        emailSubject: 'Price sheet – {{business}}',
+        emailBody: 'Hi {{name}},\n\nSharing our current price sheet (PDF attached).\n\nBest,\n{{business}}',
+        generateForClientBtn: 'Generate price sheet',
         preparedFor: 'Prepared for',
         sheetTitle: 'Price Sheet',
         additionalCharges: 'Additional charges',

@@ -9,9 +9,9 @@ export const dynamic = 'force-dynamic';
 // print-only CSS hides the app chrome). A "Customize" panel controls the accent
 // color, section order, and per-unit price label — persisted per business.
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Printer, ArrowLeft, Sliders, ChevronUp, ChevronDown } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Printer, ArrowLeft, Sliders, ChevronUp, ChevronDown, Search, Mail, X } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
@@ -37,6 +37,8 @@ interface ClientLite {
   last_name: string | null;
   company: string | null;
   state: string | null;
+  email: string | null;
+  email_office: string | null;
 }
 
 const STATE_CODES = Object.keys(US_STATE_ABBR_TO_NAME);
@@ -58,6 +60,20 @@ export default function GenerarPreciosPage() {
   const [clientId, setClientId] = useState('');
   const [stateCode, setStateCode] = useState('');
   const [loading, setLoading] = useState(true);
+  // Searchable client picker (replaces the giant native <select>).
+  const [clientQuery, setClientQuery] = useState('');
+  const [clientListOpen, setClientListOpen] = useState(false);
+  const clientBoxRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (clientBoxRef.current && !clientBoxRef.current.contains(e.target as Node)) setClientListOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, []);
+  // Deep link from a client's page: /precios/generar?client=<id> preselects.
+  const searchParams = useSearchParams();
+  const preselectClientId = searchParams.get('client');
 
   // Style/order config (businesses.price_sheet_template). Local so the preview
   // updates live; saved from the Customize modal. Only re-seed from the business
@@ -78,11 +94,16 @@ export default function GenerarPreciosPage() {
           .select('id, name, category, pricing_mode, unit_label, rate, state_rates, client_rates, match_terms, is_addon, sort_order, active')
           .eq('business_id', bid).eq('active', true).order('sort_order').order('name'),
         supabase.from('clients')
-          .select('id, first_name, last_name, company, state')
+          .select('id, first_name, last_name, company, state, email, email_office')
           .eq('business_id', bid).order('company', { ascending: true }).order('last_name', { ascending: true }),
       ]);
       setItems(((itemRes.data ?? []) as PriceSheetRow[]).map(rowToPriceSheetItem));
-      setClients((clientRes.data ?? []) as ClientLite[]);
+      const list = (clientRes.data ?? []) as ClientLite[];
+      setClients(list);
+      if (preselectClientId && list.some(c => c.id === preselectClientId)) {
+        setMode('client');
+        setClientId(preselectClientId);
+      }
       setLoading(false);
     })();
   }, [business, supabase]);
@@ -94,7 +115,30 @@ export default function GenerarPreciosPage() {
       : { state: stateCode || null, clientId: null }
   ), [mode, selectedClient, stateCode]);
 
-  const clientName = (c: ClientLite) => (c.company?.trim() || `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim() || '—');
+  // Person-first display: "First Last · Company" (company alone when no name).
+  const clientName = (c: ClientLite) => {
+    const person = `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim();
+    return [person, c.company?.trim()].filter(Boolean).join(' · ') || '—';
+  };
+  const clientEmail = (c: ClientLite | null) => c?.email?.trim() || c?.email_office?.trim() || null;
+  const filteredClients = useMemo(() => {
+    const q = clientQuery.trim().toLowerCase();
+    if (!q) return clients;
+    return clients.filter(c =>
+      `${c.first_name ?? ''} ${c.last_name ?? ''}`.toLowerCase().includes(q) ||
+      (c.company ?? '').toLowerCase().includes(q) ||
+      (c.state ?? '').toLowerCase() === q);
+  }, [clients, clientQuery]);
+  const emailSheet = () => {
+    if (!selectedClient) return;
+    const to = clientEmail(selectedClient);
+    if (!to) return;
+    const subject = t.emailSubject.replace('{{business}}', business?.name ?? 'Amixos');
+    const body = t.emailBody
+      .replace('{{name}}', (selectedClient.first_name ?? '').trim() || clientName(selectedClient))
+      .replace(/\{\{business\}\}/g, business?.name ?? 'Amixos');
+    window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
   const preparedFor = mode === 'client' && selectedClient ? clientName(selectedClient) : null;
   const stateLabel = ctx.state ? usStateName(ctx.state, locale) : t.allStatesLabel;
 
@@ -222,8 +266,8 @@ export default function GenerarPreciosPage() {
         <button type="button" onClick={() => router.back()} className="flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-ink mb-4">
           <ArrowLeft size={16} /> {t.title}
         </button>
-        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 flex flex-col sm:flex-row sm:items-end gap-3">
-          <div className="flex-1">
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
+          <div className="flex-1 min-w-[280px]">
             <label className="block text-xs font-semibold text-muted mb-1.5">{t.generateTitle}</label>
             <div className="flex gap-2">
               <div className="inline-flex gap-1 bg-border-soft p-1 rounded-xl">
@@ -235,11 +279,35 @@ export default function GenerarPreciosPage() {
                 ))}
               </div>
               {mode === 'client' ? (
-                <select value={clientId} onChange={e => setClientId(e.target.value)}
-                  className="flex-1 min-w-0 rounded-xl border border-border px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary">
-                  <option value="">{t.selectClientPlaceholder}</option>
-                  {clients.map(c => <option key={c.id} value={c.id}>{clientName(c)}{c.state ? ` (${c.state})` : ''}</option>)}
-                </select>
+                <div ref={clientBoxRef} className="relative flex-1 min-w-0">
+                  <div className="flex items-center rounded-xl border border-border bg-card px-3 focus-within:ring-2 focus-within:ring-primary">
+                    <Search size={14} className="text-faint shrink-0" />
+                    <input
+                      value={clientListOpen || !selectedClient ? clientQuery : `${clientName(selectedClient)}${selectedClient.state ? ` (${selectedClient.state})` : ''}`}
+                      onChange={e => { setClientQuery(e.target.value); setClientListOpen(true); }}
+                      onFocus={() => setClientListOpen(true)}
+                      placeholder={selectedClient ? undefined : t.searchClientPlaceholder}
+                      className="w-full min-w-0 bg-transparent px-2 py-2 text-sm focus:outline-none"
+                    />
+                    {selectedClient ? (
+                      <button type="button" onClick={() => { setClientId(''); setClientQuery(''); setClientListOpen(true); }}
+                        className="p-1 rounded hover:bg-border-soft"><X size={13} className="text-faint" /></button>
+                    ) : null}
+                  </div>
+                  {clientListOpen ? (
+                    <div className="absolute z-30 mt-1 left-0 right-0 max-h-72 overflow-y-auto rounded-xl border border-border-soft bg-card shadow-lg py-1">
+                      {filteredClients.length === 0 ? (
+                        <p className="px-3 py-2 text-sm text-faint">{t.noClientMatches}</p>
+                      ) : filteredClients.slice(0, 80).map(c => (
+                        <button key={c.id} type="button"
+                          onMouseDown={() => { setClientId(c.id); setClientQuery(''); setClientListOpen(false); }}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-surface ${c.id === clientId ? 'text-primary font-semibold' : 'text-ink'}`}>
+                          {clientName(c)}{c.state ? <span className="text-faint"> ({c.state})</span> : null}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               ) : (
                 <select value={stateCode} onChange={e => setStateCode(e.target.value)}
                   className="flex-1 min-w-0 rounded-xl border border-border px-3 py-2 text-sm bg-card focus:outline-none focus:ring-2 focus:ring-primary">
@@ -250,11 +318,17 @@ export default function GenerarPreciosPage() {
               )}
             </div>
           </div>
-          <div className="flex gap-2 shrink-0">
+          <div className="flex flex-wrap gap-2 shrink-0">
             <button type="button" onClick={openCustomize}
               className="flex items-center justify-center gap-1.5 bg-card border border-border px-4 py-2.5 rounded-xl text-sm font-semibold text-ink hover:bg-surface">
               <Sliders size={16} /> {t.customizeBtn}
             </button>
+            {mode === 'client' && selectedClient && clientEmail(selectedClient) ? (
+              <button type="button" onClick={emailSheet}
+                className="flex items-center justify-center gap-1.5 bg-card border border-border px-4 py-2.5 rounded-xl text-sm font-semibold text-primary hover:bg-surface">
+                <Mail size={16} /> {t.emailBtn}
+              </button>
+            ) : null}
             <button type="button" onClick={() => window.print()}
               className="flex items-center justify-center gap-1.5 bg-primary px-4 py-2.5 rounded-xl text-sm font-semibold text-white hover:opacity-90">
               <Printer size={16} /> {t.printBtn}
