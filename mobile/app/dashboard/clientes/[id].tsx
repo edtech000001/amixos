@@ -702,6 +702,14 @@ export default function ClienteDetailRoute() {
               <ShieldCheck size={18} color={c.muted} />
             </Pressable>
           ) : null}
+          <Pressable
+            onPress={() => router.push(`/dashboard/facturas/precios?client=${client.id}` as never)}
+            hitSlop={8}
+            className="p-2 rounded-lg active:bg-border-soft"
+            accessibilityLabel={full.dashboard.settings.priceSheet.generateForClientBtn}
+          >
+            <FileText size={18} color={c.muted} />
+          </Pressable>
           {canEdit ? (
             <Pressable
               onPress={() => router.push(`/dashboard/clientes/nuevo?edit=${client.id}` as never)}

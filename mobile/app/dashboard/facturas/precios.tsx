@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, Modal as RNModal, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronDown, ChevronLeft, ChevronUp, Printer, Sliders, X } from 'lucide-react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -49,6 +49,9 @@ const ACCENT_SWATCHES = ['#4F46E5', '#2563EB', '#0D9488', '#16A34A', '#D97706', 
 
 export default function FacturasPreciosPage() {
   const router = useRouter();
+  // Deep-link from client detail: ?client=<id> preselects that client and
+  // opens the generate sheet right away (mirrors web /precios/generar?client=).
+  const { client: clientParam } = useLocalSearchParams<{ client?: string }>();
   const { t: full, locale } = useLang();
   const { business, currentRole } = useApp();
   const c = useThemeColors();
@@ -72,6 +75,15 @@ export default function FacturasPreciosPage() {
   const [draftAccent, setDraftAccent] = useState('#4F46E5');
   const [draftOrder, setDraftOrder] = useState<string[]>([]);
   const [savingTpl, setSavingTpl] = useState(false);
+
+  useEffect(() => {
+    if (typeof clientParam === 'string' && clientParam) {
+      setMode('client');
+      setClientId(clientParam);
+      setGenOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientParam]);
 
   useEffect(() => {
     if (!business || !genOpen || clients.length) return;
