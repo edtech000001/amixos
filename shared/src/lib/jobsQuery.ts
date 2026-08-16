@@ -61,7 +61,6 @@ export interface JobsPage<T extends { id: string; created_at?: string | null }> 
 
 // Mirror JobsListScreen's constants so the server filter matches the client.
 const PROPOSAL_STATUSES = ['proposal', 'sent', 'accepted', 'declined'];
-const CLOSED_DEFAULT_HIDDEN = ['invoiced', 'cancelled'];
 
 /** Escape LIKE wildcards so a user typing % or _ searches literally. */
 const escLike = (s: string) => s.replace(/[\\%_]/g, (m) => `\\${m}`);
@@ -78,10 +77,12 @@ function tabCondition(tab: string): string {
 /** Apply the tab / default-view filter to a jobs query — mirrors matchesTab(). */
 function applyTabFilter(q: any, tabs: string[], searching: boolean): any {
   if (!tabs.length) {
-    // Default view hides closed + archived work — UNLESS searching, which spans
-    // every status so a targeted match always surfaces.
+    // Default view spans EVERY status (incl. invoiced/cancelled — a field
+    // worker must still see a job the office invoiced mid-pay-period); only
+    // archived work is hidden, since archiving is the explicit "put away".
+    // Searching spans archived too so a targeted match always surfaces.
     if (searching) return q;
-    return q.not('status', 'in', `(${CLOSED_DEFAULT_HIDDEN.join(',')})`).is('archived_at', null);
+    return q.is('archived_at', null);
   }
   // A job matches if it satisfies ANY selected tab.
   return q.or(tabs.map(tabCondition).join(','));
@@ -260,7 +261,7 @@ export function jobTabFilterParams(
 ): { statusInclude: string[] | null; excludeClosed: boolean; archived: 'exclude' | 'only' | 'any' } | null {
   if (!tabs.length) {
     if (searching) return { statusInclude: null, excludeClosed: false, archived: 'any' };
-    return { statusInclude: null, excludeClosed: true, archived: 'exclude' };
+    return { statusInclude: null, excludeClosed: false, archived: 'exclude' };
   }
   if (tabs.length === 1) {
     const tk = tabs[0];

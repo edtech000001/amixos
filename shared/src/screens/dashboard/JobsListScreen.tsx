@@ -107,7 +107,6 @@ export interface JobListItem {
 const PROPOSAL_STATUSES = ['proposal', 'sent', 'accepted', 'declined'];
 // Closed/terminal work hidden from the default (no-tab) "active" view — still
 // reachable by selecting the corresponding status tab.
-const CLOSED_DEFAULT_HIDDEN = ['invoiced', 'cancelled'];
 const TAB_KEYS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated', 'archived'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 type StatusTabKey = Exclude<TabKey, 'all'>;
@@ -406,7 +405,7 @@ export function JobsListScreen({
   const matchesTab = (j: JobListItem) => {
     if (tabs.length === 0) {
       if (searching) return true;
-      return !CLOSED_DEFAULT_HIDDEN.includes(j.status) && !j.archivedAt;
+      return !j.archivedAt;
     }
     return tabs.some(tk => jobInTab(j, tk));
   };
