@@ -1778,7 +1778,12 @@ export default function NuevoTrabajoRoute() {
           const alreadyLead = assignments.some((a) => a.is_lead);
           const creatorName = (user?.name ?? '').trim();
           if (myEmployeeId) {
-            if (!assignments.some((a) => a.employee_id === myEmployeeId)) {
+            const mine = assignments.find((a) => a.employee_id === myEmployeeId);
+            if (mine) {
+              // Creator already picked himself as crew — promote that row so
+              // the job still gets a lead ("the person logging it is the lead").
+              if (!alreadyLead) mine.is_lead = true;
+            } else {
               assignments.push({ job_id: jobId, employee_id: myEmployeeId, worker_name: creatorName, is_lead: !alreadyLead, crew: true });
             }
           } else if (!alreadyLead && creatorName) {
