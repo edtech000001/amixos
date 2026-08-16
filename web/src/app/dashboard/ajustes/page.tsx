@@ -425,9 +425,19 @@ export default function AjustesPage() {
       if (cancelled || !data) return;
       setFirstName(data.first_name ?? '');
       setLastName(data.last_name ?? '');
+      dbNameRef.current = { first: data.first_name ?? '', last: data.last_name ?? '' };
+      setNameDirtyTick(t => t + 1);
     })();
     return () => { cancelled = true; };
   }, [user?.id]);
+
+  // Baseline for the account-name dirty check (ref + tick: the load effect
+  // writes it outside React state).
+  const dbNameRef = useRef({ first: '', last: '' });
+  const [, setNameDirtyTick] = useState(0);
+  const nameDirty =
+    firstName.trim() !== dbNameRef.current.first.trim() ||
+    lastName.trim() !== dbNameRef.current.last.trim();
 
   const saveName = async () => {
     if (!user) return;
@@ -438,6 +448,10 @@ export default function AjustesPage() {
       .eq('id', user.id);
     setNameMsgIsError(!!error);
     setNameMsg(error ? t.account.nameSaveError : t.account.nameSaveSuccess);
+    if (!error) {
+      dbNameRef.current = { first: firstName.trim(), last: lastName.trim() };
+      setNameDirtyTick(t => t + 1);
+    }
     setSavingName(false);
   };
 
@@ -2137,6 +2151,47 @@ export default function AjustesPage() {
   // Dirty flag for the Facturas tab — combines the templates/required/order
   // batch (saveInvoiceRequired) with the separate due-days/notes batch
   // (saveInvoiceSettings).
+  // Negocio card: solid save buttons on a pristine form read as "unsaved
+  // changes" — grey them until something actually differs from the business.
+  const bizDirty = useMemo(() => {
+    if (!business) return false;
+    const pa = business.policy_agents;
+    return (
+      bizName !== business.name ||
+      bizEmail !== (business.email ?? '') ||
+      bizPhone !== (business.phone ?? '') ||
+      bizWebsite !== (business.website ?? '') ||
+      bizAddress !== (business.address ?? '') ||
+      bizCity !== (business.city ?? '') ||
+      bizState !== (business.state ?? '') ||
+      bizZip !== (business.postal_code ?? '') ||
+      bizTaxId !== (business.tax_id ?? '') ||
+      bizLicense !== (business.license_number ?? '') ||
+      coiAgentName !== (pa?.coi?.name ?? '') ||
+      coiAgentEmail !== (pa?.coi?.email ?? '') ||
+      wcAgentName !== (pa?.workcomp?.name ?? '') ||
+      wcAgentEmail !== (pa?.workcomp?.email ?? '') ||
+      JSON.stringify(operatingHours) !==
+        JSON.stringify(normalizeOperatingHours(business.operating_hours) ?? DEFAULT_OPERATING_HOURS)
+    );
+  }, [business, bizName, bizEmail, bizPhone, bizWebsite, bizAddress, bizCity, bizState, bizZip, bizTaxId, bizLicense, coiAgentName, coiAgentEmail, wcAgentName, wcAgentEmail, operatingHours]);
+
+  // Facturas card's settings inputs (due days, numbering, tax, email, notes) —
+  // the SAME clauses feed invoicesDirty below, but that flag also covers the
+  // field-config editor, so the settings buttons get their own precise flag.
+  const invoiceSettingsDirty = useMemo(
+    () =>
+      (business?.invoice_due_days != null ? String(business.invoice_due_days) : '') !== invoiceDueDays ||
+      String(business?.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER) !== invoiceStartNumber ||
+      (business?.invoice_tax_rate ? String(business.invoice_tax_rate) : '') !== invoiceTaxRate ||
+      (business?.invoice_qty_field ?? '') !== invoiceQtyField ||
+      (business?.invoice_email_subject ?? '') !== invoiceEmailSubject ||
+      (business?.invoice_email_body ?? '') !== invoiceEmailBody ||
+      (business?.invoice_email_delivery || 'pdf') !== invoiceEmailDelivery ||
+      (business?.invoice_notes_default ?? '') !== bizInvoiceNotes,
+    [business, invoiceDueDays, invoiceStartNumber, invoiceTaxRate, invoiceQtyField, invoiceEmailSubject, invoiceEmailBody, invoiceEmailDelivery, bizInvoiceNotes],
+  );
+
   const invoicesDirty = useMemo(
     () =>
       isDirty(dbInvoiceTemplates, invoiceTemplates) ||
@@ -2465,7 +2520,7 @@ export default function AjustesPage() {
               </div>
               {bizMsg && <p className={`text-xs mt-3 ${bizMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{bizMsg}</p>}
               <div className="mt-5">
-                <Button onClick={saveBusiness} loading={savingBiz}>
+                <Button onClick={saveBusiness} loading={savingBiz} disabled={!bizDirty}>
                   <Save size={14} className="mr-1.5"/> {tc.buttons.saveChanges}
                 </Button>
               </div>
@@ -2733,7 +2788,7 @@ export default function AjustesPage() {
                 {jobAlertsMsg && <p className={`text-xs mt-4 ${jobAlertsMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{jobAlertsMsg}</p>}
                 {jobAlertsDirty && (
                   <div className="mt-4">
-                    <Button onClick={saveJobAlerts} loading={savingJobAlerts}>
+                    <Button onClick={saveJobAlerts} loading={savingJobAlerts} disabled={!jobAlertsDirty}>
                       <Save size={14} className="mr-1.5"/> {t.jobAlerts.saveBtn}
                     </Button>
                   </div>
@@ -2788,7 +2843,7 @@ export default function AjustesPage() {
                 {crewModeMsg && <p className={`text-xs mt-3 ${crewModeMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{crewModeMsg}</p>}
                 {crewModeDirty && (
                   <div className="mt-4">
-                    <Button onClick={saveCrewMode} loading={savingCrewMode}>
+                    <Button onClick={saveCrewMode} loading={savingCrewMode} disabled={!crewModeDirty}>
                       <Save size={14} className="mr-1.5"/> {t.crewMode.saveBtn}
                     </Button>
                   </div>
@@ -3116,7 +3171,7 @@ export default function AjustesPage() {
                 </div>
                 {nameMsg && <p className={`text-xs mt-3 ${nameMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{nameMsg}</p>}
                 <div className="mt-4">
-                  <Button onClick={saveName} loading={savingName}>
+                  <Button onClick={saveName} loading={savingName} disabled={!nameDirty}>
                     <Save size={14} className="mr-1.5"/> {t.account.saveNameBtn}
                   </Button>
                 </div>
@@ -3316,7 +3371,7 @@ export default function AjustesPage() {
                 </div>
                 {pwMsg && <p className={`text-xs mt-3 ${pwMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{pwMsg}</p>}
                 <div className="mt-5">
-                  <Button onClick={savePassword} loading={savingPw}>
+                  <Button onClick={savePassword} loading={savingPw} disabled={!currentPw || !newPw}>
                     <Save size={14} className="mr-1.5"/> {t.password.saveBtn}
                   </Button>
                 </div>
@@ -3395,7 +3450,7 @@ export default function AjustesPage() {
                 />
                 {themeMsg && <p className={`text-xs mt-3 ${themeMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{themeMsg}</p>}
                 <div className="mt-5">
-                  <Button onClick={saveInvoiceTheme} loading={savingTheme}>
+                  <Button onClick={saveInvoiceTheme} loading={savingTheme} disabled={!invoiceThemeDirty}>
                     <Save size={14} className="mr-1.5" /> {tc.buttons.saveChanges}
                   </Button>
                 </div>
@@ -3480,7 +3535,7 @@ export default function AjustesPage() {
                 </div>
                 {invoiceMsg && <p className={`text-xs mt-3 ${invoiceMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{invoiceMsg}</p>}
                 <div className="mt-5">
-                  <Button onClick={saveInvoiceSettings} loading={savingInvoice}>
+                  <Button onClick={saveInvoiceSettings} loading={savingInvoice} disabled={!invoiceSettingsDirty}>
                     <Save size={14} className="mr-1.5"/> {tc.buttons.saveChanges}
                   </Button>
                 </div>
@@ -3591,7 +3646,7 @@ export default function AjustesPage() {
                   </div>
                 </div>
                 <div className="mt-5">
-                  <Button onClick={saveInvoiceSettings} loading={savingInvoice}>
+                  <Button onClick={saveInvoiceSettings} loading={savingInvoice} disabled={!invoiceSettingsDirty}>
                     <Save size={14} className="mr-1.5"/> {tc.buttons.saveChanges}
                   </Button>
                 </div>
