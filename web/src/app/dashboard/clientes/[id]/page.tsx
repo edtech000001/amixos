@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, Phone, Mail, MapPin, FileText, Plus, Pencil, Building2, Trash2, Star, UserPlus, Printer, Share2, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, MapPin, FileText, Plus, Pencil, Building2, Trash2, Star, UserPlus, Printer, Share2, ShieldCheck, MoreHorizontal } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
@@ -196,6 +196,19 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
   // send the COI / workers comp to this client (agents configured in Ajustes →
   // Negocio). Button only shows once a COI agent email exists.
   const [policyDialog, setPolicyDialog] = useState(false);
+
+  // "…" overflow menu — secondary actions (CSV, price sheet, email policy)
+  // live here so the header keeps only the primary buttons (mirrors mobile).
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [moreOpen]);
   const policyAgents = parsePolicyAgents(business?.policy_agents);
   const canEmailPolicy = !!agentFor(policyAgents, 'coi');
   const sendPolicyEmail = (kind: PolicyDocKind) => {
@@ -546,19 +559,6 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           <Button variant="secondary" size="sm" onClick={() => setShareDialog(true)}>
             <Printer size={14} className="mr-1.5"/> {td.sharePdfBtn}
           </Button>
-          <Button variant="secondary" size="sm" onClick={onShareCsv}>
-            <Share2 size={14} className="mr-1.5"/> CSV
-          </Button>
-          {canEmailPolicy && (
-            <Button variant="secondary" size="sm" onClick={() => setPolicyDialog(true)}>
-              <ShieldCheck size={14} className="mr-1.5"/> {td.policy.btn}
-            </Button>
-          )}
-          <Link href={`/dashboard/precios/generar?client=${id}`} title={full.dashboard.settings.priceSheet.generateForClientBtn}>
-            <Button variant="secondary" size="sm">
-              <FileText size={14} className="mr-1.5"/> {full.dashboard.settings.priceSheet.title}
-            </Button>
-          </Link>
           {canEdit && (
             <Button variant="secondary" size="sm" onClick={() => { setEditError(''); setEditModal(true); }}>
               <Pencil size={14} className="mr-1.5"/> {tc.buttons.edit}
@@ -570,6 +570,34 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           <Link href={`/dashboard/facturas/nueva?client=${id}`}>
             <Button size="sm"><Plus size={14} className="mr-1.5"/> {full.dashboard.invoices.newInvoice}</Button>
           </Link>
+          <div className="relative" ref={moreRef}>
+            <Button variant="secondary" size="sm" onClick={() => setMoreOpen(o => !o)}
+              title={full.dashboard.invoices.moreActionsTitle}>
+              <MoreHorizontal size={16}/>
+            </Button>
+            {moreOpen && (
+              <div className="absolute right-0 top-full mt-2 w-60 bg-card border border-border-soft rounded-xl shadow-lg py-1.5 z-30">
+                <button type="button" onClick={() => { setMoreOpen(false); onShareCsv(); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-ink hover:bg-border-soft/60 text-left">
+                  <Share2 size={15} className="text-faint"/> {td.shareCsvBtn}
+                </button>
+                <Link href={`/dashboard/precios/generar?client=${id}`}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-ink hover:bg-border-soft/60 text-left"
+                  onClick={() => setMoreOpen(false)}>
+                  <FileText size={15} className="text-faint"/> {full.dashboard.settings.priceSheet.generateForClientBtn}
+                </Link>
+                <button type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    if (canEmailPolicy) setPolicyDialog(true);
+                    else void alertMessage({ message: td.policy.noAgentMsg });
+                  }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-ink hover:bg-border-soft/60 text-left">
+                  <ShieldCheck size={15} className="text-faint"/> {td.policy.btn}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
