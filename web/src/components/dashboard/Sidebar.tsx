@@ -8,7 +8,8 @@ import {
   Settings, ChevronLeft, Menu, X, ClipboardList, BarChart3,
   Store as StoreIcon, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useSidebarCollapsed } from './useSidebarCollapsed';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
@@ -64,18 +65,8 @@ export function Sidebar() {
   const modulesDict = full.dashboard.modules.list;
   const supabase = createSupabaseClient();
   const [open, setOpen] = useState(false);
-  // Desktop icon-only mode — persisted so the choice survives navigation.
-  // Hydrated in an effect (not the initializer) to keep SSR markup stable.
-  const [collapsed, setCollapsed] = useState(false);
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.localStorage.getItem('amixos.sidebar.collapsed') === '1') setCollapsed(true);
-  }, []);
-  const toggleCollapsed = () => {
-    setCollapsed(prev => {
-      if (typeof window !== 'undefined') window.localStorage.setItem('amixos.sidebar.collapsed', prev ? '0' : '1');
-      return !prev;
-    });
-  };
+  // Desktop icon-only mode — shared with SettingsNav (one preference).
+  const [collapsed, toggleCollapsed] = useSidebarCollapsed();
 
   // Enabled + available modules show up as their own sidebar entries
   // after the core nav. Coming-soon modules are filtered out even if
