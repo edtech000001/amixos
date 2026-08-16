@@ -747,6 +747,14 @@ export type DashboardDict = {
       unInvoiceDeleteEmpty: string;
       editItemsBtn: string;
       addItemsBtn: string;
+      // Estimated labor cost card (completed jobs; Employees-permission gated)
+      laborCost: {
+        title: string;
+        totalLabel: string;
+        hoursShort: string;
+        salariedNote: string;
+        hint: string;
+      };
       // Pipeline action buttons (detail-specific phrasing)
       scheduleWork: string;
       invoiceDirectly: string;
@@ -3629,6 +3637,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
         unInvoiceDeleteEmpty: 'La factura {{number}} quedó sin trabajos. ¿Eliminarla?',
         editItemsBtn: 'Editar',
         addItemsBtn: 'Agregar ítems',
+        laborCost: {
+          title: 'Nómina estimada',
+          totalLabel: 'Total',
+          hoursShort: 'h',
+          salariedNote: '{{count}} con salario fijo no incluido(s)',
+          hint: 'Horas del trabajo × tarifa de cada trabajador (más pago de chofer). No incluye horas extra ni fórmulas.',
+        },
         scheduleWork: 'Programar trabajo',
         invoiceDirectly: 'Facturar directamente',
         cancelledBanner: 'Este trabajo fue cancelado.',
@@ -6501,6 +6516,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
         unInvoiceDeleteEmpty: 'Invoice {{number}} has no jobs left. Delete it?',
         editItemsBtn: 'Edit',
         addItemsBtn: 'Add items',
+        laborCost: {
+          title: 'Estimated labor cost',
+          totalLabel: 'Total',
+          hoursShort: 'h',
+          salariedNote: '{{count}} salaried worker(s) not included',
+          hint: "Job hours × each worker's rate (plus driver pay). Excludes overtime and custom formulas.",
+        },
         scheduleWork: 'Schedule work',
         invoiceDirectly: 'Invoice directly',
         cancelledBanner: 'This job was cancelled.',

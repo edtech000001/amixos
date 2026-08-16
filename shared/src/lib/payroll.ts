@@ -595,3 +595,79 @@ export function employeeBreakdownInRange(opts: {
     totalHours: round2(workedHours + drivenHours + loggedHours),
   };
 }
+
+// ─── Per-job labor cost estimate ────────────────────────────────────────────
+// "What did this job cost me in payroll?" — shown on the completed job detail
+// for roles with the Employees permission (pay rates are behind it; the
+// employees RLS read is the real lock, this just decides whether to render).
+//
+// An ESTIMATE, deliberately simpler than the real payroll: same hour-crediting
+// (each crewed worker gets the job's total_hours; drivers get driver_hours per
+// the driver mode) and the same payForHours math per pay type — but no
+// overtime and no custom formulas (both are period-level, not per-job).
+// Salaried workers can't be attributed per job → excluded with a count.
+
+export interface JobLaborEstimateRow {
+  employeeId: string;
+  name: string;
+  hours: number;
+  cost: number;
+}
+
+export interface JobLaborEstimate {
+  total: number;
+  rows: JobLaborEstimateRow[];
+  /** Crewed salaried workers whose cost can't be attributed to one job. */
+  salariedCount: number;
+}
+
+export function estimateJobLaborCost(opts: {
+  totalHours: number | null | undefined;
+  driverHours: number | null | undefined;
+  /** Employee ids of crew=true assignment rows (lead-only rows excluded). */
+  crewedEmployeeIds: string[];
+  driverEmployeeIds: string[] | null | undefined;
+  employees: Array<Pick<PayrollEmployee, 'id' | 'first_name' | 'last_name' | 'pay_rate' | 'pay_type'>>;
+  /** businesses.payroll_config (raw jsonb ok). */
+  config?: unknown;
+}): JobLaborEstimate {
+  const cfg = normalizePayrollConfig(opts.config ?? null);
+  const th = opts.totalHours ?? 0;
+  const dh = opts.driverHours ?? 0;
+  const crewIds = new Set(opts.crewedEmployeeIds);
+  const driverIds = new Set(opts.driverEmployeeIds ?? []);
+  const rows: JobLaborEstimateRow[] = [];
+  let salariedCount = 0;
+  let total = 0;
+  const allIds = new Set<string>();
+  crewIds.forEach((id) => allIds.add(id));
+  driverIds.forEach((id) => allIds.add(id));
+  allIds.forEach((id) => {
+    const e = opts.employees.find((x) => x.id === id);
+    if (!e) return; // not fetched (e.g. inactive) — skip rather than guess
+    const worked = crewIds.has(id) ? th : 0;
+    const driven = driverIds.has(id) ? dh : 0;
+    // Driver component mirrors payRowFor: 'same' folds driven hours into base
+    // hours; 'rate'/'flat' pay them separately (and work for salaried too).
+    const driverExtra =
+      cfg.driver.mode === 'rate' ? driven * cfg.driver.rate
+      : cfg.driver.mode === 'flat' ? (driverIds.has(id) ? cfg.driver.flat : 0)
+      : 0;
+    const baseHours = cfg.driver.mode === 'same' ? worked + driven : worked;
+    let cost: number;
+    if (e.pay_type === 'salary') {
+      if (baseHours > 0) salariedCount += 1;
+      cost = driverExtra;
+    } else {
+      cost = payForHours(baseHours, e.pay_rate, e.pay_type) + driverExtra;
+    }
+    const hours = Math.round((worked + driven) * 100) / 100;
+    if (cost > 0 || hours > 0) {
+      cost = Math.round(cost * 100) / 100;
+      total += cost;
+      rows.push({ employeeId: id, name: `${e.first_name} ${e.last_name}`.trim(), hours, cost });
+    }
+  });
+  rows.sort((a, b) => b.cost - a.cost || a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+  return { total: Math.round(total * 100) / 100, rows, salariedCount };
+}

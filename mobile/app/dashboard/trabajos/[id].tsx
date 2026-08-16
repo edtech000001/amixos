@@ -62,6 +62,7 @@ import { invoiceDefaultLanguage, nextInvoiceNumber, resolveConfig, buildInvoiceV
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { memberNameMap } from '@amixos/shared/lib/memberNames';
 import { can } from '@amixos/shared/lib/permissions';
+import { estimateJobLaborCost, type JobLaborEstimate } from '@amixos/shared/lib/payroll';
 import { rowToPriceSheetItem, autopriceLine, suggestPriceItem, matchingAddons, extractQuantity, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { formatDateLong, formatDateTimeLong, formatStamp, formatNumberGrouped, formatTime12h, todayLocalISO } from '@amixos/shared/lib/format';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
@@ -114,6 +115,7 @@ interface Job {
   total_hours: number | null;
   driver_hours: number | null;
   driver_names: string[] | null;
+  driver_employee_ids: string[] | null;
   completed_date: string | null;
   all_day: boolean | null;
   total_amount: number;
@@ -172,7 +174,8 @@ interface JobAssignment {
   id: string;
   worker_name: string | null;
   is_lead: boolean | null;
-  employees: { first_name: string; last_name: string; user_id: string | null } | null;
+  crew: boolean | null;
+  employees: { id: string; first_name: string; last_name: string; user_id: string | null } | null;
 }
 
 interface JobItem {
@@ -297,6 +300,38 @@ export default function JobDetailRoute() {
   const [job, setJob] = useState<Job | null>(null);
   const [items, setItems] = useState<JobItem[]>([]);
   const [assignments, setAssignments] = useState<JobAssignment[]>([]);
+  // Estimated labor cost for completed/invoiced jobs — Employees-permission
+  // gated (pay rates live behind it; the employees RLS read is the real lock).
+  const [laborCost, setLaborCost] = useState<JobLaborEstimate | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setLaborCost(null);
+    if (!job || !business || !['completed', 'invoiced'].includes(job.status)) return;
+    if (!can.seeEmployees(currentRole)) return;
+    const crewedIds = assignments
+      .filter((a) => a.crew !== false && a.employees?.id)
+      .map((a) => a.employees!.id);
+    const driverIds = job.driver_employee_ids ?? [];
+    const ids = Array.from(new Set([...crewedIds, ...driverIds]));
+    if (ids.length === 0 || ((job.total_hours ?? 0) === 0 && (job.driver_hours ?? 0) === 0)) return;
+    void (async () => {
+      const { data } = await supabase.from('employees')
+        .select('id, first_name, last_name, pay_rate, pay_type')
+        .in('id', ids);
+      if (cancelled || !data?.length) return;
+      const est = estimateJobLaborCost({
+        totalHours: job.total_hours,
+        driverHours: job.driver_hours,
+        crewedEmployeeIds: crewedIds,
+        driverEmployeeIds: driverIds,
+        employees: data as { id: string; first_name: string; last_name: string; pay_rate: number; pay_type: string }[],
+        config: (business as { payroll_config?: unknown }).payroll_config,
+      });
+      if (!cancelled && (est.rows.length > 0 || est.salariedCount > 0)) setLaborCost(est);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job?.id, job?.status, assignments, currentRole, business?.id]);
   const [templates, setTemplates] = useState<{ id: string; field_key: string; field_label: string; field_type: 'text' | 'number' | 'date' | 'boolean' | 'select' }[]>([]);
   const [itemsEditOpen, setItemsEditOpen] = useState(false);
   const [editRows, setEditRows] = useState<EditRow[]>([]);
@@ -420,7 +455,7 @@ export default function JobDetailRoute() {
       loadCached(`job_assignments_${id}`, async () => {
         const { data, error } = await supabase
           .from('job_assignments')
-          .select('id, worker_name, is_lead, employees(first_name, last_name, user_id)')
+          .select('id, worker_name, is_lead, crew, employees(id, first_name, last_name, user_id)')
           .eq('job_id', id);
         if (error) throw error;
         return data ?? [];
@@ -1594,6 +1629,29 @@ export default function JobDetailRoute() {
                     {(job.driver_hours ?? 0) > 0 ? ` · ${job.driver_hours} h` : ''}
                   </Text>
                 ) : null}
+              </View>
+            </View>
+          ) : null}
+
+          {laborCost ? (
+            <View className="flex-row items-start gap-3">
+              <DollarSign size={16} color={c.muted} />
+              <View className="flex-1">
+                <Text className="text-xs text-muted">{td.laborCost.title}</Text>
+                <Text className="text-sm font-semibold text-ink">
+                  {td.laborCost.totalLabel}: ${formatNumberGrouped(laborCost.total)}
+                </Text>
+                {laborCost.rows.map((r) => (
+                  <Text key={r.employeeId} className="text-xs text-muted mt-0.5">
+                    {r.name} · {r.hours} {td.laborCost.hoursShort} · ${formatNumberGrouped(r.cost)}
+                  </Text>
+                ))}
+                {laborCost.salariedCount > 0 ? (
+                  <Text className="text-[11px] text-amber-600 mt-1">
+                    {td.laborCost.salariedNote.replace('{{count}}', String(laborCost.salariedCount))}
+                  </Text>
+                ) : null}
+                <Text className="text-[11px] text-faint mt-1">{td.laborCost.hint}</Text>
               </View>
             </View>
           ) : null}

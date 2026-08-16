@@ -28,6 +28,7 @@ import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { memberNameMap } from '@amixos/shared/lib/memberNames';
 import { insertInvoiceUnique, removeJobFromInvoice, placeholderQtyFor } from '@amixos/shared/lib/invoicing';
 import { can } from '@amixos/shared/lib/permissions';
+import { estimateJobLaborCost, type JobLaborEstimate } from '@amixos/shared/lib/payroll';
 import { rowToPriceSheetItem, autopriceLine, suggestPriceItem, matchingAddons, extractQuantity, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { formatDateLong, formatDateTimeLong, formatTime12h, formatStamp, formatNumberGrouped, todayLocalISO } from '@amixos/shared/lib/format';
 import { formatProjectDuration } from '@amixos/shared/lib/duration';
@@ -47,6 +48,7 @@ interface Job {
   worker_notes: string | null;
   archived_at: string | null;
   total_hours: number | null; driver_hours: number | null; driver_names: string[] | null;
+  driver_employee_ids: string[] | null;
   estimate_number: string | null; external_ref: string | null; notes: string | null;
   issue_date: string | null; expiry_date: string | null;
   subtotal_amount: number; tax_rate: number; tax_amount: number; discount: number;
@@ -67,6 +69,7 @@ interface JobFieldTemplate {
 interface Assignment {
   id: string; worker_name: string | null;
   is_lead: boolean | null;
+  crew: boolean | null;
   hours_worked: number | null;
   custom_fields: Record<string, unknown> | null;
   employees: { id: string; first_name: string; last_name: string; user_id: string | null } | null;
@@ -119,6 +122,38 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const [job, setJob] = useState<Job | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [items, setItems] = useState<JobItem[]>([]);
+  // Estimated labor cost for completed/invoiced jobs — Employees-permission
+  // gated (pay rates live behind it; the employees RLS read is the real lock).
+  const [laborCost, setLaborCost] = useState<JobLaborEstimate | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setLaborCost(null);
+    if (!job || !business || !['completed', 'invoiced'].includes(job.status)) return;
+    if (!can.seeEmployees(currentRole)) return;
+    const crewedIds = assignments
+      .filter(a => a.crew !== false && a.employees?.id)
+      .map(a => a.employees!.id);
+    const driverIds = job.driver_employee_ids ?? [];
+    const ids = Array.from(new Set([...crewedIds, ...driverIds]));
+    if (ids.length === 0 || ((job.total_hours ?? 0) === 0 && (job.driver_hours ?? 0) === 0)) return;
+    void (async () => {
+      const { data } = await supabase.from('employees')
+        .select('id, first_name, last_name, pay_rate, pay_type')
+        .in('id', ids);
+      if (cancelled || !data?.length) return;
+      const est = estimateJobLaborCost({
+        totalHours: job.total_hours,
+        driverHours: job.driver_hours,
+        crewedEmployeeIds: crewedIds,
+        driverEmployeeIds: driverIds,
+        employees: data as { id: string; first_name: string; last_name: string; pay_rate: number; pay_type: string }[],
+        config: business.payroll_config,
+      });
+      if (!cancelled && (est.rows.length > 0 || est.salariedCount > 0)) setLaborCost(est);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job?.id, job?.status, assignments, currentRole, business?.id]);
   const [priceItems, setPriceItems] = useState<PriceSheetItem[]>([]);
   const [clientTierId, setClientTierId] = useState<string | null>(null);
   const [showPriceVerify, setShowPriceVerify] = useState(false);
@@ -1299,6 +1334,30 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                         {(job.driver_hours ?? 0) > 0 ? ` · ${job.driver_hours} h` : ''}
                       </p>
                     ) : null}
+                  </div>
+                </div>
+              )}
+              {laborCost && (
+                <div className="flex items-start gap-2.5">
+                  <DollarSign size={15} className="text-faint mt-0.5 shrink-0"/>
+                  <div className="min-w-0">
+                    <p className="text-xs text-faint">{td.laborCost.title}</p>
+                    <p className="text-sm font-semibold text-ink">
+                      {td.laborCost.totalLabel}: ${formatNumberGrouped(laborCost.total)}
+                    </p>
+                    <div className="mt-1 flex flex-col gap-0.5">
+                      {laborCost.rows.map(r => (
+                        <p key={r.employeeId} className="text-xs text-muted">
+                          {r.name} · {r.hours} {td.laborCost.hoursShort} · ${formatNumberGrouped(r.cost)}
+                        </p>
+                      ))}
+                    </div>
+                    {laborCost.salariedCount > 0 && (
+                      <p className="text-[11px] text-amber-600 mt-1">
+                        {td.laborCost.salariedNote.replace('{{count}}', String(laborCost.salariedCount))}
+                      </p>
+                    )}
+                    <p className="text-[11px] text-faint mt-1">{td.laborCost.hint}</p>
                   </div>
                 </div>
               )}
