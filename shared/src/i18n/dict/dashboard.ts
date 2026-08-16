@@ -485,6 +485,7 @@ export type DashboardDict = {
         coi: string;
         workcomp: string;
         both: string;
+        noAgentMsg: string;
         subjectCoi: string;
         subjectWorkcomp: string;
         subjectBoth: string;
@@ -3428,6 +3429,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           coi: 'COI (certificado de seguro)',
           workcomp: 'Workers comp',
           both: 'Ambos',
+          noAgentMsg: 'Primero agrega el nombre y correo de tu agente en Ajustes → Negocio → Agente de seguros.',
           subjectCoi: 'Enviar seguro | {{business}}',
           subjectWorkcomp: 'Enviar WorkComp | {{business}}',
           subjectBoth: 'Enviar póliza | {{business}}',
@@ -6356,6 +6358,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           coi: 'COI (certificate of insurance)',
           workcomp: 'Workers comp',
           both: 'Both',
+          noAgentMsg: 'First add your agent\'s name and email in Settings → Business → Insurance agent.',
           subjectCoi: 'Send Out Insurance | {{business}}',
           subjectWorkcomp: 'Send Out WorkComp. | {{business}}',
           subjectBoth: 'Send Out Policy | {{business}}',

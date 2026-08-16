@@ -24,6 +24,7 @@ import {
   FileText,
   Printer,
   ShieldCheck,
+  MoreHorizontal,
   Building2,
   CloudOff,
   Star,
@@ -392,6 +393,7 @@ export default function ClienteDetailRoute() {
   // Negocio) to send the COI / workers comp to this client.
   const policyAgents = parsePolicyAgents(business?.policy_agents);
   const canEmailPolicy = !!agentFor(policyAgents, 'coi');
+  const [moreOpen, setMoreOpen] = useState(false);
   const sendPolicyEmail = (kind: PolicyDocKind) => {
     if (!client || !business) return;
     const draft = buildPolicyEmail({
@@ -428,6 +430,12 @@ export default function ClienteDetailRoute() {
   };
 
   const onEmailPolicy = () => {
+    if (!canEmailPolicy) {
+      // Configured-agent gate: instead of hiding the action (invisible ≠
+      // discoverable), point at where to add the agent email.
+      Alert.alert(td.policy.btn, td.policy.noAgentMsg);
+      return;
+    }
     Alert.alert(td.policy.dialogTitle, undefined, [
       { text: tc.buttons.cancel, style: 'cancel' },
       { text: td.policy.coi, onPress: () => sendPolicyEmail('coi') },
@@ -686,32 +694,6 @@ export default function ClienteDetailRoute() {
           >
             <Printer size={18} color={c.muted} />
           </Pressable>
-          <Pressable
-            onPress={onShareCsv}
-            hitSlop={8}
-            className="p-2 rounded-lg active:bg-border-soft"
-            accessibilityLabel={td.shareCsvBtn}
-          >
-            <Share2 size={18} color={c.muted} />
-          </Pressable>
-          {canEmailPolicy ? (
-            <Pressable
-              onPress={onEmailPolicy}
-              hitSlop={8}
-              className="p-2 rounded-lg active:bg-border-soft"
-              accessibilityLabel={td.policy.btn}
-            >
-              <ShieldCheck size={18} color={c.muted} />
-            </Pressable>
-          ) : null}
-          <Pressable
-            onPress={() => router.push(`/dashboard/facturas/precios?client=${client.id}` as never)}
-            hitSlop={8}
-            className="p-2 rounded-lg active:bg-border-soft"
-            accessibilityLabel={full.dashboard.settings.priceSheet.generateForClientBtn}
-          >
-            <FileText size={18} color={c.muted} />
-          </Pressable>
           {canEdit ? (
             <Pressable
               onPress={() => router.push(`/dashboard/clientes/nuevo?edit=${client.id}` as never)}
@@ -730,8 +712,53 @@ export default function ClienteDetailRoute() {
               <Trash2 size={18} color={c.danger} />
             </Pressable>
           ) : null}
+          <Pressable
+            onPress={() => setMoreOpen(true)}
+            hitSlop={8}
+            className="p-2 rounded-lg active:bg-border-soft"
+            accessibilityLabel={full.dashboard.invoices.moreActionsTitle}
+          >
+            <MoreHorizontal size={18} color={c.muted} />
+          </Pressable>
         </View>
       </View>
+
+      {/* Overflow actions sheet — canonical bottom-sheet structure (absolute
+         backdrop first, card as sibling; see CLAUDE.md). */}
+      <RNModal visible={moreOpen} transparent animationType="fade" onRequestClose={() => setMoreOpen(false)}>
+        <View className="flex-1 justify-end">
+          <Pressable
+            onPress={() => setMoreOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+            className="bg-black/40"
+          />
+          <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10">
+            <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
+            <Text className="text-base font-bold text-ink mb-2">{full.dashboard.invoices.moreActionsTitle}</Text>
+            <Pressable
+              onPress={() => { setMoreOpen(false); void onShareCsv(); }}
+              className="flex-row items-center gap-3 py-3.5 border-b border-border-soft active:opacity-60"
+            >
+              <View className="w-9 h-9 rounded-xl bg-border-soft items-center justify-center"><Share2 size={18} color={c.muted} /></View>
+              <Text className="text-base text-ink font-medium">{td.shareCsvBtn}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => { setMoreOpen(false); router.push(`/dashboard/facturas/precios?client=${client.id}` as never); }}
+              className="flex-row items-center gap-3 py-3.5 border-b border-border-soft active:opacity-60"
+            >
+              <View className="w-9 h-9 rounded-xl bg-border-soft items-center justify-center"><FileText size={18} color={c.muted} /></View>
+              <Text className="text-base text-ink font-medium">{full.dashboard.settings.priceSheet.generateForClientBtn}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => { setMoreOpen(false); setTimeout(onEmailPolicy, 400); }}
+              className="flex-row items-center gap-3 py-3.5 active:opacity-60"
+            >
+              <View className="w-9 h-9 rounded-xl bg-border-soft items-center justify-center"><ShieldCheck size={18} color={c.muted} /></View>
+              <Text className="text-base text-ink font-medium">{td.policy.btn}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </RNModal>
 
       <ScrollView contentContainerClassName="px-5 pt-5 pb-44">
         {/* Header card: avatar + name + company */}
