@@ -284,6 +284,9 @@ export function FieldHomeScreen({
           <View className="flex-row items-center gap-2 mb-3 mt-6">
             <CheckCircle2 size={16} color={c.success} />
             <Text className="text-sm font-semibold text-ink">{f.recentCompletedTitle}</Text>
+            <View className="px-2 py-0.5 rounded-full bg-emerald-500/15">
+              <Text className="text-xs font-bold text-emerald-600">{recentCompleted.length}</Text>
+            </View>
           </View>
           <View className="gap-3">
             {recentCompleted.map(job => <JobCard key={job.id} job={job} />)}
