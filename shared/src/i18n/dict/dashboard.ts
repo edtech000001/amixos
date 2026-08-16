@@ -474,6 +474,9 @@ export type DashboardDict = {
       shareDialogTitle: string;
       shareDialogBasic: string;
       shareDialogAll: string;
+      pdfInvoicesHeading: string;
+      pdfInvoicesTotal: string;
+      pdfGeneratedOn: string;
       shareError: string;
       contactModal: {
         addTitle: string;
@@ -3378,8 +3381,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         sharePdfBtn: 'Imprimir / PDF',
         shareCsvBtn: 'Compartir como CSV',
         shareDialogTitle: '¿Qué incluir?',
-        shareDialogBasic: 'Solo datos básicos',
-        shareDialogAll: 'Todos los campos',
+        shareDialogBasic: 'Solo datos de contacto',
+        shareDialogAll: 'Todo + facturas',
+        pdfInvoicesHeading: 'Facturas',
+        pdfInvoicesTotal: 'Total facturado',
+        pdfGeneratedOn: 'Generado el {{date}}',
         shareError: 'No se pudo compartir. Intenta de nuevo.',
         contactModal: {
           addTitle: 'Nuevo contacto',
@@ -6269,8 +6275,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         sharePdfBtn: 'Print / PDF',
         shareCsvBtn: 'Share as CSV',
         shareDialogTitle: 'What to include?',
-        shareDialogBasic: 'Basic info only',
-        shareDialogAll: 'All fields',
+        shareDialogBasic: 'Contact details only',
+        shareDialogAll: 'All fields + invoices',
+        pdfInvoicesHeading: 'Invoices',
+        pdfInvoicesTotal: 'Total invoiced',
+        pdfGeneratedOn: 'Generated on {{date}}',
         shareError: "Couldn't share. Try again.",
         contactModal: {
           addTitle: 'New contact',

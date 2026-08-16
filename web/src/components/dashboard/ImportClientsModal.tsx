@@ -12,6 +12,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useLang } from '@/i18n/LangProvider';
 import { createSupabaseClient } from '@/lib/supabase';
+import { parseClientContactsCell } from '@amixos/shared/lib/clientShare';
 import { RecentImports } from './RecentImports';
 import { logImportRun } from '@amixos/shared/lib/importRunners';
 import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
@@ -95,9 +96,20 @@ export default function ImportClientsModal({ open, businessId, templates, locati
     hint: locale === 'en' ? 'Blank = visible in all branches.' : 'Vacío = visible en todas las sucursales.',
   };
 
+  // Serialized contact-people column written by "Share CSV" on a client —
+  // makes moving a client between Amixos businesses a clean round trip.
+  const CONTACT_PEOPLE_FIELD = {
+    key: 'contact_people',
+    label: t.detail.contactPeople,
+    hint: locale === 'en'
+      ? 'From another Amixos export — recreated as contact people.'
+      : 'De otra exportación de Amixos — se recrean como personas de contacto.',
+  };
+
   const allImportFields: { key: string; label: string; required?: boolean; isCustom?: boolean; hint?: string }[] = [
     ...CLIENT_FIELDS,
     ...(multiLocation ? [BRANCH_FIELD] : []),
+    CONTACT_PEOPLE_FIELD,
     ...templates.map(tpl => ({ key: `custom:${tpl.field_key}`, label: tpl.field_label, isCustom: true })),
   ];
 
@@ -163,7 +175,7 @@ export default function ImportClientsModal({ open, businessId, templates, locati
 
   const runImport = async () => {
     setImporting(true);
-    const batch: { entry: any; csvLine: number; originalRow: Record<string, string>; branchId: string | null; branchRaw: string }[] = [];
+    const batch: { entry: any; csvLine: number; originalRow: Record<string, string>; branchId: string | null; branchRaw: string; contacts?: ReturnType<typeof parseClientContactsCell> }[] = [];
     const failedRows: { label: string; reason: string }[] = [];
     const unknownBranches = new Set<string>();
     csvRows.forEach((row, idx) => {
@@ -215,12 +227,19 @@ export default function ImportClientsModal({ open, businessId, templates, locati
           if (!branchId) unknownBranches.add(branchRaw);
         }
       }
-      batch.push({ entry, csvLine, originalRow: row, branchId, branchRaw });
+      const cpCol = colMap['contact_people'];
+      const cpRaw = cpCol && row[cpCol] ? row[cpCol].trim() : '';
+      batch.push({ entry, csvLine, originalRow: row, branchId, branchRaw, contacts: cpRaw ? parseClientContactsCell(cpRaw) : undefined });
     });
     let success = 0;
     const insertedIds: string[] = [];
     // Branch links to write once all clients exist (matched branches only).
     const branchLinks: { business_id: string; client_id: string; location_id: string; is_primary: boolean }[] = [];
+    // Contact-people rows (from the serialized export column).
+    const contactRows: { business_id: string; client_id: string; name: string; role: string | null; phone: string | null; email: string | null }[] = [];
+    const queueContacts = (clientId: string, list?: ReturnType<typeof parseClientContactsCell>) => {
+      (list ?? []).forEach(ct => contactRows.push({ business_id: businessId, client_id: clientId, ...ct }));
+    };
     for (let i = 0; i < batch.length; i += 50) {
       setProgress({ done: i, total: batch.length });
       const slice = batch.slice(i, i + 50);
@@ -238,6 +257,7 @@ export default function ImportClientsModal({ open, businessId, templates, locati
             if (d2?.id) {
               insertedIds.push(d2.id);
               if (b.branchId) branchLinks.push({ business_id: businessId, client_id: d2.id, location_id: b.branchId, is_primary: true });
+              queueContacts(d2.id, b.contacts);
             }
           }
         }
@@ -250,6 +270,7 @@ export default function ImportClientsModal({ open, businessId, templates, locati
             insertedIds.push(r.id);
             const b = slice[j];
             if (b?.branchId) branchLinks.push({ business_id: businessId, client_id: r.id, location_id: b.branchId, is_primary: true });
+            queueContacts(r.id, b?.contacts);
           });
         }
       }
@@ -258,6 +279,10 @@ export default function ImportClientsModal({ open, businessId, templates, locati
     // the imported clients (they just stay shared across branches).
     for (let i = 0; i < branchLinks.length; i += 200) {
       await supabase.from('client_locations').insert(branchLinks.slice(i, i + 200));
+    }
+    // Best-effort contact recreation from the export column.
+    for (let i = 0; i < contactRows.length; i += 200) {
+      await supabase.from('client_contacts').insert(contactRows.slice(i, i + 200));
     }
     // Hand off to the banner provider — it owns throttling, persistence,
     // and auto-resume if the browser is closed mid-batch. Skip when Google

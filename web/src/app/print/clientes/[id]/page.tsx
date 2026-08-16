@@ -14,6 +14,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/i18n/LangProvider';
 import { buildClientHtml } from '@amixos/shared/lib/clientShare';
+import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 
 interface Client {
@@ -69,7 +70,7 @@ export default function ClientPrintPage() {
         .maybeSingle();
       if (!client || cancelled) return;
       const c = client as Client;
-      const [{ data: tpl }, { data: cts }] = await Promise.all([
+      const [{ data: tpl }, { data: cts }, { data: invs }] = await Promise.all([
         supabase
           .from('client_field_templates')
           .select('field_key, field_label, field_label_es, field_label_en')
@@ -80,6 +81,14 @@ export default function ClientPrintPage() {
           .select('name, role, phone, email')
           .eq('client_id', id)
           .order('is_primary', { ascending: false }),
+        includeAll
+          ? supabase
+              .from('invoices')
+              .select('invoice_number, status, total_amount, created_at')
+              .eq('client_id', id)
+              .order('created_at', { ascending: false })
+              .limit(200)
+          : Promise.resolve({ data: [] }),
       ]);
       if (cancelled) return;
 
@@ -105,6 +114,20 @@ export default function ClientPrintPage() {
           includeAll,
           contacts: includeAll ? ((cts as ClientContact[] | null) ?? []) : undefined,
           contactsHeading: t.detail.contactPeople,
+          invoices: includeAll && (invs ?? []).length
+            ? ((invs ?? []) as Array<{ invoice_number: string; status: string; total_amount: number; created_at: string }>).map(inv => ({
+                number: inv.invoice_number,
+                date: inv.created_at ? formatDateLong(inv.created_at, locale) : '',
+                status: ((full.dashboard.invoiceStatus as unknown as Record<string, string>)[inv.status]) ?? inv.status,
+                total: `$${formatNumberGrouped(inv.total_amount)}`,
+              }))
+            : undefined,
+          invoicesHeading: t.detail.pdfInvoicesHeading,
+          invoicesTotalLabel: t.detail.pdfInvoicesTotal,
+          invoicesTotalValue: includeAll && (invs ?? []).length
+            ? `$${formatNumberGrouped(((invs ?? []) as Array<{ total_amount: number }>).reduce((sum, inv) => sum + (inv.total_amount ?? 0), 0))}`
+            : undefined,
+          generatedLine: t.detail.pdfGeneratedOn.replace('{{date}}', formatDateLong(new Date(), locale)),
         },
       );
       setHtml(rendered);

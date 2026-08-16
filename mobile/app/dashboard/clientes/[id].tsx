@@ -22,6 +22,7 @@ import {
   MapPin,
   Plus,
   FileText,
+  Printer,
   Building2,
   CloudOff,
   Star,
@@ -358,6 +359,12 @@ export default function ClienteDetailRoute() {
         client,
         buildShareLabels(),
         templates.map(tpl => ({ field_key: tpl.field_key, field_label: tpl.field_label })),
+        undefined,
+        // Contact people ride along so importing into another Amixos business
+        // recreates them (the clients importer parses this column).
+        contacts.length
+          ? { list: contacts.map(ct => ({ name: ct.name, role: ct.role, phone: ct.phone, email: ct.email })), label: td.contactPeople }
+          : undefined,
       );
       const safeName = [client.first_name, client.last_name]
         .filter(Boolean)
@@ -406,6 +413,20 @@ export default function ClienteDetailRoute() {
               }))
             : undefined,
           contactsHeading: td.contactPeople,
+          invoices: includeAll && invoices.length
+            ? invoices.map(inv => ({
+                number: inv.invoice_number,
+                date: inv.created_at ? formatDateLong(inv.created_at, dateLoc) : '',
+                status: (tStatus as Record<string, string>)[inv.status] ?? inv.status,
+                total: `$${formatNumberGrouped(inv.total_amount)}`,
+              }))
+            : undefined,
+          invoicesHeading: td.pdfInvoicesHeading,
+          invoicesTotalLabel: td.pdfInvoicesTotal,
+          invoicesTotalValue: includeAll && invoices.length
+            ? `$${formatNumberGrouped(invoices.reduce((sum, inv) => sum + (inv.total_amount ?? 0), 0))}`
+            : undefined,
+          generatedLine: td.pdfGeneratedOn.replace('{{date}}', formatDateLong(new Date(), dateLoc)),
         },
       );
       // Render HTML → PDF on device, then surface the OS share sheet so
@@ -613,7 +634,7 @@ export default function ClienteDetailRoute() {
             className="p-2 rounded-lg active:bg-border-soft"
             accessibilityLabel={td.sharePdfBtn}
           >
-            <FileText size={18} color={c.muted} />
+            <Printer size={18} color={c.muted} />
           </Pressable>
           <Pressable
             onPress={onShareCsv}

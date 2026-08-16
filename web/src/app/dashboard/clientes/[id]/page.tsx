@@ -213,6 +213,12 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
       client,
       buildShareLabels(),
       templates.map(tpl => ({ field_key: tpl.field_key, field_label: tpl.field_label })),
+      undefined,
+      // Contact people ride along so importing into another Amixos business
+      // recreates them (the clients importer parses this column).
+      contacts.length
+        ? { list: contacts.map(ct => ({ name: ct.name, role: ct.role, phone: ct.phone, email: ct.email })), label: td.contactPeople }
+        : undefined,
     );
     const safeName = [client.first_name, client.last_name]
       .filter(Boolean)

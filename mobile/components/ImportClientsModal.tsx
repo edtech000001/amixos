@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { parseClientContactsCell } from '@amixos/shared/lib/clientShare';
 import { logImportRun } from '@amixos/shared/lib/importRunners';
 import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
 import { View, Text, Pressable, ActivityIndicator, Alert, ScrollView } from 'react-native';
@@ -159,7 +160,7 @@ export function ImportClientsModal({
   // back to one-by-one inserts on that slice so we can identify the
   // specific bad row and capture its error reason.
   const insertBatchWithRetry = async (
-    batch: { entry: Record<string, unknown>; csvLine: number; originalRow: Record<string, string>; branchId?: string | null }[],
+    batch: { entry: Record<string, unknown>; csvLine: number; originalRow: Record<string, string>; branchId?: string | null; contacts?: ReturnType<typeof parseClientContactsCell> }[],
   ): Promise<{
     success: number;
     insertedIds: string[];
@@ -170,6 +171,11 @@ export function ImportClientsModal({
     const failedRows: { label: string; reason: string }[] = [];
     // Branch links (matched branches only) written once all clients exist.
     const branchLinks: { business_id: string; client_id: string; location_id: string; is_primary: boolean }[] = [];
+    // Contact-people rows (from the serialized export column).
+    const contactRows: { business_id: string; client_id: string; name: string; role: string | null; phone: string | null; email: string | null }[] = [];
+    const queueContacts = (clientId: string, list?: ReturnType<typeof parseClientContactsCell>) => {
+      (list ?? []).forEach(ct => contactRows.push({ business_id: businessId, client_id: clientId, ...ct }));
+    };
     for (let i = 0; i < batch.length; i += 50) {
       setProgress({ done: i, total: batch.length });
       const slice = batch.slice(i, i + 50);
@@ -191,6 +197,7 @@ export function ImportClientsModal({
             if (d2?.id) {
               insertedIds.push(d2.id);
               if (b.branchId) branchLinks.push({ business_id: businessId, client_id: d2.id, location_id: b.branchId, is_primary: true });
+              queueContacts(d2.id, b.contacts);
             }
           }
         }
@@ -203,6 +210,7 @@ export function ImportClientsModal({
             insertedIds.push(r.id);
             const b = slice[j];
             if (b?.branchId) branchLinks.push({ business_id: businessId, client_id: r.id, location_id: b.branchId, is_primary: true });
+            queueContacts(r.id, b?.contacts);
           });
         }
       }
@@ -211,6 +219,9 @@ export function ImportClientsModal({
     // stay shared across branches).
     for (let i = 0; i < branchLinks.length; i += 200) {
       await supabase.from('client_locations').insert(branchLinks.slice(i, i + 200));
+    }
+    for (let i = 0; i < contactRows.length; i += 200) {
+      await supabase.from('client_contacts').insert(contactRows.slice(i, i + 200));
     }
     return { success, insertedIds, failedRows };
   };
@@ -350,6 +361,9 @@ export function ImportClientsModal({
     ...(multiLocation
       ? [{ key: 'branch', label: branchLabel, isCustom: false, hint: (locale === 'en' ? 'Blank = visible in all branches.' : 'Vacío = visible en todas las sucursales.') as string | undefined }]
       : []),
+    // Serialized contact-people column written by "Share CSV" on a client —
+    // makes moving a client between Amixos businesses a clean round trip.
+    { key: 'contact_people', label: t.detail.contactPeople, isCustom: false, hint: (locale === 'en' ? 'From another Amixos export — recreated as contact people.' : 'De otra exportación de Amixos — se recrean como personas de contacto.') as string | undefined },
     ...templates.map(tpl => ({
       key: `custom:${tpl.field_key}`,
       label: tpl.field_label,
@@ -466,7 +480,7 @@ export function ImportClientsModal({
 
   const runImport = async () => {
     setImporting(true);
-    const batch: { entry: Record<string, unknown>; csvLine: number; originalRow: Record<string, string>; branchId?: string | null }[] = [];
+    const batch: { entry: Record<string, unknown>; csvLine: number; originalRow: Record<string, string>; branchId?: string | null; contacts?: ReturnType<typeof parseClientContactsCell> }[] = [];
     const failedRows: { label: string; reason: string }[] = [];
     const unknownBranches = new Set<string>();
 
@@ -526,7 +540,9 @@ export function ImportClientsModal({
           if (!branchId) unknownBranches.add(branchRaw);
         }
       }
-      batch.push({ entry, csvLine, originalRow: row, branchId });
+      const cpCol = colMap['contact_people'];
+      const cpRaw = cpCol && row[cpCol] ? row[cpCol].trim() : '';
+      batch.push({ entry, csvLine, originalRow: row, branchId, contacts: cpRaw ? parseClientContactsCell(cpRaw) : undefined });
     });
 
     const { success, insertedIds, failedRows: dbFailures } =
