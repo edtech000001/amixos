@@ -15,6 +15,7 @@ import { INVOICE_EMAIL_TOKENS } from '@amixos/shared/lib/invoiceEmail';
 import { roleLabel, can } from '@amixos/shared/lib/permissions';
 import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import { parseHiddenFields, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, JOB_LAYOUT_SECTIONS, type JobFieldEntry, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
+import { sameFieldMap } from '@amixos/shared/lib/fieldMaps';
 import {
   CLIENT_FIELD_SECTIONS, CLIENT_FIELDS_ALWAYS_SHOWN, parseClientLayout, clientFieldsInSection,
   CLIENT_SECTION_FIELDS, type ClientFieldSection, type ClientFieldEntry,
@@ -1137,10 +1138,10 @@ export default function AjustesPage() {
   const clientsDirty = useMemo(
     () =>
       isDirty(dbTemplates, templates) ||
-      JSON.stringify(dbFieldRequired) !== JSON.stringify(fieldRequired) ||
+      !sameFieldMap(dbFieldRequired, fieldRequired) ||
       JSON.stringify(dbClientOrder) !== JSON.stringify(localClientOrder) ||
       JSON.stringify(dbClientLayout) !== JSON.stringify(localClientLayout) ||
-      JSON.stringify(dbClientHidden) !== JSON.stringify(clientHidden),
+      !sameFieldMap(dbClientHidden, clientHidden),
     [dbTemplates, templates, dbFieldRequired, fieldRequired, dbClientOrder, localClientOrder, dbClientLayout, localClientLayout, dbClientHidden, clientHidden],
   );
 
@@ -1404,10 +1405,10 @@ export default function AjustesPage() {
   const employeesDirty = useMemo(
     () =>
       isDirty(dbEmpTemplates, empTemplates) ||
-      JSON.stringify(dbEmpRequired) !== JSON.stringify(empRequired) ||
+      !sameFieldMap(dbEmpRequired, empRequired) ||
       JSON.stringify(dbEmpOrder) !== JSON.stringify(localEmpOrder) ||
       JSON.stringify(dbEmpLayout) !== JSON.stringify(localEmpLayout) ||
-      JSON.stringify(dbEmpHidden) !== JSON.stringify(empHidden),
+      !sameFieldMap(dbEmpHidden, empHidden),
     [dbEmpTemplates, empTemplates, dbEmpRequired, empRequired, dbEmpOrder, localEmpOrder, dbEmpLayout, localEmpLayout, dbEmpHidden, empHidden],
   );
 
@@ -1743,10 +1744,10 @@ export default function AjustesPage() {
   const jobFieldsDirty = useMemo(
     () =>
       isDirty(dbJobTemplates, jobTemplates) ||
-      JSON.stringify(dbJobRequired) !== JSON.stringify(jobRequired) ||
+      !sameFieldMap(dbJobRequired, jobRequired) ||
       JSON.stringify(dbJobOrder) !== JSON.stringify(localJobOrder) ||
       JSON.stringify(dbJobLayout) !== JSON.stringify(localJobLayout) ||
-      JSON.stringify(dbJobHidden) !== JSON.stringify(jobHidden),
+      !sameFieldMap(dbJobHidden, jobHidden),
     [dbJobTemplates, jobTemplates, dbJobRequired, jobRequired, dbJobOrder, localJobOrder, dbJobLayout, localJobLayout, dbJobHidden, jobHidden],
   );
 
@@ -2127,10 +2128,10 @@ export default function AjustesPage() {
   const invoicesDirty = useMemo(
     () =>
       isDirty(dbInvoiceTemplates, invoiceTemplates) ||
-      JSON.stringify(dbInvoiceFieldRequired) !== JSON.stringify(invoiceFieldRequired) ||
+      !sameFieldMap(dbInvoiceFieldRequired, invoiceFieldRequired) ||
       JSON.stringify(dbInvoiceOrder) !== JSON.stringify(localInvoiceOrder) ||
       JSON.stringify(dbInvoiceLayout) !== JSON.stringify(localInvoiceLayout) ||
-      JSON.stringify(dbInvoiceHidden) !== JSON.stringify(invoiceHidden) ||
+      !sameFieldMap(dbInvoiceHidden, invoiceHidden) ||
       (business?.invoice_due_days != null ? String(business.invoice_due_days) : '') !== invoiceDueDays ||
       String(business?.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER) !== invoiceStartNumber ||
       (business?.invoice_tax_rate ? String(business.invoice_tax_rate) : '') !== invoiceTaxRate ||

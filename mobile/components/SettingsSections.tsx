@@ -68,6 +68,7 @@ import {
   type JobAlertThresholds,
 } from '@amixos/shared/lib/jobAlerts';
 import { parseHiddenFields, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, JOB_LAYOUT_SECTIONS, type JobFieldEntry, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
+import { sameFieldMap } from '@amixos/shared/lib/fieldMaps';
 import {
   CLIENT_FIELD_SECTIONS,
   CLIENT_FIELDS_ALWAYS_SHOWN,
@@ -949,10 +950,10 @@ export function FacturasSection() {
       emailSubject !== dbEmailSubject ||
       emailBody !== dbEmailBody ||
       emailDelivery !== dbEmailDelivery ||
-      JSON.stringify(dbRequired) !== JSON.stringify(required) ||
+      !sameFieldMap(dbRequired, required) ||
       JSON.stringify(dbOrder) !== JSON.stringify(localOrder) ||
       JSON.stringify(dbLayout) !== JSON.stringify(localLayout) ||
-      JSON.stringify(dbHidden) !== JSON.stringify(hidden) ||
+      !sameFieldMap(dbHidden, hidden) ||
       isDirty(dbTemplates, templates),
     [dueDays, dbDueDays, notes, dbNotes, startNumber, dbStartNumber, taxRate, dbTaxRate, qtyField, dbQtyField, emailSubject, dbEmailSubject, emailBody, dbEmailBody, emailDelivery, dbEmailDelivery, dbRequired, required, dbOrder, localOrder, dbLayout, localLayout, dbHidden, hidden, dbTemplates, templates],
   );
@@ -1544,10 +1545,10 @@ export function TrabajosFieldsSection() {
   const dirty = useMemo(
     () =>
       isDirty(dbTemplates, templates) ||
-      JSON.stringify(dbRequired) !== JSON.stringify(required) ||
+      !sameFieldMap(dbRequired, required) ||
       JSON.stringify(dbOrder) !== JSON.stringify(localOrder) ||
       JSON.stringify(dbJobLayout) !== JSON.stringify(localJobLayout) ||
-      JSON.stringify(dbHidden) !== JSON.stringify(hidden),
+      !sameFieldMap(dbHidden, hidden),
     [dbTemplates, templates, dbRequired, required, dbOrder, localOrder, dbJobLayout, localJobLayout, dbHidden, hidden],
   );
 
@@ -2453,10 +2454,10 @@ export function ClientesSection() {
   const dirty = useMemo(
     () =>
       isDirty(dbTemplates, templates) ||
-      JSON.stringify(dbRequired) !== JSON.stringify(required) ||
+      !sameFieldMap(dbRequired, required) ||
       JSON.stringify(dbOrder) !== JSON.stringify(localOrder) ||
       JSON.stringify(dbLayout) !== JSON.stringify(localLayout) ||
-      JSON.stringify(dbHidden) !== JSON.stringify(hidden),
+      !sameFieldMap(dbHidden, hidden),
     [dbTemplates, templates, dbRequired, required, dbOrder, localOrder, dbLayout, localLayout, dbHidden, hidden],
   );
 
@@ -2909,10 +2910,10 @@ export function EmpleadosSection() {
   const dirty = useMemo(
     () =>
       isDirty(dbTemplates, templates) ||
-      JSON.stringify(dbRequired) !== JSON.stringify(required) ||
+      !sameFieldMap(dbRequired, required) ||
       JSON.stringify(dbOrder) !== JSON.stringify(localOrder) ||
       JSON.stringify(dbLayout) !== JSON.stringify(localLayout) ||
-      JSON.stringify(dbHidden) !== JSON.stringify(hidden),
+      !sameFieldMap(dbHidden, hidden),
     [dbTemplates, templates, dbRequired, required, dbOrder, localOrder, dbLayout, localLayout, dbHidden, hidden],
   );
 
