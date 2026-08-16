@@ -125,6 +125,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   // Estimated labor cost for completed/invoiced jobs — Employees-permission
   // gated (pay rates live behind it; the employees RLS read is the real lock).
   const [laborCost, setLaborCost] = useState<JobLaborEstimate | null>(null);
+  const [laborCostOpen, setLaborCostOpen] = useState(false);
   useEffect(() => {
     let cancelled = false;
     setLaborCost(null);
@@ -138,7 +139,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     if (ids.length === 0 || ((job.total_hours ?? 0) === 0 && (job.driver_hours ?? 0) === 0)) return;
     void (async () => {
       const { data } = await supabase.from('employees')
-        .select('id, first_name, last_name, pay_rate, pay_type')
+        .select('id, first_name, last_name, pay_rate, pay_type, custom_fields')
         .in('id', ids);
       if (cancelled || !data?.length) return;
       const est = estimateJobLaborCost({
@@ -146,8 +147,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
         driverHours: job.driver_hours,
         crewedEmployeeIds: crewedIds,
         driverEmployeeIds: driverIds,
-        employees: data as { id: string; first_name: string; last_name: string; pay_rate: number; pay_type: string }[],
+        employees: data as { id: string; first_name: string; last_name: string; pay_rate: number; pay_type: string; custom_fields: Record<string, unknown> | null }[],
         config: business.payroll_config,
+        jobCustomFields: job.custom_fields,
       });
       if (!cancelled && (est.rows.length > 0 || est.salariedCount > 0)) setLaborCost(est);
     })();
@@ -1345,19 +1347,29 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                     <p className="text-sm font-semibold text-ink">
                       {td.laborCost.totalLabel}: ${formatNumberGrouped(laborCost.total)}
                     </p>
-                    <div className="mt-1 flex flex-col gap-0.5">
-                      {laborCost.rows.map(r => (
-                        <p key={r.employeeId} className="text-xs text-muted">
-                          {r.name} · {r.hours} {td.laborCost.hoursShort} · ${formatNumberGrouped(r.cost)}
-                        </p>
-                      ))}
-                    </div>
+                    {laborCost.rows.length > 0 && (
+                      <button onClick={() => setLaborCostOpen(o => !o)}
+                        className="text-xs font-semibold text-primary hover:underline mt-0.5">
+                        {laborCostOpen
+                          ? td.laborCost.hideBreakdown
+                          : td.laborCost.showBreakdown.replace('{{count}}', String(laborCost.rows.length))}
+                      </button>
+                    )}
+                    {laborCostOpen && (
+                      <div className="mt-1 flex flex-col gap-0.5">
+                        {laborCost.rows.map(r => (
+                          <p key={r.employeeId} className="text-xs text-muted">
+                            {r.name} · {r.hours} {td.laborCost.hoursShort} · ${formatNumberGrouped(r.cost)}
+                          </p>
+                        ))}
+                      </div>
+                    )}
                     {laborCost.salariedCount > 0 && (
                       <p className="text-[11px] text-amber-600 mt-1">
                         {td.laborCost.salariedNote.replace('{{count}}', String(laborCost.salariedCount))}
                       </p>
                     )}
-                    <p className="text-[11px] text-faint mt-1">{td.laborCost.hint}</p>
+                    {laborCostOpen && <p className="text-[11px] text-faint mt-1">{td.laborCost.hint}</p>}
                   </div>
                 </div>
               )}

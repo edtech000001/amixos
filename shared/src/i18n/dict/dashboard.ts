@@ -754,6 +754,8 @@ export type DashboardDict = {
         hoursShort: string;
         salariedNote: string;
         hint: string;
+        showBreakdown: string;
+        hideBreakdown: string;
       };
       // Pipeline action buttons (detail-specific phrasing)
       scheduleWork: string;
@@ -3642,7 +3644,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
           totalLabel: 'Total',
           hoursShort: 'h',
           salariedNote: '{{count}} con salario fijo no incluido(s)',
-          hint: 'Horas del trabajo × tarifa de cada trabajador (más pago de chofer). No incluye horas extra ni fórmulas.',
+          hint: 'Horas del trabajo × tarifa de cada trabajador, más pago de chofer y tu fórmula de pago si aplica. No incluye horas extra.',
+          showBreakdown: 'Ver desglose ({{count}})',
+          hideBreakdown: 'Ocultar desglose',
         },
         scheduleWork: 'Programar trabajo',
         invoiceDirectly: 'Facturar directamente',
@@ -6521,7 +6525,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
           totalLabel: 'Total',
           hoursShort: 'h',
           salariedNote: '{{count}} salaried worker(s) not included',
-          hint: "Job hours × each worker's rate (plus driver pay). Excludes overtime and custom formulas.",
+          hint: "Job hours × each worker's rate, plus driver pay and your pay formula if set. Excludes overtime.",
+          showBreakdown: 'Show breakdown ({{count}})',
+          hideBreakdown: 'Hide breakdown',
         },
         scheduleWork: 'Schedule work',
         invoiceDirectly: 'Invoice directly',

@@ -601,11 +601,13 @@ export function employeeBreakdownInRange(opts: {
 // for roles with the Employees permission (pay rates are behind it; the
 // employees RLS read is the real lock, this just decides whether to render).
 //
-// An ESTIMATE, deliberately simpler than the real payroll: same hour-crediting
+// An ESTIMATE, deliberately close to the real payroll: same hour-crediting
 // (each crewed worker gets the job's total_hours; drivers get driver_hours per
-// the driver mode) and the same payForHours math per pay type — but no
-// overtime and no custom formulas (both are period-level, not per-job).
-// Salaried workers can't be attributed per job → excluded with a count.
+// the driver mode), the same payForHours math per pay type, and the business's
+// CUSTOM PAY FORMULA evaluated per job (this job's hours + custom-field reads,
+// e.g. overnights) — only OVERTIME is skipped, since it's period-level and
+// can't be attributed to one job. Salaried workers can't be attributed per
+// job either → excluded with a count.
 
 export interface JobLaborEstimateRow {
   employeeId: string;
@@ -627,11 +629,23 @@ export function estimateJobLaborCost(opts: {
   /** Employee ids of crew=true assignment rows (lead-only rows excluded). */
   crewedEmployeeIds: string[];
   driverEmployeeIds: string[] | null | undefined;
-  employees: Array<Pick<PayrollEmployee, 'id' | 'first_name' | 'last_name' | 'pay_rate' | 'pay_type'>>;
+  employees: Array<Pick<PayrollEmployee, 'id' | 'first_name' | 'last_name' | 'pay_rate' | 'pay_type' | 'custom_fields'>>;
   /** businesses.payroll_config (raw jsonb ok). */
   config?: unknown;
+  /** THIS job's custom-field values — read by pay-formula jcf references. */
+  jobCustomFields?: Record<string, unknown> | null;
 }): JobLaborEstimate {
   const cfg = normalizePayrollConfig(opts.config ?? null);
+  const jcfRefs = cfg.formula ? formulaJobFieldRefs(cfg.formula) : [];
+  // Per-formula-ref value from this one job (sum semantics collapse to the
+  // single job's value; option-match refs count 0/1) — mirrors
+  // computePayrollRows' per-period accumulation for a one-job "period".
+  const jcf: Record<string, number> = {};
+  for (const ref of jcfRefs) {
+    const raw = opts.jobCustomFields?.[ref.k];
+    const v = ref.eq === undefined ? numericFieldValue(raw) : matchFieldValue(raw, ref.eq);
+    if (v) jcf[fieldRefId(ref)] = v;
+  }
   const th = opts.totalHours ?? 0;
   const dh = opts.driverHours ?? 0;
   const crewIds = new Set(opts.crewedEmployeeIds);
@@ -659,7 +673,29 @@ export function estimateJobLaborCost(opts: {
       if (baseHours > 0) salariedCount += 1;
       cost = driverExtra;
     } else {
-      cost = payForHours(baseHours, e.pay_rate, e.pay_type) + driverExtra;
+      const basePay = payForHours(baseHours, e.pay_rate, e.pay_type);
+      cost = basePay + driverExtra;
+      // Custom pay formula (hourly only, like payRowFor) — evaluated with this
+      // job's numbers; overtime vars are 0 (period-level, not per-job).
+      if (cfg.formula && e.pay_type === 'hourly') {
+        const result = evaluateFormula(cfg.formula, {
+          vars: {
+            pay_rate: e.pay_rate,
+            worked_hours: worked,
+            driven_hours: driven,
+            total_hours: worked + driven,
+            normal_hours: baseHours,
+            overtime_hours: 0,
+            normal_pay: basePay,
+            overtime_pay: 0,
+            driver_pay: driverExtra,
+            standard_pay: basePay + driverExtra,
+          },
+          ecf: e.custom_fields ?? {},
+          jcf,
+        });
+        if (result !== null) cost = result;
+      }
     }
     const hours = Math.round((worked + driven) * 100) / 100;
     if (cost > 0 || hours > 0) {
