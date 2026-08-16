@@ -34,7 +34,7 @@ interface RawInvoice {
   created_at: string;
   sent_at: string | null;
   clients: InvoiceClient | null;
-  invoice_clients: { clients: InvoiceClient }[];
+  invoice_clients: { clients: InvoiceClient | null }[];
 }
 
 // Only the columns the list renders/searches. created_at drives the keyset cursor.
@@ -60,8 +60,12 @@ export default function FacturasTab() {
   const [loading, setLoading] = useState(true);
 
   const mapClientNames = (raw: RawInvoice): string | null => {
+    // Embedded client rows can be NULL under RLS (roles with Clients =
+    // "Assigned"/none still see invoices) — never assume the join resolved.
     const list = raw.invoice_clients?.length
-      ? raw.invoice_clients.map(ic => `${ic.clients.first_name} ${ic.clients.last_name}`)
+      ? raw.invoice_clients
+          .filter(ic => ic.clients)
+          .map(ic => `${ic.clients!.first_name} ${ic.clients!.last_name}`)
       : raw.clients
         ? [`${raw.clients.first_name} ${raw.clients.last_name}`]
         : [];

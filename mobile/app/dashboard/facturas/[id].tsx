@@ -775,8 +775,10 @@ export default function FacturaDetailRoute() {
   };
 
   const mapInvoice = (raw: RawInvoice, tpls: InvoiceFieldTemplate[]): InvoiceDetail => {
+    // Embedded client rows can be NULL under RLS (roles without full Clients
+    // access still see the invoice) — drop unresolved joins.
     const clientList: RawClient[] = raw.invoice_clients?.length
-      ? raw.invoice_clients.map(ic => ic.clients)
+      ? raw.invoice_clients.map(ic => ic.clients).filter((c): c is RawClient => !!c)
       : raw.clients
         ? [raw.clients]
         : [];
