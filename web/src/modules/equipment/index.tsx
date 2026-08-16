@@ -199,14 +199,13 @@ export default function EquipmentModule() {
     ...photos.map((p) => p.storage_path),
   ]);
 
-  // Local object URLs for photos queued while adding (revoked on change).
+  // Local object URLs for photos queued while adding. NO revoke-on-cleanup:
+  // React StrictMode (next dev) double-invokes effects, so the cleanup revoked
+  // these URLs while the memo still returned them — broken preview thumbnails
+  // on localhost. Blob URLs are tiny and die with the page.
   const pendingUrls = useMemo(
     () => pendingPhotos.map((f) => URL.createObjectURL(f)),
     [pendingPhotos],
-  );
-  useEffect(
-    () => () => { pendingUrls.forEach((u) => URL.revokeObjectURL(u)); },
-    [pendingUrls],
   );
 
   const TYPE_SUGGESTIONS = useMemo(() => [
