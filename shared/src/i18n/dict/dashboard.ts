@@ -2433,6 +2433,7 @@ export type DashboardDict = {
         chooseFromLibrary: string;
         uploading: string;
         limitHit: string;
+        uploadError: string;
         deleteConfirm: string;
       };
       detailTabs: { overview: string; leases: string; ledger: string; expenses: string; maintenance: string; photos: string };
@@ -5336,6 +5337,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           chooseFromLibrary: 'Elegir de la galería',
           uploading: 'Subiendo…',
           limitHit: 'Máximo {{max}} fotos por propiedad.',
+          uploadError: 'No se pudo subir la foto. Intenta de nuevo.',
           deleteConfirm: '¿Eliminar esta foto?',
         },
         detailTabs: { overview: 'Resumen', leases: 'Contratos', ledger: 'Pagos', expenses: 'Gastos', maintenance: 'Mantenimiento', photos: 'Fotos' },
@@ -8265,6 +8267,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           chooseFromLibrary: 'Choose from library',
           uploading: 'Uploading…',
           limitHit: 'Maximum {{max}} photos per property.',
+          uploadError: "Couldn't upload the photo. Try again.",
           deleteConfirm: 'Delete this photo?',
         },
         detailTabs: { overview: 'Overview', leases: 'Leases', ledger: 'Payments', expenses: 'Expenses', maintenance: 'Maintenance', photos: 'Photos' },

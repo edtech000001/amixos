@@ -714,7 +714,12 @@ export function PropertyDetail({
         if (insErr) throw insErr;
       }
       await reload();
-    } catch { /* keep whatever uploaded */ }
+    } catch {
+      // Surface it — a silent skip here reads as "the photo just vanished"
+      // (this is how the missing rentals storage policy went unnoticed).
+      window.alert(t.photos.uploadError);
+      await reload();
+    }
     setUploadingPhoto(false);
   };
 

@@ -481,15 +481,18 @@ export default function RentalsScreen() {
       if (error) { Alert.alert('', t.saveError); setSavingProp(false); return; }
       const created = data as RentalProperty;
       // Flush photos queued while adding, now that the row exists.
+      let photoFailed = false;
       for (const uri of pendingPhotoUris) {
         const path = rentalPropertyPhotoPath(business.id, created.id, rentalUid());
         if (await uploadImage(uri, path)) {
-          await supabase.from('rental_property_photos').insert({
+          const { error: insErr } = await supabase.from('rental_property_photos').insert({
             business_id: business.id, property_id: created.id, storage_path: path,
             created_by: user?.id ?? null,
           });
-        }
+          if (insErr) photoFailed = true;
+        } else photoFailed = true;
       }
+      if (photoFailed) Alert.alert('', t.photos.uploadError);
       setPendingPhotoUris([]);
       if (pendingPhotoUris.length) { setCoverPhotos({}); void loadCovers([created.id]); }
       void logAudit(supabase, business.id, 'rental_property.created', 'rental_property', created.id, { name: payload.name });
@@ -1029,7 +1032,7 @@ export default function RentalsScreen() {
       setCoverPhotos({});
       void loadCovers([detail.id]);
     } else {
-      Alert.alert('', t.saveError);
+      Alert.alert('', t.photos.uploadError);
     }
     setUploadingPhoto(false);
   };
