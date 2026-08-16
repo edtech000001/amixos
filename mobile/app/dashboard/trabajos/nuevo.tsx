@@ -584,10 +584,13 @@ export default function NuevoTrabajoRoute() {
     }
   };
 
-  // Auto-fill GPS coords when CREATING a job — the crew is usually standing
-  // at the job site. Quiet: denied permission / GPS failure just skips. Never
-  // runs for edit or duplicate (those may already carry a location), and never
-  // overwrites coords the user typed/pasted while the fix was resolving.
+  // Auto-fill GPS coords when CREATING a job — but only for creators whose
+  // flow records finished work on-site (field crew / completed-by-default
+  // roles): they ARE standing at the job. Schedulers plan from elsewhere, so
+  // grabbing their position just fills a wrong location (they still have the
+  // "Usar mi ubicación" button). Quiet: denied permission / GPS failure just
+  // skips. Never runs for edit or duplicate (those may already carry a
+  // location), and never overwrites coords typed while the fix was resolving.
   const coordsTextRef = useRef('');
   // Client id for the job being CREATED — generated once per form session so
   // a retry after a mid-save failure re-uses it (duplicate insert = success)
@@ -595,7 +598,7 @@ export default function NuevoTrabajoRoute() {
   const draftJobIdRef = useRef(newUuid());
   useEffect(() => { coordsTextRef.current = coordsText; }, [coordsText]);
   useEffect(() => {
-    if (editId || duplicate) return;
+    if (editId || duplicate || !defaultsCompleted) return;
     let cancelled = false;
     (async () => {
       try {
@@ -618,7 +621,7 @@ export default function NuevoTrabajoRoute() {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editId, duplicate]);
+  }, [editId, duplicate, defaultsCompleted]);
 
   // Try to pull coords from a map URL. Returns true when successful.
   // Address / city / state are NOT auto-filled — Google's /place/ slug puts

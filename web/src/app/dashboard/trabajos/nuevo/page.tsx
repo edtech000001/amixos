@@ -1208,14 +1208,17 @@ function NuevoTrabajoContent() {
     );
   };
 
-  // Auto-fill GPS coords when CREATING a job — quiet: denied permission /
-  // failure just skips. Never runs for edit or duplicate (sourceId — those may
-  // already carry a location), and never overwrites coords the user
-  // typed/pasted while the fix was resolving.
+  // Auto-fill GPS coords when CREATING a job — but only for creators whose
+  // flow records finished work on-site (field crew / completed-by-default
+  // roles): they ARE standing at the job. Schedulers plan from elsewhere, so
+  // grabbing their position just fills a wrong location (they still have the
+  // "Usar mi ubicación" button). Quiet: denied permission / failure just
+  // skips. Never runs for edit or duplicate (sourceId — those may already
+  // carry a location), and never overwrites coords typed while resolving.
   const coordsTextRef = useRef('');
   useEffect(() => { coordsTextRef.current = coordsText; }, [coordsText]);
   useEffect(() => {
-    if (sourceId) return;
+    if (sourceId || !defaultsCompleted) return;
     if (typeof navigator === 'undefined' || !navigator.geolocation) return;
     let cancelled = false;
     navigator.geolocation.getCurrentPosition(
@@ -1233,7 +1236,7 @@ function NuevoTrabajoContent() {
     );
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceId]);
+  }, [sourceId, defaultsCompleted]);
 
   const toggleEmployee = (id: string) => {
     // Removing the lead from the crew is allowed — they stay lead (unpaid on
