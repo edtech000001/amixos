@@ -286,6 +286,12 @@ export type DashboardDict = {
     createdLabel: string;
     moreActionsTitle: string;
     shareLinkAction: string;
+    clientPrices: {
+      viewBtn: string;
+      title: string;
+      flatWord: string;
+      tierNote: string;
+    };
     autonameBtn: string;
     autonameDone: string;
     autonameNone: string;
@@ -3183,6 +3189,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
       createdLabel: 'Creada',
       moreActionsTitle: 'Más acciones',
       shareLinkAction: 'Compartir enlace',
+      clientPrices: {
+        viewBtn: 'Ver precios',
+        title: 'Precios para este cliente',
+        flatWord: 'fijo',
+        tierNote: 'Precio especial de este cliente',
+      },
       autonameBtn: 'Autonombre',
       autonameDone: '{{count}} nombre(s) de trabajo actualizados.',
       autonameNone: 'Los nombres ya están correctos.',
@@ -6064,6 +6076,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
       createdLabel: 'Created',
       moreActionsTitle: 'More actions',
       shareLinkAction: 'Share link',
+      clientPrices: {
+        viewBtn: 'View prices',
+        title: 'Prices for this client',
+        flatWord: 'flat',
+        tierNote: "This client's special price",
+      },
       autonameBtn: 'Autoname',
       autonameDone: '{{count}} job name(s) updated.',
       autonameNone: 'Names already look good.',

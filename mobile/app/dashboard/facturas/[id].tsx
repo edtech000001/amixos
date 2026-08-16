@@ -30,7 +30,7 @@ import type { InvoiceLang } from '@amixos/shared';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { sortInvoiceLinesByDate, setLineItemExcluded, removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
-import { rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
+import { applicableRate, rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { can } from '@amixos/shared/lib/permissions';
@@ -157,6 +157,9 @@ export default function FacturaDetailRoute() {
   const [invClientId, setInvClientId] = useState<string | null>(null);
   const [priceItems, setPriceItems] = useState<PriceSheetItem[]>([]);
   const [clientTierId, setClientTierId] = useState<string | null>(null);
+  const [clientState, setClientState] = useState<string | null>(null);
+  // Read-only "prices for this client" sheet (tier + state resolved rates).
+  const [pricesOpen, setPricesOpen] = useState(false);
   const [showInvVerify, setShowInvVerify] = useState(false);
   const [previewJobId, setPreviewJobId] = useState<string | null>(null);
   const [jobBusy, setJobBusy] = useState(false);
@@ -320,9 +323,12 @@ export default function FacturaDetailRoute() {
       .then(({ data }: { data: PriceSheetRow[] | null }) => setPriceItems((data ?? []).map(rowToPriceSheetItem)));
   }, [business?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!invClientId) { setClientTierId(null); return; }
-    void supabase.from('clients').select('price_tier_id').eq('id', invClientId).single()
-      .then(({ data }: { data: { price_tier_id: string | null } | null }) => setClientTierId(data?.price_tier_id ?? null));
+    if (!invClientId) { setClientTierId(null); setClientState(null); return; }
+    void supabase.from('clients').select('price_tier_id, state').eq('id', invClientId).single()
+      .then(({ data }: { data: { price_tier_id: string | null; state: string | null } | null }) => {
+        setClientTierId(data?.price_tier_id ?? null);
+        setClientState(data?.state ?? null);
+      });
   }, [invClientId]); // eslint-disable-line react-hooks/exhaustive-deps
   // Walk the tied lines one at a time (a native picker per line), collecting the
   // chosen price-item ids, then re-run autoprice with those picks.
@@ -1141,6 +1147,9 @@ export default function FacturaDetailRoute() {
         onEdit={invoice && canEdit ? () => router.replace(`/dashboard/facturas/nueva?edit=${id}` as never) : undefined}
         onDelete={invoice && canDelete ? confirmDelete : undefined}
         onAutoprice={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? runAutoprice : undefined}
+        // Delay past the more-actions sheet's dismissal — iOS refuses to
+        // present a modal while another is still animating out.
+        onViewPrices={priceItems.some(p => p.active) ? () => setTimeout(() => setPricesOpen(true), 400) : undefined}
         onAutoname={autonameEnabled(business?.id) && canEdit ? runAutoname : undefined}
         onClearPrices={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? clearPrices : undefined}
         autopriceVerify={showInvVerify}
@@ -1484,6 +1493,64 @@ export default function FacturaDetailRoute() {
           </View>
         ) : null}
         </KeyboardAvoidingView>
+      </RNModal>
+
+      {/* Read-only price list resolved for THIS client (tier > state > base). */}
+      <RNModal visible={pricesOpen} transparent animationType="fade" onRequestClose={() => setPricesOpen(false)}>
+        <View className="flex-1 justify-end">
+          <Pressable onPress={() => setPricesOpen(false)} className="absolute inset-0 bg-black/40" />
+          <View className="bg-card rounded-t-3xl pt-3 pb-8" style={{ maxHeight: '80%' }}>
+            <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
+            <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">
+              <Text className="text-lg font-bold text-ink">{tInv.clientPrices.title}</Text>
+              <Pressable onPress={() => setPricesOpen(false)} hitSlop={8}><X size={20} color={c.faint} /></Pressable>
+            </View>
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16 }}>
+              {(() => {
+                const items = priceItems.filter(p => p.active);
+                const groups = new Map<string, PriceSheetItem[]>();
+                for (const it of items) {
+                  const k = it.category?.trim() || '';
+                  const arr = groups.get(k);
+                  if (arr) arr.push(it); else groups.set(k, [it]);
+                }
+                let anyTier = false;
+                const blocks = Array.from(groups.entries()).map(([cat, arr]) => (
+                  <View key={cat || '__none'} className="mb-4">
+                    {cat ? (
+                      <Text className="text-[11px] font-bold text-faint uppercase tracking-wide mb-1.5">{cat}</Text>
+                    ) : null}
+                    <View className="rounded-xl border border-border-soft overflow-hidden">
+                      {arr.map((it, i) => {
+                        const rate = applicableRate(it, { tierId: clientTierId, state: clientState });
+                        const tierHit = !!(clientTierId && it.tierRates && Number.isFinite(it.tierRates[clientTierId]));
+                        if (tierHit) anyTier = true;
+                        return (
+                          <View key={it.id} className={`flex-row items-center justify-between gap-3 px-3 py-2.5 ${i > 0 ? 'border-t border-border-soft' : ''}`}>
+                            <Text className="text-sm text-ink flex-1" numberOfLines={1}>{it.isAddon ? '+ ' : ''}{it.name}</Text>
+                            <Text className={`text-sm font-semibold ${tierHit ? 'text-primary' : 'text-ink'}`}>
+                              ${formatNumberGrouped(rate)}
+                              <Text className="text-xs font-normal text-muted">
+                                {it.pricingMode === 'per_unit' ? `/${it.unitLabel || 'u'}` : ` (${tInv.clientPrices.flatWord})`}
+                              </Text>
+                              {tierHit ? ' *' : ''}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ));
+                return (
+                  <>
+                    {blocks}
+                    {anyTier ? <Text className="text-[11px] text-primary">* {tInv.clientPrices.tierNote}</Text> : null}
+                  </>
+                );
+              })()}
+            </ScrollView>
+          </View>
+        </View>
       </RNModal>
 
       {/* Payment photo viewer */}

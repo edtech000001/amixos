@@ -28,7 +28,7 @@ import { signedUrl } from '@amixos/shared/lib/storageUrls';
 import { INVOICE_PAYMENT_BUCKET, paymentPhotoPath } from '@amixos/shared/lib/invoicePayments';
 import { autonameEnabled, autonameJobTitle, detectAutonameType } from '@amixos/shared/lib/autoname';
 import { sortInvoiceLinesByDate, setLineItemExcluded, removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
-import { rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
+import { applicableRate, rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { secureShareToken } from '@amixos/shared/lib/shareToken';
@@ -177,6 +177,9 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   // Autoprice: active price-sheet items + the invoice client's tier.
   const [priceItems, setPriceItems] = useState<PriceSheetItem[]>([]);
   const [clientTierId, setClientTierId] = useState<string | null>(null);
+  const [clientState, setClientState] = useState<string | null>(null);
+  // Read-only "prices for this client" sheet (tier + state resolved rates).
+  const [pricesOpen, setPricesOpen] = useState(false);
   const [showInvVerify, setShowInvVerify] = useState(false);
   // Autoprice tie picker: lines that matched 2+ prices, + the user's choices.
   const [ambiguous, setAmbiguous] = useState<AutopriceAmbiguous[] | null>(null);
@@ -330,9 +333,12 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
 
   // The invoice client's price tier (for tier-aware autopricing).
   useEffect(() => {
-    if (!invClientId) { setClientTierId(null); return; }
-    void supabase.from('clients').select('price_tier_id').eq('id', invClientId).single()
-      .then(({ data }: { data: { price_tier_id: string | null } | null }) => setClientTierId(data?.price_tier_id ?? null));
+    if (!invClientId) { setClientTierId(null); setClientState(null); return; }
+    void supabase.from('clients').select('price_tier_id, state').eq('id', invClientId).single()
+      .then(({ data }: { data: { price_tier_id: string | null; state: string | null } | null }) => {
+        setClientTierId(data?.price_tier_id ?? null);
+        setClientState(data?.state ?? null);
+      });
   }, [invClientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset every line to unpriced ($0) so Autoprice can re-run clean — e.g. after
@@ -1004,6 +1010,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         onEdit={invoice && canEdit ? () => router.push(`/dashboard/facturas/nueva?edit=${id}`) : undefined}
         onDelete={invoice && canDelete ? () => setDeleteOpen(true) : undefined}
         onAutoprice={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? runAutoprice : undefined}
+        onViewPrices={priceItems.some(p => p.active) ? () => setPricesOpen(true) : undefined}
         onAutoname={autonameEnabled(business?.id) && canEdit ? runAutoname : undefined}
         onClearPrices={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? clearPrices : undefined}
         autopriceVerify={showInvVerify}
@@ -1400,6 +1407,52 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
               {deleting ? tInv.deleting : tc.buttons.delete}
             </button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Read-only price list resolved for THIS client (tier > state > base). */}
+      <Modal open={pricesOpen} onClose={() => setPricesOpen(false)} title={tInv.clientPrices.title}>
+        <div className="flex flex-col gap-4">
+          {(() => {
+            const items = priceItems.filter(p => p.active);
+            const groups = new Map<string, PriceSheetItem[]>();
+            for (const it of items) {
+              const k = it.category?.trim() || '';
+              const arr = groups.get(k);
+              if (arr) arr.push(it); else groups.set(k, [it]);
+            }
+            let anyTier = false;
+            const blocks = Array.from(groups.entries()).map(([cat, arr]) => (
+              <div key={cat || '__none'}>
+                {cat ? <p className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5">{cat}</p> : null}
+                <div className="rounded-xl border border-border-soft divide-y divide-border-soft">
+                  {arr.map(it => {
+                    const rate = applicableRate(it, { tierId: clientTierId, state: clientState });
+                    const tierHit = !!(clientTierId && it.tierRates && Number.isFinite(it.tierRates[clientTierId]));
+                    if (tierHit) anyTier = true;
+                    return (
+                      <div key={it.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                        <span className="text-sm text-ink truncate">{it.isAddon ? '+ ' : ''}{it.name}</span>
+                        <span className={`text-sm font-semibold shrink-0 ${tierHit ? 'text-primary' : 'text-ink'}`}>
+                          ${formatNumberGrouped(rate)}
+                          <span className="text-xs font-normal text-muted">
+                            {it.pricingMode === 'per_unit' ? `/${it.unitLabel || 'u'}` : ` (${tInv.clientPrices.flatWord})`}
+                          </span>
+                          {tierHit ? ' *' : ''}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ));
+            return (
+              <>
+                {blocks}
+                {anyTier ? <p className="text-[11px] text-primary">* {tInv.clientPrices.tierNote}</p> : null}
+              </>
+            );
+          })()}
         </div>
       </Modal>
     </>

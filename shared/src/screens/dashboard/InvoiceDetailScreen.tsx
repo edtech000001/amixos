@@ -139,6 +139,8 @@ export interface InvoiceDetailScreenProps {
   /** Autoprice: fill in unpriced ($0) lines from the price sheet. Hidden when
    *  not provided (no price-sheet items or a sent/paid invoice). */
   onAutoprice?: () => void;
+  /** Opens the read-only "prices for this client" sheet (platform-owned). */
+  onViewPrices?: () => void;
   /** Autoname (gated pilot): normalize the linked jobs' titles. */
   onAutoname?: () => void;
   /** Reset all lines to unpriced ($0) so Autoprice can re-run clean. */
@@ -228,6 +230,7 @@ export function InvoiceDetailScreen({
   onPrint,
   onShareLink,
   onAutoprice,
+  onViewPrices,
   onAutoname,
   onClearPrices,
   autopriceVerify,
@@ -355,7 +358,7 @@ export function InvoiceDetailScreen({
           {onDelete ? (
             <Pressable onPress={onDelete} className="p-2 rounded-xl active:bg-red-500/10"><Trash2 size={18} color={c.danger} /></Pressable>
           ) : null}
-          {((onAutoprice || onAutoname || onClearPrices) && canEdit) || onShareLink ? (
+          {((onAutoprice || onAutoname || onClearPrices) && canEdit) || onShareLink || onViewPrices ? (
             <Pressable onPress={() => setMoreOpen(true)} className="p-2 rounded-xl active:bg-border-soft" accessibilityLabel={tInv.moreActionsTitle}>
               <MoreHorizontal size={18} color={c.muted} />
             </Pressable>
@@ -727,6 +730,12 @@ export function InvoiceDetailScreen({
           <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10">
             <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <Text className="text-base font-bold text-ink mb-2">{tInv.moreActionsTitle}</Text>
+            {onViewPrices ? (
+              <Pressable onPress={() => { setMoreOpen(false); onViewPrices(); }} className="flex-row items-center gap-3 py-3.5 border-b border-border-soft active:opacity-60">
+                <View className="w-9 h-9 rounded-xl bg-border-soft items-center justify-center"><DollarSign size={18} color={c.muted} /></View>
+                <Text className="text-base text-ink font-medium">{tInv.clientPrices.viewBtn}</Text>
+              </Pressable>
+            ) : null}
             {onAutoprice && canEdit ? (
               <Pressable onPress={() => { setMoreOpen(false); onAutoprice(); }} className="flex-row items-center gap-3 py-3.5 border-b border-border-soft active:opacity-60">
                 <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center"><DollarSign size={18} color={c.primary} /></View>

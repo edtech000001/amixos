@@ -141,6 +141,8 @@ export interface InvoiceDetailScreenProps {
   /** Autoprice: fill in unpriced ($0) lines from the price sheet. Button hidden
    *  when not provided (e.g. no price-sheet items or a sent/paid invoice). */
   onAutoprice?: () => void;
+  /** Opens the read-only "prices for this client" sheet (platform-owned). */
+  onViewPrices?: () => void;
   /** Autoname (gated pilot): normalize the linked jobs' titles. */
   onAutoname?: () => void;
   /** Reset all lines to unpriced ($0) so Autoprice can re-run clean (e.g. after
@@ -235,6 +237,7 @@ export function InvoiceDetailScreen({
   onSortLines,
   sortLinesDir,
   onAutoprice,
+  onViewPrices,
   onAutoname,
   onClearPrices,
   autopriceVerify,
@@ -339,6 +342,11 @@ export function InvoiceDetailScreen({
           </div>
         </div>
         <div className="flex items-center gap-1">
+          {onViewPrices ? (
+            <button type="button" onClick={onViewPrices} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-surface text-sm font-semibold text-muted transition-colors mr-1">
+              {tInv.clientPrices.viewBtn}
+            </button>
+          ) : null}
           {onAutoprice && canEdit ? (
             <button type="button" onClick={onAutoprice} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-surface text-sm font-semibold text-primary transition-colors mr-1">
               <DollarSign size={15} /> {ui.dashboard.jobs.detail.autopriceBtn}
