@@ -332,7 +332,7 @@ export default function RentalsModule() {
       if (err) { setError(t.saveError); setSaving(false); return; }
       const row = created as RentalProperty;
       // Flush photos queued while adding, now that the row exists.
-      let photoFailed = false;
+      let photoFailMsg: string | null = null;
       for (const file of pendingPhotos) {
         const path = rentalPropertyPhotoPath(business.id, row.id, rentalUid());
         const { error: upErr } = await supabase.storage.from(RENTALS_BUCKET)
@@ -342,10 +342,10 @@ export default function RentalsModule() {
             business_id: business.id, property_id: row.id, storage_path: path,
             created_by: user?.id ?? null,
           });
-          if (insErr) photoFailed = true;
-        } else photoFailed = true;
+          if (insErr) photoFailMsg = insErr.message;
+        } else photoFailMsg = upErr.message;
       }
-      if (photoFailed) window.alert(t.photos.uploadError);
+      if (photoFailMsg) window.alert(`${t.photos.uploadError}\n\n${photoFailMsg}`);
       if (pendingPhotos.length) { setCoverPhotos({}); void loadCovers([row.id]); }
       setPendingPhotos([]);
       void logAudit(supabase, business.id, 'rental_property.created', 'rental_property', row.id, { name: payload.name });
