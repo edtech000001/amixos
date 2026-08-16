@@ -196,6 +196,9 @@ function NuevoTrabajoContent() {
   // visible-to-crew + self-assigned so they can actually see it (RLS 044/089
   // hides unpublished/unassigned jobs from field). Mirrors logFieldJob.
   const restrictedCreator = !!currentRole && !can.seeAllJobs(currentRole);
+  // True once the edit prefill obtained the job's existing assignments. Guards
+  // the save's delete+reinsert against wiping crew that simply failed to load.
+  const assignsBaselineRef = useRef(false);
   // Crew-assignment rights (matches migration 164's job_assignments policy):
   // managers+ get the dispatcher tools; a field creator keeps self-assign on
   // their own job; office/viewer get nothing (they can't write job_assignments).
@@ -846,11 +849,15 @@ function NuevoTrabajoContent() {
       await Promise.all([empPromise, tplPromise, clientsPromise]);
 
       if (sourceId) {
-        const [{ data: job }, { data: jobItems }, { data: assigns }] = await Promise.all([
+        const [{ data: job }, { data: jobItems }, { data: assigns, error: assignsErr }] = await Promise.all([
           supabase.from('jobs').select('*').eq('id', sourceId).single(),
           supabase.from('job_items').select('*').eq('job_id', sourceId).order('created_at'),
           supabase.from('job_assignments').select('*').eq('job_id', sourceId),
         ]);
+        // Baseline known = the assignments fetch actually answered. When it
+        // failed (flaky network), the save must NOT delete-and-reinsert
+        // assignments from empty pickers — that silently wiped the crew.
+        assignsBaselineRef.current = !assignsErr && assigns != null;
         if (job && teamOnly) {
           setLoadedCreatedBy(job.created_by ?? null);
           setClientId(job.client_id ?? '');
@@ -1541,8 +1548,13 @@ function NuevoTrabajoContent() {
         }
 
         // Replace assignments — include is_lead so the Project Leader is
-        // recorded for the post-job actuals flow.
-        if (editId) await supabase.from('job_assignments').delete().eq('job_id', finalJobId);
+        // recorded for the post-job actuals flow. Unknown baseline + nothing
+        // picked → leave the server's crew alone (deleting here wiped workers
+        // whenever the prefill couldn't load).
+        const skipAssignmentReplace = !!editId && !assignsBaselineRef.current
+          && assignedEmployees.length === 0 && !leadEmployeeId
+          && manualWorkers.every(w => !w.trim());
+        if (editId && !skipAssignmentReplace) await supabase.from('job_assignments').delete().eq('job_id', finalJobId);
         const assignments: any[] = [];
         assignedEmployees.forEach(empId => {
           const emp = employees.find(e => e.id === empId);
@@ -1588,7 +1600,7 @@ function NuevoTrabajoContent() {
             assignments.push({ job_id: finalJobId, worker_name: creatorName, is_lead: true, crew: true });
           }
         }
-        if (assignments.length > 0) {
+        if (assignments.length > 0 && !skipAssignmentReplace) {
           await supabase.from('job_assignments').insert(assignments);
         }
 

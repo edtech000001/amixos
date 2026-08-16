@@ -448,11 +448,46 @@ export default function NuevoTrabajoRoute() {
       if (cancelled) return;
 
       if (sourceId) {
-        const [{ data: job }, { data: assigns }] = await Promise.all([
-          supabase.from('jobs').select('*').eq('id', sourceId).single(),
-          supabase.from('job_assignments').select('*').eq('job_id', sourceId),
+        // Read through the offline cache (SAME keys + select shapes the detail
+        // screen warms) so editing works with no signal — and, critically, so a
+        // failed job_assignments fetch can't blank the crew pickers: the save
+        // replaces assignments wholesale, so an empty prefill silently WIPED
+        // the workers of an offline-created job on the next edit-save.
+        const [jobRes, asgRes] = await Promise.all([
+          loadCached<Record<string, unknown>>(`job_${sourceId}`, async () => {
+            const { data, error } = await supabase
+              .from('jobs')
+              .select(
+                '*, clients(id, first_name, last_name, company, phone_cell, phone_office, email, email_office, email_home, address, city, state, zip_code, custom_fields)',
+              )
+              .eq('id', sourceId)
+              .single();
+            if (error) throw error;
+            return data;
+          }),
+          loadCached<{ worker_name: string | null; is_lead: boolean | null; crew: boolean | null; employees: { id: string } | null }[]>(
+            `job_assignments_${sourceId}`,
+            async () => {
+              const { data, error } = await supabase
+                .from('job_assignments')
+                .select('id, worker_name, is_lead, crew, employees(id, first_name, last_name, user_id)')
+                .eq('job_id', sourceId);
+              if (error) throw error;
+              return (data ?? []) as never;
+            },
+          ),
         ]);
         if (cancelled) return;
+        const job = jobRes.data as Record<string, any> | null;
+        // Baseline known = server OR cached copy arrived. When neither did, the
+        // save must NOT delete-and-reinsert assignments (see save path).
+        assignsBaselineRef.current = asgRes.data != null;
+        const assigns = (asgRes.data ?? []).map((a) => ({
+          employee_id: a.employees?.id ?? null,
+          worker_name: a.worker_name,
+          is_lead: a.is_lead,
+          crew: a.crew,
+        }));
         if (job && teamOnly) {
           setLoadedCreatedBy(job.created_by ?? null);
           setClientId(job.client_id ?? '');
@@ -518,7 +553,7 @@ export default function NuevoTrabajoRoute() {
             }
           }
         }
-        if (assigns) {
+        if (assignsBaselineRef.current) {
           setAssignedEmployees(
             assigns.filter((a: any) => a.employee_id && a.crew !== false).map((a: any) => a.employee_id),
           );
@@ -596,6 +631,10 @@ export default function NuevoTrabajoRoute() {
   // a retry after a mid-save failure re-uses it (duplicate insert = success)
   // instead of inserting another copy of the job.
   const draftJobIdRef = useRef(newUuid());
+  // True once the edit prefill obtained the job's existing assignments (live
+  // or cached). Guards the save's delete+reinsert against wiping crew that
+  // simply failed to load.
+  const assignsBaselineRef = useRef(false);
   useEffect(() => { coordsTextRef.current = coordsText; }, [coordsText]);
   useEffect(() => {
     if (editId || duplicate || !defaultsCompleted) return;
@@ -1736,6 +1775,12 @@ export default function NuevoTrabajoRoute() {
       // line items from this form (moved to detail page).
       if (!isProposal) {
         try {
+        // Unknown baseline + nothing picked → leave the server's crew alone
+        // (deleting here wiped workers whenever the prefill couldn't load).
+        const skipAssignmentReplace = !!editId && !assignsBaselineRef.current
+          && assignedEmployees.length === 0 && !leadEmployeeId
+          && manualWorkers.every((w) => !w.trim());
+        if (!skipAssignmentReplace) {
         if (editId) await queuedDelete({ table: 'job_assignments', match: { job_id: jobId }, businessId: business.id, label: 'Asignaciones' });
         const assignments: {
           job_id: string;
@@ -1798,6 +1843,7 @@ export default function NuevoTrabajoRoute() {
         // Per-assignment insert with client ids so an offline retry is idempotent.
         for (const a of assignments) {
           await queuedInsert({ table: 'job_assignments', payload: { id: newUuid(), ...a }, businessId: business.id, label: `Asignación: ${a.worker_name}` });
+        }
         }
         } catch (assignErr) {
           // The job row is already saved — a failed assignment write must not
