@@ -215,7 +215,9 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
         email: client.email_office || client.email_home,
       },
       t: {
-        subject: td.policy.subject,
+        subjectCoi: td.policy.subjectCoi,
+        subjectWorkcomp: td.policy.subjectWorkcomp,
+        subjectBoth: td.policy.subjectBoth,
         body: td.policy.body,
         docsCoi: td.policy.docsCoi,
         docsWorkcomp: td.policy.docsWorkcomp,

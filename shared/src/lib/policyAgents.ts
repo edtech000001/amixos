@@ -37,7 +37,9 @@ export function agentFor(agents: PolicyAgents, kind: 'coi' | 'workcomp'): Policy
 }
 
 export interface PolicyEmailStrings {
-  subject: string;      // "Enviar seguro | {{business}}"
+  subjectCoi: string;       // "Send Out Insurance | {{business}}"
+  subjectWorkcomp: string;  // "Send Out WorkComp. | {{business}}"
+  subjectBoth: string;      // "Send Out Policy | {{business}}"
   body: string;         // greeting/body with {{agent}} {{docs}} {{details}} {{business}}
   docsCoi: string;
   docsWorkcomp: string;
@@ -90,7 +92,11 @@ export function buildPolicyEmail(opts: {
   add(opts.t.phoneLabel, opts.client.phone);
   add(opts.t.emailLabel, opts.client.email);
 
-  const subject = opts.t.subject.replace('{{business}}', opts.businessName);
+  const subjectTpl =
+    opts.kind === 'coi' ? opts.t.subjectCoi
+    : opts.kind === 'workcomp' ? opts.t.subjectWorkcomp
+    : opts.t.subjectBoth;
+  const subject = subjectTpl.replace('{{business}}', opts.businessName);
   const body = opts.t.body
     .replace('{{agent}}', agentFirst)
     .replace('{{docs}}', docs)

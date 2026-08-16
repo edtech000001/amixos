@@ -485,7 +485,9 @@ export type DashboardDict = {
         coi: string;
         workcomp: string;
         both: string;
-        subject: string;
+        subjectCoi: string;
+        subjectWorkcomp: string;
+        subjectBoth: string;
         body: string;
         docsCoi: string;
         docsWorkcomp: string;
@@ -3426,7 +3428,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
           coi: 'COI (certificado de seguro)',
           workcomp: 'Workers comp',
           both: 'Ambos',
-          subject: 'Enviar seguro | {{business}}',
+          subjectCoi: 'Enviar seguro | {{business}}',
+          subjectWorkcomp: 'Enviar WorkComp | {{business}}',
+          subjectBoth: 'Enviar póliza | {{business}}',
           body: 'Hola {{agent}}, ¡espero que tengas un excelente día! ¿Podrías enviar {{docs}} a:\n\n{{details}}\n\nSaludos,\n{{business}}',
           docsCoi: 'nuestro COI',
           docsWorkcomp: 'nuestro workers comp',
@@ -6352,7 +6356,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
           coi: 'COI (certificate of insurance)',
           workcomp: 'Workers comp',
           both: 'Both',
-          subject: 'Send Out Insurance | {{business}}',
+          subjectCoi: 'Send Out Insurance | {{business}}',
+          subjectWorkcomp: 'Send Out WorkComp. | {{business}}',
+          subjectBoth: 'Send Out Policy | {{business}}',
           body: "Hey {{agent}}, hope you're having a wonderful day! Could you email out {{docs}} to:\n\n{{details}}\n\nSincerely,\n{{business}}",
           docsCoi: 'our COI',
           docsWorkcomp: 'our workers comp',
