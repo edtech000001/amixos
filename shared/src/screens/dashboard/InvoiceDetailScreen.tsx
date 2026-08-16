@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView, Image, Modal as RNModal } from 'reac
 import {
   ArrowLeft,
   MoreHorizontal,
+  X,
   Eye,
   EyeOff,
   ChevronDown,
@@ -729,7 +730,12 @@ export function InvoiceDetailScreen({
           />
           <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10">
             <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
-            <Text className="text-base font-bold text-ink mb-2">{tInv.moreActionsTitle}</Text>
+            <View className="flex-row items-center justify-between mb-2">
+              <Text className="text-base font-bold text-ink">{tInv.moreActionsTitle}</Text>
+              <Pressable onPress={() => setMoreOpen(false)} hitSlop={8} className="p-1.5 rounded-lg active:bg-border-soft">
+                <X size={18} color={c.muted} />
+              </Pressable>
+            </View>
             {onViewPrices ? (
               <Pressable onPress={() => { setMoreOpen(false); onViewPrices(); }} className="flex-row items-center gap-3 py-3.5 border-b border-border-soft active:opacity-60">
                 <View className="w-9 h-9 rounded-xl bg-border-soft items-center justify-center"><DollarSign size={18} color={c.muted} /></View>

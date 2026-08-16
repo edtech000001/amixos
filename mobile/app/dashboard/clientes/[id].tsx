@@ -25,6 +25,7 @@ import {
   Printer,
   ShieldCheck,
   MoreHorizontal,
+  X,
   Building2,
   CloudOff,
   Star,
@@ -734,7 +735,12 @@ export default function ClienteDetailRoute() {
           />
           <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10">
             <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
-            <Text className="text-base font-bold text-ink mb-2">{full.dashboard.invoices.moreActionsTitle}</Text>
+            <View className="flex-row items-center justify-between mb-2">
+              <Text className="text-base font-bold text-ink">{full.dashboard.invoices.moreActionsTitle}</Text>
+              <Pressable onPress={() => setMoreOpen(false)} hitSlop={8} className="p-1.5 rounded-lg active:bg-border-soft">
+                <X size={18} color={c.muted} />
+              </Pressable>
+            </View>
             <Pressable
               onPress={() => { setMoreOpen(false); void onShareCsv(); }}
               className="flex-row items-center gap-3 py-3.5 border-b border-border-soft active:opacity-60"
