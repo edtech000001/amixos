@@ -137,6 +137,9 @@ export default function GenerarPreciosPage() {
     const body = t.emailBody
       .replace('{{name}}', (selectedClient.first_name ?? '').trim() || clientName(selectedClient))
       .replace(/\{\{business\}\}/g, business?.name ?? 'Amixos');
+    // Same flow as sending an invoice: pop the print dialog FIRST so the user
+    // saves the PDF, then (once it closes) open the drafted email to attach it.
+    window.print();
     window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
   const preparedFor = mode === 'client' && selectedClient ? clientName(selectedClient) : null;
@@ -258,7 +261,7 @@ export default function GenerarPreciosPage() {
   };
 
   return (
-    <div className="min-h-screen print:min-h-0 bg-surface print:bg-card p-6 lg:p-8 print:p-0">
+    <div className="min-h-screen print:min-h-0 bg-surface print:bg-white p-6 lg:p-8 print:p-0">
       {/* Tight, full-width single page when printing. */}
       <style>{`@media print { @page { size: letter portrait; margin: 0.4in; } html, body { background: #fff; } }`}</style>
       {/* Controls — hidden on print */}
@@ -267,7 +270,7 @@ export default function GenerarPreciosPage() {
           <ArrowLeft size={16} /> {t.title}
         </button>
         <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
-          <div className="flex-1 min-w-[280px]">
+          <div className="flex-[2] min-w-[340px]">
             <label className="block text-xs font-semibold text-muted mb-1.5">{t.generateTitle}</label>
             <div className="flex gap-2">
               <div className="inline-flex gap-1 bg-border-soft p-1 rounded-xl">
@@ -318,27 +321,31 @@ export default function GenerarPreciosPage() {
               )}
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 shrink-0">
-            <button type="button" onClick={openCustomize}
-              className="flex items-center justify-center gap-1.5 bg-card border border-border px-4 py-2.5 rounded-xl text-sm font-semibold text-ink hover:bg-surface">
-              <Sliders size={16} /> {t.customizeBtn}
+          {/* Compact actions — the picker gets the width, not the buttons. */}
+          <div className="flex flex-wrap gap-1.5 shrink-0">
+            <button type="button" onClick={openCustomize} title={t.customizeBtn}
+              className="flex items-center justify-center gap-1 bg-card border border-border px-2.5 py-2 rounded-lg text-xs font-semibold text-ink hover:bg-surface">
+              <Sliders size={14} /> {t.customizeBtn}
             </button>
             {mode === 'client' && selectedClient && clientEmail(selectedClient) ? (
-              <button type="button" onClick={emailSheet}
-                className="flex items-center justify-center gap-1.5 bg-card border border-border px-4 py-2.5 rounded-xl text-sm font-semibold text-primary hover:bg-surface">
-                <Mail size={16} /> {t.emailBtn}
+              <button type="button" onClick={emailSheet} title={t.emailBtn}
+                className="flex items-center justify-center gap-1 bg-card border border-border px-2.5 py-2 rounded-lg text-xs font-semibold text-primary hover:bg-surface">
+                <Mail size={14} /> {t.emailBtn}
               </button>
             ) : null}
             <button type="button" onClick={() => window.print()}
-              className="flex items-center justify-center gap-1.5 bg-primary px-4 py-2.5 rounded-xl text-sm font-semibold text-white hover:opacity-90">
-              <Printer size={16} /> {t.printBtn}
+              className="flex items-center justify-center gap-1 bg-primary px-2.5 py-2 rounded-lg text-xs font-semibold text-white hover:opacity-90">
+              <Printer size={14} /> {t.printBtn}
             </button>
           </div>
         </div>
       </div>
 
       {/* Document — the printout */}
-      <div className={`max-w-3xl print:max-w-full mx-auto bg-card rounded-2xl print:rounded-none border border-border-soft print:border-0 shadow-sm print:shadow-none p-8 print:p-0 ${theme.font}`}>
+      {/* print-force-light: on screen the preview follows the app theme, but
+          the PRINTED document always comes out on white paper (this is what
+          killed the black bars in the saved PDF). */}
+      <div className={`print-force-light max-w-3xl print:max-w-full mx-auto bg-card rounded-2xl print:rounded-none border border-border-soft print:border-0 shadow-sm print:shadow-none p-8 print:p-0 ${theme.font}`}>
         {/* Header — split (default) or centered (elegant) */}
         {theme.centered ? (
           <div className="text-center pb-5 print:pb-2 border-b border-border-soft">

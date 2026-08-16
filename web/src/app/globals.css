@@ -77,6 +77,35 @@
 }
 
 /*
+ * Print-only version of .force-light: the on-screen preview keeps the app
+ * theme (dark stays dark), but the PRINTED document always comes out on
+ * white paper. Used by the price-sheet generator.
+ */
+@media print {
+  .print-force-light {
+
+  color-scheme: light;
+  --color-primary: 37 99 235;
+  --color-primary-dark: 29 78 216;
+  --color-primary-light: 96 165 250;
+  --color-surface: 248 250 252;
+  --color-card: 255 255 255;
+  --color-elevated: 255 255 255;
+  --color-border: 226 232 240;
+  --color-border-soft: 241 245 249;
+  --color-ink: 15 23 42;
+  --color-muted: 100 116 139;
+  --color-faint: 148 163 184;
+  --color-success: 22 163 74;
+  --color-danger: 220 38 38;
+  --color-warning: 217 119 6;
+  background: rgb(var(--color-surface));
+  color: rgb(var(--color-ink));
+  }
+}
+
+
+/*
  * Native form controls default to the theme surfaces so an input/textarea
  * WITHOUT an explicit background class isn't browser-white in dark mode (it
  * was showing near-white text on a white box). Explicit Tailwind background,
