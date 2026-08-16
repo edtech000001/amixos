@@ -297,10 +297,10 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
         </div>
       )}
 
-      {/* Add/edit modal */}
+      {/* Add/edit modal. Backdrop click deliberately does NOT close — a
+          mis-click mustn't discard an in-progress price edit. Close via the
+          X (or Cancel). */}
       {draft ? (
-        {/* Backdrop click deliberately does NOT close — a mis-click mustn't
-            discard an in-progress price edit. Close via the X (or Cancel). */}
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="bg-card rounded-2xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
