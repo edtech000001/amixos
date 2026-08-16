@@ -292,6 +292,10 @@ export function BusinessSection() {
   const [zip, setZip] = useState(business?.postal_code ?? '');
   const [taxId, setTaxId] = useState(business?.tax_id ?? '');
   const [license, setLicense] = useState(business?.license_number ?? '');
+  const [coiAgentName, setCoiAgentName] = useState(business?.policy_agents?.coi?.name ?? '');
+  const [coiAgentEmail, setCoiAgentEmail] = useState(business?.policy_agents?.coi?.email ?? '');
+  const [wcAgentName, setWcAgentName] = useState(business?.policy_agents?.workcomp?.name ?? '');
+  const [wcAgentEmail, setWcAgentEmail] = useState(business?.policy_agents?.workcomp?.email ?? '');
   const [operatingHours, setOperatingHours] = useState<OperatingHours>(
     normalizeOperatingHours(business?.operating_hours) ?? DEFAULT_OPERATING_HOURS,
   );
@@ -388,6 +392,10 @@ export function BusinessSection() {
     setZip(business.postal_code ?? '');
     setTaxId(business.tax_id ?? '');
     setLicense(business.license_number ?? '');
+    setCoiAgentName(business.policy_agents?.coi?.name ?? '');
+    setCoiAgentEmail(business.policy_agents?.coi?.email ?? '');
+    setWcAgentName(business.policy_agents?.workcomp?.name ?? '');
+    setWcAgentEmail(business.policy_agents?.workcomp?.email ?? '');
     setOperatingHours(normalizeOperatingHours(business.operating_hours) ?? DEFAULT_OPERATING_HOURS);
   }, [business]);
 
@@ -412,6 +420,10 @@ export function BusinessSection() {
         postal_code: zip.trim() || null,
         tax_id: taxId.trim() || null,
         license_number: license.trim() || null,
+        policy_agents: {
+          coi: { name: coiAgentName.trim(), email: coiAgentEmail.trim() },
+          workcomp: { name: wcAgentName.trim(), email: wcAgentEmail.trim() },
+        },
         operating_hours: operatingHours,
       })
       .eq('id', business.id);
@@ -448,6 +460,10 @@ export function BusinessSection() {
     zip !== (business?.postal_code ?? '') ||
     taxId !== (business?.tax_id ?? '') ||
     license !== (business?.license_number ?? '') ||
+    coiAgentName !== (business?.policy_agents?.coi?.name ?? '') ||
+    coiAgentEmail !== (business?.policy_agents?.coi?.email ?? '') ||
+    wcAgentName !== (business?.policy_agents?.workcomp?.name ?? '') ||
+    wcAgentEmail !== (business?.policy_agents?.workcomp?.email ?? '') ||
     JSON.stringify(operatingHours) !==
       JSON.stringify(normalizeOperatingHours(business?.operating_hours) ?? DEFAULT_OPERATING_HOURS);
   useSettingsSaveAction({ dirty, saving, onSave });
@@ -562,6 +578,17 @@ export function BusinessSection() {
         <GroupLabel>{t.business.legalHeading}</GroupLabel>
         <Input label={t.business.taxIdLabel} value={taxId} onChangeText={setTaxId} />
         <Input label={t.business.licenseLabel} value={license} onChangeText={setLicense} />
+
+        {/* Insurance agent contacts — feed the client "Enviar póliza" request emails. */}
+        <GroupLabel>{t.business.policyAgentsHeading}</GroupLabel>
+        <Text className="text-xs text-faint -mt-2">{t.business.policyAgentsHint}</Text>
+        <Text className="text-xs font-semibold text-muted">{t.business.coiAgentLabel}</Text>
+        <Input label={t.business.agentNameLabel} value={coiAgentName} onChangeText={setCoiAgentName} autoCapitalize="words" />
+        <Input label={t.business.agentEmailLabel} value={coiAgentEmail} onChangeText={setCoiAgentEmail} autoCapitalize="none" keyboardType="email-address" />
+        <Text className="text-xs font-semibold text-muted">{t.business.workcompAgentLabel}</Text>
+        <Text className="text-xs text-faint -mt-2">{t.business.workcompFallbackHint}</Text>
+        <Input label={t.business.agentNameLabel} value={wcAgentName} onChangeText={setWcAgentName} autoCapitalize="words" />
+        <Input label={t.business.agentEmailLabel} value={wcAgentEmail} onChangeText={setWcAgentEmail} autoCapitalize="none" keyboardType="email-address" />
 
         <GroupLabel>{t.business.operatingHoursHeading}</GroupLabel>
         <Text className="text-xs text-faint -mt-2">{t.business.operatingHoursSub}</Text>

@@ -23,6 +23,7 @@ import {
   Plus,
   FileText,
   Printer,
+  ShieldCheck,
   Building2,
   CloudOff,
   Star,
@@ -33,6 +34,7 @@ import * as Print from 'expo-print';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { buildClientCsv, buildClientHtml } from '@amixos/shared/lib/clientShare';
+import { parsePolicyAgents, agentFor, buildPolicyEmail, type PolicyDocKind } from '@amixos/shared/lib/policyAgents';
 import { createSupabaseClient } from '@/lib/supabase';
 import { loadCached, writeCached } from '@/lib/offline/cache';
 import { swrRead } from '@amixos/shared/lib/swrCache';
@@ -386,6 +388,52 @@ export default function ClienteDetailRoute() {
     }
   };
 
+  // "Enviar póliza": draft an email asking the insurance agent (Ajustes →
+  // Negocio) to send the COI / workers comp to this client.
+  const policyAgents = parsePolicyAgents(business?.policy_agents);
+  const canEmailPolicy = !!agentFor(policyAgents, 'coi');
+  const sendPolicyEmail = (kind: PolicyDocKind) => {
+    if (!client || !business) return;
+    const draft = buildPolicyEmail({
+      agents: policyAgents,
+      kind,
+      businessName: business.name,
+      client: {
+        name: [client.first_name, client.last_name].filter(Boolean).join(' '),
+        company: client.company,
+        addressLines: [
+          [client.address, client.address_line2].filter(Boolean).join(', '),
+          [client.city, client.state, client.zip_code].filter(Boolean).join(', '),
+        ].filter(Boolean),
+        phone: client.phone_cell || client.phone_office,
+        email: client.email_office || client.email_home,
+      },
+      t: {
+        subject: td.policy.subject,
+        body: td.policy.body,
+        docsCoi: td.policy.docsCoi,
+        docsWorkcomp: td.policy.docsWorkcomp,
+        docsBoth: td.policy.docsBoth,
+        nameLabel: td.policy.nameLabel,
+        companyLabel: td.policy.companyLabel,
+        addressLabel: td.policy.addressLabel,
+        phoneLabel: td.policy.phoneLabel,
+        emailLabel: td.policy.emailLabel,
+      },
+    });
+    if (!draft) return;
+    openLink(`mailto:${draft.to}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`);
+  };
+
+  const onEmailPolicy = () => {
+    Alert.alert(td.policy.dialogTitle, undefined, [
+      { text: tc.buttons.cancel, style: 'cancel' },
+      { text: td.policy.coi, onPress: () => sendPolicyEmail('coi') },
+      { text: td.policy.workcomp, onPress: () => sendPolicyEmail('workcomp') },
+      { text: td.policy.both, onPress: () => sendPolicyEmail('both') },
+    ]);
+  };
+
   const onSharePdf = () => {
     if (!client) return;
     Alert.alert(td.shareDialogTitle, undefined, [
@@ -644,6 +692,16 @@ export default function ClienteDetailRoute() {
           >
             <Share2 size={18} color={c.muted} />
           </Pressable>
+          {canEmailPolicy ? (
+            <Pressable
+              onPress={onEmailPolicy}
+              hitSlop={8}
+              className="p-2 rounded-lg active:bg-border-soft"
+              accessibilityLabel={td.policy.btn}
+            >
+              <ShieldCheck size={18} color={c.muted} />
+            </Pressable>
+          ) : null}
           {canEdit ? (
             <Pressable
               onPress={() => router.push(`/dashboard/clientes/nuevo?edit=${client.id}` as never)}

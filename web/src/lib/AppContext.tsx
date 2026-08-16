@@ -96,6 +96,7 @@ export interface Business {
   // app skips out-of-hours job warnings until set. Shape: see
   // shared/src/lib/operatingHours.ts (OperatingHours).
   operating_hours: Record<string, { enabled: boolean; start: string; end: string }> | null;
+  policy_agents: Record<string, { name?: string; email?: string }> | null;
   // Home dashboard widget layout (migration 049). Null = default layout.
   // Shape: see shared/src/lib/dashboardWidgets.ts (DashboardLayout).
   dashboard_layout: { order: string[]; hidden: string[]; sizes?: Record<string, 'sm' | 'md' | 'lg'> } | null;
@@ -389,7 +390,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [{ data: bizRows }, { data: memberRows }] = await Promise.all([
       supabase
         .from('businesses')
-        .select('id, name, logo_url, service_type, city, state, address, postal_code, email, phone, website, tax_id, license_number, invoice_notes_default, invoice_due_days, invoice_start_number, invoice_tax_rate, invoice_qty_field, invoice_email_subject, invoice_email_body, invoice_email_delivery, invoice_field_required, invoice_field_order, invoice_field_hidden, invoice_field_layout, invoice_template, price_sheet_template, client_field_required, client_field_order, client_field_hidden, client_field_layout, employee_field_required, employee_field_order, employee_field_hidden, employee_field_layout, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, job_item_types_enabled, crew_finder_enabled, job_private_on_invoice, job_field_hidden, job_field_layout, payroll_frequency, payroll_anchor_date, payroll_custom_days, payroll_config, job_alert_thresholds, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config, operating_hours, dashboard_layout, plan, subscription_status, billing_period, trial_ends_at, current_period_end, stripe_customer_id, stripe_subscription_id')
+        .select('id, name, logo_url, service_type, city, state, address, postal_code, email, phone, website, tax_id, license_number, invoice_notes_default, invoice_due_days, invoice_start_number, invoice_tax_rate, invoice_qty_field, invoice_email_subject, invoice_email_body, invoice_email_delivery, invoice_field_required, invoice_field_order, invoice_field_hidden, invoice_field_layout, invoice_template, price_sheet_template, client_field_required, client_field_order, client_field_hidden, client_field_layout, employee_field_required, employee_field_order, employee_field_hidden, employee_field_layout, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, job_item_types_enabled, crew_finder_enabled, job_private_on_invoice, job_field_hidden, job_field_layout, payroll_frequency, payroll_anchor_date, payroll_custom_days, payroll_config, job_alert_thresholds, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config, operating_hours, policy_agents, dashboard_layout, plan, subscription_status, billing_period, trial_ends_at, current_period_end, stripe_customer_id, stripe_subscription_id')
         // Deterministic order: the fallback "first business" must be the
         // same on web and mobile, or per-business state (e.g. the Google
         // connection) looks inconsistent across devices.

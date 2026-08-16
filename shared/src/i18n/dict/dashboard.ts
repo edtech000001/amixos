@@ -479,6 +479,23 @@ export type DashboardDict = {
       pdfInvoicesHeading: string;
       pdfInvoicesTotal: string;
       pdfGeneratedOn: string;
+      policy: {
+        btn: string;
+        dialogTitle: string;
+        coi: string;
+        workcomp: string;
+        both: string;
+        subject: string;
+        body: string;
+        docsCoi: string;
+        docsWorkcomp: string;
+        docsBoth: string;
+        nameLabel: string;
+        companyLabel: string;
+        addressLabel: string;
+        phoneLabel: string;
+        emailLabel: string;
+      };
       shareError: string;
       contactModal: {
         addTitle: string;
@@ -1632,6 +1649,13 @@ export type DashboardDict = {
       stateLabel: string;
       zipLabel: string;
       legalHeading: string;
+      policyAgentsHeading: string;
+      policyAgentsHint: string;
+      coiAgentLabel: string;
+      workcompAgentLabel: string;
+      agentNameLabel: string;
+      agentEmailLabel: string;
+      workcompFallbackHint: string;
       taxIdLabel: string;
       licenseLabel: string;
       invoiceHeading: string;
@@ -3396,6 +3420,23 @@ export const dashboard: Record<Locale, DashboardDict> = {
         pdfInvoicesHeading: 'Facturas',
         pdfInvoicesTotal: 'Total facturado',
         pdfGeneratedOn: 'Generado el {{date}}',
+        policy: {
+          btn: 'Enviar póliza',
+          dialogTitle: '¿Qué documento pedir al agente?',
+          coi: 'COI (certificado de seguro)',
+          workcomp: 'Workers comp',
+          both: 'Ambos',
+          subject: 'Enviar seguro | {{business}}',
+          body: 'Hola {{agent}}, ¡espero que tengas un excelente día! ¿Podrías enviar {{docs}} a:\n\n{{details}}\n\nSaludos,\n{{business}}',
+          docsCoi: 'nuestro COI',
+          docsWorkcomp: 'nuestro workers comp',
+          docsBoth: 'nuestro COI y workers comp',
+          nameLabel: 'Nombre',
+          companyLabel: 'Compañía',
+          addressLabel: 'Dirección',
+          phoneLabel: 'Teléfono',
+          emailLabel: 'Correo',
+        },
         shareError: 'No se pudo compartir. Intenta de nuevo.',
         contactModal: {
           addTitle: 'Nuevo contacto',
@@ -4526,6 +4567,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
         stateLabel: 'Estado',
         zipLabel: 'Código postal',
         legalHeading: 'Información fiscal y legal',
+        policyAgentsHeading: 'Agente de seguros',
+        policyAgentsHint: 'Para pedirle por correo el COI o el workers comp de un cliente (botón "Enviar póliza" en el cliente).',
+        coiAgentLabel: 'Agente COI',
+        workcompAgentLabel: 'Agente Workers Comp',
+        agentNameLabel: 'Nombre del agente',
+        agentEmailLabel: 'Correo del agente',
+        workcompFallbackHint: 'Déjalo vacío si es el mismo agente del COI.',
         taxIdLabel: 'ID fiscal / EIN',
         licenseLabel: 'Número de licencia',
         invoiceHeading: 'Facturación',
@@ -6298,6 +6346,23 @@ export const dashboard: Record<Locale, DashboardDict> = {
         pdfInvoicesHeading: 'Invoices',
         pdfInvoicesTotal: 'Total invoiced',
         pdfGeneratedOn: 'Generated on {{date}}',
+        policy: {
+          btn: 'Email policy',
+          dialogTitle: 'What should the agent send?',
+          coi: 'COI (certificate of insurance)',
+          workcomp: 'Workers comp',
+          both: 'Both',
+          subject: 'Send Out Insurance | {{business}}',
+          body: "Hey {{agent}}, hope you're having a wonderful day! Could you email out {{docs}} to:\n\n{{details}}\n\nSincerely,\n{{business}}",
+          docsCoi: 'our COI',
+          docsWorkcomp: 'our workers comp',
+          docsBoth: 'our COI and workers comp',
+          nameLabel: 'Name',
+          companyLabel: 'Company',
+          addressLabel: 'Address',
+          phoneLabel: 'Phone',
+          emailLabel: 'Email',
+        },
         shareError: "Couldn't share. Try again.",
         contactModal: {
           addTitle: 'New contact',
@@ -7428,6 +7493,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
         stateLabel: 'State',
         zipLabel: 'ZIP code',
         legalHeading: 'Tax & legal',
+        policyAgentsHeading: 'Insurance agent',
+        policyAgentsHint: 'Used to email your agent a COI / workers comp request for a client (the "Email policy" button on the client).',
+        coiAgentLabel: 'COI agent',
+        workcompAgentLabel: 'Workers Comp agent',
+        agentNameLabel: 'Agent name',
+        agentEmailLabel: 'Agent email',
+        workcompFallbackHint: 'Leave blank if it is the same agent as the COI.',
         taxIdLabel: 'Tax ID / EIN',
         licenseLabel: 'License number',
         invoiceHeading: 'Invoicing',

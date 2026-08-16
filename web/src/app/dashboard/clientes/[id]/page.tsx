@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, Phone, Mail, MapPin, FileText, Plus, Pencil, Building2, Trash2, Star, UserPlus, Printer, Share2 } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, MapPin, FileText, Plus, Pencil, Building2, Trash2, Star, UserPlus, Printer, Share2, ShieldCheck } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
@@ -23,6 +23,7 @@ import { triggerGoogleSync, triggerClientContactGoogleSync } from '@amixos/share
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useRouter } from 'next/navigation';
 import { buildClientCsv } from '@amixos/shared/lib/clientShare';
+import { parsePolicyAgents, agentFor, buildPolicyEmail, type PolicyDocKind } from '@amixos/shared/lib/policyAgents';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { CommunicationLog } from '@amixos/shared/screens/dashboard/CommunicationLog';
 import { useContactOutcomePrompt } from '@/modules/communications/useContactOutcomePrompt';
@@ -190,6 +191,46 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
   // print route (window.print fires on mount) so we don't have to lug a
   // PDF lib into the main bundle.
   const [shareDialog, setShareDialog] = useState(false);
+
+  // "Enviar póliza": drafts an email asking the business's insurance agent to
+  // send the COI / workers comp to this client (agents configured in Ajustes →
+  // Negocio). Button only shows once a COI agent email exists.
+  const [policyDialog, setPolicyDialog] = useState(false);
+  const policyAgents = parsePolicyAgents(business?.policy_agents);
+  const canEmailPolicy = !!agentFor(policyAgents, 'coi');
+  const sendPolicyEmail = (kind: PolicyDocKind) => {
+    if (!client || !business) return;
+    const draft = buildPolicyEmail({
+      agents: policyAgents,
+      kind,
+      businessName: business.name,
+      client: {
+        name: [client.first_name, client.last_name].filter(Boolean).join(' '),
+        company: client.company,
+        addressLines: [
+          [client.address, client.address_line2].filter(Boolean).join(', '),
+          [client.city, client.state, client.zip_code].filter(Boolean).join(', '),
+        ].filter(Boolean),
+        phone: client.phone_cell || client.phone_office,
+        email: client.email_office || client.email_home,
+      },
+      t: {
+        subject: td.policy.subject,
+        body: td.policy.body,
+        docsCoi: td.policy.docsCoi,
+        docsWorkcomp: td.policy.docsWorkcomp,
+        docsBoth: td.policy.docsBoth,
+        nameLabel: td.policy.nameLabel,
+        companyLabel: td.policy.companyLabel,
+        addressLabel: td.policy.addressLabel,
+        phoneLabel: td.policy.phoneLabel,
+        emailLabel: td.policy.emailLabel,
+      },
+    });
+    if (!draft) return;
+    setPolicyDialog(false);
+    window.location.href = `mailto:${draft.to}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`;
+  };
 
   const buildShareLabels = () => ({
     first_name: t.fields.firstName,
@@ -506,6 +547,11 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           <Button variant="secondary" size="sm" onClick={onShareCsv}>
             <Share2 size={14} className="mr-1.5"/> CSV
           </Button>
+          {canEmailPolicy && (
+            <Button variant="secondary" size="sm" onClick={() => setPolicyDialog(true)}>
+              <ShieldCheck size={14} className="mr-1.5"/> {td.policy.btn}
+            </Button>
+          )}
           <Link href={`/dashboard/precios/generar?client=${id}`} title={full.dashboard.settings.priceSheet.generateForClientBtn}>
             <Button variant="secondary" size="sm">
               <FileText size={14} className="mr-1.5"/> {full.dashboard.settings.priceSheet.title}
@@ -734,6 +780,21 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           </Button>
           <Button onClick={() => openPrintView(true)} fullWidth>
             {td.shareDialogAll}
+          </Button>
+        </div>
+      </Modal>
+
+      {/* ── Policy request dialog (COI / workers comp / both) ─────────────── */}
+      <Modal open={policyDialog} onClose={() => setPolicyDialog(false)} title={td.policy.dialogTitle} size="sm">
+        <div className="flex flex-col gap-2">
+          <Button variant="secondary" onClick={() => sendPolicyEmail('coi')} fullWidth>
+            {td.policy.coi}
+          </Button>
+          <Button variant="secondary" onClick={() => sendPolicyEmail('workcomp')} fullWidth>
+            {td.policy.workcomp}
+          </Button>
+          <Button onClick={() => sendPolicyEmail('both')} fullWidth>
+            {td.policy.both}
           </Button>
         </div>
       </Modal>

@@ -309,6 +309,10 @@ export default function AjustesPage() {
   const [bizZip, setBizZip] = useState(business?.postal_code ?? '');
   const [bizTaxId, setBizTaxId] = useState(business?.tax_id ?? '');
   const [bizLicense, setBizLicense] = useState(business?.license_number ?? '');
+  const [coiAgentName, setCoiAgentName] = useState(business?.policy_agents?.coi?.name ?? '');
+  const [coiAgentEmail, setCoiAgentEmail] = useState(business?.policy_agents?.coi?.email ?? '');
+  const [wcAgentName, setWcAgentName] = useState(business?.policy_agents?.workcomp?.name ?? '');
+  const [wcAgentEmail, setWcAgentEmail] = useState(business?.policy_agents?.workcomp?.email ?? '');
   const [bizInvoiceNotes, setBizInvoiceNotes] = useState(business?.invoice_notes_default ?? '');
   const [invoiceDueDays, setInvoiceDueDays] = useState(
     business?.invoice_due_days != null ? String(business.invoice_due_days) : '',
@@ -530,6 +534,10 @@ export default function AjustesPage() {
       setBizZip(business.postal_code ?? '');
       setBizTaxId(business.tax_id ?? '');
       setBizLicense(business.license_number ?? '');
+      setCoiAgentName(business.policy_agents?.coi?.name ?? '');
+      setCoiAgentEmail(business.policy_agents?.coi?.email ?? '');
+      setWcAgentName(business.policy_agents?.workcomp?.name ?? '');
+      setWcAgentEmail(business.policy_agents?.workcomp?.email ?? '');
       setBizInvoiceNotes(business.invoice_notes_default ?? '');
       setInvoiceDueDays(business.invoice_due_days != null ? String(business.invoice_due_days) : '');
       setInvoiceStartNumber(String(business.invoice_start_number ?? DEFAULT_INVOICE_START_NUMBER));
@@ -696,6 +704,10 @@ export default function AjustesPage() {
       postal_code: bizZip.trim() || null,
       tax_id: bizTaxId.trim() || null,
       license_number: bizLicense.trim() || null,
+      policy_agents: {
+        coi: { name: coiAgentName.trim(), email: coiAgentEmail.trim() },
+        workcomp: { name: wcAgentName.trim(), email: wcAgentEmail.trim() },
+      },
       operating_hours: operatingHours,
     }).eq('id', business.id);
     setBizMsgIsError(!!error);
@@ -2400,6 +2412,19 @@ export default function AjustesPage() {
                 <p className="sm:col-span-2 text-xs font-semibold text-faint uppercase mt-2">{t.business.legalHeading}</p>
                 <Input label={t.business.taxIdLabel} value={bizTaxId} onChange={e => setBizTaxId(e.target.value)}/>
                 <Input label={t.business.licenseLabel} value={bizLicense} onChange={e => setBizLicense(e.target.value)}/>
+
+                {/* Insurance agent contacts — feeds the client "Enviar póliza"
+                    request emails (COI / workers comp). */}
+                <div className="sm:col-span-2 mt-2">
+                  <p className="text-xs font-semibold text-faint uppercase">{t.business.policyAgentsHeading}</p>
+                  <p className="text-xs text-faint mt-0.5">{t.business.policyAgentsHint}</p>
+                </div>
+                <p className="sm:col-span-2 text-[11px] font-semibold text-muted -mb-2">{t.business.coiAgentLabel}</p>
+                <Input label={t.business.agentNameLabel} value={coiAgentName} onChange={e => setCoiAgentName(e.target.value)}/>
+                <Input label={t.business.agentEmailLabel} type="email" value={coiAgentEmail} onChange={e => setCoiAgentEmail(e.target.value)}/>
+                <p className="sm:col-span-2 text-[11px] font-semibold text-muted -mb-2">{t.business.workcompAgentLabel} <span className="font-normal text-faint">— {t.business.workcompFallbackHint}</span></p>
+                <Input label={t.business.agentNameLabel} value={wcAgentName} onChange={e => setWcAgentName(e.target.value)}/>
+                <Input label={t.business.agentEmailLabel} type="email" value={wcAgentEmail} onChange={e => setWcAgentEmail(e.target.value)}/>
               </div>
 
               {/* Operating hours — 2-column grid of days to use the width. */}
