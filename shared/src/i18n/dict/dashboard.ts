@@ -18,6 +18,8 @@ export type DashboardDict = {
     /** Section header for enabled INDUSTRY modules (registry category
      *  'industry') — each is effectively its own app inside Amixos. */
     appsSection: string;
+    collapseSidebar: string;
+    expandSidebar: string;
     // Short one-liners shown under each label on mobile's Más list. Keeps
     // that menu visually consistent with Ajustes (card with description).
     descriptions: {
@@ -2937,6 +2939,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       mas: 'Más',
       logout: 'Cerrar sesión',
       appsSection: 'Apps',
+      collapseSidebar: 'Contraer menú',
+      expandSidebar: 'Expandir menú',
       descriptions: {
         clientes: 'Tu lista de clientes y contactos.',
         trabajos: 'Trabajos, cotizaciones y su progreso.',
@@ -5831,6 +5835,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       mas: 'More',
       logout: 'Sign out',
       appsSection: 'Apps',
+      collapseSidebar: 'Collapse menu',
+      expandSidebar: 'Expand menu',
       descriptions: {
         clientes: 'Your clients and contacts.',
         trabajos: 'Jobs, proposals, and their progress.',

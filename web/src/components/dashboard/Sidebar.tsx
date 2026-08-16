@@ -6,9 +6,9 @@ import { clsx } from 'clsx';
 import {
   LayoutDashboard, Users, FileText, UsersRound, Calendar,
   Settings, ChevronLeft, Menu, X, ClipboardList, BarChart3,
-  Store as StoreIcon,
+  Store as StoreIcon, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
@@ -64,6 +64,18 @@ export function Sidebar() {
   const modulesDict = full.dashboard.modules.list;
   const supabase = createSupabaseClient();
   const [open, setOpen] = useState(false);
+  // Desktop icon-only mode — persisted so the choice survives navigation.
+  // Hydrated in an effect (not the initializer) to keep SSR markup stable.
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.localStorage.getItem('amixos.sidebar.collapsed') === '1') setCollapsed(true);
+  }, []);
+  const toggleCollapsed = () => {
+    setCollapsed(prev => {
+      if (typeof window !== 'undefined') window.localStorage.setItem('amixos.sidebar.collapsed', prev ? '0' : '1');
+      return !prev;
+    });
+  };
 
   // Enabled + available modules show up as their own sidebar entries
   // after the core nav. Coming-soon modules are filtered out even if
@@ -85,13 +97,22 @@ export function Sidebar() {
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname.startsWith(href);
 
-  const NavContent = () => (
+  const NavContent = ({ mini = false }: { mini?: boolean }) => (
     <div className="flex flex-col h-full">
-      {/* Business switcher (replaces the read-only logo + name block) */}
-      <div className="px-6 py-5 border-b border-border-soft flex flex-col gap-3">
-        <BusinessSwitcher />
-        <LocationSwitcher />
-      </div>
+      {/* Business switcher (replaces the read-only logo + name block). In
+          icon-only mode the switchers hide — expand to switch. */}
+      {!mini ? (
+        <div className="px-6 py-5 border-b border-border-soft flex flex-col gap-3">
+          <BusinessSwitcher />
+          <LocationSwitcher />
+        </div>
+      ) : (
+        <div className="py-4 border-b border-border-soft flex items-center justify-center">
+          <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-sm font-bold" title={business?.name ?? 'Amixos'}>
+            {(business?.name ?? 'A').charAt(0).toUpperCase()}
+          </div>
+        </div>
+      )}
 
       {/* Nav items. Core list first, then any enabled+available modules.
           Coming-soon modules don't appear here even if pre-enabled in DB —
@@ -104,15 +125,17 @@ export function Sidebar() {
               key={href}
               href={href}
               onClick={() => setOpen(false)}
+              title={mini ? t[key] : undefined}
               className={clsx(
-                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                'flex items-center gap-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                mini ? 'justify-center px-0' : 'px-3',
                 active
                   ? 'bg-primary text-white shadow-sm'
                   : 'text-muted hover:bg-border-soft hover:text-ink'
               )}
             >
               <Icon size={18} />
-              {t[key]}
+              {!mini && t[key]}
             </Link>
           );
         })}
@@ -127,8 +150,10 @@ export function Sidebar() {
               key={href}
               href={href}
               onClick={() => setOpen(false)}
+              title={mini ? name : undefined}
               className={clsx(
-                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                'flex items-center gap-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                mini ? 'justify-center px-0' : 'px-3',
                 active
                   ? 'bg-primary text-white shadow-sm'
                   : 'text-muted hover:bg-border-soft hover:text-ink',
@@ -138,15 +163,19 @@ export function Sidebar() {
                   module icons match the core nav instead of each showing their
                   own brand color. */}
               <Icon size={18} />
-              {name}
+              {!mini && name}
             </Link>
           );
         })}
         {industryApps.length > 0 ? (
           <>
-            <p className="px-3 pt-4 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-faint">
-              {t.appsSection}
-            </p>
+            {mini ? (
+              <div className="mx-3 my-2 border-t border-border-soft" />
+            ) : (
+              <p className="px-3 pt-4 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-faint">
+                {t.appsSection}
+              </p>
+            )}
             {industryApps.map(m => {
               const href = `/dashboard/modulos/${m.id}`;
               const active = isActive(href);
@@ -158,15 +187,17 @@ export function Sidebar() {
                   key={href}
                   href={href}
                   onClick={() => setOpen(false)}
+                  title={mini ? name : undefined}
                   className={clsx(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                    'flex items-center gap-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                    mini ? 'justify-center px-0' : 'px-3',
                     active
                       ? 'bg-primary text-white shadow-sm'
                       : 'text-muted hover:bg-border-soft hover:text-ink',
                   )}
                 >
                   <Icon size={18} />
-                  {name}
+                  {!mini && name}
                 </Link>
               );
             })}
@@ -183,41 +214,69 @@ export function Sidebar() {
           <Link
             href="/dashboard/ajustes/tienda"
             onClick={() => setOpen(false)}
+            title={mini ? store.heading : undefined}
             className={clsx(
-              'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+              'flex items-center gap-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+              mini ? 'justify-center px-0' : 'px-3',
               isActive('/dashboard/ajustes/tienda')
                 ? 'bg-primary text-white shadow-sm'
                 : 'text-muted hover:bg-border-soft hover:text-ink',
             )}
           >
             <StoreIcon size={18} />
-            {store.heading}
+            {!mini && store.heading}
           </Link>
         )}
         <Link
           href="/dashboard/ajustes"
           onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted hover:bg-border-soft hover:text-ink transition-all"
+          title={mini ? t.ajustes : undefined}
+          className={clsx(
+            'flex items-center gap-3 py-2.5 rounded-xl text-sm font-medium text-muted hover:bg-border-soft hover:text-ink transition-all',
+            mini ? 'justify-center px-0' : 'px-3',
+          )}
         >
           <Settings size={18} />
-          {t.ajustes}
+          {!mini && t.ajustes}
         </Link>
       </div>
 
       {/* Platform brand — the workspace shows the customer's name up top;
           this keeps Amixos as the subtle platform mark at the foot. Theme
           toggle sits here (light ↔ dark). */}
-      <div className="px-6 py-3 border-t border-border-soft flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[10px] text-faint">
-            Powered by <span className="font-semibold text-muted">Amixos</span>
-          </p>
-          {APP_VERSION && (
-            <p className="text-[10px] text-faint mt-0.5">{APP_VERSION}</p>
-          )}
+      {!mini ? (
+        <div className="px-6 py-3 border-t border-border-soft flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] text-faint">
+              Powered by <span className="font-semibold text-muted">Amixos</span>
+            </p>
+            {APP_VERSION && (
+              <p className="text-[10px] text-faint mt-0.5">{APP_VERSION}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <button
+              onClick={toggleCollapsed}
+              title={t.collapseSidebar}
+              className="hidden md:inline-flex p-1.5 rounded-lg hover:bg-border-soft text-muted"
+            >
+              <PanelLeftClose size={16} />
+            </button>
+          </div>
         </div>
-        <ThemeToggle />
-      </div>
+      ) : (
+        <div className="py-3 border-t border-border-soft flex flex-col items-center gap-2">
+          <ThemeToggle />
+          <button
+            onClick={toggleCollapsed}
+            title={t.expandSidebar}
+            className="p-1.5 rounded-lg hover:bg-border-soft text-muted"
+          >
+            <PanelLeftOpen size={16} />
+          </button>
+        </div>
+      )}
     </div>
   );
 
@@ -226,8 +285,11 @@ export function Sidebar() {
       {/* Desktop sidebar — hidden on settings pages (drill-in: the settings
           tabs become the single left rail with their own Back link). */}
       {!isSettingsRoute && (
-        <aside className="hidden md:flex w-60 shrink-0 border-r border-border-soft bg-card h-screen sticky top-0 flex-col">
-          <NavContent />
+        <aside className={clsx(
+          'hidden md:flex shrink-0 border-r border-border-soft bg-card h-screen sticky top-0 flex-col transition-[width] duration-200',
+          collapsed ? 'w-[68px]' : 'w-60',
+        )}>
+          <NavContent mini={collapsed} />
         </aside>
       )}
 
