@@ -3,13 +3,14 @@
 // Price sheet editor (reached from the Facturas header → "Lista de precios").
 // Self-contained CRUD over price_sheet_items — the caller just mounts it with a
 // supabase client + businessId. Items group by category; each has a price, an
-// optional unit (blank = flat price), and optional per-state / per-tier
+// optional unit (blank = flat price), and optional per-state / per-client
 // overrides that autoprice reads via applicableRate().
 
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, X, Trash2, Pencil, Copy, DollarSign, FileText, Search } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
+import { fetchAllById } from '../../lib/supabaseFetch';
 import { confirm } from '../../ui/confirmBus';
 import { usStateName } from '../../lib/usStates';
 import {
@@ -48,16 +49,15 @@ interface Draft {
   unitLabel: string;
   rate: string;
   stateRates: DraftState[];
-  tierRates: Record<string, string>;
+  clientRates: Array<{ clientId: string; rate: string }>;
   matchTerms: string;
   isAddon: boolean;
   addonInline: boolean;
 }
 
-interface PriceTier { id: string; name: string }
 
 const emptyDraft = (): Draft => ({
-  id: null, name: '', category: '', pricingMode: 'per_unit', unitLabel: '', rate: '', stateRates: [], tierRates: {}, matchTerms: '', isAddon: false, addonInline: false,
+  id: null, name: '', category: '', pricingMode: 'per_unit', unitLabel: '', rate: '', stateRates: [], clientRates: [], matchTerms: '', isAddon: false, addonInline: false,
 });
 
 export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }: PriceSheetScreenProps) {
@@ -68,28 +68,23 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
-  const [tiers, setTiers] = useState<PriceTier[]>([]);
-  const [newTier, setNewTier] = useState('');
+  // Client roster for the per-client price picker (names only).
+  const [clients, setClients] = useState<Array<{ id: string; name: string }>>([]);
   const [search, setSearch] = usePersistedSearch(businessId ? `search.priceSheet.${businessId}` : null);
 
-  const loadTiers = async () => {
-    const { data } = await supabase.from('price_tiers').select('id, name').eq('business_id', businessId).order('sort_order');
-    setTiers((data ?? []) as PriceTier[]);
-  };
-  const addTier = async () => {
-    if (!newTier.trim()) return;
-    await supabase.from('price_tiers').insert({ business_id: businessId, name: newTier.trim(), sort_order: tiers.length });
-    setNewTier('');
-    await loadTiers();
-  };
-  const renameTier = async (id: string, name: string) => {
-    await supabase.from('price_tiers').update({ name }).eq('id', id);
-    setTiers(prev => prev.map(x => x.id === id ? { ...x, name } : x));
-  };
-  const removeTier = async (id: string) => {
-    if (!(await confirm({ message: t.deleteTierConfirm, destructive: true }))) return;
-    await supabase.from('price_tiers').delete().eq('id', id);
-    await Promise.all([loadTiers(), load()]);
+  const loadClients = async () => {
+    const rows = await fetchAllById<{ id: string; first_name: string | null; last_name: string | null; company: string | null }>(
+      (afterId, pageSize) => {
+        let q = supabase.from('clients').select('id, first_name, last_name, company')
+          .eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+        if (afterId) q = q.gt('id', afterId);
+        return q;
+      },
+    );
+    setClients(rows.map(c => ({
+      id: c.id,
+      name: [`${c.first_name ?? ''} ${c.last_name ?? ''}`.trim(), c.company ?? ''].filter(Boolean).join(' · ') || c.id.slice(0, 8),
+    })).sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })));
   };
 
   // silent = refetch WITHOUT the spinner, so a post-save reload doesn't swap the
@@ -98,14 +93,14 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
     if (!silent) setLoading(true);
     const { data } = await supabase
       .from('price_sheet_items')
-      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, is_addon, addon_inline, sort_order, active')
+      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, client_rates, match_terms, is_addon, addon_inline, sort_order, active')
       .eq('business_id', businessId)
       .order('sort_order')
       .order('name');
     setItems(((data ?? []) as PriceSheetRow[]).map(rowToPriceSheetItem));
     if (!silent) setLoading(false);
   };
-  useEffect(() => { void load(); void loadTiers(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [businessId]);
+  useEffect(() => { void load(); void loadClients(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [businessId]);
 
   // Search filter across name, category, and match terms.
   const visibleItems = useMemo(() => {
@@ -145,7 +140,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
     unitLabel: i.unitLabel ?? '',
     rate: String(i.rate),
     stateRates: sortStateRates(Object.entries(i.stateRates ?? {}).map(([state, rate]) => ({ state, rate: String(rate) }))),
-    tierRates: Object.fromEntries(Object.entries(i.tierRates ?? {}).map(([k, v]) => [k, String(v)])),
+    clientRates: Object.entries(i.clientRates ?? {}).map(([clientId, rate]) => ({ clientId, rate: String(rate) })),
     matchTerms: i.matchTerms.join(', '),
     isAddon: i.isAddon,
     addonInline: i.addonInline,
@@ -173,10 +168,13 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
       unit_label: draft.pricingMode === 'per_unit' ? (draft.unitLabel.trim() || null) : null,
       rate: parseFloat(draft.rate) || 0,
       state_rates: Object.keys(stateRates).length ? stateRates : null,
-      tier_rates: (() => {
-        const tr: Record<string, number> = {};
-        Object.entries(draft.tierRates).forEach(([tid, v]) => { const r = parseFloat(v); if (Number.isFinite(r)) tr[tid] = r; });
-        return Object.keys(tr).length ? tr : null;
+      client_rates: (() => {
+        const cr: Record<string, number> = {};
+        draft.clientRates.forEach(({ clientId, rate }) => {
+          const r = parseFloat(rate);
+          if (clientId && Number.isFinite(r)) cr[clientId] = r;
+        });
+        return Object.keys(cr).length ? cr : null;
       })(),
       match_terms: draft.matchTerms.trim() || null,
       is_addon: draft.isAddon,
@@ -246,29 +244,6 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
             className="absolute right-3 top-1/2 -translate-y-1/2 text-faint hover:text-muted"><X size={16} /></button>
         ) : null}
       </div>
-
-      {/* Tiers manager — pricing models assigned to clients. */}
-      {canManage ? (
-        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 max-w-2xl">
-          <p className="text-sm font-semibold text-ink">{t.tiersTitle}</p>
-          <p className="text-[11px] text-faint mt-0.5 mb-2">{t.tiersHint}</p>
-          <div className="flex flex-col gap-2">
-            {tiers.map(tier => (
-              <div key={tier.id} className="flex items-center gap-2">
-                <input value={tier.name} onChange={e => renameTier(tier.id, e.target.value)}
-                  className="flex-1 rounded-xl border border-border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-                <button type="button" onClick={() => removeTier(tier.id)} className="p-1.5 rounded-lg text-faint hover:text-red-500"><X size={14} /></button>
-              </div>
-            ))}
-            <div className="flex items-center gap-2">
-              <input value={newTier} onChange={e => setNewTier(e.target.value)} placeholder={t.tierNamePlaceholder}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void addTier(); } }}
-                className="flex-1 rounded-xl border border-border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-              <button type="button" onClick={addTier} disabled={!newTier.trim()} className="px-3 py-1.5 rounded-xl text-xs font-semibold text-primary hover:bg-primary/5 disabled:opacity-40">+ {t.addTier}</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -388,21 +363,41 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
                 className="w-full py-2 pl-1 text-sm focus:outline-none" />
             </div>
 
-            {tiers.length > 0 ? (
-              <div className="mb-4">
-                <label className="block text-sm font-semibold text-ink mb-2">{t.tierRatesLabel}</label>
-                {tiers.map(tier => (
-                  <div key={tier.id} className="flex items-center gap-2 mb-2">
-                    <span className="w-28 text-sm text-muted truncate">{tier.name}</span>
-                    <div className="flex-1 flex items-center rounded-xl border border-border px-3 focus-within:ring-2 focus-within:ring-primary">
-                      <span className="text-faint text-sm">$</span>
-                      <input value={draft.tierRates[tier.id] ?? ''} onChange={e => setDraft({ ...draft, tierRates: { ...draft.tierRates, [tier.id]: e.target.value.replace(/[^0-9.]/g, '') } })}
-                        inputMode="decimal" placeholder={String(draft.rate || '0.00')} className="w-full py-2 pl-1 text-sm focus:outline-none" />
-                    </div>
+            {/* Per-CLIENT price overrides — the picked client always pays this
+                rate for the item (beats state pricing). */}
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-ink">{t.clientRatesLabel}</label>
+              <p className="text-[11px] text-faint mt-0.5 mb-2">{t.clientRatesHint}</p>
+              {draft.clientRates.map((cr, idx) => (
+                <div key={idx} className="flex items-center gap-2 mb-2">
+                  <select value={cr.clientId}
+                    onChange={e => setDraft({ ...draft, clientRates: draft.clientRates.map((x, j) => j === idx ? { ...x, clientId: e.target.value } : x) })}
+                    className="flex-1 min-w-0 rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                    <option value="">{t.clientPickPlaceholder}</option>
+                    {clients.map(c => (
+                      <option key={c.id} value={c.id}
+                        disabled={c.id !== cr.clientId && draft.clientRates.some(x => x.clientId === c.id)}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="w-32 flex items-center rounded-xl border border-border px-3 focus-within:ring-2 focus-within:ring-primary">
+                    <span className="text-faint text-sm">$</span>
+                    <input value={cr.rate}
+                      onChange={e => setDraft({ ...draft, clientRates: draft.clientRates.map((x, j) => j === idx ? { ...x, rate: e.target.value.replace(/[^0-9.]/g, '') } : x) })}
+                      inputMode="decimal" placeholder={String(draft.rate || '0.00')} className="w-full py-2 pl-1 text-sm focus:outline-none" />
                   </div>
-                ))}
-              </div>
-            ) : null}
+                  <button type="button"
+                    onClick={() => setDraft({ ...draft, clientRates: draft.clientRates.filter((_, j) => j !== idx) })}
+                    className="p-1.5 rounded-lg text-faint hover:text-red-500"><X size={14} /></button>
+                </div>
+              ))}
+              <button type="button"
+                onClick={() => setDraft({ ...draft, clientRates: [...draft.clientRates, { clientId: '', rate: '' }] })}
+                className="text-xs font-semibold text-primary hover:bg-primary/5 px-2 py-1 rounded-lg">
+                {t.addClientRate}
+              </button>
+            </div>
 
             <div className="mb-4">
               <label className="block text-sm font-semibold text-ink mb-1">{t.matchTermsLabel}</label>

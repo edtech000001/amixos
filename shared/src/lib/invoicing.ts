@@ -743,7 +743,7 @@ export async function linkLineToJob(
 
 /**
  * Autoprice an invoice's UNPRICED lines from the price sheet. For each line whose
- * rate is 0, match its description to a price item and apply the state/tier-aware
+ * rate is 0, match its description to a price item and apply the client/state-aware
  * rate; lines that ALREADY have a price are left untouched (never overridden).
  * Works regardless of whether Materials & Labor is enabled — it prices whatever
  * line descriptions exist (job titles, imported names, manual items). Returns
@@ -761,7 +761,7 @@ export async function autopriceInvoice(
   opts: {
     invoiceId: string;
     items: PriceSheetItem[];
-    tierId?: string | null;
+    clientId?: string | null;
     qtyField?: string | null;
     /** Resolve an ambiguous line (line index → chosen price-item id) — from the
      *  tie picker. Lines with a pick are priced with that item. */
@@ -834,7 +834,7 @@ export async function autopriceInvoice(
     const measured = fromField ?? (qty > 1 ? qty : (extractQuantity(li.description ?? '') ?? 1));
     // Job's own state (normalized), else the client's state.
     const state = normStateCode(jctx?.job_state) ?? normStateCode(clientState);
-    const priced = autopriceLine(item, measured, { state, tierId: opts.tierId }, addons, { splitFlatAddons: true });
+    const priced = autopriceLine(item, measured, { state, clientId: opts.clientId }, addons, { splitFlatAddons: true });
     const base: InvoiceLineItem = {
       ...li,
       qty: priced.quantity,

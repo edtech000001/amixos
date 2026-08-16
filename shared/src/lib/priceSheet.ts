@@ -21,8 +21,8 @@ export interface PriceSheetItem {
   rate: number;
   /** Per-state overrides: { "NE": 3.75 }. Autoprice uses the job's state. */
   stateRates: Record<string, number> | null;
-  /** Per-tier overrides: { "<tierId>": 4.00 }. Beats state for a client on it. */
-  tierRates: Record<string, number> | null;
+  /** Per-client overrides: { "<clientId>": 4.00 }. Beats state pricing. */
+  clientRates: Record<string, number> | null;
   /** Alternate phrasings/acronyms for text auto-matching (already split). */
   matchTerms: string[];
   /** true = a surcharge that STACKS on top of the matched base price during
@@ -45,7 +45,7 @@ export interface PriceSheetRow {
   unit_label: string | null;
   rate: number;
   state_rates: Record<string, number> | null;
-  tier_rates: Record<string, number> | null;
+  client_rates?: Record<string, number> | null;
   match_terms: string | null;
   is_addon?: boolean | null;
   addon_inline?: boolean | null;
@@ -62,7 +62,7 @@ export function rowToPriceSheetItem(r: PriceSheetRow): PriceSheetItem {
     unitLabel: r.unit_label,
     rate: Number(r.rate) || 0,
     stateRates: normalizeStateRates(r.state_rates),
-    tierRates: normalizeStateRates(r.tier_rates),
+    clientRates: normalizeStateRates(r.client_rates ?? null),
     matchTerms: splitMatchTerms(r.match_terms),
     isAddon: r.is_addon === true,
     addonInline: r.addon_inline === true,
@@ -101,15 +101,15 @@ export function normalizeStateRates(raw: unknown): Record<string, number> | null
  */
 export interface RateContext {
   state?: string | null;
-  /** The job's client's price tier id, if any. */
-  tierId?: string | null;
+  /** The job's/invoice's client id — their custom price wins over state. */
+  clientId?: string | null;
 }
 
 export function applicableRate(item: PriceSheetItem, ctx?: RateContext | string | null): number {
   // Back-compat: a bare string is treated as the state.
   const c: RateContext = typeof ctx === 'string' || ctx == null ? { state: ctx as string | null } : ctx;
-  if (c.tierId && item.tierRates) {
-    const hit = item.tierRates[c.tierId];
+  if (c.clientId && item.clientRates) {
+    const hit = item.clientRates[c.clientId];
     if (Number.isFinite(hit)) return hit;
   }
   if (c.state && item.stateRates) {

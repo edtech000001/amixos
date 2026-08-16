@@ -157,7 +157,6 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job?.id, job?.status, assignments, currentRole, business?.id]);
   const [priceItems, setPriceItems] = useState<PriceSheetItem[]>([]);
-  const [clientTierId, setClientTierId] = useState<string | null>(null);
   const [showPriceVerify, setShowPriceVerify] = useState(false);
   const [templates, setTemplates] = useState<JobFieldTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -233,7 +232,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       }
     }
     void supabase.from('price_sheet_items')
-      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, is_addon, sort_order, active')
+      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, client_rates, match_terms, is_addon, sort_order, active')
       .eq('business_id', business.id).eq('active', true)
       .then(({ data }: { data: PriceSheetRow[] | null }) => setPriceItems((data ?? []).map(rowToPriceSheetItem)));
     const [{ data: j }, { data: a }, { data: it }, { data: tpl }] = await Promise.all([
@@ -245,10 +244,6 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     setTemplates(localizeTemplates((tpl ?? []) as JobFieldTemplate[], locale));
     if (j) {
       setJob(j as Job);
-      if (j.client_id) {
-        void supabase.from('clients').select('price_tier_id').eq('id', j.client_id).single()
-          .then(({ data }: { data: { price_tier_id: string | null } | null }) => setClientTierId(data?.price_tier_id ?? null));
-      } else setClientTierId(null);
       // Tax: the job's own rate (from a proposal) wins; otherwise the
       // business default (Ajustes → Facturas). Editable in the modal.
       if (j.tax_rate > 0) setTaxRate(j.tax_rate);
@@ -378,7 +373,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       const addons = matchingAddons(matchText, priceItems);
       const enteredQty = parseFloat(r.quantity);
       const measured = enteredQty > 1 ? enteredQty : (extractQuantity(r.description) ?? (enteredQty || 1));
-      const priced = autopriceLine(hit.item, measured, { state: job?.job_state, tierId: clientTierId }, addons);
+      const priced = autopriceLine(hit.item, measured, { state: job?.job_state, clientId: job?.client_id ?? null }, addons);
       matched++;
       return { ...r, price_item_id: hit.item.id, quantity: String(priced.quantity), unit_price: String(priced.unitPrice), original_quantity: priced.originalQuantity };
     }));

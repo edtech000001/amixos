@@ -176,7 +176,6 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const [invClientId, setInvClientId] = useState<string | null>(null);
   // Autoprice: active price-sheet items + the invoice client's tier.
   const [priceItems, setPriceItems] = useState<PriceSheetItem[]>([]);
-  const [clientTierId, setClientTierId] = useState<string | null>(null);
   const [clientState, setClientState] = useState<string | null>(null);
   // Read-only "prices for this client" sheet (tier + state resolved rates).
   const [pricesOpen, setPricesOpen] = useState(false);
@@ -326,19 +325,16 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   useEffect(() => {
     if (!business) return;
     void supabase.from('price_sheet_items')
-      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, is_addon, addon_inline, sort_order, active')
+      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, client_rates, match_terms, is_addon, addon_inline, sort_order, active')
       .eq('business_id', business.id).eq('active', true)
       .then(({ data }: { data: PriceSheetRow[] | null }) => setPriceItems((data ?? []).map(rowToPriceSheetItem)));
   }, [business?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The invoice client's price tier (for tier-aware autopricing).
   useEffect(() => {
-    if (!invClientId) { setClientTierId(null); setClientState(null); return; }
-    void supabase.from('clients').select('price_tier_id, state').eq('id', invClientId).single()
-      .then(({ data }: { data: { price_tier_id: string | null; state: string | null } | null }) => {
-        setClientTierId(data?.price_tier_id ?? null);
-        setClientState(data?.state ?? null);
-      });
+    if (!invClientId) { setClientState(null); return; }
+    void supabase.from('clients').select('state').eq('id', invClientId).single()
+      .then(({ data }: { data: { state: string | null } | null }) => setClientState(data?.state ?? null));
   }, [invClientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset every line to unpriced ($0) so Autoprice can re-run clean — e.g. after
@@ -352,7 +348,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
 
   const runAutoprice = async (picks?: Record<number, string>) => {
     if (!priceItems.length) return;
-    const res = await autopriceInvoice(supabase, { invoiceId: id, items: priceItems, tierId: clientTierId, qtyField: business?.invoice_qty_field, picks });
+    const res = await autopriceInvoice(supabase, { invoiceId: id, items: priceItems, clientId: invClientId, qtyField: business?.invoice_qty_field, picks });
     if (res.matched) { setShowInvVerify(true); await reloadInvoice(); }
     // Lines that tied between 2+ prices → let the user pick which one.
     if (res.ambiguous.length) { setAmbiguous(res.ambiguous); setLinePicks({}); return; }
@@ -1427,8 +1423,8 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                 {cat ? <p className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5">{cat}</p> : null}
                 <div className="rounded-xl border border-border-soft divide-y divide-border-soft">
                   {arr.map(it => {
-                    const rate = applicableRate(it, { tierId: clientTierId, state: clientState });
-                    const tierHit = !!(clientTierId && it.tierRates && Number.isFinite(it.tierRates[clientTierId]));
+                    const rate = applicableRate(it, { clientId: invClientId, state: clientState });
+                    const tierHit = !!(invClientId && it.clientRates && Number.isFinite(it.clientRates[invClientId]));
                     if (tierHit) anyTier = true;
                     return (
                       <div key={it.id} className="flex items-center justify-between gap-3 px-3 py-2">

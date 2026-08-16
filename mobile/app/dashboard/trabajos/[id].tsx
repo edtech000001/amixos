@@ -338,7 +338,6 @@ export default function JobDetailRoute() {
   const [itemsEditOpen, setItemsEditOpen] = useState(false);
   const [editRows, setEditRows] = useState<EditRow[]>([]);
   const [priceItems, setPriceItems] = useState<PriceSheetItem[]>([]);
-  const [clientTierId, setClientTierId] = useState<string | null>(null);
   const [showPriceVerify, setShowPriceVerify] = useState(false);
   const [savingItems, setSavingItems] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -1021,17 +1020,11 @@ export default function JobDetailRoute() {
   useEffect(() => {
     if (!business) return;
     void supabase.from('price_sheet_items')
-      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, is_addon, sort_order, active')
+      .select('id, name, category, pricing_mode, unit_label, rate, state_rates, client_rates, match_terms, is_addon, sort_order, active')
       .eq('business_id', business.id).eq('active', true)
       .then(({ data }: { data: PriceSheetRow[] | null }) => setPriceItems((data ?? []).map(rowToPriceSheetItem)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [business?.id]);
-  useEffect(() => {
-    if (!job?.client_id) { setClientTierId(null); return; }
-    void supabase.from('clients').select('price_tier_id').eq('id', job.client_id).single()
-      .then(({ data }: { data: { price_tier_id: string | null } | null }) => setClientTierId(data?.price_tier_id ?? null));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job?.client_id]);
 
   if (loading) {
     return (
@@ -1227,7 +1220,7 @@ export default function JobDetailRoute() {
     setItemsEditOpen(true);
   };
 
-  // Autoprice — best-effort text match → state/tier-aware rate (see web).
+  // Autoprice — best-effort text match → client/state-aware rate (see web).
   const autopriceRows = () => {
     if (!priceItems.length || !job) return;
     const ctxText = `${job.title ?? ''} ${job.description ?? ''} ${job.worker_notes ?? ''} ${job.internal_notes ?? ''} ${Object.values((job.custom_fields ?? {}) as Record<string, unknown>).map(String).join(' ')}`;
@@ -1242,7 +1235,7 @@ export default function JobDetailRoute() {
       const addons = matchingAddons(matchText, priceItems);
       const enteredQty = parseFloat(r.quantity);
       const measured = enteredQty > 1 ? enteredQty : (extractQuantity(r.description) ?? (enteredQty || 1));
-      const priced = autopriceLine(hit.item, measured, { state: job.job_state, tierId: clientTierId }, addons);
+      const priced = autopriceLine(hit.item, measured, { state: job.job_state, clientId: job.client_id }, addons);
       matched++;
       return { ...r, price_item_id: hit.item.id, quantity: String(priced.quantity), unit_price: String(priced.unitPrice), original_quantity: priced.originalQuantity };
     }));

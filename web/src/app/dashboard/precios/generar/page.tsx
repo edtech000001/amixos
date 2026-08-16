@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 // Client-facing price sheet generator. Pick a client (uses their state + price
-// tier) or a state directly; every item re-prices via applicableRate (tier →
+// client) or a state directly; every item re-prices via applicableRate (client →
 // state → base, so items with no state rate just show the base and land on
 // every sheet). Preview on screen, then Print / Save as PDF (browser print,
 // print-only CSS hides the app chrome). A "Customize" panel controls the accent
@@ -37,7 +37,6 @@ interface ClientLite {
   last_name: string | null;
   company: string | null;
   state: string | null;
-  price_tier_id: string | null;
 }
 
 const STATE_CODES = Object.keys(US_STATE_ABBR_TO_NAME);
@@ -76,10 +75,10 @@ export default function GenerarPreciosPage() {
       setLoading(true);
       const [itemRes, clientRes] = await Promise.all([
         supabase.from('price_sheet_items')
-          .select('id, name, category, pricing_mode, unit_label, rate, state_rates, tier_rates, match_terms, is_addon, sort_order, active')
+          .select('id, name, category, pricing_mode, unit_label, rate, state_rates, client_rates, match_terms, is_addon, sort_order, active')
           .eq('business_id', bid).eq('active', true).order('sort_order').order('name'),
         supabase.from('clients')
-          .select('id, first_name, last_name, company, state, price_tier_id')
+          .select('id, first_name, last_name, company, state')
           .eq('business_id', bid).order('company', { ascending: true }).order('last_name', { ascending: true }),
       ]);
       setItems(((itemRes.data ?? []) as PriceSheetRow[]).map(rowToPriceSheetItem));
@@ -91,8 +90,8 @@ export default function GenerarPreciosPage() {
   const selectedClient = useMemo(() => clients.find(c => c.id === clientId) ?? null, [clients, clientId]);
   const ctx = useMemo(() => (
     mode === 'client'
-      ? { state: selectedClient?.state ?? null, tierId: selectedClient?.price_tier_id ?? null }
-      : { state: stateCode || null, tierId: null }
+      ? { state: selectedClient?.state ?? null, clientId: selectedClient?.id ?? null }
+      : { state: stateCode || null, clientId: null }
   ), [mode, selectedClient, stateCode]);
 
   const clientName = (c: ClientLite) => (c.company?.trim() || `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim() || '—');

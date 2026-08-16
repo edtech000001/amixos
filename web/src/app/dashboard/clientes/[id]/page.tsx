@@ -171,9 +171,8 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
     phone_cell: '', phone_office: '',
     email_office: '', email_home: '',
     address: '', address_line2: '', city: '', state: '', zip_code: '',
-    notes: '', price_tier_id: '',
+    notes: '',
   });
-  const [priceTiers, setPriceTiers] = useState<{ id: string; name: string }[]>([]);
   const [customVals, setCustomVals] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState('');
@@ -252,7 +251,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
       email_office: c.email_office ?? c.email ?? '', email_home: c.email_home ?? '',
       address: c.address ?? '', address_line2: c.address_line2 ?? '',
       city: c.city ?? '', state: c.state ?? '', zip_code: c.zip_code ?? '',
-      notes: c.notes ?? '', price_tier_id: (c as { price_tier_id?: string | null }).price_tier_id ?? '',
+      notes: c.notes ?? '',
     });
     setCustomVals(c.custom_fields ?? {});
   };
@@ -312,12 +311,6 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
   };
 
   useEffect(() => { load(); }, [id, business, locale]);
-  useEffect(() => {
-    if (!business) return;
-    supabase.from('price_tiers').select('id, name').eq('business_id', business.id).order('sort_order')
-      .then(({ data }) => setPriceTiers((data ?? []) as { id: string; name: string }[]));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [business?.id]);
 
   const saveEdit = async () => {
     setEditError('');
@@ -333,7 +326,6 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
       address: form.address.trim() || null, address_line2: form.address_line2.trim() || null,
       city: form.city.trim() || null, state: form.state.trim() || null, zip_code: form.zip_code.trim() || null,
       notes: form.notes.trim() || null,
-      price_tier_id: form.price_tier_id || null,
       custom_fields: Object.keys(customVals).length > 0 ? customVals : null,
     };
     await supabase.from('clients').update(payload).eq('id', id);
@@ -833,17 +825,6 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
               </div>
             </section>
           )}
-
-          {priceTiers.length > 0 ? (
-            <section>
-              <p className="text-xs font-semibold text-faint uppercase tracking-wide mb-3">{full.dashboard.settings.priceSheet.clientTierLabel}</p>
-              <select value={form.price_tier_id} onChange={e => setForm(f => ({ ...f, price_tier_id: e.target.value }))}
-                className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary">
-                <option value="">{full.dashboard.settings.priceSheet.clientTierNone}</option>
-                {priceTiers.map(pt => <option key={pt.id} value={pt.id}>{pt.name}</option>)}
-              </select>
-            </section>
-          ) : null}
 
           <section>
             <p className="text-xs font-semibold text-faint uppercase tracking-wide mb-3">{t.sections.notes}</p>

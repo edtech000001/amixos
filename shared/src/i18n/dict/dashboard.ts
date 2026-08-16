@@ -1429,6 +1429,10 @@ export type DashboardDict = {
       flatWord: string;
       stateRatesLabel: string;
       stateRatesHint: string;
+      clientRatesLabel: string;
+      clientRatesHint: string;
+      addClientRate: string;
+      clientPickPlaceholder: string;
       addStateRate: string;
       addAllStates: string;
       statePlaceholder: string;
@@ -4308,6 +4312,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         flatWord: 'fijo',
         stateRatesLabel: 'Precios por estado',
         stateRatesHint: 'Opcional. Si el trabajo es en ese estado, se usa este precio.',
+        clientRatesLabel: 'Precios por cliente',
+        clientRatesHint: 'Opcional. Precio especial para un cliente — gana sobre el precio por estado.',
+        addClientRate: '+ Agregar cliente',
+        clientPickPlaceholder: 'Elegir cliente…',
         addStateRate: 'Agregar estado',
         addAllStates: 'Agregar todos los estados',
         statePlaceholder: 'Estado (ej. NE)',
@@ -7195,6 +7203,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         flatWord: 'flat',
         stateRatesLabel: 'Prices by state',
         stateRatesHint: 'Optional. Used when the job is in that state.',
+        clientRatesLabel: 'Prices by client',
+        clientRatesHint: 'Optional. A special price for one client — beats state pricing.',
+        addClientRate: '+ Add client',
+        clientPickPlaceholder: 'Pick a client…',
         addStateRate: 'Add state',
         addAllStates: 'Add all states',
         statePlaceholder: 'State (e.g. NE)',
