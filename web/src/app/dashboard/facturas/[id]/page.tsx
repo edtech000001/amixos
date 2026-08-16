@@ -985,7 +985,56 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const canDelete = can.deleteInvoice(currentRole);
   const canEdit = can.editInvoice(currentRole);
 
+  // "Ver precios" body — shared by the docked desktop panel and the small-
+  // screen modal.
+  const clientPricesBody = (
+    <div className="flex flex-col gap-4">
+      {(() => {
+            const items = priceItems.filter(p => p.active);
+            const groups = new Map<string, PriceSheetItem[]>();
+            for (const it of items) {
+              const k = it.category?.trim() || '';
+              const arr = groups.get(k);
+              if (arr) arr.push(it); else groups.set(k, [it]);
+            }
+            let anyTier = false;
+            const blocks = Array.from(groups.entries()).map(([cat, arr]) => (
+              <div key={cat || '__none'}>
+                {cat ? <p className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5">{cat}</p> : null}
+                <div className="rounded-xl border border-border-soft divide-y divide-border-soft">
+                  {arr.map(it => {
+                    const rate = applicableRate(it, { clientId: invClientId, state: clientState });
+                    const tierHit = !!(invClientId && it.clientRates && Number.isFinite(it.clientRates[invClientId]));
+                    if (tierHit) anyTier = true;
+                    return (
+                      <div key={it.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                        <span className="text-sm text-ink truncate">{it.isAddon ? '+ ' : ''}{it.name}</span>
+                        <span className={`text-sm font-semibold shrink-0 ${tierHit ? 'text-primary' : 'text-ink'}`}>
+                          ${formatNumberGrouped(rate)}
+                          <span className="text-xs font-normal text-muted">
+                            {it.pricingMode === 'per_unit' ? `/${it.unitLabel || 'u'}` : ` (${tInv.clientPrices.flatWord})`}
+                          </span>
+                          {tierHit ? ' *' : ''}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ));
+            return (
+              <>
+                {blocks}
+                {anyTier ? <p className="text-[11px] text-primary">* {tInv.clientPrices.tierNote}</p> : null}
+              </>
+            );
+          })()}
+    </div>
+  );
+
   return (
+    <div className="flex items-start">
+    <div className="flex-1 min-w-0">
     <>
       <InvoiceDetailScreen
         loading={loading}
@@ -1407,50 +1456,29 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       </Modal>
 
       {/* Read-only price list resolved for THIS client (tier > state > base). */}
-      <Modal open={pricesOpen} onClose={() => setPricesOpen(false)} title={tInv.clientPrices.title}>
-        <div className="flex flex-col gap-4">
-          {(() => {
-            const items = priceItems.filter(p => p.active);
-            const groups = new Map<string, PriceSheetItem[]>();
-            for (const it of items) {
-              const k = it.category?.trim() || '';
-              const arr = groups.get(k);
-              if (arr) arr.push(it); else groups.set(k, [it]);
-            }
-            let anyTier = false;
-            const blocks = Array.from(groups.entries()).map(([cat, arr]) => (
-              <div key={cat || '__none'}>
-                {cat ? <p className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-1.5">{cat}</p> : null}
-                <div className="rounded-xl border border-border-soft divide-y divide-border-soft">
-                  {arr.map(it => {
-                    const rate = applicableRate(it, { clientId: invClientId, state: clientState });
-                    const tierHit = !!(invClientId && it.clientRates && Number.isFinite(it.clientRates[invClientId]));
-                    if (tierHit) anyTier = true;
-                    return (
-                      <div key={it.id} className="flex items-center justify-between gap-3 px-3 py-2">
-                        <span className="text-sm text-ink truncate">{it.isAddon ? '+ ' : ''}{it.name}</span>
-                        <span className={`text-sm font-semibold shrink-0 ${tierHit ? 'text-primary' : 'text-ink'}`}>
-                          ${formatNumberGrouped(rate)}
-                          <span className="text-xs font-normal text-muted">
-                            {it.pricingMode === 'per_unit' ? `/${it.unitLabel || 'u'}` : ` (${tInv.clientPrices.flatWord})`}
-                          </span>
-                          {tierHit ? ' *' : ''}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ));
-            return (
-              <>
-                {blocks}
-                {anyTier ? <p className="text-[11px] text-primary">* {tInv.clientPrices.tierNote}</p> : null}
-              </>
-            );
-          })()}
-        </div>
-      </Modal>
+      {/* Small screens: prices as a modal. */}
+      <div className="lg:hidden">
+        <Modal open={pricesOpen} onClose={() => setPricesOpen(false)} title={tInv.clientPrices.title}>
+          {clientPricesBody}
+        </Modal>
+      </div>
     </>
+    </div>
+    {/* Desktop: docked reference panel — the invoice shifts left and stays
+        fully editable while the client's prices sit alongside. */}
+    {pricesOpen ? (
+      <aside className="hidden lg:flex w-80 xl:w-96 shrink-0 flex-col border-l border-border-soft bg-card sticky top-0 h-screen">
+        <div className="flex items-center justify-between px-4 py-3.5 border-b border-border-soft">
+          <p className="text-sm font-bold text-ink">{tInv.clientPrices.title}</p>
+          <button onClick={() => setPricesOpen(false)} className="p-1.5 rounded-lg hover:bg-border-soft">
+            <X size={15} className="text-muted" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          {clientPricesBody}
+        </div>
+      </aside>
+    ) : null}
+    </div>
   );
 }
