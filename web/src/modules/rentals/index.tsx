@@ -298,10 +298,13 @@ export default function RentalsModule() {
   };
 
   const onPendingPhotosChosen = async (ev: React.ChangeEvent<HTMLInputElement>) => {
-    const files = ev.target.files;
+    // Copy BEFORE clearing: input.files is a LIVE FileList, so resetting
+    // value empties the reference too — the old order silently dropped every
+    // selection (the "photo does nothing" bug).
+    const files = Array.from(ev.target.files ?? []);
     ev.target.value = '';
-    if (!files || files.length === 0) return;
-    const picked = await normalizeImageFiles(Array.from(files));
+    if (files.length === 0) return;
+    const picked = await normalizeImageFiles(files);
     if (pendingPhotos.length + picked.length > MAX_PHOTOS_PER_PROPERTY) {
       setError(t.photos.limitHit.replace('{{max}}', String(MAX_PHOTOS_PER_PROPERTY)));
       return;
