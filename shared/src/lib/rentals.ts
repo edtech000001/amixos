@@ -9,7 +9,9 @@
 // The ledger has no server scheduler behind it. Charges are materialized
 // LAZILY: on module load, generateChargesForLeases (rentalsQuery.ts) upserts
 // one row per lease-month up to the current month, anchored on the DB's
-// unique (lease_id, period_start) so concurrent devices race harmlessly.
+// unique (lease_id, period_start, dedupe_key) so concurrent devices race
+// harmlessly (migration 204 — 'rent' and 'late_fee' are the deterministic
+// keys, manual charges get a random one so a month can hold many).
 // Charge amounts are snapshots — editing a lease's rent only affects months
 // not yet materialized.
 
@@ -261,36 +263,73 @@ export function clampMonthDay(year: number, monthIdx: number, day: number): Date
 export interface DuePeriod {
   periodStart: string; // YYYY-MM-01
   dueDate: string;     // YYYY-MM-DD
+  /** Share of the month the tenant occupies, 1 for whole months. Only ever
+   *  below 1 when the lease opts into proration. */
+  fraction: number;
+}
+
+/** Days in the month a period key points at. */
+function daysInPeriod(periodStart: Date): number {
+  return new Date(periodStart.getFullYear(), periodStart.getMonth() + 1, 0).getDate();
 }
 
 /**
  * The lease's chargeable months from its start through `today` (never future
- * months). First charge = the first month whose clamped due date falls ON or
- * AFTER start_date. A month is charged only if its due date is within the
- * lease (due date ≤ end_date). No proration in v1 — every charge is the full
- * monthly rent.
+ * months).
+ *
+ * Without proration (the default) a month is charged in full and the first
+ * month is skipped entirely when its due date already passed before the lease
+ * began — a tenant who moves in on the 20th with rent due on the 1st simply
+ * starts next month.
+ *
+ * With `prorate_partial` that first month IS charged, pro-rata for the days
+ * actually occupied and due on the move-in date itself; the final month is
+ * likewise pro-rated when the lease ends mid-month. Fractions are exact here —
+ * callers round the money once, at the amount.
  */
 export function duePeriodsForLease(
-  lease: Pick<RentalLease, 'start_date' | 'end_date' | 'due_day'>,
+  lease: Pick<RentalLease, 'start_date' | 'end_date' | 'due_day'> & { prorate_partial?: boolean },
   today: Date = new Date(),
 ): DuePeriod[] {
   const start = parseDateOnly(lease.start_date);
   const end = lease.end_date ? parseDateOnly(lease.end_date) : null;
   const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const prorate = lease.prorate_partial === true;
 
   let y = start.getFullYear();
   let m = start.getMonth();
-  if (clampMonthDay(y, m, lease.due_day).getTime() < start.getTime()) {
-    m += 1; // normalize via Date roll-over below
-  }
+  const firstDueBeforeStart = clampMonthDay(y, m, lease.due_day).getTime() < start.getTime();
+  // Only skip the partial first month when we're NOT prorating it.
+  if (firstDueBeforeStart && !prorate) m += 1;
 
   const out: DuePeriod[] = [];
   for (;;) {
     const periodStart = new Date(y, m, 1);
     if (periodStart.getTime() > currentMonthStart.getTime()) break;
+    const total = daysInPeriod(periodStart);
     const due = clampMonthDay(periodStart.getFullYear(), periodStart.getMonth(), lease.due_day);
-    if (end && due.getTime() > end.getTime()) break;
-    out.push({ periodStart: ymd(periodStart), dueDate: ymd(due) });
+
+    let fraction = 1;
+    let dueDate = due;
+    if (prorate) {
+      const isFirst = periodStart.getFullYear() === start.getFullYear() && periodStart.getMonth() === start.getMonth();
+      const isLast = !!end && periodStart.getFullYear() === end.getFullYear() && periodStart.getMonth() === end.getMonth();
+      const fromDay = isFirst ? start.getDate() : 1;
+      const toDay = isLast ? end!.getDate() : total;
+      const days = toDay - fromDay + 1;
+      if (days <= 0) break;
+      fraction = days / total;
+      // A partial first month is due the day the tenant moves in, not on a
+      // due date that already passed.
+      if (isFirst && due.getTime() < start.getTime()) dueDate = start;
+    }
+
+    // Past the lease's end: nothing more to charge. (When prorating, the final
+    // partial month is handled above and this stops the month after it.)
+    if (end && dueDate.getTime() > end.getTime() && fraction === 1) break;
+    if (end && periodStart.getTime() > end.getTime()) break;
+
+    out.push({ periodStart: ymd(periodStart), dueDate: ymd(dueDate), fraction });
     m += 1;
   }
   return out;

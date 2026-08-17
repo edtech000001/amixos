@@ -40,6 +40,7 @@ import {
   fetchRentalPropertiesCount,
   fetchRentalPropertiesPage,
   generateChargesForLeases,
+  generateLateFees,
   type RentalPropertyCursor,
   type RentalPropertyQueryParams,
 } from '@amixos/shared/lib/rentalsQuery';
@@ -215,8 +216,12 @@ export default function RentalsModule() {
       void swrWrite(`rentals_people_${business.id}`, { tenants: tn, leases: ls });
       // Materialize any missing lease-month charges (idempotent; edit-gated).
       if (canEdit) {
+        // Rent first, then fees (a fee is only owed on an unpaid rent row).
         const changed = await generateChargesForLeases(supabase, ls).catch(() => false);
-        if (changed) {
+        const feesChanged = await generateLateFees(supabase, business.id, ls).catch(() => false);
+        // Either one means the ledger moved — re-set leases so the Overview's
+        // effect (keyed on the lease array) re-pulls charges and payments.
+        if (changed || feesChanged) {
           const fresh = await fetchAllLeases(supabase, business.id);
           setLeases(fresh);
           void swrWrite(`rentals_people_${business.id}`, { tenants: tn, leases: fresh });

@@ -22,7 +22,7 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import {
   Building2, Camera, ChevronDown, ChevronLeft, ChevronRight, FileText, Home,
-  Download, ImagePlus, Pencil, Phone, Plus, RotateCw, Search, Star, Trash2, Users, Wrench, X,
+  BadgeX, Download, ImagePlus, Pencil, Phone, Plus, RotateCw, Search, Star, Trash2, Users, Wrench, X,
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -100,6 +100,7 @@ import {
   fetchRentalPropertiesCount,
   fetchRentalPropertiesPage,
   generateChargesForLeases,
+  generateLateFees,
   type RentalPropertyCursor, fetchChargesForLeases, fetchAllCharges, fetchAllPayments } from '@amixos/shared/lib/rentalsQuery';
 
 type TabKey = 'overview' | 'properties' | 'tenants';
@@ -140,6 +141,7 @@ const EMPTY_TENANT_FORM = {
 const EMPTY_LEASE_FORM = {
   tenant_id: '', unit_label: '', start_date: '', end_date: '',
   monthly_rent: '', due_day: '1', deposit_amount: '', notes: '',
+  late_fee_amount: '', late_fee_grace_days: '5', prorate_partial: false,
 };
 const EMPTY_EXPENSE_FORM = {
   expense_date: '', amount: '', category: 'repairs' as ExpenseCategory, vendor: '', note: '',
@@ -328,8 +330,10 @@ export default function RentalsScreen() {
         setLeases(ls);
         void swrWrite(cacheKey, { tenants: tn, leases: ls });
         if (canEdit) {
+          // Rent first, then fees (a fee is only owed on an unpaid rent row).
           const changed = await generateChargesForLeases(supabase, ls).catch(() => false);
-          if (changed && !cancelled) {
+          const feesChanged = await generateLateFees(supabase, business.id, ls).catch(() => false);
+          if ((changed || feesChanged) && !cancelled) {
             const fresh = await fetchAllLeases(supabase, business.id);
             if (!cancelled) {
               setLeases(fresh);
@@ -721,6 +725,9 @@ export default function RentalsScreen() {
       tenant_id: l.tenant_id, unit_label: l.unit_label ?? '', start_date: start,
       end_date: '', monthly_rent: String(l.monthly_rent), due_day: String(l.due_day),
       deposit_amount: l.deposit_amount != null ? String(l.deposit_amount) : '', notes: '',
+      late_fee_amount: l.late_fee_amount != null ? String(l.late_fee_amount) : '',
+      late_fee_grace_days: l.late_fee_grace_days != null ? String(l.late_fee_grace_days) : '5',
+      prorate_partial: l.prorate_partial,
     });
     setLeaseFormOpen(true);
   };
@@ -731,6 +738,9 @@ export default function RentalsScreen() {
       tenant_id: l.tenant_id, unit_label: l.unit_label ?? '', start_date: l.start_date,
       end_date: l.end_date ?? '', monthly_rent: String(l.monthly_rent), due_day: String(l.due_day),
       deposit_amount: l.deposit_amount != null ? String(l.deposit_amount) : '', notes: l.notes ?? '',
+      late_fee_amount: l.late_fee_amount != null ? String(l.late_fee_amount) : '',
+      late_fee_grace_days: l.late_fee_grace_days != null ? String(l.late_fee_grace_days) : '5',
+      prorate_partial: l.prorate_partial,
     });
     setLeaseFormOpen(true);
   };
@@ -750,6 +760,15 @@ export default function RentalsScreen() {
       due_day: Math.min(31, Math.max(1, parseInt(leaseForm.due_day, 10) || 1)),
       deposit_amount: leaseForm.deposit_amount ? Number(leaseForm.deposit_amount) : null,
       notes: leaseForm.notes.trim() || null,
+      late_fee_amount: leaseForm.late_fee_amount ? Number(leaseForm.late_fee_amount) : null,
+      late_fee_grace_days: leaseForm.late_fee_amount
+        ? Math.max(0, parseInt(leaseForm.late_fee_grace_days, 10) || 0)
+        : null,
+      // Stamped once so enabling fees today can't retro-charge old months.
+      late_fee_since: leaseForm.late_fee_amount
+        ? (editingLease?.late_fee_since ?? todayISO())
+        : null,
+      prorate_partial: leaseForm.prorate_partial,
     };
     let leaseRow: RentalLease | null = null;
     if (!editingLease) {
@@ -1173,6 +1192,57 @@ export default function RentalsScreen() {
   // Backfill helper: record one full payment per unpaid month of a lease
   // (dated its due date) — for importing historical leases without tapping
   // "Registrar pago" month by month.
+  const waiveCharge = async (ch: RentalCharge) => {
+    if (!detail) return;
+    if (!(await confirm({ title: t.ledger.waiveConfirmTitle, message: t.ledger.waiveConfirmBody }))) return;
+    await supabase.from('rental_charges').update({ amount: 0 }).eq('id', ch.id);
+    await reloadDetail(detail.id);
+  };
+
+  const deleteCharge = async (ch: RentalCharge) => {
+    if (!detail) return;
+    if (!(await confirm({ title: t.ledger.deleteChargeConfirmTitle, message: t.ledger.deleteChargeConfirmBody, destructive: true }))) return;
+    await supabase.from('rental_charges').delete().eq('id', ch.id);
+    await reloadDetail(detail.id);
+  };
+
+  // ── One-off charge sheet (utility, damage, manual late fee) ───────────────
+  const [addChargeLease, setAddChargeLease] = useState<RentalLease | null>(null);
+  const [newChargeKind, setNewChargeKind] = useState<'late_fee' | 'other'>('other');
+  const [newChargeAmount, setNewChargeAmount] = useState('');
+  const [newChargeDue, setNewChargeDue] = useState(todayISO());
+  const [newChargeNote, setNewChargeNote] = useState('');
+  const [addChargeBusy, setAddChargeBusy] = useState(false);
+
+  const openAddCharge = (l: RentalLease) => {
+    setAddChargeLease(l);
+    setNewChargeKind('other');
+    setNewChargeAmount('');
+    setNewChargeDue(todayISO());
+    setNewChargeNote('');
+  };
+
+  const saveNewCharge = async () => {
+    if (!business || !detail || !addChargeLease || !Number(newChargeAmount)) return;
+    setAddChargeBusy(true);
+    // Random dedupe_key → a month can hold any number of manual charges while
+    // rent and auto fees stay one-per-month (migration 204).
+    await supabase.from('rental_charges').insert({
+      business_id: business.id,
+      lease_id: addChargeLease.id,
+      property_id: addChargeLease.property_id,
+      period_start: `${newChargeDue.slice(0, 7)}-01`,
+      due_date: newChargeDue,
+      amount: Number(newChargeAmount),
+      kind: newChargeKind,
+      dedupe_key: rentalUid(),
+      note: newChargeNote.trim() || null,
+    });
+    setAddChargeBusy(false);
+    setAddChargeLease(null);
+    await reloadDetail(detail.id);
+  };
+
   const markAllPaid = async (l: RentalLease) => {
     if (!business) return;
     const lCharges = chargesByLease.get(l.id) ?? [];
@@ -1664,12 +1734,20 @@ export default function RentalsScreen() {
                           {fmtMoney(Math.max(0, balance))}
                         </Text>
                       </View>
-                      {canCreate && balance > PAY_TOLERANCE ? (
-                        <Pressable onPress={() => void markAllPaid(l)}
-                          className="self-start mb-1 px-3 py-1.5 rounded-full bg-emerald-500/10 active:opacity-70">
-                          <Text className="text-xs font-semibold text-emerald-700">{t.ledger.markAllPaidBtn}</Text>
-                        </Pressable>
-                      ) : null}
+                      <View className="flex-row gap-2 mb-1">
+                        {canCreate ? (
+                          <Pressable onPress={() => openAddCharge(l)}
+                            className="px-3 py-1.5 rounded-full bg-primary/10 active:opacity-70">
+                            <Text className="text-xs font-semibold text-primary">{t.ledger.addChargeBtn}</Text>
+                          </Pressable>
+                        ) : null}
+                        {canCreate && balance > PAY_TOLERANCE ? (
+                          <Pressable onPress={() => void markAllPaid(l)}
+                            className="px-3 py-1.5 rounded-full bg-emerald-500/10 active:opacity-70">
+                            <Text className="text-xs font-semibold text-emerald-700">{t.ledger.markAllPaidBtn}</Text>
+                          </Pressable>
+                        ) : null}
+                      </View>
                       {lCharges.length === 0 ? (
                         <Text className="text-xs text-faint">{t.ledger.noCharges}</Text>
                       ) : lCharges.map(ch => {
@@ -1677,6 +1755,7 @@ export default function RentalsScreen() {
                         const st = chargeStatus(ch, paid);
                         const cPays = paymentsByCharge.get(ch.id) ?? [];
                         const expanded = expandedCharge === ch.id;
+                        const waived = ch.kind === 'late_fee' && ch.amount <= PAY_TOLERANCE;
                         return (
                           <View key={ch.id} className="border-t border-border-soft py-2.5">
                             <View className="flex-row items-center gap-2">
@@ -1686,21 +1765,46 @@ export default function RentalsScreen() {
                                   : <View style={{ width: 15 }} />}
                               </Pressable>
                               <View className="flex-1">
-                                <Text className="text-sm text-ink">{monthLabel(ch.period_start)}</Text>
-                                <Text className="text-[11px] text-faint">
+                                <View className="flex-row items-center gap-1.5">
+                                  <Text className="text-sm text-ink">{monthLabel(ch.period_start)}</Text>
+                                  {ch.kind !== 'rent' ? (
+                                    <View className={`px-1.5 py-0.5 rounded-full ${ch.kind === 'late_fee' ? 'bg-orange-500/10' : 'bg-indigo-500/10'}`}>
+                                      <Text className={`text-[9px] font-semibold ${ch.kind === 'late_fee' ? 'text-orange-700' : 'text-indigo-600'}`}>
+                                        {ch.kind === 'late_fee' ? t.ledger.kindLateFee : t.ledger.kindOther}
+                                      </Text>
+                                    </View>
+                                  ) : null}
+                                  {waived ? (
+                                    <View className="px-1.5 py-0.5 rounded-full bg-border-soft">
+                                      <Text className="text-[9px] font-semibold text-muted">{t.ledger.waivedBadge}</Text>
+                                    </View>
+                                  ) : null}
+                                </View>
+                                <Text className="text-[11px] text-faint" numberOfLines={1}>
                                   {st === 'paid' || paid <= PAY_TOLERANCE
                                     ? fmtMoney(ch.amount)
                                     : t.ledger.paidOfAmount.replace('{{paid}}', fmtMoney(paid)).replace('{{total}}', fmtMoney(ch.amount))}
+                                  {ch.note ? ` · ${ch.note}` : ''}
                                 </Text>
                               </View>
-                              {statusChip(st, chargeDaysLate(ch))}
+                              {waived ? null : statusChip(st, chargeDaysLate(ch))}
                               {canEdit ? (
                                 <Pressable onPress={() => { setChargeEdit(ch); setChargeAmount(String(ch.amount)); }} hitSlop={6} className="active:opacity-60">
                                   <Pencil size={13} color={c.muted} />
                                 </Pressable>
                               ) : null}
+                              {canEdit && ch.kind === 'late_fee' && !waived ? (
+                                <Pressable onPress={() => void waiveCharge(ch)} hitSlop={6} className="active:opacity-60">
+                                  <BadgeX size={13} color={c.muted} />
+                                </Pressable>
+                              ) : null}
+                              {canEdit && ch.kind === 'other' ? (
+                                <Pressable onPress={() => void deleteCharge(ch)} hitSlop={6} className="active:opacity-60">
+                                  <Trash2 size={13} color={c.danger} />
+                                </Pressable>
+                              ) : null}
                             </View>
-                            {canEdit && st !== 'paid' ? (
+                            {canEdit && st !== 'paid' && !waived ? (
                               <Pressable onPress={() => openRecordPayment(ch)}
                                 className="mt-2 ml-6 self-start px-3 py-1.5 rounded-full bg-primary/10 active:opacity-70">
                                 <Text className="text-xs font-semibold text-primary">{t.ledger.recordPaymentBtn}</Text>
@@ -1993,6 +2097,7 @@ export default function RentalsScreen() {
         {renderLeaseFormSheet()}
         {renderPaymentSheet()}
         {renderChargeEditSheet()}
+        {renderAddChargeSheet()}
         {renderExpenseSheet()}
         {renderMaintSheet()}
 
@@ -2758,6 +2863,35 @@ export default function RentalsScreen() {
           <Text className={labelCls}>{t.leases.form.depositLabel}</Text>
           {moneyInput(leaseForm.deposit_amount, v => setLeaseForm(f => ({ ...f, deposit_amount: v })))}
         </View>
+        <Text className="text-[11px] font-bold text-faint uppercase mt-1">{t.leases.form.lateFeeHeading}</Text>
+        <View className="flex-row gap-3">
+          <View className="flex-1">
+            <Text className={labelCls}>{t.leases.form.lateFeeAmountLabel}</Text>
+            {moneyInput(leaseForm.late_fee_amount, v => setLeaseForm(f => ({ ...f, late_fee_amount: v })))}
+          </View>
+          <View className="flex-1">
+            <Text className={labelCls}>{t.leases.form.lateFeeGraceLabel}</Text>
+            <TextInput value={leaseForm.late_fee_grace_days}
+              onChangeText={v => setLeaseForm(f => ({ ...f, late_fee_grace_days: v.replace(/[^0-9]/g, '').slice(0, 2) }))}
+              keyboardType="number-pad" placeholderTextColor={c.faint} className={fieldCls} />
+          </View>
+        </View>
+        {leaseForm.late_fee_amount ? (
+          <Text className="text-[11px] text-faint -mt-1">
+            {t.leases.form.lateFeeSinceHint.replace('{{date}}',
+              formatDateLong(`${editingLease?.late_fee_since ?? todayISO()}T00:00:00`, dateLoc))}
+          </Text>
+        ) : null}
+        <Pressable onPress={() => setLeaseForm(f => ({ ...f, prorate_partial: !f.prorate_partial }))}
+          className="flex-row items-start gap-2.5 active:opacity-70">
+          <View className={`w-5 h-5 rounded-md border items-center justify-center mt-0.5 ${leaseForm.prorate_partial ? 'bg-primary border-primary' : 'border-border'}`}>
+            {leaseForm.prorate_partial ? <Text className="text-white text-xs font-bold">✓</Text> : null}
+          </View>
+          <View className="flex-1">
+            <Text className="text-sm text-ink">{t.leases.form.prorateLabel}</Text>
+            <Text className="text-[11px] text-faint">{t.leases.form.prorateHint}</Text>
+          </View>
+        </Pressable>
         <View>
           <Text className={labelCls}>{t.leases.form.notesLabel}</Text>
           <TextInput value={leaseForm.notes} onChangeText={v => setLeaseForm(f => ({ ...f, notes: v }))}
@@ -2852,6 +2986,40 @@ export default function RentalsScreen() {
         <Pressable onPress={saveCharge} disabled={chargeBusy || !Number(chargeAmount)}
           className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
           {chargeBusy ? <ActivityIndicator color="#fff" /> : <Text className="text-sm font-semibold text-white">{tc.buttons.save}</Text>}
+        </Pressable>
+      </View>
+    ));
+  }
+
+  function renderAddChargeSheet() {
+    return sheetShell(!!addChargeLease, () => setAddChargeLease(null), t.ledger.addChargeTitle, (
+      <View className="gap-3.5 pb-2">
+        <View>
+          <Text className={labelCls}>{t.ledger.chargeKindLabel}</Text>
+          <View className="flex-row gap-2">
+            {(['other', 'late_fee'] as const).map(k => (
+              <Pressable key={k} onPress={() => setNewChargeKind(k)}
+                className={`px-3.5 py-2 rounded-full border ${newChargeKind === k ? 'bg-primary border-primary' : 'bg-card border-border'}`}>
+                <Text className={`text-xs font-medium ${newChargeKind === k ? 'text-white' : 'text-ink'}`}>
+                  {k === 'late_fee' ? t.ledger.kindLateFee : t.ledger.kindOther}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+        <View>
+          <Text className={labelCls}>{t.ledger.chargeAmountLabel}</Text>
+          {moneyInput(newChargeAmount, setNewChargeAmount)}
+        </View>
+        <DatePicker label={t.ledger.chargeDueLabel} value={newChargeDue} onChange={setNewChargeDue} />
+        <View>
+          <Text className={labelCls}>{t.ledger.chargeNoteLabel}</Text>
+          <TextInput value={newChargeNote} onChangeText={setNewChargeNote}
+            placeholder={t.ledger.chargeNotePlaceholder} placeholderTextColor={c.faint} className={fieldCls} />
+        </View>
+        <Pressable onPress={saveNewCharge} disabled={addChargeBusy || !Number(newChargeAmount) || !newChargeDue}
+          className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
+          {addChargeBusy ? <ActivityIndicator color="#fff" /> : <Text className="text-sm font-semibold text-white">{tc.buttons.save}</Text>}
         </Pressable>
       </View>
     ));

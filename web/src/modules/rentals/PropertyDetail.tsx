@@ -7,8 +7,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { confirm } from '@amixos/shared/ui/confirmBus';
 import {
-  ArrowLeft, Camera, ChevronDown, ChevronLeft, ChevronRight, FileText, Home,
-  Pencil, Plus, RotateCw, Star, Trash2, Upload, Wrench, X,
+  ArrowLeft, BadgeX, Camera, ChevronDown, ChevronLeft, ChevronRight, FileText,
+  Home, Pencil, Plus, RotateCw, Star, Trash2, Upload, Wrench, X,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -90,6 +90,9 @@ const EMPTY_LEASE_FORM = {
   due_day: '1',
   deposit_amount: '',
   notes: '',
+  late_fee_amount: '',
+  late_fee_grace_days: '5',
+  prorate_partial: false,
 };
 
 const EMPTY_EXPENSE_FORM = {
@@ -262,6 +265,9 @@ export function PropertyDetail({
       due_day: String(l.due_day),
       deposit_amount: l.deposit_amount != null ? String(l.deposit_amount) : '',
       notes: '',
+      late_fee_amount: l.late_fee_amount != null ? String(l.late_fee_amount) : '',
+      late_fee_grace_days: l.late_fee_grace_days != null ? String(l.late_fee_grace_days) : '5',
+      prorate_partial: l.prorate_partial,
     });
     setLeaseError('');
     setLeaseFormOpen(true);
@@ -278,6 +284,9 @@ export function PropertyDetail({
       due_day: String(l.due_day),
       deposit_amount: l.deposit_amount != null ? String(l.deposit_amount) : '',
       notes: l.notes ?? '',
+      late_fee_amount: l.late_fee_amount != null ? String(l.late_fee_amount) : '',
+      late_fee_grace_days: l.late_fee_grace_days != null ? String(l.late_fee_grace_days) : '5',
+      prorate_partial: l.prorate_partial,
     });
     setLeaseError('');
     setLeaseFormOpen(true);
@@ -299,6 +308,16 @@ export function PropertyDetail({
       due_day: Math.min(31, Math.max(1, parseInt(leaseForm.due_day, 10) || 1)),
       deposit_amount: leaseForm.deposit_amount ? Number(leaseForm.deposit_amount) : null,
       notes: leaseForm.notes.trim() || null,
+      late_fee_amount: leaseForm.late_fee_amount ? Number(leaseForm.late_fee_amount) : null,
+      late_fee_grace_days: leaseForm.late_fee_amount
+        ? Math.max(0, parseInt(leaseForm.late_fee_grace_days, 10) || 0)
+        : null,
+      // Stamped the first time a rule is enabled so switching fees on today
+      // can never retro-charge months that were imported unpaid.
+      late_fee_since: leaseForm.late_fee_amount
+        ? (editingLease?.late_fee_since ?? todayISO())
+        : null,
+      prorate_partial: leaseForm.prorate_partial,
     };
     let leaseRow: RentalLease | null = null;
     if (!editingLease) {
@@ -971,6 +990,55 @@ export function PropertyDetail({
     await reload();
   };
 
+  const waiveCharge = async (c: RentalCharge) => {
+    if (!(await confirm({ title: t.ledger.waiveConfirmTitle, message: t.ledger.waiveConfirmBody }))) return;
+    await supabase.from('rental_charges').update({ amount: 0 }).eq('id', c.id);
+    await reload();
+  };
+
+  const deleteCharge = async (c: RentalCharge) => {
+    if (!(await confirm({ title: t.ledger.deleteChargeConfirmTitle, message: t.ledger.deleteChargeConfirmBody, destructive: true }))) return;
+    await supabase.from('rental_charges').delete().eq('id', c.id);
+    await reload();
+  };
+
+  // ── One-off charge (utility, damage, a manual late fee) ───────────────────
+  const [addChargeLease, setAddChargeLease] = useState<RentalLease | null>(null);
+  const [newChargeKind, setNewChargeKind] = useState<'late_fee' | 'other'>('other');
+  const [newChargeAmount, setNewChargeAmount] = useState('');
+  const [newChargeDue, setNewChargeDue] = useState(todayISO());
+  const [newChargeNote, setNewChargeNote] = useState('');
+  const [addChargeBusy, setAddChargeBusy] = useState(false);
+
+  const openAddCharge = (l: RentalLease) => {
+    setAddChargeLease(l);
+    setNewChargeKind('other');
+    setNewChargeAmount('');
+    setNewChargeDue(todayISO());
+    setNewChargeNote('');
+  };
+
+  const saveNewCharge = async () => {
+    if (!business || !addChargeLease || !Number(newChargeAmount)) return;
+    setAddChargeBusy(true);
+    // A random dedupe_key is what lets a month hold any number of manual
+    // charges while rent and auto fees stay one-per-month (migration 204).
+    await supabase.from('rental_charges').insert({
+      business_id: business.id,
+      lease_id: addChargeLease.id,
+      property_id: addChargeLease.property_id,
+      period_start: `${newChargeDue.slice(0, 7)}-01`,
+      due_date: newChargeDue,
+      amount: Number(newChargeAmount),
+      kind: newChargeKind,
+      dedupe_key: rentalUid(),
+      note: newChargeNote.trim() || null,
+    });
+    setAddChargeBusy(false);
+    setAddChargeLease(null);
+    await reload();
+  };
+
   const ledgerForLease = (l: RentalLease) => {
     const tn = tenantOf(l.tenant_id);
     const lCharges = chargesByLease.get(l.id) ?? [];
@@ -988,6 +1056,11 @@ export function PropertyDetail({
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {canCreate ? (
+              <Button variant="secondary" size="sm" onClick={() => openAddCharge(l)}>
+                <Plus size={12} className="mr-1" />{t.ledger.addChargeBtn}
+              </Button>
+            ) : null}
             {canCreate && balance > PAY_TOLERANCE ? (
               <Button variant="secondary" size="sm" onClick={() => void markAllPaid(l)}>
                 {t.ledger.markAllPaidBtn}
@@ -1007,6 +1080,7 @@ export function PropertyDetail({
               const st = chargeStatus(c, paid);
               const cPays = paymentsByCharge.get(c.id) ?? [];
               const expanded = expandedCharge === c.id;
+              const waived = c.kind === 'late_fee' && c.amount <= PAY_TOLERANCE;
               return (
                 <div key={c.id} className="py-2">
                   <div className="flex items-center gap-2">
@@ -1020,25 +1094,52 @@ export function PropertyDetail({
                         : <span className="inline-block w-3.5" />}
                     </button>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-ink">{monthLabel(c.period_start)}</p>
+                      <p className="text-sm text-ink">
+                        {monthLabel(c.period_start)}
+                        {c.kind !== 'rent' ? (
+                          <span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${c.kind === 'late_fee' ? 'bg-orange-500/10 text-orange-700' : 'bg-indigo-500/10 text-indigo-600'}`}>
+                            {c.kind === 'late_fee' ? t.ledger.kindLateFee : t.ledger.kindOther}
+                          </span>
+                        ) : null}
+                        {waived ? (
+                          <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-border-soft text-muted">
+                            {t.ledger.waivedBadge}
+                          </span>
+                        ) : null}
+                      </p>
                       <p className="text-[11px] text-faint">
                         {st === 'paid' || paid <= PAY_TOLERANCE
                           ? fmtMoney(c.amount)
                           : t.ledger.paidOfAmount.replace('{{paid}}', fmtMoney(paid)).replace('{{total}}', fmtMoney(c.amount))}
+                        {c.note ? ` · ${c.note}` : ''}
                       </p>
                     </div>
-                    {statusChip(st, chargeDaysLate(c))}
+                    {waived ? null : statusChip(st, chargeDaysLate(c))}
                     {canEdit ? (
                       <>
-                        {st !== 'paid' ? (
+                        {st !== 'paid' && !waived ? (
                           <Button size="sm" variant="secondary" onClick={() => openRecordPayment(c)}>
                             {t.ledger.recordPaymentBtn}
                           </Button>
                         ) : null}
                         <button onClick={() => { setChargeEditId(c.id); setChargeAmount(String(c.amount)); }}
-                          className="p-1.5 rounded-lg hover:bg-border-soft">
+                          className="p-1.5 rounded-lg hover:bg-border-soft" title={t.ledger.editChargeTitle}>
                           <Pencil size={13} className="text-muted" />
                         </button>
+                        {/* A late fee is WAIVED (amount → 0), never deleted: the
+                           generator would just recreate a deleted row. */}
+                        {c.kind === 'late_fee' && !waived ? (
+                          <button onClick={() => void waiveCharge(c)}
+                            className="p-1.5 rounded-lg hover:bg-border-soft" title={t.ledger.waiveBtn}>
+                            <BadgeX size={13} className="text-muted" />
+                          </button>
+                        ) : null}
+                        {c.kind === 'other' ? (
+                          <button onClick={() => void deleteCharge(c)}
+                            className="p-1.5 rounded-lg hover:bg-border-soft" title={t.ledger.deleteChargeConfirmTitle}>
+                            <Trash2 size={13} className="text-red-500" />
+                          </button>
+                        ) : null}
                       </>
                     ) : null}
                   </div>
@@ -1456,6 +1557,33 @@ export function PropertyDetail({
               value={withCommas(leaseForm.deposit_amount)}
               onChange={e => setLeaseForm(f => ({ ...f, deposit_amount: sanitizeMoney(e.target.value) }))} />
           </div>
+          {/* Late-fee rule + proration */}
+          <div>
+            <p className="text-xs font-semibold text-faint uppercase tracking-wide mb-2">{t.leases.form.lateFeeHeading}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Input label={t.leases.form.lateFeeAmountLabel} leftIcon={<span className="text-sm">$</span>}
+                value={withCommas(leaseForm.late_fee_amount)}
+                onChange={e => setLeaseForm(f => ({ ...f, late_fee_amount: sanitizeMoney(e.target.value) }))} />
+              <Input label={t.leases.form.lateFeeGraceLabel} hint={t.leases.form.lateFeeGraceHint}
+                inputMode="numeric" value={leaseForm.late_fee_grace_days}
+                onChange={e => setLeaseForm(f => ({ ...f, late_fee_grace_days: e.target.value.replace(/[^0-9]/g, '').slice(0, 2) }))} />
+            </div>
+            {leaseForm.late_fee_amount ? (
+              <p className="text-[11px] text-faint mt-1.5">
+                {t.leases.form.lateFeeSinceHint.replace('{{date}}',
+                  formatDateLong(`${editingLease?.late_fee_since ?? todayISO()}T00:00:00`, locale))}
+              </p>
+            ) : null}
+          </div>
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input type="checkbox" checked={leaseForm.prorate_partial}
+              onChange={e => setLeaseForm(f => ({ ...f, prorate_partial: e.target.checked }))}
+              className="mt-0.5 w-4 h-4 rounded border-border accent-primary" />
+            <span>
+              <span className="block text-sm text-ink">{t.leases.form.prorateLabel}</span>
+              <span className="block text-[11px] text-faint">{t.leases.form.prorateHint}</span>
+            </span>
+          </label>
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-ink">{t.leases.form.notesLabel}</label>
             <textarea rows={2} value={leaseForm.notes}
@@ -1522,6 +1650,35 @@ export function PropertyDetail({
       </Modal>
 
       {/* Charge amount edit */}
+      <Modal open={!!addChargeLease} onClose={() => setAddChargeLease(null)} title={t.ledger.addChargeTitle} size="sm">
+        <div className="flex flex-col gap-4">
+          <div>
+            <label className="block text-sm font-medium text-ink mb-1.5">{t.ledger.chargeKindLabel}</label>
+            <div className="flex gap-2">
+              {(['other', 'late_fee'] as const).map(k => (
+                <button key={k} type="button" onClick={() => setNewChargeKind(k)}
+                  className={`px-3 py-2 rounded-xl text-sm font-medium border ${newChargeKind === k ? 'bg-primary text-white border-primary' : 'bg-card text-ink border-border'}`}>
+                  {k === 'late_fee' ? t.ledger.kindLateFee : t.ledger.kindOther}
+                </button>
+              ))}
+            </div>
+          </div>
+          <Input label={t.ledger.chargeAmountLabel} leftIcon={<span className="text-sm">$</span>}
+            value={withCommas(newChargeAmount)}
+            onChange={e => setNewChargeAmount(sanitizeMoney(e.target.value))} />
+          <Input label={t.ledger.chargeDueLabel} type="date" value={newChargeDue}
+            onChange={e => setNewChargeDue(e.target.value)} />
+          <Input label={t.ledger.chargeNoteLabel} placeholder={t.ledger.chargeNotePlaceholder}
+            value={newChargeNote} onChange={e => setNewChargeNote(e.target.value)} />
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setAddChargeLease(null)}>{tc.buttons.cancel}</Button>
+            <Button onClick={saveNewCharge} loading={addChargeBusy} disabled={!Number(newChargeAmount) || !newChargeDue}>
+              {tc.buttons.save}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       <Modal open={!!chargeEditId} onClose={() => setChargeEditId(null)} title={t.ledger.editChargeTitle} size="sm">
         <div className="flex flex-col gap-4">
           <Input label={t.ledger.chargeAmountLabel} leftIcon={<span className="text-sm">$</span>}

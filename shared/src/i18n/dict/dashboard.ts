@@ -2503,6 +2503,13 @@ export type DashboardDict = {
           rentLabel: string;
           dueDayLabel: string;
           dueDayHint: string;
+          lateFeeHeading: string;
+          lateFeeAmountLabel: string;
+          lateFeeGraceLabel: string;
+          lateFeeGraceHint: string;
+          lateFeeSinceHint: string;
+          prorateLabel: string;
+          prorateHint: string;
           depositLabel: string;
           notesLabel: string;
         };
@@ -5483,6 +5490,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
             rentLabel: 'Renta mensual',
             dueDayLabel: 'Día de pago',
             dueDayHint: 'Día del mes en que vence la renta.',
+          lateFeeHeading: 'Recargo por atraso',
+          lateFeeAmountLabel: 'Monto del recargo',
+          lateFeeGraceLabel: 'Días de gracia',
+          lateFeeGraceHint: 'Días después del vencimiento antes de aplicar el recargo.',
+          lateFeeSinceHint: 'Solo se aplica a rentas que vencen desde {{date}} en adelante.',
+          prorateLabel: 'Prorratear meses parciales',
+          prorateHint: 'Cobra solo los días ocupados en el primer y último mes.',
             depositLabel: 'Depósito',
             notesLabel: 'Notas',
           },
@@ -8489,6 +8503,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
             rentLabel: 'Monthly rent',
             dueDayLabel: 'Due day',
             dueDayHint: 'Day of the month rent is due.',
+          lateFeeHeading: 'Late fee',
+          lateFeeAmountLabel: 'Fee amount',
+          lateFeeGraceLabel: 'Grace days',
+          lateFeeGraceHint: 'Days after the due date before the fee applies.',
+          lateFeeSinceHint: 'Only applies to rent due on or after {{date}}.',
+          prorateLabel: 'Prorate partial months',
+          prorateHint: 'Charge only the days occupied in the first and last month.',
             depositLabel: 'Deposit',
             notesLabel: 'Notes',
           },

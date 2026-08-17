@@ -9,6 +9,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import {
+  PAY_TOLERANCE,
   duePeriodsForLease,
   parseDateOnly,
   type RentalCharge,
@@ -399,7 +400,12 @@ export async function generateChargesForLeases(
         property_id: lease.property_id,
         period_start: p.periodStart,
         due_date: p.dueDate,
-        amount: lease.monthly_rent,
+        // Round the money once, here — the fraction stays exact upstream.
+        amount: p.fraction === 1
+          ? lease.monthly_rent
+          : Math.round(lease.monthly_rent * p.fraction * 100) / 100,
+        kind: 'rent',
+        dedupe_key: 'rent',
       });
     }
   }
@@ -410,7 +416,7 @@ export async function generateChargesForLeases(
     for (let i = 0; i < rows.length; i += 500) {
       const { error, count } = await supabase.from('rental_charges')
         .upsert(rows.slice(i, i + 500), {
-          onConflict: 'lease_id,period_start',
+          onConflict: 'lease_id,period_start,dedupe_key',
           ignoreDuplicates: true,
           count: 'exact',
         });
@@ -432,3 +438,96 @@ export async function generateChargesForLeases(
   }
   return changed;
 }
+
+/**
+ * Materialize automatic late fees. Runs beside generateChargesForLeases on
+ * module load, gated on can.editRentals.
+ *
+ * Three guards keep this from inventing money:
+ *   1. `late_fee_since` — a fee only applies to rent due ON OR AFTER the day
+ *      the landlord switched the rule on, so enabling it today can never
+ *      retro-charge years of imported history.
+ *   2. The rent charge must STILL be unpaid right now. A month settled before
+ *      the grace period elapsed never earns a fee.
+ *   3. today must be past due_date + grace_days.
+ *
+ * Idempotent through dedupe_key='late_fee' + the (lease, period, dedupe_key)
+ * unique index, so two devices generating at once collide harmlessly. Waiving
+ * a fee sets its amount to 0 rather than deleting the row — a deleted row
+ * would just be regenerated on the next load.
+ */
+export async function generateLateFees(
+  supabase: AnySupabase,
+  businessId: string,
+  leases: RentalLease[],
+  today: Date = new Date(),
+): Promise<boolean> {
+  const ruled = leases.filter(
+    (l) => l.status === 'active' && (l.late_fee_amount ?? 0) > 0 && l.late_fee_since,
+  );
+  if (ruled.length === 0) return false;
+
+  const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  // Only rent charges old enough to possibly qualify, for the ruled leases.
+  const minGrace = Math.min(...ruled.map((l) => l.late_fee_grace_days ?? 0));
+  const cutoff = new Date(t.getFullYear(), t.getMonth(), t.getDate() - minGrace);
+  const leaseIds = ruled.map((l) => l.id);
+
+  const candidates = await fetchAllRows<RentalCharge>((afterId, pageSize) => {
+    let q = supabase.from('rental_charges').select('*')
+      .eq('business_id', businessId)
+      .eq('kind', 'rent')
+      .in('lease_id', leaseIds)
+      .lt('due_date', ymd(cutoff))
+      .order('id', { ascending: true })
+      .limit(pageSize);
+    if (afterId) q = q.gt('id', afterId);
+    return q;
+  });
+  if (candidates.length === 0) return false;
+
+  const pays = await fetchPaymentsForCharges(supabase, businessId, candidates.map((c) => c.id));
+  const paidBy = new Map<string, number>();
+  for (const p of pays) paidBy.set(p.charge_id, (paidBy.get(p.charge_id) ?? 0) + p.amount);
+
+  const rows: Array<Record<string, unknown>> = [];
+  for (const lease of ruled) {
+    const grace = lease.late_fee_grace_days ?? 0;
+    for (const c of candidates) {
+      if (c.lease_id !== lease.id) continue;
+      if (c.due_date < (lease.late_fee_since as string)) continue;          // guard 1
+      if ((paidBy.get(c.id) ?? 0) >= c.amount - PAY_TOLERANCE) continue;    // guard 2
+      const due = parseDateOnly(c.due_date);
+      const feeDue = new Date(due.getFullYear(), due.getMonth(), due.getDate() + grace);
+      if (feeDue.getTime() >= t.getTime()) continue;                        // guard 3
+      rows.push({
+        business_id: businessId,
+        lease_id: lease.id,
+        property_id: c.property_id,
+        period_start: c.period_start,
+        due_date: ymd(feeDue),
+        amount: lease.late_fee_amount,
+        kind: 'late_fee',
+        dedupe_key: 'late_fee',
+      });
+    }
+  }
+  if (rows.length === 0) return false;
+
+  let changed = false;
+  for (let i = 0; i < rows.length; i += 500) {
+    const { error, count } = await supabase.from('rental_charges')
+      .upsert(rows.slice(i, i + 500), {
+        onConflict: 'lease_id,period_start,dedupe_key',
+        ignoreDuplicates: true,
+        count: 'exact',
+      });
+    if (error) throw new Error(error.message);
+    if ((count ?? 0) > 0) changed = true;
+  }
+  return changed;
+}
+
