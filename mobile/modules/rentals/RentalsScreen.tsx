@@ -1192,6 +1192,41 @@ export default function RentalsScreen() {
   // Backfill helper: record one full payment per unpaid month of a lease
   // (dated its due date) — for importing historical leases without tapping
   // "Registrar pago" month by month.
+  // ── Deposit return ────────────────────────────────────────────────────────
+  const [depositLease, setDepositLease] = useState<RentalLease | null>(null);
+  const [depositDate, setDepositDate] = useState(todayISO());
+  const [depositWithheld, setDepositWithheld] = useState('');
+  const [depositNote, setDepositNote] = useState('');
+  const [depositBusy, setDepositBusy] = useState(false);
+
+  const openReturnDeposit = (l: RentalLease) => {
+    setDepositLease(l);
+    setDepositDate(todayISO());
+    setDepositWithheld(l.deposit_withheld != null ? String(l.deposit_withheld) : '');
+    setDepositNote(l.deposit_note ?? '');
+  };
+
+  const saveDepositReturn = async () => {
+    if (!depositLease || !detail) return;
+    setDepositBusy(true);
+    await supabase.from('rental_leases').update({
+      deposit_returned_on: depositDate,
+      deposit_withheld: depositWithheld ? Number(depositWithheld) : null,
+      deposit_note: depositNote.trim() || null,
+    }).eq('id', depositLease.id);
+    setDepositBusy(false);
+    setDepositLease(null);
+    await reloadDetail(detail.id);
+    reloadPeople();
+  };
+
+  const undoDepositReturn = async (l: RentalLease) => {
+    if (!detail) return;
+    await supabase.from('rental_leases').update({ deposit_returned_on: null }).eq('id', l.id);
+    await reloadDetail(detail.id);
+    reloadPeople();
+  };
+
   const waiveCharge = async (ch: RentalCharge) => {
     if (!detail) return;
     if (!(await confirm({ title: t.ledger.waiveConfirmTitle, message: t.ledger.waiveConfirmBody }))) return;
@@ -1684,6 +1719,45 @@ export default function RentalsScreen() {
                         ))}
                       </View>
 
+                      {/* Deposit — held vs returned */}
+                      {l.deposit_amount != null ? (
+                        <View className="mt-3 rounded-xl bg-surface px-3 py-2.5">
+                          <View className="flex-row items-center justify-between gap-2">
+                            <View className="flex-1">
+                              <Text className="text-[10px] font-bold text-faint uppercase">{t.leases.depositHeading}</Text>
+                              <View className="flex-row items-center gap-2 mt-0.5">
+                                <Text className="text-sm font-semibold text-ink">{fmtMoney(l.deposit_amount)}</Text>
+                                <View className={`px-1.5 py-0.5 rounded-full ${l.deposit_returned_on ? 'bg-border-soft' : 'bg-emerald-500/10'}`}>
+                                  <Text className={`text-[9px] font-semibold ${l.deposit_returned_on ? 'text-muted' : 'text-emerald-700'}`}>
+                                    {l.deposit_returned_on
+                                      ? t.leases.depositReturned.replace('{{date}}', formatDateLong(`${l.deposit_returned_on}T00:00:00`, dateLoc))
+                                      : t.leases.depositHeld}
+                                  </Text>
+                                </View>
+                              </View>
+                              {l.deposit_withheld ? (
+                                <Text className="text-[11px] text-muted mt-0.5" numberOfLines={2}>
+                                  {t.leases.depositWithheldLabel}: {fmtMoney(l.deposit_withheld)}{l.deposit_note ? ` · ${l.deposit_note}` : ''}
+                                </Text>
+                              ) : l.deposit_note ? (
+                                <Text className="text-[11px] text-muted mt-0.5" numberOfLines={2}>{l.deposit_note}</Text>
+                              ) : null}
+                            </View>
+                            {canEdit ? (
+                              l.deposit_returned_on ? (
+                                <Pressable onPress={() => void undoDepositReturn(l)} hitSlop={6} className="active:opacity-60">
+                                  <Text className="text-xs font-semibold text-muted">{t.leases.undoReturnBtn}</Text>
+                                </Pressable>
+                              ) : (
+                                <Pressable onPress={() => openReturnDeposit(l)} hitSlop={6} className="active:opacity-60">
+                                  <Text className="text-xs font-semibold text-primary">{t.leases.returnDepositBtn}</Text>
+                                </Pressable>
+                              )
+                            ) : null}
+                          </View>
+                        </View>
+                      ) : null}
+
                       {/* Actions */}
                       {canEdit ? (
                         <View className="mt-3 flex-row justify-end gap-4">
@@ -2098,6 +2172,7 @@ export default function RentalsScreen() {
         {renderPaymentSheet()}
         {renderChargeEditSheet()}
         {renderAddChargeSheet()}
+        {renderDepositSheet()}
         {renderExpenseSheet()}
         {renderMaintSheet()}
 
@@ -2986,6 +3061,27 @@ export default function RentalsScreen() {
         <Pressable onPress={saveCharge} disabled={chargeBusy || !Number(chargeAmount)}
           className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
           {chargeBusy ? <ActivityIndicator color="#fff" /> : <Text className="text-sm font-semibold text-white">{tc.buttons.save}</Text>}
+        </Pressable>
+      </View>
+    ));
+  }
+
+  function renderDepositSheet() {
+    return sheetShell(!!depositLease, () => setDepositLease(null), t.leases.returnDepositTitle, (
+      <View className="gap-3.5 pb-2">
+        <DatePicker label={t.leases.returnDateLabel} value={depositDate} onChange={setDepositDate} />
+        <View>
+          <Text className={labelCls}>{t.leases.depositWithheldLabel}</Text>
+          {moneyInput(depositWithheld, setDepositWithheld)}
+        </View>
+        <View>
+          <Text className={labelCls}>{t.leases.depositNoteLabel}</Text>
+          <TextInput value={depositNote} onChangeText={setDepositNote}
+            placeholder={t.leases.depositNotePlaceholder} placeholderTextColor={c.faint} className={fieldCls} />
+        </View>
+        <Pressable onPress={saveDepositReturn} disabled={depositBusy || !depositDate}
+          className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
+          {depositBusy ? <ActivityIndicator color="#fff" /> : <Text className="text-sm font-semibold text-white">{tc.buttons.save}</Text>}
         </Pressable>
       </View>
     ));

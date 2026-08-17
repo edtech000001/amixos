@@ -940,6 +940,43 @@ export function PropertyDetail({
           )}
         </div>
 
+        {/* Deposit — held vs returned, with what was kept for damages. */}
+        {l.deposit_amount != null ? (
+          <div className="mt-3 rounded-xl bg-surface px-3 py-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">{t.leases.depositHeading}</p>
+                <p className="text-sm font-semibold text-ink">
+                  {fmtMoney(l.deposit_amount)}
+                  <span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${l.deposit_returned_on ? 'bg-border-soft text-muted' : 'bg-emerald-500/10 text-emerald-700'}`}>
+                    {l.deposit_returned_on
+                      ? t.leases.depositReturned.replace('{{date}}', formatDateLong(`${l.deposit_returned_on}T00:00:00`, locale))
+                      : t.leases.depositHeld}
+                  </span>
+                </p>
+                {l.deposit_withheld ? (
+                  <p className="text-[11px] text-muted mt-0.5">
+                    {t.leases.depositWithheldLabel}: {fmtMoney(l.deposit_withheld)}{l.deposit_note ? ` · ${l.deposit_note}` : ''}
+                  </p>
+                ) : l.deposit_note ? (
+                  <p className="text-[11px] text-muted mt-0.5">{l.deposit_note}</p>
+                ) : null}
+              </div>
+              {canEdit ? (
+                l.deposit_returned_on ? (
+                  <button onClick={() => void undoDepositReturn(l)} className="text-xs font-semibold text-muted hover:underline shrink-0">
+                    {t.leases.undoReturnBtn}
+                  </button>
+                ) : (
+                  <button onClick={() => openReturnDeposit(l)} className="text-xs font-semibold text-primary hover:underline shrink-0">
+                    {t.leases.returnDepositBtn}
+                  </button>
+                )
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         {canEdit ? (
           <div className="mt-3 flex justify-end gap-4">
             {canCreate ? (
@@ -988,6 +1025,41 @@ export function PropertyDetail({
     })));
     void logAudit(supabase, business.id, 'rental_payment.recorded', 'rental_payment', l.id, { bulk: open.length, total });
     await reload();
+  };
+
+  // ── Deposit return ────────────────────────────────────────────────────────
+  const [depositLease, setDepositLease] = useState<RentalLease | null>(null);
+  const [depositDate, setDepositDate] = useState(todayISO());
+  const [depositWithheld, setDepositWithheld] = useState('');
+  const [depositNote, setDepositNote] = useState('');
+  const [depositBusy, setDepositBusy] = useState(false);
+
+  const openReturnDeposit = (l: RentalLease) => {
+    setDepositLease(l);
+    setDepositDate(todayISO());
+    setDepositWithheld(l.deposit_withheld != null ? String(l.deposit_withheld) : '');
+    setDepositNote(l.deposit_note ?? '');
+  };
+
+  const saveDepositReturn = async () => {
+    if (!depositLease) return;
+    setDepositBusy(true);
+    await supabase.from('rental_leases').update({
+      deposit_returned_on: depositDate,
+      deposit_withheld: depositWithheld ? Number(depositWithheld) : null,
+      deposit_note: depositNote.trim() || null,
+    }).eq('id', depositLease.id);
+    setDepositBusy(false);
+    setDepositLease(null);
+    await reload();
+    onDataChanged();
+  };
+
+  const undoDepositReturn = async (l: RentalLease) => {
+    await supabase.from('rental_leases')
+      .update({ deposit_returned_on: null }).eq('id', l.id);
+    await reload();
+    onDataChanged();
   };
 
   const waiveCharge = async (c: RentalCharge) => {
@@ -1650,6 +1722,22 @@ export function PropertyDetail({
       </Modal>
 
       {/* Charge amount edit */}
+      <Modal open={!!depositLease} onClose={() => setDepositLease(null)} title={t.leases.returnDepositTitle} size="sm">
+        <div className="flex flex-col gap-4">
+          <Input label={t.leases.returnDateLabel} type="date" value={depositDate}
+            onChange={e => setDepositDate(e.target.value)} />
+          <Input label={t.leases.depositWithheldLabel} leftIcon={<span className="text-sm">$</span>}
+            value={withCommas(depositWithheld)}
+            onChange={e => setDepositWithheld(sanitizeMoney(e.target.value))} />
+          <Input label={t.leases.depositNoteLabel} placeholder={t.leases.depositNotePlaceholder}
+            value={depositNote} onChange={e => setDepositNote(e.target.value)} />
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setDepositLease(null)}>{tc.buttons.cancel}</Button>
+            <Button onClick={saveDepositReturn} loading={depositBusy} disabled={!depositDate}>{tc.buttons.save}</Button>
+          </div>
+        </div>
+      </Modal>
+
       <Modal open={!!addChargeLease} onClose={() => setAddChargeLease(null)} title={t.ledger.addChargeTitle} size="sm">
         <div className="flex flex-col gap-4">
           <div>

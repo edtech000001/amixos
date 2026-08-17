@@ -2491,6 +2491,16 @@ export type DashboardDict = {
         monthToMonth: string;
         endsInDays: string;
         endedBadge: string;
+        depositHeading: string;
+        depositHeld: string;
+        depositReturned: string;
+        depositWithheldLabel: string;
+        depositNoteLabel: string;
+        depositNotePlaceholder: string;
+        returnDepositBtn: string;
+        returnDepositTitle: string;
+        returnDateLabel: string;
+        undoReturnBtn: string;
         expiredBadge: string;
         form: {
           tenantLabel: string;
@@ -5478,6 +5488,16 @@ export const dashboard: Record<Locale, DashboardDict> = {
           monthToMonth: 'Mes a mes',
           endsInDays: 'Vence en {{days}} días',
           endedBadge: 'Terminado',
+          depositHeading: 'Depósito',
+          depositHeld: 'Retenido',
+          depositReturned: 'Devuelto el {{date}}',
+          depositWithheldLabel: 'Monto retenido por daños',
+          depositNoteLabel: 'Nota',
+          depositNotePlaceholder: 'Daño en la pared, limpieza…',
+          returnDepositBtn: 'Registrar devolución',
+          returnDepositTitle: 'Devolver depósito',
+          returnDateLabel: 'Fecha de devolución',
+          undoReturnBtn: 'Deshacer devolución',
           expiredBadge: 'Vencido',
           form: {
             tenantLabel: 'Inquilino',
@@ -8491,6 +8511,16 @@ export const dashboard: Record<Locale, DashboardDict> = {
           monthToMonth: 'Month to month',
           endsInDays: 'Ends in {{days}} days',
           endedBadge: 'Ended',
+          depositHeading: 'Deposit',
+          depositHeld: 'Held',
+          depositReturned: 'Returned on {{date}}',
+          depositWithheldLabel: 'Amount withheld for damages',
+          depositNoteLabel: 'Note',
+          depositNotePlaceholder: 'Wall damage, cleaning…',
+          returnDepositBtn: 'Record return',
+          returnDepositTitle: 'Return deposit',
+          returnDateLabel: 'Return date',
+          undoReturnBtn: 'Undo return',
           expiredBadge: 'Expired',
           form: {
             tenantLabel: 'Tenant',
