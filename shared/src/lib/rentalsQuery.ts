@@ -194,6 +194,77 @@ export function fetchChargesForProperty(supabase: AnySupabase, propertyId: strin
   });
 }
 
+/** Every charge whose period falls in [fromPeriod, toPeriod] — the Overview's
+ *  12-month trend and YTD figures. Paginated: a 3-year-old portfolio easily
+ *  exceeds the 1000-row cap. */
+export function fetchChargesInRange(
+  supabase: AnySupabase,
+  businessId: string,
+  fromPeriod: string,
+  toPeriod: string,
+): Promise<RentalCharge[]> {
+  return fetchAllRows<RentalCharge>((afterId, pageSize) => {
+    let q = supabase.from('rental_charges').select('*')
+      .eq('business_id', businessId)
+      .gte('period_start', fromPeriod)
+      .lte('period_start', toPeriod)
+      .order('id', { ascending: true })
+      .limit(pageSize);
+    if (afterId) q = q.gt('id', afterId);
+    return q;
+  });
+}
+
+/** Payments RECEIVED in [from, to] (by paid_on) — cash-basis income. */
+export function fetchPaymentsInRange(
+  supabase: AnySupabase,
+  businessId: string,
+  from: string,
+  to: string,
+): Promise<RentalPayment[]> {
+  return fetchAllRows<RentalPayment>((afterId, pageSize) => {
+    let q = supabase.from('rental_payments').select('*')
+      .eq('business_id', businessId)
+      .gte('paid_on', from)
+      .lte('paid_on', to)
+      .order('id', { ascending: true })
+      .limit(pageSize);
+    if (afterId) q = q.gt('id', afterId);
+    return q;
+  });
+}
+
+/** Every unpaid-capable charge for the business regardless of age — the
+ *  delinquency aging table and all-time per-property balances. */
+export function fetchAllCharges(
+  supabase: AnySupabase,
+  businessId: string,
+): Promise<RentalCharge[]> {
+  return fetchAllRows<RentalCharge>((afterId, pageSize) => {
+    let q = supabase.from('rental_charges').select('*')
+      .eq('business_id', businessId)
+      .order('id', { ascending: true })
+      .limit(pageSize);
+    if (afterId) q = q.gt('id', afterId);
+    return q;
+  });
+}
+
+/** Every payment for the business (pairs with fetchAllCharges for balances). */
+export function fetchAllPayments(
+  supabase: AnySupabase,
+  businessId: string,
+): Promise<RentalPayment[]> {
+  return fetchAllRows<RentalPayment>((afterId, pageSize) => {
+    let q = supabase.from('rental_payments').select('*')
+      .eq('business_id', businessId)
+      .order('id', { ascending: true })
+      .limit(pageSize);
+    if (afterId) q = q.gt('id', afterId);
+    return q;
+  });
+}
+
 /** All charges across a set of leases (a tenant's history — small set). */
 export function fetchChargesForLeases(
   supabase: AnySupabase,

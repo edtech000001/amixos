@@ -17,9 +17,12 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 import {
   Building2, Camera, ChevronDown, ChevronLeft, ChevronRight, FileText, Home,
-  ImagePlus, Pencil, Phone, Plus, RotateCw, Search, Star, Trash2, Users, Wrench, X,
+  Download, ImagePlus, Pencil, Phone, Plus, RotateCw, Search, Star, Trash2, Users, Wrench, X,
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -28,6 +31,26 @@ import { useThemeColors } from '@/lib/ThemeProvider';
 import { DatePicker, Select } from '@amixos/shared/ui';
 import { confirm } from '@amixos/shared/ui/confirmBus';
 import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
+import {
+  agingBuckets,
+  buildMonthlySeries,
+  cashTotals,
+  currentPeriod,
+  depositsHeld,
+  monthRange,
+  monthSummary,
+  monthToMonthCount,
+  monthsBack,
+  periodOf,
+  propertyPerformance,
+  shiftMonth,
+  upcomingExpirations,
+  vacantUnits,
+  yearStart,
+} from '@amixos/shared/lib/rentalsAnalytics';
+import { expensesByCategory } from '@amixos/shared/lib/rentalsAnalytics';
+import { buildRentalStatementHtml } from '@amixos/shared/lib/rentalsReportHtml';
+import { csvCell } from '@amixos/shared/lib/clientShare';
 import { signedUrl, useSignedUrls } from '@amixos/shared/lib/storageUrls';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
@@ -69,17 +92,15 @@ import {
 import {
   fetchAllLeases,
   fetchAllTenants,
-  fetchChargesForMonth,
   fetchChargesForProperty,
   fetchExpensesForProperty,
   fetchExpensesInRange,
   fetchMaintenanceForProperty,
-  fetchPaymentsForCharges,
   fetchPaymentsForLeases,
   fetchRentalPropertiesCount,
   fetchRentalPropertiesPage,
   generateChargesForLeases,
-  type RentalPropertyCursor, fetchChargesForLeases } from '@amixos/shared/lib/rentalsQuery';
+  type RentalPropertyCursor, fetchChargesForLeases, fetchAllCharges, fetchAllPayments } from '@amixos/shared/lib/rentalsQuery';
 
 type TabKey = 'overview' | 'properties' | 'tenants';
 type DetailTab = 'overview' | 'leases' | 'ledger' | 'expenses' | 'maintenance' | 'photos';
@@ -99,11 +120,6 @@ const fmtMoney = (n: number) =>
 const todayISO = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-
-const currentPeriodStart = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 };
 
 const US_STATES = [
@@ -157,6 +173,13 @@ export default function RentalsScreen() {
     const s = new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'es-MX', { month: 'long', year: 'numeric' })
       .format(new Date(y, (m ?? 1) - 1, 1));
     return s.charAt(0).toUpperCase() + s.slice(1);
+  }, [locale]);
+
+  /** Three-letter month for the trend axis. */
+  const shortMonthLabel = useCallback((periodStart: string) => {
+    const [y, m] = periodStart.split('-').map(Number);
+    return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'es-MX', { month: 'short' })
+      .format(new Date(y, (m ?? 1) - 1, 1));
   }, [locale]);
 
   // ── Properties list ─────────────────────────────────────────────────────────
@@ -325,36 +348,72 @@ export default function RentalsScreen() {
   const activeLeases = useMemo(() => leases.filter(l => l.status === 'active'), [leases]);
   const tenantOf = useCallback((id: string) => tenants.find(x => x.id === id) ?? null, [tenants]);
 
-  // ── Rent roll (this month) ──────────────────────────────────────────────────
-  const period = currentPeriodStart();
-  const [monthCharges, setMonthCharges] = useState<RentalCharge[]>([]);
-  const [monthPayments, setMonthPayments] = useState<RentalPayment[]>([]);
-  const [monthExpensesTotal, setMonthExpensesTotal] = useState(0);
+  // ── Overview data (month-navigable + portfolio analytics) ───────────────────
+  // Charges and payments load WHOLE (paginated) so aging, all-time balances,
+  // the 12-month trend and YTD all resolve without extra round trips — same
+  // shape as the web Overview so both platforms show identical numbers.
+  const [period, setPeriod] = useState(() => currentPeriod());
+  const [allCharges, setAllCharges] = useState<RentalCharge[]>([]);
+  const [allPayments, setAllPayments] = useState<RentalPayment[]>([]);
+  const [overviewExpenses, setOverviewExpenses] = useState<RentalExpense[]>([]);
   const [monthLoading, setMonthLoading] = useState(true);
+
+  const trendPeriods = useMemo(() => monthsBack(period, 12), [period]);
+  const monthBounds = useMemo(() => monthRange(period), [period]);
+  const ytdFrom = useMemo(() => yearStart(period), [period]);
 
   useEffect(() => {
     if (!business) return;
     let cancelled = false;
+    setMonthLoading(true);
     (async () => {
       try {
-        const ch = await fetchChargesForMonth(supabase, business.id, period);
-        const [y, m] = period.split('-').map(Number);
-        const last = new Date(y, m, 0);
-        const to = `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`;
-        const [pays, exp] = await Promise.all([
-          fetchPaymentsForCharges(supabase, business.id, ch.map(x => x.id)),
-          fetchExpensesInRange(supabase, business.id, period, to),
+        const expFrom = trendPeriods[0] < ytdFrom ? trendPeriods[0] : ytdFrom;
+        const [ch, pays, exp] = await Promise.all([
+          fetchAllCharges(supabase, business.id),
+          fetchAllPayments(supabase, business.id),
+          fetchExpensesInRange(supabase, business.id, expFrom, monthBounds.to),
         ]);
         if (cancelled) return;
-        setMonthCharges(ch);
-        setMonthPayments(pays);
-        setMonthExpensesTotal(exp.reduce((s, e) => s + e.amount, 0));
+        setAllCharges(ch);
+        setAllPayments(pays);
+        setOverviewExpenses(exp);
       } catch { /* offline */ }
       finally { if (!cancelled) setMonthLoading(false); }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [business?.id, period, leases]);
+
+  const monthCharges = useMemo(
+    () => allCharges.filter(ch => periodOf(ch.period_start) === period),
+    [allCharges, period],
+  );
+  const monthPayments = allPayments;
+  const summary = useMemo(() => monthSummary(monthCharges, allPayments), [monthCharges, allPayments]);
+  const held = useMemo(() => depositsHeld(leases), [leases]);
+  const ytd = useMemo(
+    () => cashTotals(ytdFrom, monthBounds.to, allPayments, overviewExpenses),
+    [ytdFrom, monthBounds.to, allPayments, overviewExpenses],
+  );
+  const series = useMemo(
+    () => buildMonthlySeries(trendPeriods, allCharges, allPayments, overviewExpenses),
+    [trendPeriods, allCharges, allPayments, overviewExpenses],
+  );
+  const aging = useMemo(() => agingBuckets(allCharges, allPayments), [allCharges, allPayments]);
+  const perf = useMemo(
+    () => propertyPerformance(properties, leases, allCharges, allPayments, overviewExpenses, period, ytdFrom, monthBounds.to),
+    [properties, leases, allCharges, allPayments, overviewExpenses, period, ytdFrom, monthBounds.to],
+  );
+  const expiringSoon = useMemo(() => upcomingExpirations(leases, 60), [leases]);
+  const vacant = useMemo(() => vacantUnits(properties, activeLeases), [properties, activeLeases]);
+  const mtmCount = useMemo(() => monthToMonthCount(leases), [leases]);
+  const monthExpensesTotal = useMemo(
+    () => overviewExpenses
+      .filter(e => e.expense_date >= monthBounds.from && e.expense_date <= monthBounds.to)
+      .reduce((sum, e) => sum + e.amount, 0),
+    [overviewExpenses, monthBounds],
+  );
 
   // ── Property detail data ────────────────────────────────────────────────────
   const [propLeases, setPropLeases] = useState<RentalLease[]>([]);
@@ -1400,9 +1459,6 @@ export default function RentalsScreen() {
       });
   }, [monthCharges, properties, leases, tenantOf, monthPaidByCharge]);
 
-  const collected = rollRows.reduce((s, r) => s + Math.min(r.paid, r.charge.amount), 0);
-  const outstanding = rollRows.reduce((s, r) => s + Math.max(0, r.charge.amount - r.paid), 0);
-  const overdueCount = rollRows.filter(r => r.status === 'late').length;
   const occ = occupancy(properties, activeLeases);
 
   // ═══════════════════════════ RENDER ═══════════════════════════
@@ -1973,6 +2029,64 @@ export default function RentalsScreen() {
     { key: 'tenants', label: t.tabs.tenants },
   ];
 
+  // ── Overview exports (same documents the web Overview produces) ────────────
+  const exportRentRollCsv = async () => {
+    const head = [t.overview.propertyColumn, t.overview.tenantColumn, t.overview.rentColumn,
+      t.overview.collectedColumn, t.overview.outstandingColumn, t.overview.statusColumn];
+    const body = rollRows.map(r => [
+      `${r.property?.name ?? ''}${r.lease?.unit_label ? ` · ${r.lease.unit_label}` : ''}`,
+      r.tenant ? tenantName(r.tenant) : '',
+      String(r.charge.amount),
+      String(Math.min(r.paid, r.charge.amount)),
+      String(Math.max(0, r.charge.amount - r.paid)),
+      r.status,
+    ]);
+    const csv = [head, ...body].map(cols => cols.map(csvCell).join(',')).join('\r\n');
+    try {
+      const path = `${FileSystem.cacheDirectory}rent-roll-${period.slice(0, 7)}.csv`;
+      await FileSystem.writeAsStringAsync(path, `\ufeff${csv}`, { encoding: FileSystem.EncodingType.UTF8 });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(path, { mimeType: 'text/csv', UTI: 'public.comma-separated-values-text' });
+      }
+    } catch { Alert.alert('', t.saveError); }
+  };
+
+  const exportStatement = async () => {
+    const catLabels = t.expenses.categories as unknown as Record<string, string>;
+    const income = perf
+      .map(pf => ({ label: properties.find(pr => pr.id === pf.propertyId)?.name ?? '—', amount: pf.collected }))
+      .filter(r => r.amount > PAY_TOLERANCE)
+      .sort((a, b) => b.amount - a.amount);
+    const html = buildRentalStatementHtml({
+      businessName: business?.name ?? '',
+      logoUrl: business?.logo_url ?? null,
+      businessLines: [
+        [business?.address, business?.city, business?.state].filter(Boolean).join(', '),
+        [business?.phone, business?.email].filter(Boolean).join(' · '),
+      ].filter(Boolean),
+      income,
+      expenses: expensesByCategory(overviewExpenses, monthBounds.from, monthBounds.to)
+        .map(r => ({ label: catLabels[r.category] ?? r.category, amount: r.amount })),
+      labels: {
+        title: t.overview.statementTitle.replace('{{month}}', monthLabel(period)),
+        incomeHeading: t.overview.statementIncomeHeading,
+        expensesHeading: t.overview.statementExpensesHeading,
+        categoryColumn: t.overview.statementCategoryColumn,
+        amountColumn: t.overview.statementAmountColumn,
+        totalIncome: t.overview.statementTotalIncome,
+        totalExpenses: t.overview.statementTotalExpenses,
+        net: t.overview.statementNet,
+        generatedOn: t.overview.statementGeneratedOn.replace('{{date}}', formatDateLong(new Date(), dateLoc)),
+      },
+    });
+    try {
+      const { uri } = await Print.printToFileAsync({ html });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
+      }
+    } catch { Alert.alert('', t.saveError); }
+  };
+
   const sortedTenants = [...tenants].sort((a, b) =>
     tenantName(a).localeCompare(tenantName(b), 'es', { sensitivity: 'base' }));
   const activeTenantIds = new Set(activeLeases.map(l => l.tenant_id));
@@ -2006,22 +2120,63 @@ export default function RentalsScreen() {
           <View className="flex-1 items-center justify-center"><ActivityIndicator color={c.primary} /></View>
         ) : (
           <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 220 }}>
+            {/* Month stepper */}
+            <View className="flex-row items-center justify-between mb-3">
+              <Pressable onPress={() => setPeriod(p => shiftMonth(p, -1))} hitSlop={10}
+                className="w-9 h-9 rounded-full bg-card border border-border-soft items-center justify-center active:opacity-70">
+                <ChevronLeft size={18} color={c.muted} />
+              </Pressable>
+              <View className="items-center">
+                <Text className="text-base font-bold text-ink">{monthLabel(period)}</Text>
+                {period !== currentPeriod() ? (
+                  <Pressable onPress={() => setPeriod(currentPeriod())} hitSlop={8}>
+                    <Text className="text-[11px] font-semibold text-primary">{t.overview.todayBtn}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              <Pressable onPress={() => setPeriod(p => shiftMonth(p, 1))} hitSlop={10}
+                className="w-9 h-9 rounded-full bg-card border border-border-soft items-center justify-center active:opacity-70">
+                <ChevronRight size={18} color={c.muted} />
+              </Pressable>
+            </View>
+
+            <View className="flex-row gap-2 mb-3">
+              <Pressable onPress={() => void exportRentRollCsv()}
+                className="flex-1 flex-row items-center justify-center gap-1.5 py-2 rounded-xl border border-border-soft bg-card active:opacity-70">
+                <Download size={14} color={c.muted} />
+                <Text className="text-xs font-semibold text-muted">{t.overview.exportCsvBtn}</Text>
+              </Pressable>
+              <Pressable onPress={() => void exportStatement()}
+                className="flex-1 flex-row items-center justify-center gap-1.5 py-2 rounded-xl border border-border-soft bg-card active:opacity-70">
+                <FileText size={14} color={c.muted} />
+                <Text className="text-xs font-semibold text-muted">{t.overview.statementBtn}</Text>
+              </Pressable>
+            </View>
+
             <View className="flex-row gap-3">
-              {statTile(t.overview.collectedLabel, fmtMoney(collected), undefined, 'text-emerald-600')}
-              {statTile(t.overview.outstandingLabel, fmtMoney(outstanding), undefined, outstanding > PAY_TOLERANCE ? 'text-red-600' : 'text-ink')}
+              {statTile(t.overview.collectedLabel, fmtMoney(summary.collected), undefined, 'text-emerald-600')}
+              {statTile(t.overview.billedLabel, fmtMoney(summary.billed))}
             </View>
             <View className="flex-row gap-3 mt-3">
-              {statTile(t.overview.overdueLabel, String(overdueCount))}
+              {statTile(t.overview.outstandingLabel, fmtMoney(summary.outstanding), undefined, summary.outstanding > PAY_TOLERANCE ? 'text-red-600' : 'text-ink')}
+              {statTile(t.overview.overdueAmountLabel, fmtMoney(summary.overdueAmount),
+                `${summary.overdueCount} ${t.overview.overdueLabel.toLowerCase()}`,
+                summary.overdueAmount > PAY_TOLERANCE ? 'text-red-600' : 'text-ink')}
+            </View>
+            <View className="flex-row gap-3 mt-3">
               {statTile(
                 t.overview.occupancyLabel,
                 occ.capacity > 0 ? `${Math.round((occ.occupied / occ.capacity) * 100)}%` : '—',
                 t.overview.occupiedOf.replace('{{occupied}}', String(occ.occupied)).replace('{{capacity}}', String(occ.capacity)),
               )}
+              {statTile(t.overview.depositsHeldLabel, fmtMoney(held))}
             </View>
+
+            {/* Month income vs expenses */}
             <View className="bg-card rounded-2xl border border-border-soft p-4 mt-3 flex-row justify-between">
               <View>
                 <Text className="text-[11px] text-muted">{t.overview.incomeLabel}</Text>
-                <Text className="text-sm font-bold text-emerald-600 mt-0.5">{fmtMoney(collected)}</Text>
+                <Text className="text-sm font-bold text-emerald-600 mt-0.5">{fmtMoney(summary.collected)}</Text>
               </View>
               <View>
                 <Text className="text-[11px] text-muted">{t.overview.expensesLabel}</Text>
@@ -2029,11 +2184,173 @@ export default function RentalsScreen() {
               </View>
               <View>
                 <Text className="text-[11px] text-muted">{t.overview.netLabel}</Text>
-                <Text className={`text-sm font-bold mt-0.5 ${collected - monthExpensesTotal >= 0 ? 'text-ink' : 'text-red-600'}`}>
-                  {fmtMoney(collected - monthExpensesTotal)}
+                <Text className={`text-sm font-bold mt-0.5 ${summary.collected - monthExpensesTotal >= 0 ? 'text-ink' : 'text-red-600'}`}>
+                  {fmtMoney(summary.collected - monthExpensesTotal)}
                 </Text>
               </View>
             </View>
+
+            {/* Year to date */}
+            <View className="bg-card rounded-2xl border border-border-soft p-4 mt-3">
+              <Text className="text-[11px] font-bold text-faint uppercase mb-2">{t.overview.ytdHeading}</Text>
+              <View className="flex-row justify-between">
+                <View>
+                  <Text className="text-[11px] text-muted">{t.overview.ytdIncomeLabel}</Text>
+                  <Text className="text-base font-bold text-emerald-600">{fmtMoney(ytd.income)}</Text>
+                </View>
+                <View>
+                  <Text className="text-[11px] text-muted">{t.overview.ytdExpensesLabel}</Text>
+                  <Text className="text-base font-bold text-red-600">{fmtMoney(ytd.expenses)}</Text>
+                </View>
+                <View>
+                  <Text className="text-[11px] text-muted">{t.overview.ytdNetLabel}</Text>
+                  <Text className={`text-base font-bold ${ytd.net >= 0 ? 'text-ink' : 'text-red-600'}`}>{fmtMoney(ytd.net)}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* 12-month trend — paired bars scaled to the window's max
+               (the ReportsScreen pattern; no chart lib on mobile). */}
+            {(() => {
+              const max = Math.max(1, ...series.map(sp => Math.max(sp.income, sp.expenses)));
+              return (
+                <View className="bg-card rounded-2xl border border-border-soft p-4 mt-3">
+                  <Text className="text-sm font-bold text-ink">{t.overview.trendHeading}</Text>
+                  <Text className="text-[10px] text-faint mb-3">{t.overview.trendHint}</Text>
+                  <View className="flex-row items-end justify-between" style={{ height: 110 }}>
+                    {series.map(sp => (
+                      <View key={sp.period} className="flex-1 items-center justify-end">
+                        <View className="flex-row items-end gap-0.5" style={{ height: 90 }}>
+                          <View className="w-1.5 rounded-t bg-teal-500"
+                            style={{ height: Math.max(2, (sp.income / max) * 90) }} />
+                          <View className="w-1.5 rounded-t bg-orange-500"
+                            style={{ height: Math.max(2, (sp.expenses / max) * 90) }} />
+                        </View>
+                        <Text className="text-[8px] text-faint mt-1">{shortMonthLabel(sp.period)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View className="flex-row gap-4 mt-2">
+                    <View className="flex-row items-center gap-1.5">
+                      <View className="w-2 h-2 rounded-full bg-teal-500" />
+                      <Text className="text-[10px] text-muted">{t.overview.incomeLabel}</Text>
+                    </View>
+                    <View className="flex-row items-center gap-1.5">
+                      <View className="w-2 h-2 rounded-full bg-orange-500" />
+                      <Text className="text-[10px] text-muted">{t.overview.expensesLabel}</Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })()}
+
+            {/* Needs attention */}
+            <View className="bg-card rounded-2xl border border-border-soft p-4 mt-3">
+              <Text className="text-[11px] font-bold text-faint uppercase mb-2">{t.overview.attentionHeading}</Text>
+              {expiringSoon.length === 0 && vacant === 0 && mtmCount === 0 ? (
+                <Text className="text-sm text-muted">{t.overview.allGood}</Text>
+              ) : (
+                <View className="flex-row flex-wrap gap-2">
+                  {expiringSoon.length > 0 ? (
+                    <View className="bg-amber-500/10 px-2.5 py-1 rounded-full">
+                      <Text className="text-[11px] font-semibold text-amber-700">
+                        {t.overview.expiringSoon.replace('{{count}}', String(expiringSoon.length))}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {vacant > 0 ? (
+                    <View className="bg-blue-500/10 px-2.5 py-1 rounded-full">
+                      <Text className="text-[11px] font-semibold text-blue-700">
+                        {t.overview.vacantUnits.replace('{{count}}', String(vacant))}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {mtmCount > 0 ? (
+                    <View className="bg-border-soft px-2.5 py-1 rounded-full">
+                      <Text className="text-[11px] font-semibold text-muted">
+                        {t.overview.monthToMonth.replace('{{count}}', String(mtmCount))}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              )}
+            </View>
+
+            {/* Delinquency aging */}
+            <Text className="text-xs font-bold text-muted uppercase tracking-wide mt-5 mb-2.5">
+              {t.overview.agingHeading}
+            </Text>
+            {aging.length === 0 ? (
+              <View className="bg-card rounded-2xl border border-border-soft p-6 items-center">
+                <Text className="text-sm text-muted text-center">{t.overview.agingEmpty}</Text>
+              </View>
+            ) : (
+              <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
+                {aging.map((a, i) => {
+                  const lease = leases.find(l => l.id === a.leaseId);
+                  const tn = lease ? tenantOf(lease.tenant_id) : null;
+                  const prop = lease ? properties.find(pr => pr.id === lease.property_id) : null;
+                  const bucket = a.d60plus > 0 ? t.overview.aging60plus
+                    : a.d31_60 > 0 ? t.overview.aging31_60
+                    : a.d1_30 > 0 ? t.overview.aging1_30
+                    : t.overview.agingCurrent;
+                  const tone = a.d60plus > 0 ? 'text-red-700'
+                    : a.d31_60 > 0 ? 'text-orange-700'
+                    : a.d1_30 > 0 ? 'text-amber-700' : 'text-muted';
+                  return (
+                    <Pressable key={a.leaseId} onPress={() => { if (prop) openDetail(prop); }}
+                      className={`px-4 py-3 active:bg-surface ${i > 0 ? 'border-t border-border-soft' : ''}`}>
+                      <View className="flex-row items-center justify-between gap-2">
+                        <Text className="text-sm font-medium text-ink flex-1" numberOfLines={1}>
+                          {tn ? tenantName(tn) : '—'}
+                        </Text>
+                        <Text className="text-sm font-bold text-ink">{fmtMoney(a.total)}</Text>
+                      </View>
+                      <View className="flex-row items-center justify-between mt-0.5">
+                        <Text className="text-[11px] text-faint flex-1" numberOfLines={1}>
+                          {prop?.name ?? '—'}{lease?.unit_label ? ` · ${lease.unit_label}` : ''}
+                        </Text>
+                        <Text className={`text-[11px] font-semibold ${tone}`}>{bucket}</Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Per-property performance */}
+            {perf.length > 0 ? (
+              <>
+                <Text className="text-xs font-bold text-muted uppercase tracking-wide mt-5 mb-2.5">
+                  {t.overview.propertiesHeading}
+                </Text>
+                <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
+                  {perf.map((pf, i) => {
+                    const prop = properties.find(pr => pr.id === pf.propertyId);
+                    return (
+                      <Pressable key={pf.propertyId} onPress={() => { if (prop) openDetail(prop); }}
+                        className={`px-4 py-3 active:bg-surface ${i > 0 ? 'border-t border-border-soft' : ''}`}>
+                        <View className="flex-row items-center justify-between gap-2">
+                          <Text className="text-sm font-medium text-ink flex-1" numberOfLines={1}>{prop?.name ?? '—'}</Text>
+                          <Text className="text-[11px] text-muted">{pf.occupied}/{pf.units}</Text>
+                        </View>
+                        <View className="flex-row items-center justify-between mt-1">
+                          <Text className="text-[11px] text-muted">
+                            {t.overview.collectedColumn}: <Text className="text-emerald-600 font-semibold">{fmtMoney(pf.collected)}</Text>
+                          </Text>
+                          <Text className="text-[11px] text-muted">
+                            {t.overview.outstandingColumn}: <Text className={pf.outstanding > PAY_TOLERANCE ? 'text-red-600 font-semibold' : 'text-ink'}>{fmtMoney(pf.outstanding)}</Text>
+                          </Text>
+                          <Text className="text-[11px] text-muted">
+                            {t.overview.ytdNetColumn}: <Text className={pf.ytdNet >= 0 ? 'text-ink font-semibold' : 'text-red-600 font-semibold'}>{fmtMoney(pf.ytdNet)}</Text>
+                          </Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            ) : null}
 
             <Text className="text-xs font-bold text-muted uppercase tracking-wide mt-5 mb-2.5">
               {t.overview.monthTitle.replace('{{month}}', monthLabel(period))}

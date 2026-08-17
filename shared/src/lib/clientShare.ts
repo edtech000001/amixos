@@ -63,7 +63,7 @@ export interface ClientFieldLabels {
 
 // Wrap a CSV cell only when it contains a delimiter / quote / newline.
 // Double internal quotes per RFC 4180.
-function csvCell(v: string): string {
+export function csvCell(v: string): string {
   if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
   return v;
 }

@@ -2533,6 +2533,22 @@ export type DashboardDict = {
         chargeAmountLabel: string;
         noCharges: string;
         paidOfAmount: string;
+        kindRent: string;
+        kindLateFee: string;
+        kindOther: string;
+        addChargeBtn: string;
+        addChargeTitle: string;
+        chargeKindLabel: string;
+        chargeDueLabel: string;
+        chargeNoteLabel: string;
+        chargeNotePlaceholder: string;
+        waiveBtn: string;
+        waiveConfirmTitle: string;
+        waiveConfirmBody: string;
+        waivedBadge: string;
+        deleteChargeConfirmTitle: string;
+        deleteChargeConfirmBody: string;
+        autoLateFeeNote: string;
       };
       payments: {
         recordTitle: string;
@@ -2623,6 +2639,45 @@ export type DashboardDict = {
         tenantColumn: string;
         rentColumn: string;
         statusColumn: string;
+        todayBtn: string;
+        billedLabel: string;
+        overdueAmountLabel: string;
+        depositsHeldLabel: string;
+        ytdHeading: string;
+        ytdIncomeLabel: string;
+        ytdExpensesLabel: string;
+        ytdNetLabel: string;
+        trendHeading: string;
+        trendHint: string;
+        agingHeading: string;
+        agingCurrent: string;
+        aging1_30: string;
+        aging31_60: string;
+        aging60plus: string;
+        agingTotal: string;
+        agingEmpty: string;
+        attentionHeading: string;
+        expiringSoon: string;
+        vacantUnits: string;
+        monthToMonth: string;
+        allGood: string;
+        propertiesHeading: string;
+        unitsColumn: string;
+        rentRollColumn: string;
+        collectedColumn: string;
+        outstandingColumn: string;
+        ytdNetColumn: string;
+        exportCsvBtn: string;
+        statementBtn: string;
+        statementTitle: string;
+        statementIncomeHeading: string;
+        statementExpensesHeading: string;
+        statementCategoryColumn: string;
+        statementAmountColumn: string;
+        statementTotalIncome: string;
+        statementTotalExpenses: string;
+        statementNet: string;
+        statementGeneratedOn: string;
       };
     };
   };
@@ -5455,6 +5510,22 @@ export const dashboard: Record<Locale, DashboardDict> = {
           daysLate: '{{days}} días de atraso',
           recordPaymentBtn: 'Registrar pago',
           editChargeTitle: 'Editar cobro',
+          kindRent: 'Renta',
+          kindLateFee: 'Recargo',
+          kindOther: 'Otro cargo',
+          addChargeBtn: 'Agregar cargo',
+          addChargeTitle: 'Nuevo cargo',
+          chargeKindLabel: 'Tipo',
+          chargeDueLabel: 'Fecha de vencimiento',
+          chargeNoteLabel: 'Concepto',
+          chargeNotePlaceholder: 'Agua, daño a la pared…',
+          waiveBtn: 'Eximir recargo',
+          waiveConfirmTitle: 'Eximir recargo',
+          waiveConfirmBody: 'El recargo quedará en $0 y no contará en el saldo. ¿Continuar?',
+          waivedBadge: 'Eximido',
+          deleteChargeConfirmTitle: 'Eliminar cargo',
+          deleteChargeConfirmBody: 'Se eliminará este cargo y sus pagos registrados. ¿Continuar?',
+          autoLateFeeNote: 'Recargo automático',
           chargeAmountLabel: 'Monto del cobro',
           noCharges: 'Aún no hay cobros generados.',
           paidOfAmount: '{{paid}} de {{total}}',
@@ -5535,6 +5606,45 @@ export const dashboard: Record<Locale, DashboardDict> = {
         },
         overview: {
           monthTitle: 'Rentas de {{month}}',
+          todayBtn: 'Hoy',
+          billedLabel: 'Facturado',
+          overdueAmountLabel: 'Vencido',
+          depositsHeldLabel: 'Depósitos retenidos',
+          ytdHeading: 'Año en curso',
+          ytdIncomeLabel: 'Ingresos del año',
+          ytdExpensesLabel: 'Gastos del año',
+          ytdNetLabel: 'Neto del año',
+          trendHeading: 'Ingresos vs gastos (12 meses)',
+          trendHint: 'Ingresos = pagos recibidos en el mes.',
+          agingHeading: 'Saldos vencidos',
+          agingCurrent: 'Por vencer',
+          aging1_30: '1–30 días',
+          aging31_60: '31–60 días',
+          aging60plus: '60+ días',
+          agingTotal: 'Total',
+          agingEmpty: 'Nadie debe renta. ¡Todo al corriente!',
+          attentionHeading: 'Requiere atención',
+          expiringSoon: '{{count}} contrato(s) vencen en 60 días',
+          vacantUnits: '{{count}} unidad(es) vacía(s)',
+          monthToMonth: '{{count}} contrato(s) mes a mes',
+          allGood: 'Nada pendiente por ahora.',
+          propertiesHeading: 'Rendimiento por propiedad',
+          unitsColumn: 'Unidades',
+          rentRollColumn: 'Renta mensual',
+          collectedColumn: 'Cobrado',
+          outstandingColumn: 'Pendiente',
+          ytdNetColumn: 'Neto del año',
+          exportCsvBtn: 'Exportar CSV',
+          statementBtn: 'Estado de cuenta',
+          statementTitle: 'Estado de cuenta · {{month}}',
+          statementIncomeHeading: 'Ingresos por propiedad',
+          statementExpensesHeading: 'Gastos por categoría',
+          statementCategoryColumn: 'Categoría',
+          statementAmountColumn: 'Monto',
+          statementTotalIncome: 'Total de ingresos',
+          statementTotalExpenses: 'Total de gastos',
+          statementNet: 'Neto',
+          statementGeneratedOn: 'Generado el {{date}}',
           collectedLabel: 'Cobrado',
           outstandingLabel: 'Pendiente',
           overdueLabel: 'Atrasados',
@@ -8406,6 +8516,22 @@ export const dashboard: Record<Locale, DashboardDict> = {
           daysLate: '{{days}} days late',
           recordPaymentBtn: 'Record payment',
           editChargeTitle: 'Edit charge',
+          kindRent: 'Rent',
+          kindLateFee: 'Late fee',
+          kindOther: 'Other charge',
+          addChargeBtn: 'Add charge',
+          addChargeTitle: 'New charge',
+          chargeKindLabel: 'Type',
+          chargeDueLabel: 'Due date',
+          chargeNoteLabel: 'Description',
+          chargeNotePlaceholder: 'Water, wall damage…',
+          waiveBtn: 'Waive late fee',
+          waiveConfirmTitle: 'Waive late fee',
+          waiveConfirmBody: 'The fee drops to $0 and stops counting toward the balance. Continue?',
+          waivedBadge: 'Waived',
+          deleteChargeConfirmTitle: 'Delete charge',
+          deleteChargeConfirmBody: 'This deletes the charge and any payments recorded against it. Continue?',
+          autoLateFeeNote: 'Automatic late fee',
           chargeAmountLabel: 'Charge amount',
           noCharges: 'No charges generated yet.',
           paidOfAmount: '{{paid}} of {{total}}',
@@ -8486,6 +8612,45 @@ export const dashboard: Record<Locale, DashboardDict> = {
         },
         overview: {
           monthTitle: '{{month}} rent',
+          todayBtn: 'Today',
+          billedLabel: 'Billed',
+          overdueAmountLabel: 'Overdue',
+          depositsHeldLabel: 'Deposits held',
+          ytdHeading: 'Year to date',
+          ytdIncomeLabel: 'YTD income',
+          ytdExpensesLabel: 'YTD expenses',
+          ytdNetLabel: 'YTD net',
+          trendHeading: 'Income vs expenses (12 months)',
+          trendHint: 'Income = payments received that month.',
+          agingHeading: 'Past-due balances',
+          agingCurrent: 'Not yet due',
+          aging1_30: '1–30 days',
+          aging31_60: '31–60 days',
+          aging60plus: '60+ days',
+          agingTotal: 'Total',
+          agingEmpty: 'Nobody owes rent. All caught up!',
+          attentionHeading: 'Needs attention',
+          expiringSoon: '{{count}} lease(s) end within 60 days',
+          vacantUnits: '{{count}} vacant unit(s)',
+          monthToMonth: '{{count}} month-to-month lease(s)',
+          allGood: 'Nothing pending right now.',
+          propertiesHeading: 'Property performance',
+          unitsColumn: 'Units',
+          rentRollColumn: 'Monthly rent',
+          collectedColumn: 'Collected',
+          outstandingColumn: 'Outstanding',
+          ytdNetColumn: 'YTD net',
+          exportCsvBtn: 'Export CSV',
+          statementBtn: 'Owner statement',
+          statementTitle: 'Owner statement · {{month}}',
+          statementIncomeHeading: 'Income by property',
+          statementExpensesHeading: 'Expenses by category',
+          statementCategoryColumn: 'Category',
+          statementAmountColumn: 'Amount',
+          statementTotalIncome: 'Total income',
+          statementTotalExpenses: 'Total expenses',
+          statementNet: 'Net',
+          statementGeneratedOn: 'Generated on {{date}}',
           collectedLabel: 'Collected',
           outstandingLabel: 'Outstanding',
           overdueLabel: 'Overdue',

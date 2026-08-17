@@ -83,6 +83,21 @@ export interface RentalLease {
   deposit_amount: number | null;
   status: 'active' | 'ended';
   notes: string | null;
+  /** Late-fee rule (204). Fees only apply to rent due on/after late_fee_since. */
+  late_fee_amount: number | null;
+  late_fee_grace_days: number | null;
+  late_fee_since: string | null;
+  /** Charge the first/last partial month pro-rata by day (204). */
+  prorate_partial: boolean;
+  /** Deposit tracking (205): null returned_on = still held. */
+  deposit_returned_on: string | null;
+  deposit_withheld: number | null;
+  deposit_note: string | null;
+  /** Tenant e-signature (206) — share link + captured signature. */
+  share_token: string | null;
+  tenant_signature: string | null;
+  tenant_signed_at: string | null;
+  tenant_signer_name: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -108,10 +123,15 @@ export interface RentalCharge {
   period_start: string;           // canonical YYYY-MM-01
   due_date: string;
   amount: number;                 // snapshot at generation
-  kind: 'rent' | 'late_fee' | 'other';
+  kind: RentalChargeKind;
+  /** Idempotency discriminator (204): 'rent' / 'late_fee' for generated
+   *  charges, a random uuid for manual ones so a month can hold many. */
+  dedupe_key: string;
   note: string | null;
   created_at: string;
 }
+
+export type RentalChargeKind = 'rent' | 'late_fee' | 'other';
 
 export interface RentalPayment {
   id: string;
