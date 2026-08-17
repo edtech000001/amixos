@@ -939,6 +939,38 @@ export function PropertyDetail({
     );
   };
 
+  // Backfill helper: when importing historical leases, record one full
+  // payment per unpaid month (dated its due date) instead of clicking
+  // "Record payment" month by month.
+  const markAllPaid = async (l: RentalLease) => {
+    if (!business) return;
+    const lCharges = chargesByLease.get(l.id) ?? [];
+    const open = lCharges
+      .map(ch => ({ ch, remaining: ch.amount - paidOn(ch.id) }))
+      .filter(x => x.remaining > PAY_TOLERANCE);
+    if (open.length === 0) return;
+    const total = open.reduce((s2, x) => s2 + x.remaining, 0);
+    const ok = await confirm({
+      title: t.ledger.markAllConfirmTitle,
+      message: t.ledger.markAllConfirmBody
+        .replace('{{count}}', String(open.length))
+        .replace('{{total}}', fmtMoney(total)),
+    });
+    if (!ok) return;
+    await supabase.from('rental_payments').insert(open.map(x => ({
+      business_id: business.id,
+      charge_id: x.ch.id,
+      lease_id: l.id,
+      amount: x.remaining,
+      method: null,
+      paid_on: x.ch.due_date,
+      note: null,
+      created_by: user?.id ?? null,
+    })));
+    void logAudit(supabase, business.id, 'rental_payment.recorded', 'rental_payment', l.id, { bulk: open.length, total });
+    await reload();
+  };
+
   const ledgerForLease = (l: RentalLease) => {
     const tn = tenantOf(l.tenant_id);
     const lCharges = chargesByLease.get(l.id) ?? [];
@@ -955,9 +987,16 @@ export function PropertyDetail({
               ) : null}
             </p>
           </div>
-          <p className={`text-sm font-bold shrink-0 ${balance > PAY_TOLERANCE ? 'text-red-600' : 'text-emerald-600'}`}>
-            {t.ledger.balanceLabel}: {fmtMoney(Math.max(0, balance))}
-          </p>
+          <div className="flex items-center gap-2 shrink-0">
+            {canCreate && balance > PAY_TOLERANCE ? (
+              <Button variant="secondary" size="sm" onClick={() => void markAllPaid(l)}>
+                {t.ledger.markAllPaidBtn}
+              </Button>
+            ) : null}
+            <p className={`text-sm font-bold ${balance > PAY_TOLERANCE ? 'text-red-600' : 'text-emerald-600'}`}>
+              {t.ledger.balanceLabel}: {fmtMoney(Math.max(0, balance))}
+            </p>
+          </div>
         </div>
         {lCharges.length === 0 ? (
           <p className="text-xs text-faint">{t.ledger.noCharges}</p>

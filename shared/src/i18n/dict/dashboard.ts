@@ -2519,6 +2519,9 @@ export type DashboardDict = {
       ledger: {
         title: string;
         balanceLabel: string;
+        markAllPaidBtn: string;
+        markAllConfirmTitle: string;
+        markAllConfirmBody: string;
         depositLabel: string;
         statusPaid: string;
         statusPartial: string;
@@ -5441,6 +5444,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         ledger: {
           title: 'Historial de renta',
           balanceLabel: 'Saldo pendiente',
+          markAllPaidBtn: 'Marcar todo pagado',
+          markAllConfirmTitle: 'Marcar todo pagado',
+          markAllConfirmBody: 'Se registrará el pago completo de {{count}} meses por {{total}}, con fecha de vencimiento de cada mes. ¿Continuar?',
           depositLabel: 'Depósito',
           statusPaid: 'Pagado',
           statusPartial: 'Parcial',
@@ -8389,6 +8395,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         ledger: {
           title: 'Rent history',
           balanceLabel: 'Outstanding balance',
+          markAllPaidBtn: 'Mark all paid',
+          markAllConfirmTitle: 'Mark all paid',
+          markAllConfirmBody: 'This will record full payment for {{count}} months totaling {{total}}, dated each month\'s due date. Continue?',
           depositLabel: 'Deposit',
           statusPaid: 'Paid',
           statusPartial: 'Partial',

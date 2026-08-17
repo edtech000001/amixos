@@ -1111,6 +1111,38 @@ export default function RentalsScreen() {
     setUploadingPhoto(false);
   };
 
+  // Backfill helper: record one full payment per unpaid month of a lease
+  // (dated its due date) — for importing historical leases without tapping
+  // "Registrar pago" month by month.
+  const markAllPaid = async (l: RentalLease) => {
+    if (!business) return;
+    const lCharges = chargesByLease.get(l.id) ?? [];
+    const open = lCharges
+      .map(ch => ({ ch, remaining: ch.amount - paidOn(ch.id) }))
+      .filter(x => x.remaining > PAY_TOLERANCE);
+    if (open.length === 0) return;
+    const total = open.reduce((s2, x) => s2 + x.remaining, 0);
+    const ok = await confirm({
+      title: t.ledger.markAllConfirmTitle,
+      message: t.ledger.markAllConfirmBody
+        .replace('{{count}}', String(open.length))
+        .replace('{{total}}', fmtMoney(total)),
+    });
+    if (!ok) return;
+    await supabase.from('rental_payments').insert(open.map(x => ({
+      business_id: business.id,
+      charge_id: x.ch.id,
+      lease_id: l.id,
+      amount: x.remaining,
+      method: null,
+      paid_on: x.ch.due_date,
+      note: null,
+      created_by: user?.id ?? null,
+    })));
+    void logAudit(supabase, business.id, 'rental_payment.recorded', 'rental_payment', l.id, { bulk: open.length, total });
+    if (detail) await reloadDetail(detail.id);
+  };
+
   const deletePropertyPhoto = async (p: RentalPropertyPhoto) => {
     if (!detail) return;
     if (!(await confirm({ message: t.photos.deleteConfirm, destructive: true }))) return;
@@ -1576,6 +1608,12 @@ export default function RentalsScreen() {
                           {fmtMoney(Math.max(0, balance))}
                         </Text>
                       </View>
+                      {canCreate && balance > PAY_TOLERANCE ? (
+                        <Pressable onPress={() => void markAllPaid(l)}
+                          className="self-start mb-1 px-3 py-1.5 rounded-full bg-emerald-500/10 active:opacity-70">
+                          <Text className="text-xs font-semibold text-emerald-700">{t.ledger.markAllPaidBtn}</Text>
+                        </Pressable>
+                      ) : null}
                       {lCharges.length === 0 ? (
                         <Text className="text-xs text-faint">{t.ledger.noCharges}</Text>
                       ) : lCharges.map(ch => {
