@@ -89,23 +89,21 @@ export function RentRoll({ supabase, businessId, properties, tenants, leases, lo
 
   // Charges + payments are fetched WHOLE (paginated): aging and all-time
   // balances need every row regardless of age, and having them in memory means
-  // the trend and YTD need no extra round trips.
+  // the trend and YTD need no extra round trips. Deliberately NOT keyed on the
+  // selected month — stepping months must not refetch or blink the page.
   useEffect(() => {
     if (!businessId) return;
     let cancelled = false;
     setDataLoading(true);
     (async () => {
       try {
-        const expFrom = trendPeriods[0] < ytdFrom ? trendPeriods[0] : ytdFrom;
-        const [ch, pay, exp] = await Promise.all([
+        const [ch, pay] = await Promise.all([
           fetchAllCharges(supabase, businessId),
           fetchAllPayments(supabase, businessId),
-          fetchExpensesInRange(supabase, businessId, expFrom, monthTo),
         ]);
         if (cancelled) return;
         setCharges(ch);
         setPayments(pay);
-        setExpenses(exp);
       } finally {
         if (!cancelled) setDataLoading(false);
       }
@@ -113,7 +111,20 @@ export function RentRoll({ supabase, businessId, properties, tenants, leases, lo
     return () => { cancelled = true; };
     // Re-pull when the lease set changes (a new lease materializes new charges).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [businessId, period, leases]);
+  }, [businessId, leases]);
+
+  // Expenses only cover the window the selected month needs (trend + YTD), so
+  // this one does follow the stepper — silently, without the loading state.
+  useEffect(() => {
+    if (!businessId) return;
+    let cancelled = false;
+    const expFrom = trendPeriods[0] < ytdFrom ? trendPeriods[0] : ytdFrom;
+    fetchExpensesInRange(supabase, businessId, expFrom, monthTo)
+      .then(exp => { if (!cancelled) setExpenses(exp); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessId, trendPeriods[0], ytdFrom, monthTo]);
 
   const monthName = useMemo(() => {
     const [y, m] = period.split('-').map(Number);

@@ -369,28 +369,40 @@ export default function RentalsScreen() {
   const monthBounds = useMemo(() => monthRange(period), [period]);
   const ytdFrom = useMemo(() => yearStart(period), [period]);
 
+  // Deliberately NOT keyed on the selected month — stepping months must not
+  // refetch the whole ledger or flash the spinner.
   useEffect(() => {
     if (!business) return;
     let cancelled = false;
     setMonthLoading(true);
     (async () => {
       try {
-        const expFrom = trendPeriods[0] < ytdFrom ? trendPeriods[0] : ytdFrom;
-        const [ch, pays, exp] = await Promise.all([
+        const [ch, pays] = await Promise.all([
           fetchAllCharges(supabase, business.id),
           fetchAllPayments(supabase, business.id),
-          fetchExpensesInRange(supabase, business.id, expFrom, monthBounds.to),
         ]);
         if (cancelled) return;
         setAllCharges(ch);
         setAllPayments(pays);
-        setOverviewExpenses(exp);
       } catch { /* offline */ }
       finally { if (!cancelled) setMonthLoading(false); }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [business?.id, period, leases]);
+  }, [business?.id, leases]);
+
+  // Expenses cover only the window the selected month needs — follows the
+  // stepper, silently.
+  useEffect(() => {
+    if (!business) return;
+    let cancelled = false;
+    const expFrom = trendPeriods[0] < ytdFrom ? trendPeriods[0] : ytdFrom;
+    fetchExpensesInRange(supabase, business.id, expFrom, monthBounds.to)
+      .then(exp => { if (!cancelled) setOverviewExpenses(exp); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id, trendPeriods[0], ytdFrom, monthBounds.to]);
 
   const monthCharges = useMemo(
     () => allCharges.filter(ch => periodOf(ch.period_start) === period),
