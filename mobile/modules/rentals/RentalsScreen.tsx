@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert, Dimensions, FlatList, Image, KeyboardAvoidingView, Linking, Modal as RNModal,
-  Platform, Pressable, ScrollView, Text, TextInput, View, ActivityIndicator,
+  Platform, Pressable, ScrollView, Share, Text, TextInput, View, ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -51,10 +51,13 @@ import {
 import { expensesByCategory } from '@amixos/shared/lib/rentalsAnalytics';
 import { buildRentalStatementHtml } from '@amixos/shared/lib/rentalsReportHtml';
 import { csvCell } from '@amixos/shared/lib/clientShare';
+import { secureShareToken } from '@amixos/shared/lib/shareToken';
+import { WEB_APP_URL } from '@/lib/webUrl';
+import { SignaturePad } from '@/components/SignaturePad';
 import { signedUrl, useSignedUrls } from '@amixos/shared/lib/storageUrls';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
-import { formatDateLong, formatPhoneInput } from '@amixos/shared/lib/format';
+import { formatDateLong, formatPhoneInput, formatDateTimeLong } from '@amixos/shared/lib/format';
 import { toUsStateAbbr, usStateName } from '@amixos/shared/lib/usStates';
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import {
@@ -1192,6 +1195,48 @@ export default function RentalsScreen() {
   // Backfill helper: record one full payment per unpaid month of a lease
   // (dated its due date) — for importing historical leases without tapping
   // "Registrar pago" month by month.
+  // ── Lease e-signing ───────────────────────────────────────────────────────
+  const [signatureView, setSignatureView] = useState<RentalLease | null>(null);
+  const [signLease, setSignLease] = useState<RentalLease | null>(null);
+  const [signName, setSignName] = useState('');
+  const [signData, setSignData] = useState<string | null>(null);
+  const [signBusy, setSignBusy] = useState(false);
+
+  /** Mint the token on first use, then hand the link to the OS share sheet. */
+  const shareSignLink = async (l: RentalLease) => {
+    if (!detail) return;
+    let token = l.share_token;
+    if (!token) {
+      token = secureShareToken();
+      const { error } = await supabase.from('rental_leases').update({ share_token: token }).eq('id', l.id);
+      if (error) { Alert.alert('', t.saveError); return; }
+      await reloadDetail(detail.id);
+    }
+    try {
+      await Share.share({ message: `${WEB_APP_URL}/contrato/${token}` });
+    } catch { /* user dismissed */ }
+  };
+
+  const openSignInPerson = (l: RentalLease) => {
+    const tn = tenantOf(l.tenant_id);
+    setSignLease(l);
+    setSignName(tn ? tenantName(tn) : '');
+    setSignData(null);
+  };
+
+  const saveInPersonSignature = async () => {
+    if (!signLease || !signData || !signName.trim() || !detail) return;
+    setSignBusy(true);
+    await supabase.from('rental_leases').update({
+      tenant_signature: signData,
+      tenant_signer_name: signName.trim(),
+      tenant_signed_at: new Date().toISOString(),
+    }).eq('id', signLease.id);
+    setSignBusy(false);
+    setSignLease(null);
+    await reloadDetail(detail.id);
+  };
+
   // ── Deposit return ────────────────────────────────────────────────────────
   const [depositLease, setDepositLease] = useState<RentalLease | null>(null);
   const [depositDate, setDepositDate] = useState(todayISO());
@@ -1758,6 +1803,41 @@ export default function RentalsScreen() {
                         </View>
                       ) : null}
 
+                      {/* Tenant signature */}
+                      <View className="mt-3 rounded-xl bg-surface px-3 py-2.5">
+                        <Text className="text-[10px] font-bold text-faint uppercase">{t.leases.signHeading}</Text>
+                        {l.tenant_signed_at ? (
+                          <Text className="text-xs font-semibold text-emerald-700 mt-0.5">
+                            {t.leases.signedBy
+                              .replace('{{name}}', l.tenant_signer_name ?? '')
+                              .replace('{{date}}', formatDateTimeLong(l.tenant_signed_at, dateLoc))}
+                          </Text>
+                        ) : (
+                          <Text className="text-xs text-muted mt-0.5">{t.leases.unsignedBadge}</Text>
+                        )}
+                        {canEdit ? (
+                          <View className="flex-row flex-wrap gap-4 mt-2">
+                            {l.tenant_signature ? (
+                              <Pressable onPress={() => setSignatureView(l)} hitSlop={6} className="active:opacity-60">
+                                <Text className="text-xs font-semibold text-muted">{t.leases.viewSignatureBtn}</Text>
+                              </Pressable>
+                            ) : null}
+                            {!l.tenant_signed_at ? (
+                              <>
+                                <Pressable onPress={() => void shareSignLink(l)} hitSlop={6} className="active:opacity-60">
+                                  <Text className="text-xs font-semibold text-primary">
+                                    {l.share_token ? t.leases.copyLinkBtn : t.leases.signLinkBtn}
+                                  </Text>
+                                </Pressable>
+                                <Pressable onPress={() => openSignInPerson(l)} hitSlop={6} className="active:opacity-60">
+                                  <Text className="text-xs font-semibold text-primary">{t.leases.signInPersonBtn}</Text>
+                                </Pressable>
+                              </>
+                            ) : null}
+                          </View>
+                        ) : null}
+                      </View>
+
                       {/* Actions */}
                       {canEdit ? (
                         <View className="mt-3 flex-row justify-end gap-4">
@@ -2173,6 +2253,8 @@ export default function RentalsScreen() {
         {renderChargeEditSheet()}
         {renderAddChargeSheet()}
         {renderDepositSheet()}
+        {renderSignSheet()}
+        {renderSignatureViewSheet()}
         {renderExpenseSheet()}
         {renderMaintSheet()}
 
@@ -3062,6 +3144,41 @@ export default function RentalsScreen() {
           className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
           {chargeBusy ? <ActivityIndicator color="#fff" /> : <Text className="text-sm font-semibold text-white">{tc.buttons.save}</Text>}
         </Pressable>
+      </View>
+    ));
+  }
+
+  function renderSignSheet() {
+    return sheetShell(!!signLease, () => setSignLease(null), t.leases.signInPersonBtn, (
+      <View className="gap-3.5 pb-2">
+        <SignaturePad hint={t.leases.signPadHint} clearLabel={tc.buttons.clear} onChange={setSignData} />
+        <View>
+          <Text className={labelCls}>{t.leases.signerNameLabel}</Text>
+          <TextInput value={signName} onChangeText={setSignName}
+            placeholderTextColor={c.faint} className={fieldCls} />
+        </View>
+        <Pressable onPress={saveInPersonSignature} disabled={signBusy || !signData || !signName.trim()}
+          className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
+          {signBusy ? <ActivityIndicator color="#fff" /> : <Text className="text-sm font-semibold text-white">{t.leases.signSubmitBtn}</Text>}
+        </Pressable>
+      </View>
+    ));
+  }
+
+  function renderSignatureViewSheet() {
+    return sheetShell(!!signatureView, () => setSignatureView(null), t.leases.signHeading, (
+      <View className="items-center gap-2 pb-2">
+        {signatureView?.tenant_signature ? (
+          <Image source={{ uri: signatureView.tenant_signature }}
+            style={{ width: '100%', height: 140 }} resizeMode="contain" />
+        ) : null}
+        {signatureView?.tenant_signed_at ? (
+          <Text className="text-xs text-muted text-center">
+            {t.leases.signedBy
+              .replace('{{name}}', signatureView.tenant_signer_name ?? '')
+              .replace('{{date}}', formatDateTimeLong(signatureView.tenant_signed_at, dateLoc))}
+          </Text>
+        ) : null}
       </View>
     ));
   }

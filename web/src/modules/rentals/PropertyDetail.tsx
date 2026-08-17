@@ -14,12 +14,14 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { Button } from '@/components/ui/Button';
+import { SignaturePad } from '@/components/SignaturePad';
+import { secureShareToken } from '@amixos/shared/lib/shareToken';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Toggle } from '@/components/ui/Toggle';
 import { useSignedUrls, signedUrl } from '@amixos/shared/lib/storageUrls';
 import { logAudit } from '@amixos/shared/lib/audit';
-import { formatDateLong } from '@amixos/shared/lib/format';
+import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { normalizeImageFiles } from '@/lib/imageFile';
 import {
@@ -977,6 +979,46 @@ export function PropertyDetail({
           </div>
         ) : null}
 
+        {/* Tenant signature — share link or sign in person. */}
+        <div className="mt-3 rounded-xl bg-surface px-3 py-2.5">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">{t.leases.signHeading}</p>
+              {l.tenant_signed_at ? (
+                <p className="text-xs text-emerald-700 font-semibold">
+                  {t.leases.signedBy
+                    .replace('{{name}}', l.tenant_signer_name ?? '')
+                    .replace('{{date}}', formatDateTimeLong(l.tenant_signed_at, locale))}
+                </p>
+              ) : (
+                <p className="text-xs text-muted">{t.leases.unsignedBadge}</p>
+              )}
+            </div>
+            {canEdit ? (
+              <div className="flex items-center gap-3 shrink-0">
+                {l.tenant_signature ? (
+                  <button onClick={() => setSignatureView(l)} className="text-xs font-semibold text-muted hover:underline">
+                    {t.leases.viewSignatureBtn}
+                  </button>
+                ) : null}
+                {!l.tenant_signed_at ? (
+                  <>
+                    <button onClick={() => void shareSignLink(l)} className="text-xs font-semibold text-primary hover:underline">
+                      {l.share_token ? t.leases.copyLinkBtn : t.leases.signLinkBtn}
+                    </button>
+                    <button onClick={() => openSignInPerson(l)} className="text-xs font-semibold text-primary hover:underline">
+                      {t.leases.signInPersonBtn}
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+          {copiedLeaseId === l.id ? (
+            <p className="text-[11px] text-emerald-600 mt-1">{t.leases.linkCopied}</p>
+          ) : null}
+        </div>
+
         {canEdit ? (
           <div className="mt-3 flex justify-end gap-4">
             {canCreate ? (
@@ -1024,6 +1066,53 @@ export function PropertyDetail({
       created_by: user?.id ?? null,
     })));
     void logAudit(supabase, business.id, 'rental_payment.recorded', 'rental_payment', l.id, { bulk: open.length, total });
+    await reload();
+  };
+
+  // ── Lease e-signing ───────────────────────────────────────────────────────
+  const [copiedLeaseId, setCopiedLeaseId] = useState<string | null>(null);
+  const [signatureView, setSignatureView] = useState<RentalLease | null>(null);
+  const [signLease, setSignLease] = useState<RentalLease | null>(null);
+  const [signName, setSignName] = useState('');
+  const [signData, setSignData] = useState<string | null>(null);
+  const [signBusy, setSignBusy] = useState(false);
+
+  /** Mint the share token on first use, then copy the public link. */
+  const shareSignLink = async (l: RentalLease) => {
+    let token = l.share_token;
+    if (!token) {
+      token = secureShareToken();
+      const { error } = await supabase.from('rental_leases').update({ share_token: token }).eq('id', l.id);
+      if (error) return;
+      await reload();
+    }
+    const url = `${window.location.origin}/contrato/${token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedLeaseId(l.id);
+      setTimeout(() => setCopiedLeaseId(null), 2500);
+    } catch {
+      window.prompt(t.leases.copyLinkBtn, url);
+    }
+  };
+
+  const openSignInPerson = (l: RentalLease) => {
+    const tn = tenantOf(l.tenant_id);
+    setSignLease(l);
+    setSignName(tn ? tenantName(tn) : '');
+    setSignData(null);
+  };
+
+  const saveInPersonSignature = async () => {
+    if (!signLease || !signData || !signName.trim()) return;
+    setSignBusy(true);
+    await supabase.from('rental_leases').update({
+      tenant_signature: signData,
+      tenant_signer_name: signName.trim(),
+      tenant_signed_at: new Date().toISOString(),
+    }).eq('id', signLease.id);
+    setSignBusy(false);
+    setSignLease(null);
     await reload();
   };
 
@@ -1722,6 +1811,35 @@ export function PropertyDetail({
       </Modal>
 
       {/* Charge amount edit */}
+      <Modal open={!!signatureView} onClose={() => setSignatureView(null)} title={t.leases.signHeading} size="sm">
+        <div className="flex flex-col items-center gap-2">
+          {signatureView?.tenant_signature ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={signatureView.tenant_signature} alt="" className="max-h-40 object-contain" />
+          ) : null}
+          {signatureView?.tenant_signed_at ? (
+            <p className="text-xs text-muted text-center">
+              {t.leases.signedBy
+                .replace('{{name}}', signatureView.tenant_signer_name ?? '')
+                .replace('{{date}}', formatDateTimeLong(signatureView.tenant_signed_at, locale))}
+            </p>
+          ) : null}
+        </div>
+      </Modal>
+
+      <Modal open={!!signLease} onClose={() => setSignLease(null)} title={t.leases.signInPersonBtn} size="sm">
+        <div className="flex flex-col gap-3">
+          <SignaturePad hint={t.leases.signPadHint} clearLabel={tc.buttons.clear} onChange={setSignData} />
+          <Input label={t.leases.signerNameLabel} value={signName} onChange={e => setSignName(e.target.value)} />
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setSignLease(null)}>{tc.buttons.cancel}</Button>
+            <Button onClick={saveInPersonSignature} loading={signBusy} disabled={!signData || !signName.trim()}>
+              {t.leases.signSubmitBtn}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       <Modal open={!!depositLease} onClose={() => setDepositLease(null)} title={t.leases.returnDepositTitle} size="sm">
         <div className="flex flex-col gap-4">
           <Input label={t.leases.returnDateLabel} type="date" value={depositDate}

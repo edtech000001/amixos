@@ -2501,6 +2501,18 @@ export type DashboardDict = {
         returnDepositTitle: string;
         returnDateLabel: string;
         undoReturnBtn: string;
+        signHeading: string;
+        signedBadge: string;
+        unsignedBadge: string;
+        signLinkBtn: string;
+        copyLinkBtn: string;
+        linkCopied: string;
+        signInPersonBtn: string;
+        viewSignatureBtn: string;
+        signedBy: string;
+        signPadHint: string;
+        signerNameLabel: string;
+        signSubmitBtn: string;
         expiredBadge: string;
         form: {
           tenantLabel: string;
@@ -5498,6 +5510,18 @@ export const dashboard: Record<Locale, DashboardDict> = {
           returnDepositTitle: 'Devolver depósito',
           returnDateLabel: 'Fecha de devolución',
           undoReturnBtn: 'Deshacer devolución',
+          signHeading: 'Firma del inquilino',
+          signedBadge: 'Firmado',
+          unsignedBadge: 'Pendiente de firma',
+          signLinkBtn: 'Generar enlace de firma',
+          copyLinkBtn: 'Copiar enlace',
+          linkCopied: 'Enlace copiado',
+          signInPersonBtn: 'Firmar en persona',
+          viewSignatureBtn: 'Ver firma',
+          signedBy: 'Firmado por {{name}} el {{date}}',
+          signPadHint: 'Firma con el dedo o el mouse',
+          signerNameLabel: 'Nombre de quien firma',
+          signSubmitBtn: 'Firmar contrato',
           expiredBadge: 'Vencido',
           form: {
             tenantLabel: 'Inquilino',
@@ -8521,6 +8545,18 @@ export const dashboard: Record<Locale, DashboardDict> = {
           returnDepositTitle: 'Return deposit',
           returnDateLabel: 'Return date',
           undoReturnBtn: 'Undo return',
+          signHeading: 'Tenant signature',
+          signedBadge: 'Signed',
+          unsignedBadge: 'Awaiting signature',
+          signLinkBtn: 'Create signing link',
+          copyLinkBtn: 'Copy link',
+          linkCopied: 'Link copied',
+          signInPersonBtn: 'Sign in person',
+          viewSignatureBtn: 'View signature',
+          signedBy: 'Signed by {{name}} on {{date}}',
+          signPadHint: 'Sign with your finger or mouse',
+          signerNameLabel: "Signer's name",
+          signSubmitBtn: 'Sign lease',
           expiredBadge: 'Expired',
           form: {
             tenantLabel: 'Tenant',
