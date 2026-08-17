@@ -710,10 +710,13 @@ export function PropertyDetail({
         const { error: upErr } = await supabase.storage.from(RENTALS_BUCKET)
           .upload(path, file, { upsert: false, contentType: file.type || 'image/jpeg' });
         if (upErr) throw upErr;
+        const [catLease, catPhase] = photoCat ? photoCat.split('|') : [null, null];
         const { error: insErr } = await supabase.from('rental_property_photos').insert({
           business_id: business.id,
           property_id: property.id,
           storage_path: path,
+          lease_id: catLease,
+          phase: catPhase,
           created_by: user?.id ?? null,
         });
         if (insErr) throw insErr;
@@ -739,6 +742,37 @@ export function PropertyDetail({
   };
 
   const photoUrls = useSignedUrls(supabase, photos.map(p => p.storage_path));
+
+  // Upload category: '' = general, '<leaseId>|before' / '<leaseId>|after' =
+  // damage-doc photos for one tenant's stay (migration 203).
+  const [photoCat, setPhotoCat] = useState('');
+  const photoCatOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = [{ value: '', label: t.photos.catGeneral }];
+    for (const l of leases) {
+      const tn = tenants.find(x => x.id === l.tenant_id);
+      const name = tn ? tenantName(tn) : '—';
+      opts.push({ value: `${l.id}|before`, label: `${name} · ${t.photos.catBefore}` });
+      opts.push({ value: `${l.id}|after`, label: `${name} · ${t.photos.catAfter}` });
+    }
+    return opts;
+  }, [leases, tenants, t]);
+  // Grouped render order: general first, then each lease's before/after.
+  const photoGroups = useMemo(() => {
+    const groups: { key: string; label: string | null; items: { p: RentalPropertyPhoto; index: number }[] }[] = [];
+    const byKey = new Map<string, { p: RentalPropertyPhoto; index: number }[]>();
+    photos.forEach((p, index) => {
+      const key = p.lease_id && p.phase ? `${p.lease_id}|${p.phase}` : '';
+      (byKey.get(key) ?? byKey.set(key, []).get(key)!).push({ p, index });
+    });
+    for (const opt of photoCatOptions) {
+      const items = byKey.get(opt.value);
+      if (items?.length) groups.push({ key: opt.value, label: opt.value ? opt.label : (byKey.size > 1 ? opt.label : null), items });
+      byKey.delete(opt.value);
+    }
+    // Orphaned categories (lease deleted while phase kept) — show under general.
+    byKey.forEach(items => { if (items.length) groups.push({ key: 'orphan', label: t.photos.catGeneral, items }); });
+    return groups;
+  }, [photos, photoCatOptions, t]);
 
   // ── Fullscreen photo viewer (zoom/pan/rotate/cover) — JobPhotosSection's
   //    viewer adapted to rental_property_photos ─────────────────────────────
@@ -1220,7 +1254,12 @@ export function PropertyDetail({
       {!loading && tab === 'photos' ? (
         <div className="flex flex-col gap-3">
           {canEdit ? (
-            <div className="flex justify-end">
+            <div className="flex justify-end items-center gap-2">
+              <select value={photoCat} onChange={e => setPhotoCat(e.target.value)}
+                title={t.photos.categoryLabel}
+                className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary">
+                {photoCatOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
               <Button size="sm" onClick={() => photoInputRef.current?.click()} loading={uploadingPhoto}>
                 <Plus size={13} className="mr-1.5" />{t.photos.addBtn}
               </Button>
@@ -1231,9 +1270,13 @@ export function PropertyDetail({
               <Camera size={28} className="text-faint mx-auto mb-2" />
               <p className="text-sm text-muted">{t.photos.heading}</p>
             </div>
-          ) : (
+          ) : photoGroups.map(g => (
+            <div key={g.key} className="flex flex-col gap-2">
+              {g.label ? (
+                <p className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{g.label}</p>
+              ) : null}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {photos.map((p, i) => (
+              {g.items.map(({ p, index: i }) => (
                 <div key={p.id} className="relative group rounded-xl overflow-hidden border border-border-soft aspect-video bg-surface">
                   <button type="button" onClick={() => setPhotoViewer(i)} className="block w-full h-full">
                     {photoUrls[p.storage_path] ? (
@@ -1261,7 +1304,8 @@ export function PropertyDetail({
                 </div>
               ))}
             </div>
-          )}
+            </div>
+          ))}
         </div>
       ) : null}
 

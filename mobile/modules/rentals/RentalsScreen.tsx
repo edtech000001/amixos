@@ -31,7 +31,7 @@ import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
 import { signedUrl, useSignedUrls } from '@amixos/shared/lib/storageUrls';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
-import { formatDateLong } from '@amixos/shared/lib/format';
+import { formatDateLong, formatPhoneInput } from '@amixos/shared/lib/format';
 import { toUsStateAbbr, usStateName } from '@amixos/shared/lib/usStates';
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import {
@@ -1013,6 +1013,35 @@ export default function RentalsScreen() {
   const [photoChooserOpen, setPhotoChooserOpen] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
+  // Upload category: '' = general, '<leaseId>|before' / '<leaseId>|after'
+  // (damage documentation per tenant stay, migration 203).
+  const [photoCat, setPhotoCat] = useState('');
+  const photoCatOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = [{ value: '', label: t.photos.catGeneral }];
+    for (const l of propLeases) {
+      const tn = tenants.find(x => x.id === l.tenant_id);
+      const name = tn ? tenantName(tn) : '—';
+      opts.push({ value: `${l.id}|before`, label: `${name} · ${t.photos.catBefore}` });
+      opts.push({ value: `${l.id}|after`, label: `${name} · ${t.photos.catAfter}` });
+    }
+    return opts;
+  }, [propLeases, tenants, t]);
+  const photoGroups = useMemo(() => {
+    const byKey = new Map<string, { p: RentalPropertyPhoto; index: number }[]>();
+    propPhotos.forEach((p, index) => {
+      const key = p.lease_id && p.phase ? `${p.lease_id}|${p.phase}` : '';
+      (byKey.get(key) ?? byKey.set(key, []).get(key)!).push({ p, index });
+    });
+    const groups: { key: string; label: string | null; items: { p: RentalPropertyPhoto; index: number }[] }[] = [];
+    for (const opt of photoCatOptions) {
+      const items = byKey.get(opt.value);
+      if (items?.length) groups.push({ key: opt.value, label: opt.value ? opt.label : (byKey.size > 1 ? opt.label : null), items });
+      byKey.delete(opt.value);
+    }
+    byKey.forEach(items => { if (items.length) groups.push({ key: 'orphan', label: t.photos.catGeneral, items }); });
+    return groups;
+  }, [propPhotos, photoCatOptions, t]);
+
   const addPropertyPhoto = async (source: 'camera' | 'library') => {
     setPhotoChooserOpen(false);
     if (!business || !detail) return;
@@ -1025,8 +1054,10 @@ export default function RentalsScreen() {
     setUploadingPhoto(true);
     const path = rentalPropertyPhotoPath(business.id, detail.id, rentalUid());
     if (await uploadImage(uri, path)) {
+      const [catLease, catPhase] = photoCat ? photoCat.split('|') : [null, null];
       await supabase.from('rental_property_photos').insert({
         business_id: business.id, property_id: detail.id, storage_path: path,
+        lease_id: catLease, phase: catPhase,
         created_by: user?.id ?? null,
       });
       await reloadDetail(detail.id);
@@ -1537,42 +1568,58 @@ export default function RentalsScreen() {
               // Explicit pixel tiles (equipment pattern): % width + aspectRatio
               // never resolves a height for an empty box, which collapsed the
               // Add tile and mis-centered its icon. 16px screen padding, 12px
-              // gap, two columns.
+              // gap, two columns. Grouped by category (general / tenant stay
+              // before-after) — the Add tile uploads into the selected category.
               (() => {
                 const tileW = (Dimensions.get('window').width - 32 - 12) / 2;
                 const tileH = Math.round(tileW * 10 / 16);
-                return (
-                  <View className="flex-row flex-wrap gap-3">
-                    {propPhotos.map((p, i) => (
-                      <Pressable key={p.id} onPress={() => setPhotoViewer(i)}
-                        className="rounded-xl overflow-hidden border border-border-soft" style={{ width: tileW, height: tileH }}>
-                        <Image source={{ uri: detailPhotoUrls[p.storage_path] }}
-                          style={{ width: '100%', height: '100%', transform: [{ rotate: `${p.rotation ?? 0}deg` }] }} resizeMode="cover" />
-                        {p.is_cover ? (
-                          <View className="absolute top-1.5 left-1.5 flex-row items-center gap-1 px-2 py-0.5 rounded-full bg-black/55">
-                            <Star size={10} color="#FBBF24" fill="#FBBF24" />
-                            <Text className="text-[10px] font-semibold text-white">{t.photos.coverBadge}</Text>
-                          </View>
-                        ) : null}
-                        {canEdit ? (
-                          <Pressable onPress={() => deletePropertyPhoto(p)} hitSlop={8}
-                            className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/50 items-center justify-center active:opacity-70">
-                            <X size={14} color="#fff" />
-                          </Pressable>
-                        ) : null}
+                const tile = (p: RentalPropertyPhoto, i: number) => (
+                  <Pressable key={p.id} onPress={() => setPhotoViewer(i)}
+                    className="rounded-xl overflow-hidden border border-border-soft" style={{ width: tileW, height: tileH }}>
+                    <Image source={{ uri: detailPhotoUrls[p.storage_path] }}
+                      style={{ width: '100%', height: '100%', transform: [{ rotate: `${p.rotation ?? 0}deg` }] }} resizeMode="cover" />
+                    {p.is_cover ? (
+                      <View className="absolute top-1.5 left-1.5 flex-row items-center gap-1 px-2 py-0.5 rounded-full bg-black/55">
+                        <Star size={10} color="#FBBF24" fill="#FBBF24" />
+                        <Text className="text-[10px] font-semibold text-white">{t.photos.coverBadge}</Text>
+                      </View>
+                    ) : null}
+                    {canEdit ? (
+                      <Pressable onPress={() => deletePropertyPhoto(p)} hitSlop={8}
+                        className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/50 items-center justify-center active:opacity-70">
+                        <X size={14} color="#fff" />
                       </Pressable>
+                    ) : null}
+                  </Pressable>
+                );
+                return (
+                  <View className="gap-4">
+                    {canEdit && photoCatOptions.length > 1 ? (
+                      <Select label={t.photos.categoryLabel} value={photoCat} onValueChange={setPhotoCat} options={photoCatOptions} />
+                    ) : null}
+                    {photoGroups.map(g => (
+                      <View key={g.key} className="gap-2">
+                        {g.label ? (
+                          <Text className="text-xs font-semibold text-faint uppercase">{g.label}</Text>
+                        ) : null}
+                        <View className="flex-row flex-wrap gap-3">
+                          {g.items.map(({ p, index }) => tile(p, index))}
+                        </View>
+                      </View>
                     ))}
                     {canEdit ? (
-                      <Pressable onPress={() => setPhotoChooserOpen(true)} disabled={uploadingPhoto}
-                        className="rounded-xl border-2 border-dashed border-border items-center justify-center active:bg-card"
-                        style={{ width: tileW, height: tileH }}>
-                        {uploadingPhoto ? <ActivityIndicator color={c.primary} /> : (
-                          <>
-                            <ImagePlus size={22} color={c.faint} />
-                            <Text className="text-[11px] text-muted mt-1.5 font-medium">{t.photos.addBtn}</Text>
-                          </>
-                        )}
-                      </Pressable>
+                      <View className="flex-row flex-wrap gap-3">
+                        <Pressable onPress={() => setPhotoChooserOpen(true)} disabled={uploadingPhoto}
+                          className="rounded-xl border-2 border-dashed border-border items-center justify-center active:bg-card"
+                          style={{ width: tileW, height: tileH }}>
+                          {uploadingPhoto ? <ActivityIndicator color={c.primary} /> : (
+                            <>
+                              <ImagePlus size={22} color={c.faint} />
+                              <Text className="text-[11px] text-muted mt-1.5 font-medium">{t.photos.addBtn}</Text>
+                            </>
+                          )}
+                        </Pressable>
+                      </View>
                     ) : null}
                   </View>
                 );
@@ -1926,7 +1973,7 @@ export default function RentalsScreen() {
                     ) : null}
                   </View>
                   <Text className="text-[11px] text-muted" numberOfLines={1}>
-                    {[tn.phone, tn.email].filter(Boolean).join(' · ') || '—'}
+                    {[tn.phone ? formatPhoneInput(tn.phone) : null, tn.email].filter(Boolean).join(' · ') || '—'}
                   </Text>
                 </View>
                 {tn.phone ? (
@@ -2109,7 +2156,7 @@ export default function RentalsScreen() {
         </View>
         <View>
           <Text className={labelCls}>{t.tenants.form.phoneLabel}</Text>
-          <TextInput value={tenantForm.phone} onChangeText={v => setTenantForm(f => ({ ...f, phone: v }))}
+          <TextInput value={formatPhoneInput(tenantForm.phone)} onChangeText={v => setTenantForm(f => ({ ...f, phone: formatPhoneInput(v) }))}
             keyboardType="phone-pad" placeholderTextColor={c.faint} className={fieldCls} />
         </View>
         <View>
@@ -2125,7 +2172,7 @@ export default function RentalsScreen() {
           </View>
           <View className="flex-1">
             <Text className={labelCls}>{t.tenants.form.emergencyPhoneLabel}</Text>
-            <TextInput value={tenantForm.emergency_contact_phone} onChangeText={v => setTenantForm(f => ({ ...f, emergency_contact_phone: v }))}
+            <TextInput value={formatPhoneInput(tenantForm.emergency_contact_phone)} onChangeText={v => setTenantForm(f => ({ ...f, emergency_contact_phone: formatPhoneInput(v) }))}
               keyboardType="phone-pad" placeholderTextColor={c.faint} className={fieldCls} />
           </View>
         </View>

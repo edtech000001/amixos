@@ -2437,6 +2437,10 @@ export type DashboardDict = {
         deleteConfirm: string;
         setCoverBtn: string;
         coverBadge: string;
+        categoryLabel: string;
+        catGeneral: string;
+        catBefore: string;
+        catAfter: string;
       };
       detailTabs: { overview: string; leases: string; ledger: string; expenses: string; maintenance: string; photos: string };
       tenants: {
@@ -5343,6 +5347,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
           deleteConfirm: '¿Eliminar esta foto?',
           setCoverBtn: 'Usar como portada',
           coverBadge: 'Portada',
+          categoryLabel: 'Categoría',
+          catGeneral: 'Generales',
+          catBefore: 'Antes',
+          catAfter: 'Después',
         },
         detailTabs: { overview: 'Resumen', leases: 'Contratos', ledger: 'Pagos', expenses: 'Gastos', maintenance: 'Mantenimiento', photos: 'Fotos' },
         tenants: {
@@ -8275,6 +8283,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
           deleteConfirm: 'Delete this photo?',
           setCoverBtn: 'Use as cover',
           coverBadge: 'Cover',
+          categoryLabel: 'Category',
+          catGeneral: 'General',
+          catBefore: 'Before',
+          catAfter: 'After',
         },
         detailTabs: { overview: 'Overview', leases: 'Leases', ledger: 'Payments', expenses: 'Expenses', maintenance: 'Maintenance', photos: 'Photos' },
         tenants: {

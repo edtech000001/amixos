@@ -47,6 +47,8 @@ export interface RentalPropertyPhoto {
   storage_path: string;
   rotation: number;               // display-only 0/90/180/270
   is_cover: boolean;              // list-card cover pick (202); falls back to oldest
+  lease_id: string | null;        // damage-doc category: tenant stay (203)
+  phase: 'before' | 'after' | null;
   created_by: string | null;
   created_at: string;
 }

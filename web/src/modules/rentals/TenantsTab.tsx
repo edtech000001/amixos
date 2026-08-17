@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { logAudit } from '@amixos/shared/lib/audit';
+import { formatPhoneInput } from '@amixos/shared/lib/format';
 import { tenantName, type RentalLease, type RentalTenant } from '@amixos/shared/lib/rentals';
 import { useLang } from '@/i18n/LangProvider';
 
@@ -146,7 +147,7 @@ export function TenantsTab({
                   ) : null}
                 </p>
                 <p className="text-[11px] text-muted truncate">
-                  {[tn.phone, tn.email].filter(Boolean).join(' · ') || '—'}
+                  {[tn.phone ? formatPhoneInput(tn.phone) : null, tn.email].filter(Boolean).join(' · ') || '—'}
                 </p>
               </div>
               {tn.phone ? (
@@ -178,16 +179,16 @@ export function TenantsTab({
               onChange={e => setForm(f => ({ ...f, last_name: e.target.value }))} />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Input label={t.form.phoneLabel} type="tel" value={form.phone}
-              onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+            <Input label={t.form.phoneLabel} type="tel" value={formatPhoneInput(form.phone)}
+              onChange={e => setForm(f => ({ ...f, phone: formatPhoneInput(e.target.value) }))} />
             <Input label={t.form.emailLabel} type="email" value={form.email}
               onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Input label={t.form.emergencyNameLabel} value={form.emergency_contact_name}
               onChange={e => setForm(f => ({ ...f, emergency_contact_name: e.target.value }))} />
-            <Input label={t.form.emergencyPhoneLabel} type="tel" value={form.emergency_contact_phone}
-              onChange={e => setForm(f => ({ ...f, emergency_contact_phone: e.target.value }))} />
+            <Input label={t.form.emergencyPhoneLabel} type="tel" value={formatPhoneInput(form.emergency_contact_phone)}
+              onChange={e => setForm(f => ({ ...f, emergency_contact_phone: formatPhoneInput(e.target.value) }))} />
           </div>
           <Input label={t.form.emergencyRelationLabel} placeholder={t.form.emergencyRelationPlaceholder}
             value={form.emergency_contact_relation}
