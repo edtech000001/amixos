@@ -194,6 +194,22 @@ export function fetchChargesForProperty(supabase: AnySupabase, propertyId: strin
   });
 }
 
+/** All charges across a set of leases (a tenant's history — small set). */
+export function fetchChargesForLeases(
+  supabase: AnySupabase,
+  leaseIds: string[],
+): Promise<RentalCharge[]> {
+  if (leaseIds.length === 0) return Promise.resolve([]);
+  return fetchAllRows<RentalCharge>((afterId, pageSize) => {
+    let q = supabase.from('rental_charges').select('*')
+      .in('lease_id', leaseIds)
+      .order('id', { ascending: true })
+      .limit(pageSize);
+    if (afterId) q = q.gt('id', afterId);
+    return q;
+  });
+}
+
 /** All payments across a set of leases (a property's leases — small set). */
 export function fetchPaymentsForLeases(
   supabase: AnySupabase,

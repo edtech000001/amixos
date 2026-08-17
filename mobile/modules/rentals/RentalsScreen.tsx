@@ -79,8 +79,7 @@ import {
   fetchRentalPropertiesCount,
   fetchRentalPropertiesPage,
   generateChargesForLeases,
-  type RentalPropertyCursor,
-} from '@amixos/shared/lib/rentalsQuery';
+  type RentalPropertyCursor, fetchChargesForLeases } from '@amixos/shared/lib/rentalsQuery';
 
 type TabKey = 'overview' | 'properties' | 'tenants';
 type DetailTab = 'overview' | 'leases' | 'ledger' | 'expenses' | 'maintenance' | 'photos';
@@ -143,6 +142,7 @@ export default function RentalsScreen() {
   const canDelete = can.deleteRentals(currentRole);
   const multiLocation = (locations?.length ?? 0) > 1;
   const { t: full, locale } = useLang();
+  const dateLoc = full.dashboard.dateLocale;
   const t = full.dashboard.modules.rentals;
   const tc = full.common;
   const c = useThemeColors();
@@ -241,6 +241,46 @@ export default function RentalsScreen() {
   // ── Tenants + leases (module-wide) ──────────────────────────────────────────
   const [tenants, setTenants] = useState<RentalTenant[]>([]);
   const [leases, setLeases] = useState<RentalLease[]>([]);
+
+  // ── Tenant detail (contact + lease history + quick totals) ────────────────
+  const [tenantDetail, setTenantDetail] = useState<RentalTenant | null>(null);
+  const [tdPropNames, setTdPropNames] = useState<Record<string, string>>({});
+  const [tdCharges, setTdCharges] = useState<RentalCharge[]>([]);
+  const [tdPayments, setTdPayments] = useState<RentalPayment[]>([]);
+  const tdLeases = useMemo(
+    () => (tenantDetail ? leases.filter(l => l.tenant_id === tenantDetail.id)
+      .sort((a, b) => (a.status === b.status ? b.start_date.localeCompare(a.start_date) : a.status === 'active' ? -1 : 1)) : []),
+    [tenantDetail, leases],
+  );
+  useEffect(() => {
+    if (!tenantDetail) return;
+    let cancelled = false;
+    const mine = leases.filter(l => l.tenant_id === tenantDetail.id);
+    const leaseIds = mine.map(l => l.id);
+    const propIds = Array.from(new Set(mine.map(l => l.property_id)));
+    void (async () => {
+      const [propsRes, charges, payments] = await Promise.all([
+        propIds.length
+          ? supabase.from('rental_properties').select('id, name').in('id', propIds)
+          : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+        fetchChargesForLeases(supabase, leaseIds),
+        fetchPaymentsForLeases(supabase, leaseIds),
+      ]);
+      if (cancelled) return;
+      const names: Record<string, string> = {};
+      for (const pr of (propsRes.data as { id: string; name: string }[] | null) ?? []) names[pr.id] = pr.name;
+      setTdPropNames(names);
+      setTdCharges(charges);
+      setTdPayments(payments);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantDetail?.id, leases]);
+  const tdTotalPaid = useMemo(() => tdPayments.reduce((s2, pmt) => s2 + pmt.amount, 0), [tdPayments]);
+  const tdBalance = useMemo(
+    () => Math.max(0, tdCharges.reduce((s2, ch) => s2 + ch.amount, 0) - tdTotalPaid),
+    [tdCharges, tdTotalPaid],
+  );
   const [peopleLoading, setPeopleLoading] = useState(true);
   const [peopleSeq, setPeopleSeq] = useState(0);
 
@@ -570,6 +610,7 @@ export default function RentalsScreen() {
     if (editingTenant) {
       const { error } = await supabase.from('rental_tenants').update(payload).eq('id', editingTenant.id);
       if (error) { Alert.alert('', t.saveError); setSavingTenant(false); return; }
+      if (tenantDetail?.id === editingTenant.id) setTenantDetail({ ...tenantDetail, ...payload, updated_at: new Date().toISOString() });
       void logAudit(supabase, business.id, 'rental_tenant.updated', 'rental_tenant', editingTenant.id, { name: payload.first_name });
     } else {
       const { data, error } = await supabase.from('rental_tenants')
@@ -586,6 +627,7 @@ export default function RentalsScreen() {
     if (!business) return;
     if (!(await confirm({ title: t.tenants.deleteConfirmTitle, message: t.tenants.deleteConfirmBody, destructive: true }))) return;
     await supabase.from('rental_tenants').delete().eq('id', tn.id);
+    if (tenantDetail?.id === tn.id) setTenantDetail(null);
     void logAudit(supabase, business.id, 'rental_tenant.deleted', 'rental_tenant', tn.id, { name: tn.first_name });
     reloadPeople();
   };
@@ -1091,7 +1133,132 @@ export default function RentalsScreen() {
     const rotation = ((viewerPhoto.rotation ?? 0) + 90) % 360;
     setPropPhotos(prev => prev.map(p => (p.id === viewerPhoto.id ? { ...p, rotation } : p)));
     await supabase.from('rental_property_photos').update({ rotation }).eq('id', viewerPhoto.id);
-    if (detail) { setCoverPhotos({}); void loadCovers([detail.id]); }
+    if (tenantDetail) {
+    const td = t.tenants.detail;
+    return (
+      <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+        <View className="flex-row items-center justify-between px-4 pt-2 pb-3 border-b border-border-soft">
+          <Pressable onPress={() => setTenantDetail(null)} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
+            <ChevronLeft size={22} color={c.ink} />
+          </Pressable>
+          <View className="flex-row gap-1">
+            {canEdit ? (
+              <Pressable onPress={() => openEditTenant(tenantDetail)} hitSlop={8} className="p-2 rounded-lg active:bg-border-soft">
+                <Pencil size={18} color={c.muted} />
+              </Pressable>
+            ) : null}
+            {canDelete ? (
+              <Pressable onPress={() => deleteTenant(tenantDetail)} hitSlop={8} className="p-2 rounded-lg active:bg-red-500/10">
+                <Trash2 size={18} color={c.danger} />
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 120, gap: 16 }}>
+          <View className="flex-row items-center gap-3">
+            <View className="w-12 h-12 rounded-full bg-primary/10 items-center justify-center">
+              <Text className="text-lg font-bold text-primary">{tenantDetail.first_name.charAt(0).toUpperCase()}</Text>
+            </View>
+            <View className="flex-1">
+              <Text className="text-xl font-bold text-ink">{tenantName(tenantDetail)}</Text>
+              {activeTenantIds.has(tenantDetail.id) ? (
+                <View className="bg-emerald-500/10 px-1.5 py-0.5 rounded-full self-start mt-0.5">
+                  <Text className="text-[9px] font-semibold text-emerald-700">{t.tenants.activeLease}</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+
+          <View className="flex-row gap-3">
+            {[
+              { label: td.statLeases, value: String(tdLeases.length) },
+              { label: td.statTotalPaid, value: fmtMoney(tdTotalPaid) },
+              { label: td.statBalance, value: fmtMoney(tdBalance) },
+            ].map(sd => (
+              <View key={sd.label} className="flex-1 bg-card rounded-2xl border border-border-soft p-3">
+                <Text className="text-base font-bold text-ink" numberOfLines={1} adjustsFontSizeToFit>{sd.value}</Text>
+                <Text className="text-[10px] text-faint mt-0.5">{sd.label}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View className="bg-card rounded-2xl border border-border-soft p-4 gap-2.5">
+            <Text className="text-[11px] font-semibold text-faint uppercase">{td.contactHeading}</Text>
+            {tenantDetail.phone ? (
+              <Pressable onPress={() => Linking.openURL(`tel:${tenantDetail.phone}`)} className="flex-row items-center gap-2.5 active:opacity-60">
+                <Phone size={14} color={c.faint} />
+                <Text className="text-sm text-ink">{formatPhoneInput(tenantDetail.phone)}</Text>
+              </Pressable>
+            ) : null}
+            {tenantDetail.email ? (
+              <Pressable onPress={() => Linking.openURL(`mailto:${tenantDetail.email}`)} className="flex-row items-center gap-2.5 active:opacity-60">
+                <FileText size={14} color={c.faint} />
+                <Text className="text-sm text-ink">{tenantDetail.email}</Text>
+              </Pressable>
+            ) : null}
+            {!tenantDetail.phone && !tenantDetail.email ? <Text className="text-sm text-faint">—</Text> : null}
+            {tenantDetail.emergency_contact_name || tenantDetail.emergency_contact_phone ? (
+              <>
+                <Text className="text-[11px] font-semibold text-faint uppercase mt-2">{td.emergencyHeading}</Text>
+                <Text className="text-sm text-ink">
+                  {[tenantDetail.emergency_contact_name, tenantDetail.emergency_contact_relation ? `(${tenantDetail.emergency_contact_relation})` : null].filter(Boolean).join(' ')}
+                </Text>
+                {tenantDetail.emergency_contact_phone ? (
+                  <Pressable onPress={() => Linking.openURL(`tel:${tenantDetail.emergency_contact_phone}`)} className="active:opacity-60">
+                    <Text className="text-sm text-muted">{formatPhoneInput(tenantDetail.emergency_contact_phone)}</Text>
+                  </Pressable>
+                ) : null}
+              </>
+            ) : null}
+            {tenantDetail.notes ? (
+              <>
+                <Text className="text-[11px] font-semibold text-faint uppercase mt-2">{td.notesHeading}</Text>
+                <Text className="text-sm text-muted">{tenantDetail.notes}</Text>
+              </>
+            ) : null}
+          </View>
+
+          <View className="bg-card rounded-2xl border border-border-soft p-4">
+            <Text className="text-[11px] font-semibold text-faint uppercase mb-2">{td.leasesHeading}</Text>
+            {tdLeases.length === 0 ? (
+              <Text className="text-sm text-faint">{td.noLeases}</Text>
+            ) : tdLeases.map((l, li) => (
+              <View key={l.id} className={`py-2.5 flex-row items-center gap-3 ${li > 0 ? 'border-t border-border-soft' : ''}`}>
+                <FileText size={15} color={c.faint} />
+                <View className="flex-1">
+                  <Text className="text-sm font-medium text-ink" numberOfLines={1}>
+                    {tdPropNames[l.property_id] ?? '—'}{l.unit_label ? ` · ${l.unit_label}` : ''}
+                  </Text>
+                  <Text className="text-[11px] text-muted">
+                    {formatDateLong(`${l.start_date}T00:00:00`, dateLoc)}
+                    {l.end_date ? ` – ${formatDateLong(`${l.end_date}T00:00:00`, dateLoc)}` : ` · ${t.leases.monthToMonth}`}
+                  </Text>
+                </View>
+                <View className="items-end">
+                  <Text className="text-sm font-semibold text-ink">{fmtMoney(l.monthly_rent)}</Text>
+                  <View className={`px-1.5 py-0.5 rounded-full ${l.status === 'active' ? 'bg-emerald-500/10' : 'bg-border-soft'}`}>
+                    <Text className={`text-[9px] font-semibold ${l.status === 'active' ? 'text-emerald-700' : 'text-muted'}`}>
+                      {l.status === 'active' ? t.tenants.activeLease : t.leases.endedBadge}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View>
+            <Text className="text-xs text-faint">{td.addedOn.replace('{{date}}', formatDateLong(tenantDetail.created_at, dateLoc))}</Text>
+            {tenantDetail.updated_at && tenantDetail.updated_at !== tenantDetail.created_at ? (
+              <Text className="text-xs text-faint">{td.editedOn.replace('{{date}}', formatDateLong(tenantDetail.updated_at, dateLoc))}</Text>
+            ) : null}
+          </View>
+        </ScrollView>
+        {renderTenantFormSheet()}
+      </SafeAreaView>
+    );
+  }
+
+  if (detail) { setCoverPhotos({}); void loadCovers([detail.id]); }
   };
 
   const setCoverPropertyPhoto = async (photo: RentalPropertyPhoto) => {
@@ -1963,7 +2130,7 @@ export default function RentalsScreen() {
                 <View className="w-9 h-9 rounded-full bg-primary/10 items-center justify-center">
                   <Text className="text-sm font-bold text-primary">{tn.first_name.charAt(0).toUpperCase()}</Text>
                 </View>
-                <View className="flex-1">
+                <Pressable className="flex-1" onPress={() => setTenantDetail(tn)}>
                   <View className="flex-row items-center gap-2">
                     <Text className="text-sm font-medium text-ink" numberOfLines={1}>{tenantName(tn)}</Text>
                     {activeTenantIds.has(tn.id) ? (
@@ -1975,7 +2142,7 @@ export default function RentalsScreen() {
                   <Text className="text-[11px] text-muted" numberOfLines={1}>
                     {[tn.phone ? formatPhoneInput(tn.phone) : null, tn.email].filter(Boolean).join(' · ') || '—'}
                   </Text>
-                </View>
+                </Pressable>
                 {tn.phone ? (
                   <Pressable onPress={() => Linking.openURL(`tel:${tn.phone}`)} hitSlop={6} className="active:opacity-60">
                     <Phone size={15} color={c.muted} />

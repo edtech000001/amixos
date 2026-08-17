@@ -2452,6 +2452,18 @@ export type DashboardDict = {
         deleteConfirmBody: string;
         copyFromClient: string;
         activeLease: string;
+        detail: {
+          contactHeading: string;
+          emergencyHeading: string;
+          notesHeading: string;
+          leasesHeading: string;
+          noLeases: string;
+          statLeases: string;
+          statTotalPaid: string;
+          statBalance: string;
+          addedOn: string;
+          editedOn: string;
+        };
         form: {
           firstNameLabel: string;
           lastNameLabel: string;
@@ -5362,6 +5374,18 @@ export const dashboard: Record<Locale, DashboardDict> = {
           deleteConfirmBody: 'Se eliminarán también sus contratos y su historial de pagos. Esta acción no se puede deshacer.',
           copyFromClient: 'Copiar de cliente',
           activeLease: 'Contrato activo',
+          detail: {
+            contactHeading: 'Contacto',
+            emergencyHeading: 'Contacto de emergencia',
+            notesHeading: 'Notas',
+            leasesHeading: 'Contratos',
+            noLeases: 'Sin contratos todavía.',
+            statLeases: 'Contratos',
+            statTotalPaid: 'Total pagado',
+            statBalance: 'Saldo pendiente',
+            addedOn: 'Agregado el {{date}}',
+            editedOn: 'Última edición {{date}}',
+          },
           form: {
             firstNameLabel: 'Nombre',
             lastNameLabel: 'Apellido',
@@ -8298,6 +8322,18 @@ export const dashboard: Record<Locale, DashboardDict> = {
           deleteConfirmBody: 'Their leases and payment history will also be deleted. This cannot be undone.',
           copyFromClient: 'Copy from client',
           activeLease: 'Active lease',
+          detail: {
+            contactHeading: 'Contact',
+            emergencyHeading: 'Emergency contact',
+            notesHeading: 'Notes',
+            leasesHeading: 'Leases',
+            noLeases: 'No leases yet.',
+            statLeases: 'Leases',
+            statTotalPaid: 'Total paid',
+            statBalance: 'Outstanding',
+            addedOn: 'Added on {{date}}',
+            editedOn: 'Last edited {{date}}',
+          },
           form: {
             firstNameLabel: 'First name',
             lastNameLabel: 'Last name',
