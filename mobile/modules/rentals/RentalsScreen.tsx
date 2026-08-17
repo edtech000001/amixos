@@ -8,18 +8,18 @@
 // as in-modal overlays, never a nested RNModal). Ledger math lives in
 // shared/lib/rentals.ts.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert, Dimensions, FlatList, Image, KeyboardAvoidingView, Linking, Modal as RNModal,
   Platform, Pressable, ScrollView, Text, TextInput, View, ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import {
   Building2, Camera, ChevronDown, ChevronLeft, ChevronRight, FileText, Home,
-  ImagePlus, Pencil, Phone, Plus, Search, Trash2, Users, Wrench, X,
+  ImagePlus, Pencil, Phone, Plus, RotateCw, Search, Star, Trash2, Users, Wrench, X,
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -146,6 +146,7 @@ export default function RentalsScreen() {
   const t = full.dashboard.modules.rentals;
   const tc = full.common;
   const c = useThemeColors();
+  const insets = useSafeAreaInsets();
 
   const [tab, setTab] = useState<TabKey>('overview');
   const [detail, setDetail] = useState<RentalProperty | null>(null);
@@ -172,7 +173,7 @@ export default function RentalsScreen() {
   const loadCovers = useCallback(async (ids: string[]) => {
     if (ids.length === 0) return;
     const { data } = await supabase.from('rental_property_photos').select('*')
-      .in('property_id', ids).order('created_at');
+      .in('property_id', ids).order('is_cover', { ascending: false }).order('created_at');
     setCoverPhotos(prev => {
       const next = { ...prev };
       for (const p of (data as RentalPropertyPhoto[] | null) ?? []) {
@@ -1040,11 +1041,44 @@ export default function RentalsScreen() {
   const deletePropertyPhoto = async (p: RentalPropertyPhoto) => {
     if (!detail) return;
     if (!(await confirm({ message: t.photos.deleteConfirm, destructive: true }))) return;
+    setPhotoViewer(null);
     await supabase.from('rental_property_photos').delete().eq('id', p.id);
     removeStorage([p.storage_path]);
     await reloadDetail(detail.id);
     setCoverPhotos({});
     void loadCovers([detail.id]);
+  };
+
+  // ── Fullscreen property-photo viewer: swipe pages, native pinch-zoom
+  //    (zoomable ScrollView per page), rotate + cover + delete ─────────────
+  const [photoViewer, setPhotoViewer] = useState<number | null>(null);
+  const photoViewerListRef = useRef<FlatList<RentalPropertyPhoto>>(null);
+  const viewerPhoto = photoViewer !== null ? propPhotos[photoViewer] : null;
+
+  const rotateViewerPhoto = async () => {
+    if (!viewerPhoto) return;
+    const rotation = ((viewerPhoto.rotation ?? 0) + 90) % 360;
+    setPropPhotos(prev => prev.map(p => (p.id === viewerPhoto.id ? { ...p, rotation } : p)));
+    await supabase.from('rental_property_photos').update({ rotation }).eq('id', viewerPhoto.id);
+    if (detail) { setCoverPhotos({}); void loadCovers([detail.id]); }
+  };
+
+  const setCoverPropertyPhoto = async (photo: RentalPropertyPhoto) => {
+    if (!detail) return;
+    setPropPhotos(prev => prev.map(p => ({ ...p, is_cover: p.id === photo.id })));
+    await supabase.from('rental_property_photos').update({ is_cover: false })
+      .eq('property_id', detail.id).neq('id', photo.id);
+    await supabase.from('rental_property_photos').update({ is_cover: true }).eq('id', photo.id);
+    setCoverPhotos({});
+    void loadCovers([detail.id]);
+  };
+
+  const photoViewerGoTo = (delta: number) => {
+    if (photoViewer === null) return;
+    const next = Math.min(Math.max(photoViewer + delta, 0), propPhotos.length - 1);
+    if (next === photoViewer) return;
+    setPhotoViewer(next);
+    photoViewerListRef.current?.scrollToIndex({ index: next, animated: true });
   };
 
   const detailPhotoUrls = useSignedUrls(supabase, [
@@ -1509,16 +1543,24 @@ export default function RentalsScreen() {
                 const tileH = Math.round(tileW * 10 / 16);
                 return (
                   <View className="flex-row flex-wrap gap-3">
-                    {propPhotos.map(p => (
-                      <View key={p.id} className="rounded-xl overflow-hidden border border-border-soft" style={{ width: tileW, height: tileH }}>
-                        <Image source={{ uri: detailPhotoUrls[p.storage_path] }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                    {propPhotos.map((p, i) => (
+                      <Pressable key={p.id} onPress={() => setPhotoViewer(i)}
+                        className="rounded-xl overflow-hidden border border-border-soft" style={{ width: tileW, height: tileH }}>
+                        <Image source={{ uri: detailPhotoUrls[p.storage_path] }}
+                          style={{ width: '100%', height: '100%', transform: [{ rotate: `${p.rotation ?? 0}deg` }] }} resizeMode="cover" />
+                        {p.is_cover ? (
+                          <View className="absolute top-1.5 left-1.5 flex-row items-center gap-1 px-2 py-0.5 rounded-full bg-black/55">
+                            <Star size={10} color="#FBBF24" fill="#FBBF24" />
+                            <Text className="text-[10px] font-semibold text-white">{t.photos.coverBadge}</Text>
+                          </View>
+                        ) : null}
                         {canEdit ? (
                           <Pressable onPress={() => deletePropertyPhoto(p)} hitSlop={8}
                             className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/50 items-center justify-center active:opacity-70">
                             <X size={14} color="#fff" />
                           </Pressable>
                         ) : null}
-                      </View>
+                      </Pressable>
                     ))}
                     {canEdit ? (
                       <Pressable onPress={() => setPhotoChooserOpen(true)} disabled={uploadingPhoto}
@@ -1550,6 +1592,93 @@ export default function RentalsScreen() {
             <Plus size={26} color="#fff" />
           </Pressable>
         ) : null}
+
+        {/* Fullscreen photo viewer — swipe pages, native pinch-zoom */}
+        <RNModal visible={viewerPhoto !== null} transparent animationType="fade" onRequestClose={() => setPhotoViewer(null)}>
+          {(() => {
+            const { width: screenW, height: screenH } = Dimensions.get('window');
+            const availH = screenH - insets.top - insets.bottom - 120;
+            return (
+              <View style={{ flex: 1, backgroundColor: '#000' }}>
+                <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Pressable onPress={() => setPhotoViewer(null)} hitSlop={10}>
+                    <X size={26} color="#FFFFFF" />
+                  </Pressable>
+                  <Text className="text-sm font-medium text-white/80">
+                    {photoViewer !== null ? `${photoViewer + 1} / ${propPhotos.length}` : ''}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+                    {canEdit && viewerPhoto ? (
+                      <Pressable onPress={() => void setCoverPropertyPhoto(viewerPhoto)} hitSlop={10} accessibilityLabel={t.photos.setCoverBtn}>
+                        <Star size={22} color="#FBBF24" fill={viewerPhoto.is_cover ? '#FBBF24' : 'transparent'} />
+                      </Pressable>
+                    ) : null}
+                    {canEdit ? (
+                      <Pressable onPress={() => void rotateViewerPhoto()} hitSlop={10}>
+                        <RotateCw size={22} color="#FFFFFF" />
+                      </Pressable>
+                    ) : null}
+                    {canEdit && viewerPhoto ? (
+                      <Pressable onPress={() => void deletePropertyPhoto(viewerPhoto)} hitSlop={10}>
+                        <Trash2 size={22} color={c.danger} />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <FlatList
+                    ref={photoViewerListRef}
+                    data={propPhotos}
+                    keyExtractor={p => p.id}
+                    extraData={propPhotos}
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    initialScrollIndex={photoViewer ?? 0}
+                    getItemLayout={(_, index) => ({ length: screenW, offset: screenW * index, index })}
+                    onMomentumScrollEnd={e => {
+                      const idx = Math.round(e.nativeEvent.contentOffset.x / screenW);
+                      setPhotoViewer(prev => (prev === idx ? prev : idx));
+                    }}
+                    renderItem={({ item }) => {
+                      const r = (item.rotation ?? 0) % 360;
+                      const swap = r === 90 || r === 270;
+                      return (
+                        <ScrollView
+                          style={{ width: screenW, height: availH }}
+                          contentContainerStyle={{ width: screenW, height: availH, alignItems: 'center', justifyContent: 'center' }}
+                          maximumZoomScale={4}
+                          minimumZoomScale={1}
+                          bouncesZoom
+                          showsHorizontalScrollIndicator={false}
+                          showsVerticalScrollIndicator={false}
+                        >
+                          <Image
+                            source={{ uri: detailPhotoUrls[item.storage_path] }}
+                            style={{ width: swap ? availH : screenW, height: swap ? screenW : availH, transform: [{ rotate: `${r}deg` }] }}
+                            resizeMode="contain"
+                          />
+                        </ScrollView>
+                      );
+                    }}
+                  />
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingBottom: insets.bottom + 12 }}>
+                  <Pressable onPress={() => photoViewerGoTo(-1)} disabled={photoViewer === 0} hitSlop={10}
+                    className="w-12 h-12 rounded-full items-center justify-center"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.12)', opacity: photoViewer === 0 ? 0.3 : 1 }}>
+                    <ChevronLeft size={24} color="#FFFFFF" />
+                  </Pressable>
+                  <Pressable onPress={() => photoViewerGoTo(1)} disabled={photoViewer === propPhotos.length - 1} hitSlop={10}
+                    className="w-12 h-12 rounded-full items-center justify-center"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.12)', opacity: photoViewer === propPhotos.length - 1 ? 0.3 : 1 }}>
+                    <ChevronRight size={24} color="#FFFFFF" />
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })()}
+        </RNModal>
 
         {/* ── Sheets (rendered on the detail screen) ── */}
         {renderPropFormSheet()}

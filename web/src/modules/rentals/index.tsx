@@ -103,7 +103,7 @@ export default function RentalsModule() {
   const loadCovers = useCallback(async (ids: string[]) => {
     if (ids.length === 0) return;
     const { data } = await supabase.from('rental_property_photos').select('*')
-      .in('property_id', ids).order('created_at');
+      .in('property_id', ids).order('is_cover', { ascending: false }).order('created_at');
     setCoverPhotos(prev => {
       const next = { ...prev };
       for (const p of (data as RentalPropertyPhoto[] | null) ?? []) {
@@ -525,6 +525,7 @@ export default function RentalsModule() {
           onEdit={() => openEdit(detail)}
           onDelete={() => deleteProperty(detail)}
           onDataChanged={() => { void loadPeople(); }}
+          onCoversChanged={() => { setCoverPhotos({}); void loadCovers([detail.id]); }}
         />
         {propertyFormModal}
       </>

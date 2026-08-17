@@ -2435,6 +2435,8 @@ export type DashboardDict = {
         limitHit: string;
         uploadError: string;
         deleteConfirm: string;
+        setCoverBtn: string;
+        coverBadge: string;
       };
       detailTabs: { overview: string; leases: string; ledger: string; expenses: string; maintenance: string; photos: string };
       tenants: {
@@ -5339,6 +5341,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
           limitHit: 'Máximo {{max}} fotos por propiedad.',
           uploadError: 'No se pudo subir la foto. Intenta de nuevo.',
           deleteConfirm: '¿Eliminar esta foto?',
+          setCoverBtn: 'Usar como portada',
+          coverBadge: 'Portada',
         },
         detailTabs: { overview: 'Resumen', leases: 'Contratos', ledger: 'Pagos', expenses: 'Gastos', maintenance: 'Mantenimiento', photos: 'Fotos' },
         tenants: {
@@ -8269,6 +8273,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
           limitHit: 'Maximum {{max}} photos per property.',
           uploadError: "Couldn't upload the photo. Try again.",
           deleteConfirm: 'Delete this photo?',
+          setCoverBtn: 'Use as cover',
+          coverBadge: 'Cover',
         },
         detailTabs: { overview: 'Overview', leases: 'Leases', ledger: 'Payments', expenses: 'Expenses', maintenance: 'Maintenance', photos: 'Photos' },
         tenants: {

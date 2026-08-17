@@ -7,8 +7,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { confirm } from '@amixos/shared/ui/confirmBus';
 import {
-  ArrowLeft, Camera, ChevronDown, ChevronRight, FileText, Home, Pencil,
-  Plus, Trash2, Upload, Wrench, X,
+  ArrowLeft, Camera, ChevronDown, ChevronLeft, ChevronRight, FileText, Home,
+  Pencil, Plus, RotateCw, Star, Trash2, Upload, Wrench, X,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -77,6 +77,8 @@ interface Props {
   onDelete: () => void;
   /** Notify the module root that leases/tenants changed (rent roll refresh). */
   onDataChanged: () => void;
+  /** Notify the module root that this property's photos changed (list cover). */
+  onCoversChanged?: () => void;
 }
 
 const EMPTY_LEASE_FORM = {
@@ -116,7 +118,7 @@ function todayISO(): string {
 }
 
 export function PropertyDetail({
-  property, tenants, canEdit, canCreate, canDelete, onBack, onEdit, onDelete, onDataChanged,
+  property, tenants, canEdit, canCreate, canDelete, onBack, onEdit, onDelete, onDataChanged, onCoversChanged,
 }: Props) {
   const supabase = createSupabaseClient();
   const { business, user } = useApp();
@@ -716,6 +718,7 @@ export function PropertyDetail({
         });
         if (insErr) throw insErr;
       }
+      onCoversChanged?.();
       await reload();
     } catch (e) {
       // Surface it WITH the underlying message — a silent skip here reads as
@@ -728,12 +731,68 @@ export function PropertyDetail({
 
   const deletePhoto = async (p: RentalPropertyPhoto) => {
     if (!(await confirm({ message: t.photos.deleteConfirm, destructive: true }))) return;
+    setPhotoViewer(null);
     await supabase.from('rental_property_photos').delete().eq('id', p.id);
     void supabase.storage.from(RENTALS_BUCKET).remove([p.storage_path]).then(() => {}, () => {});
+    onCoversChanged?.();
     await reload();
   };
 
   const photoUrls = useSignedUrls(supabase, photos.map(p => p.storage_path));
+
+  // ── Fullscreen photo viewer (zoom/pan/rotate/cover) — JobPhotosSection's
+  //    viewer adapted to rental_property_photos ─────────────────────────────
+  const [photoViewer, setPhotoViewer] = useState<number | null>(null);
+  const [pvZoom, setPvZoom] = useState(1);
+  const [pvPan, setPvPan] = useState({ x: 0, y: 0 });
+  const pvDragRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
+  const viewerPhoto = photoViewer !== null ? photos[photoViewer] : null;
+  const viewerRot = (viewerPhoto?.rotation ?? 0) % 360;
+  const viewerSwap = viewerRot === 90 || viewerRot === 270;
+  useEffect(() => { setPvZoom(1); setPvPan({ x: 0, y: 0 }); }, [photoViewer, viewerRot]);
+  const pvClamp = (z: number) => Math.min(Math.max(z, 1), 5);
+  const pvWheel = (e: React.WheelEvent) => {
+    setPvZoom(prev => {
+      const next = pvClamp(prev - e.deltaY * 0.0025);
+      if (next === 1) setPvPan({ x: 0, y: 0 });
+      return next;
+    });
+  };
+  const pvToggleZoom = () =>
+    setPvZoom(prev => {
+      const next = prev > 1 ? 1 : 2.5;
+      if (next === 1) setPvPan({ x: 0, y: 0 });
+      return next;
+    });
+  const pvPointerDown = (e: React.PointerEvent) => {
+    if (pvZoom <= 1) return;
+    pvDragRef.current = { x: pvPan.x, y: pvPan.y, px: e.clientX, py: e.clientY };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const pvPointerMove = (e: React.PointerEvent) => {
+    const d = pvDragRef.current;
+    if (!d) return;
+    setPvPan({ x: d.x + (e.clientX - d.px), y: d.y + (e.clientY - d.py) });
+  };
+  const pvPointerUp = () => { pvDragRef.current = null; };
+  const pvGoTo = (delta: number) =>
+    setPhotoViewer(i => (i === null ? i : Math.min(Math.max(i + delta, 0), photos.length - 1)));
+
+  const rotateViewerPhoto = async () => {
+    if (!viewerPhoto) return;
+    const rotation = ((viewerPhoto.rotation ?? 0) + 90) % 360;
+    setPhotos(prev => prev.map(p => (p.id === viewerPhoto.id ? { ...p, rotation } : p)));
+    await supabase.from('rental_property_photos').update({ rotation }).eq('id', viewerPhoto.id);
+    onCoversChanged?.();
+  };
+
+  const setCoverPhoto = async (photo: RentalPropertyPhoto) => {
+    setPhotos(prev => prev.map(p => ({ ...p, is_cover: p.id === photo.id })));
+    await supabase.from('rental_property_photos').update({ is_cover: false })
+      .eq('property_id', property.id).neq('id', photo.id);
+    await supabase.from('rental_property_photos').update({ is_cover: true }).eq('id', photo.id);
+    onCoversChanged?.();
+  };
 
   // ── Derived overview ────────────────────────────────────────────────────────
   const activeLeases = leases.filter(l => l.status === 'active');
@@ -1174,12 +1233,24 @@ export function PropertyDetail({
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {photos.map(p => (
+              {photos.map((p, i) => (
                 <div key={p.id} className="relative group rounded-xl overflow-hidden border border-border-soft aspect-video bg-surface">
-                  {photoUrls[p.storage_path] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={photoUrls[p.storage_path]} alt="" className="w-full h-full object-cover"
-                      style={{ transform: `rotate(${p.rotation}deg)` }} />
+                  <button type="button" onClick={() => setPhotoViewer(i)} className="block w-full h-full">
+                    {photoUrls[p.storage_path] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={photoUrls[p.storage_path]} alt="" className="w-full h-full object-cover"
+                        style={{ transform: `rotate(${p.rotation}deg)` }} />
+                    ) : null}
+                  </button>
+                  {p.is_cover ? (
+                    <span className="absolute top-1.5 left-1.5 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/55 text-white text-[10px] font-semibold">
+                      <Star size={10} className="fill-amber-400 text-amber-400" /> {t.photos.coverBadge}
+                    </span>
+                  ) : canEdit ? (
+                    <button onClick={() => void setCoverPhoto(p)} title={t.photos.setCoverBtn}
+                      className="absolute top-1.5 left-1.5 p-1.5 rounded-lg bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:text-amber-300">
+                      <Star size={13} />
+                    </button>
                   ) : null}
                   {canEdit ? (
                     <button onClick={() => deletePhoto(p)}
@@ -1191,6 +1262,76 @@ export function PropertyDetail({
               ))}
             </div>
           )}
+        </div>
+      ) : null}
+
+      {/* Fullscreen photo viewer */}
+      {viewerPhoto ? (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center overflow-hidden"
+          onClick={() => { if (pvZoom === 1) setPhotoViewer(null); }}
+          onWheel={pvWheel}
+        >
+          <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between p-4" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setPhotoViewer(null)}
+              className="w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20">
+              <X size={20} />
+            </button>
+            <span className="text-sm text-white/70">{(photoViewer ?? 0) + 1} / {photos.length}</span>
+            <div className="flex items-center gap-2">
+              {canEdit ? (
+                <button onClick={() => void setCoverPhoto(viewerPhoto)} title={t.photos.setCoverBtn}
+                  className={`h-10 px-3 rounded-full bg-white/10 flex items-center gap-1.5 hover:bg-white/20 text-sm ${viewerPhoto.is_cover ? 'text-amber-300' : 'text-white'}`}>
+                  <Star size={16} className={viewerPhoto.is_cover ? 'fill-amber-300' : undefined} />
+                  <span className="hidden sm:inline">{viewerPhoto.is_cover ? t.photos.coverBadge : t.photos.setCoverBtn}</span>
+                </button>
+              ) : null}
+              {canEdit ? (
+                <button onClick={() => void rotateViewerPhoto()}
+                  className="w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20">
+                  <RotateCw size={18} />
+                </button>
+              ) : null}
+              {canEdit ? (
+                <button onClick={() => void deletePhoto(viewerPhoto)}
+                  className="w-10 h-10 rounded-full bg-white/10 text-red-300 flex items-center justify-center hover:bg-white/20">
+                  <Trash2 size={18} />
+                </button>
+              ) : null}
+            </div>
+          </div>
+          {(photoViewer ?? 0) > 0 ? (
+            <button onClick={e => { e.stopPropagation(); pvGoTo(-1); }}
+              className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20">
+              <ChevronLeft size={24} />
+            </button>
+          ) : null}
+          {(photoViewer ?? 0) < photos.length - 1 ? (
+            <button onClick={e => { e.stopPropagation(); pvGoTo(1); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20">
+              <ChevronRight size={24} />
+            </button>
+          ) : null}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photoUrls[viewerPhoto.storage_path] ?? undefined}
+            alt=""
+            draggable={false}
+            className="object-contain select-none"
+            style={{
+              transform: `translate(${pvPan.x}px, ${pvPan.y}px) scale(${pvZoom}) rotate(${viewerRot}deg)`,
+              maxWidth: viewerSwap ? '90vh' : '92vw',
+              maxHeight: viewerSwap ? '92vw' : '90vh',
+              cursor: pvZoom > 1 ? 'grab' : 'zoom-in',
+              touchAction: 'none',
+              transition: pvDragRef.current ? 'none' : 'transform 0.15s ease-out',
+            }}
+            onClick={e => e.stopPropagation()}
+            onDoubleClick={e => { e.stopPropagation(); pvToggleZoom(); }}
+            onPointerDown={pvPointerDown}
+            onPointerMove={pvPointerMove}
+            onPointerUp={pvPointerUp}
+          />
         </div>
       ) : null}
 

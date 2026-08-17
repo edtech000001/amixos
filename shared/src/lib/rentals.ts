@@ -46,6 +46,7 @@ export interface RentalPropertyPhoto {
   property_id: string;
   storage_path: string;
   rotation: number;               // display-only 0/90/180/270
+  is_cover: boolean;              // list-card cover pick (202); falls back to oldest
   created_by: string | null;
   created_at: string;
 }
