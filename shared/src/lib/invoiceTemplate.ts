@@ -1306,7 +1306,6 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
       <div class="inv-meta">
         <div class="inv-title onacc">${escapeHtml(h.invoiceTitle)}</div>
         <div class="inv-number onacc">${escapeHtml(h.invoiceNumber)}</div>
-        <div class="inv-status onacc-sub">${escapeHtml(h.statusLabel)}</div>
         ${meta('onacc-sub')}
       </div>
     </div>`;
@@ -1317,7 +1316,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
       <div class="inv-bizname">${escapeHtml(h.businessName)}</div>
       ${bizLines('inv-bizline')}
       <div class="inv-title-c">${escapeHtml(h.invoiceTitle)}</div>
-      <div class="inv-number">${escapeHtml(h.invoiceNumber)} · ${escapeHtml(h.statusLabel)}</div>
+      <div class="inv-number">${escapeHtml(h.invoiceNumber)}</div>
       <div class="inv-meta-c">${meta('')}</div>
     </div>`;
       case 'sidebar':
@@ -1331,7 +1330,6 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
       <div class="inv-side-main">
         <div class="inv-title">${escapeHtml(h.invoiceTitle)}</div>
         <div class="inv-number">${escapeHtml(h.invoiceNumber)}</div>
-        <div class="inv-status">${escapeHtml(h.statusLabel)}</div>
         ${meta('')}
       </div>
     </div>`;
@@ -1344,7 +1342,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
       </div>
       <div class="inv-accent-rule"></div>
       <div class="inv-title-min">${escapeHtml(h.invoiceTitle)}</div>
-      <div class="inv-min-meta">${escapeHtml(h.invoiceNumber)} · ${escapeHtml(h.statusLabel)} · ${escapeHtml(h.issueLabel)} ${escapeHtml(h.issueValue)}${h.dueValue ? ` · ${escapeHtml(h.dueLabel)} ${escapeHtml(h.dueValue)}` : ''}</div>
+      <div class="inv-min-meta">${escapeHtml(h.invoiceNumber)} · ${escapeHtml(h.issueLabel)} ${escapeHtml(h.issueValue)}${h.dueValue ? ` · ${escapeHtml(h.dueLabel)} ${escapeHtml(h.dueValue)}` : ''}</div>
     </div>`;
       case 'leftbar':
         return `
@@ -1359,7 +1357,6 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
         <div class="inv-meta">
           <div class="inv-title">${escapeHtml(h.invoiceTitle)}</div>
           <div class="inv-number">${escapeHtml(h.invoiceNumber)}</div>
-          <div class="inv-status">${escapeHtml(h.statusLabel)}</div>
           ${meta('')}
         </div>
       </div>
@@ -1375,7 +1372,6 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
       <div class="inv-split-panel">
         <div class="inv-title">${escapeHtml(h.invoiceTitle)}</div>
         <div class="inv-number">${escapeHtml(h.invoiceNumber)}</div>
-        <div class="inv-status">${escapeHtml(h.statusLabel)}</div>
         ${meta('')}
       </div>
     </div>`;
@@ -1391,7 +1387,6 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
         <div class="inv-stamp-chip">
           <div class="inv-stamp-title">${escapeHtml(h.invoiceTitle)}</div>
           <div class="inv-stamp-num">${escapeHtml(h.invoiceNumber)}</div>
-          <div class="inv-stamp-status">${escapeHtml(h.statusLabel)}</div>
         </div>
         <div class="inv-stamp-dates">${meta('')}</div>
       </div>
@@ -1407,7 +1402,6 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
       <div class="inv-hero-right">
         <div class="inv-hero-word">${escapeHtml(h.invoiceTitle)}</div>
         <div class="inv-number">${escapeHtml(h.invoiceNumber)}</div>
-        <div class="inv-status">${escapeHtml(h.statusLabel)}</div>
         ${meta('')}
         ${heroBillToHtml}
       </div>
@@ -1425,7 +1419,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
       </div>
       <div class="inv-wordmark-rule"></div>
       <div class="inv-wordmark-meta">
-        <span>${escapeHtml(h.invoiceNumber)} · ${escapeHtml(h.statusLabel)}</span>
+        <span>${escapeHtml(h.invoiceNumber)}</span>
         <span>${escapeHtml(h.issueLabel)} ${escapeHtml(h.issueValue)}${h.dueValue ? ` · ${escapeHtml(h.dueLabel)} ${escapeHtml(h.dueValue)}` : ''}</span>
       </div>
     </div>`;
@@ -1440,7 +1434,6 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
       <div class="inv-panel-right">
         <div class="inv-panel-title onacc">${escapeHtml(h.invoiceTitle)}</div>
         <div class="inv-number onacc">${escapeHtml(h.invoiceNumber)}</div>
-        <div class="inv-status onacc-sub">${escapeHtml(h.statusLabel)}</div>
         ${meta('onacc-sub')}
       </div>
     </div>`;
@@ -1449,7 +1442,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     <div class="inv-elegant">
       <div class="inv-elegant-left">
         <div class="inv-elegant-title">${escapeHtml(h.invoiceTitle)}</div>
-        <div class="inv-number">${escapeHtml(h.invoiceNumber)} · ${escapeHtml(h.statusLabel)}</div>
+        <div class="inv-number">${escapeHtml(h.invoiceNumber)}</div>
         <div class="inv-elegant-dates">${escapeHtml(h.issueLabel)} ${escapeHtml(h.issueValue)}${h.dueValue ? `  ·  ${escapeHtml(h.dueLabel)} ${escapeHtml(h.dueValue)}` : ''}</div>
       </div>
       <div class="inv-elegant-badge">
@@ -1462,7 +1455,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     <div class="inv-titleleft">
       <div class="inv-titleleft-main">
         <div class="inv-title-tl">${escapeHtml(h.invoiceTitle)}</div>
-        <div class="inv-number">${escapeHtml(h.invoiceNumber)} · ${escapeHtml(h.statusLabel)}</div>
+        <div class="inv-number">${escapeHtml(h.invoiceNumber)}</div>
         ${meta('')}
       </div>
       <div class="inv-titleleft-logo">
@@ -1476,7 +1469,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     <div class="inv-bandcenter">
       ${logoTag('inv-logo-c')}
       <div class="inv-bandcenter-band">${escapeHtml(h.invoiceTitle)}</div>
-      <div class="inv-bandcenter-meta">${escapeHtml(h.invoiceNumber)} · ${escapeHtml(h.statusLabel)} · ${escapeHtml(h.issueLabel)} ${escapeHtml(h.issueValue)}${h.dueValue ? ` · ${escapeHtml(h.dueLabel)} ${escapeHtml(h.dueValue)}` : ''}</div>
+      <div class="inv-bandcenter-meta">${escapeHtml(h.invoiceNumber)} · ${escapeHtml(h.issueLabel)} ${escapeHtml(h.issueValue)}${h.dueValue ? ` · ${escapeHtml(h.dueLabel)} ${escapeHtml(h.dueValue)}` : ''}</div>
     </div>`;
       default: // classic
         return `
@@ -1489,7 +1482,6 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
       <div class="inv-meta">
         <div class="inv-title">${escapeHtml(h.invoiceTitle)}</div>
         <div class="inv-number">${escapeHtml(h.invoiceNumber)}</div>
-        <div class="inv-status">${escapeHtml(h.statusLabel)}</div>
         ${meta('')}
       </div>
     </div>`;
@@ -1689,11 +1681,20 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     (deco.topBand ? `<svg class="inv-deco-top" viewBox="${deco.topBand.spec.viewBox}" preserveAspectRatio="none" style="height:${deco.topBand.height}px">${svgShapes(deco.topBand.spec)}</svg>` : '') +
     (deco.bottomBand ? `<svg class="inv-deco-bot" viewBox="${deco.bottomBand.spec.viewBox}" preserveAspectRatio="none" style="height:${deco.bottomBand.height}px">${svgShapes(deco.bottomBand.spec)}</svg>` : '');
   const docPad = deco.padTop || deco.padBottom ? ` style="padding-top:${deco.padTop}px;padding-bottom:${deco.padBottom}px"` : '';
+  // The bar shows the TAGLINE when the business has one: buildInvoiceViewModel
+  // drops `footer` from the body sections whenever footerBar is on, so the bar
+  // is the tagline's only home — printing the contact strip instead loses it
+  // from the document entirely. Falls back to the business contact line.
+  // Mirrors both React renderers.
   const footerBarHtml =
-    !freeform && vm.footerBar && vm.footerContact.length
-      ? `<div class="inv-footerbar">${vm.footerContact
-          .map((l, i) => `<span class="${i === 0 ? 'fb-name' : ''}">${escapeHtml(l)}</span>`)
-          .join('<span class="fb-sep">·</span>')}</div>`
+    !freeform && vm.footerBar && (vm.footer || vm.footerContact.length)
+      ? `<div class="inv-footerbar">${
+          vm.footer
+            ? `<span>${br(vm.footer)}</span>`
+            : vm.footerContact
+                .map((l, i) => `<span class="${i === 0 ? 'fb-name' : ''}">${escapeHtml(l)}</span>`)
+                .join('<span class="fb-sep">·</span>')
+        }</div>`
       : '';
   // "Full-page" presets (decoration / footer strip / tint) get a minimum height
   // of one letter page so the flourishes anchor to the page edges and the footer
