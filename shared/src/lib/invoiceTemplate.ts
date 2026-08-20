@@ -930,8 +930,10 @@ export function buildInvoiceViewModel(
       .join(' ');
     return {
       name: `${c.firstName} ${c.lastName}`.trim(),
-      // Company + address + phone + email — whatever the client record lists.
-      lines: [c.company ?? '', c.address ?? '', cityStateZip, c.phoneCell ?? '', c.email ?? '']
+      // Company + mailing address + phone. The client's EMAIL is deliberately
+      // left off the document — it's how we send the invoice, not something
+      // the invoice needs to state back to them.
+      lines: [c.company ?? '', c.address ?? '', cityStateZip, c.phoneCell ?? '']
         .map(s => s.trim())
         .filter(Boolean),
     };
