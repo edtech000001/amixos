@@ -44,8 +44,10 @@ const APP_VERSION = (() => {
     const Updates = require('expo-updates') as typeof import('expo-updates');
     if (Updates.updateId && !Updates.isEmbeddedLaunch) {
       const d = Updates.createdAt;
+      // MM/DD/YYYY — this line is read at a glance to confirm an `eas update`
+      // landed, and US date order is what the reader expects.
       const stamp = d
-        ? ` ${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        ? ` ${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`
         : '';
       s += `\nOTA ${Updates.updateId.slice(0, 8)}${stamp}`;
     }
