@@ -248,7 +248,6 @@ export interface InvoiceTemplateConfig {
   /** Invert the logo's colors (CSS invert filter) — flips a black logo to white
    *  so a monochrome logo stays visible on a dark header band. Opt-in because it
    *  also colour-shifts a colored logo. */
-  logoInvert?: boolean;
   sections: InvoiceSection[];
   columns: InvoiceColumns;
   text: InvoiceTextBlocks;
@@ -537,7 +536,6 @@ export function normalizeConfig(raw: unknown): InvoiceTemplateConfig {
     showLogo: r.showLogo !== false,
     logoSize: r.logoSize === 'sm' || r.logoSize === 'lg' ? r.logoSize : 'md',
     logoPx: typeof r.logoPx === 'number' && isFinite(r.logoPx) ? clampLogoPx(r.logoPx) : null,
-    logoInvert: r.logoInvert === true,
     sections,
     columns: {
       qty: r.columns?.qty !== false,
@@ -848,8 +846,6 @@ export interface InvoiceViewModel {
   header: {
     showLogo: boolean;
     logoUrl: string | null;
-    /** Invert the logo's colors (see InvoiceTemplateConfig.logoInvert). */
-    logoInvert: boolean;
     businessName: string;
     businessLines: string[];
     invoiceTitle: string;
@@ -1017,7 +1013,6 @@ export function buildInvoiceViewModel(
     header: {
       showLogo: cfg.showLogo && !!branding.logoUrl,
       logoUrl: branding.logoUrl,
-      logoInvert: cfg.logoInvert === true,
       businessName: branding.name,
       businessLines,
       invoiceTitle: isEstimate ? labels.estimate : labels.invoice,
@@ -1269,12 +1264,8 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
   const subtleOnAcc = onAcc === '#FFFFFF' ? 'rgba(255,255,255,0.82)' : 'rgba(17,24,39,0.68)';
   const tint = withAlpha(st.accent, 0.1);
 
-  // "Invert logo colors" (Ajustes → Factura) exists so a dark logo stays
-  // visible on an accent/dark header. Same CSS filter the web renderer uses —
-  // without it, PDFs printed from the phone had a black logo on a black band.
-  const logoInvertCss = h.logoInvert ? ' style="filter:invert(1)"' : '';
   const logoTag = (cls: string) =>
-    h.showLogo && h.logoUrl ? `<img class="${cls}" src="${escapeHtml(h.logoUrl)}" alt=""${logoInvertCss}>` : '';
+    h.showLogo && h.logoUrl ? `<img class="${cls}" src="${escapeHtml(h.logoUrl)}" alt="">` : '';
   const bizLines = (cls: string) =>
     h.businessLines.map(l => `<div class="${cls}">${escapeHtml(l)}</div>`).join('');
 
@@ -1633,7 +1624,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     return `<div style="width:100%;height:100%;background:${fill};border-radius:${radius}"></div>`;
   };
   const elInner = (el: InvoiceElement): string => {
-    if (el.kind === 'logo') return h.logoUrl ? `<img class="inv-el-logo" src="${escapeHtml(h.logoUrl)}" alt=""${h.logoInvert ? ' style="filter:invert(1)"' : ''}>` : '';
+    if (el.kind === 'logo') return h.logoUrl ? `<img class="inv-el-logo" src="${escapeHtml(h.logoUrl)}" alt="">` : '';
     if (el.kind === 'shape') return shapeHtml(el);
     if (el.kind === 'icon') return iconSvg(el);
     if (el.kind === 'text') return `<div class="inv-el-text">${br(el.text ?? '')}</div>`;
@@ -1935,9 +1926,6 @@ export function setLogoSize(c: InvoiceTemplateConfig, logoSize: InvoiceLogoSize)
 }
 export function setLogoPx(c: InvoiceTemplateConfig, px: number): InvoiceTemplateConfig {
   return { ...c, logoPx: clampLogoPx(px) };
-}
-export function setLogoInvert(c: InvoiceTemplateConfig, logoInvert: boolean): InvoiceTemplateConfig {
-  return { ...c, logoInvert };
 }
 export function toggleSection(c: InvoiceTemplateConfig, id: InvoiceSectionId): InvoiceTemplateConfig {
   return {

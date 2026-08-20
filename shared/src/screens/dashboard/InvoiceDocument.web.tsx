@@ -9,10 +9,10 @@ import { createElement, type CSSProperties, type ReactNode } from 'react';
 import { resolveFieldValue, customFieldElementText, cssFontFamily, fieldUsesAccent, onAccentColor, withAlpha, decorationRender, type InvoiceViewModel, type InvoiceSectionId, type InvoiceElement, type DecoSpec } from '../../lib/invoiceTemplate';
 import { INVOICE_ICON_NODES } from '../../lib/invoiceIconNodes';
 
-function Logo({ url, maxHeight, maxWidth = 220, center, invert }: { url: string; maxHeight: number; maxWidth?: number; center?: boolean; invert?: boolean }) {
+function Logo({ url, maxHeight, maxWidth = 220, center }: { url: string; maxHeight: number; maxWidth?: number; center?: boolean }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={url} alt="" style={{ maxHeight, maxWidth, objectFit: 'contain', marginBottom: 8, display: 'block', ...(invert ? { filter: 'invert(1)' } : null), ...(center ? { marginLeft: 'auto', marginRight: 'auto' } : null) }} />
+    <img src={url} alt="" style={{ maxHeight, maxWidth, objectFit: 'contain', marginBottom: 8, display: 'block', ...(center ? { marginLeft: 'auto', marginRight: 'auto' } : null) }} />
   );
 }
 
@@ -85,7 +85,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
 
   const fromBlock = (
     <div>
-      {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} invert={h.logoInvert} /> : null}
+      {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} /> : null}
       <div className="font-bold" style={{ fontSize: st.fontPx + 4 }}>{h.businessName}</div>
       {h.businessLines.map((l, i) => (
         <div key={i} className="text-muted" style={{ fontSize: small, marginTop: 2, color: addrColor }}>{l}</div>
@@ -138,7 +138,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
         return (
           <div className="flex justify-between gap-6" style={{ background: accent, padding: `${gap}px ${gap + 4}px`, borderRadius: 10 }}>
             <div>
-              {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} invert={h.logoInvert} /> : null}
+              {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} /> : null}
               <div className="font-bold" style={{ fontSize: st.fontPx + 4, color: onAcc }}>{h.businessName}</div>
               {h.businessLines.map((l, i) => (
                 <div key={i} style={{ fontSize: small, marginTop: 2, color: subtleOnAcc }}>{l}</div>
@@ -154,7 +154,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
       case 'centered':
         return (
           <div className="text-center pb-4" style={{ borderBottom: `2px solid ${accent}` }}>
-            {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} center invert={h.logoInvert} /> : null}
+            {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} center /> : null}
             <div className="font-bold" style={{ fontSize: st.fontPx + 4 }}>{h.businessName}</div>
             {h.businessLines.map((l, i) => (
               <div key={i} className="text-muted" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
@@ -168,7 +168,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
         return (
           <div className="flex gap-4 items-stretch">
             <div style={{ background: tint, borderRadius: 12, padding: 16, width: '40%' }}>
-              {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} maxWidth={160} invert={h.logoInvert} /> : null}
+              {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} maxWidth={160} /> : null}
               <div className="font-bold" style={{ fontSize: st.fontPx + 4 }}>{h.businessName}</div>
               {h.businessLines.map((l, i) => (
                 <div key={i} className="text-muted" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
@@ -186,7 +186,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
           <div className="pb-4" style={{ borderBottom: '1px solid #e5e7eb' }}>
             <div className="flex justify-between items-center">
               <div className="uppercase text-muted font-semibold" style={{ fontSize: small, letterSpacing: '0.12em' }}>{h.businessName}</div>
-              {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={Math.round(st.logoPx * 0.7)} maxWidth={160} invert={h.logoInvert} /> : null}
+              {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={Math.round(st.logoPx * 0.7)} maxWidth={160} /> : null}
             </div>
             <div style={{ width: 32, height: 3, background: accent, borderRadius: 2, margin: '14px 0 8px' }} />
             <div style={{ fontWeight: 300, fontSize: st.fontPx + 16, color: '#111827', letterSpacing: '0.02em' }}>{h.invoiceTitle}</div>
@@ -225,7 +225,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
         return (
           <div className="flex justify-between gap-6" style={{ background: accent, borderRadius: 12, padding: `${gap + 2}px ${gap + 6}px` }}>
             <div>
-              {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} invert={h.logoInvert} /> : null}
+              {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} /> : null}
               <div className="font-bold" style={{ fontSize: st.fontPx + 4, color: onAcc }}>{h.businessName}</div>
               {h.businessLines.map((l, i) => (
                 <div key={i} style={{ fontSize: small, marginTop: 2, color: subtleOnAcc }}>{l}</div>
@@ -249,7 +249,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             <div style={{ width: 122, height: 122, borderRadius: '50%', background: tint, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', flex: '0 0 auto' }}>
               {h.showLogo && h.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={h.logoUrl} alt="" style={{ maxHeight: 44, maxWidth: 80, objectFit: 'contain', marginBottom: 4, ...(h.logoInvert ? { filter: 'invert(1)' } : null) }} />
+                <img src={h.logoUrl} alt="" style={{ maxHeight: 44, maxWidth: 80, objectFit: 'contain', marginBottom: 4 }} />
               ) : null}
               <div className="uppercase text-muted" style={{ fontSize: st.fontPx - 3, letterSpacing: '0.1em', padding: '0 10px' }}>{h.businessName}</div>
             </div>
@@ -264,7 +264,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
               {metaLines()}
             </div>
             <div className="text-right">
-              {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} center={false} invert={h.logoInvert} /> : null}
+              {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} center={false} /> : null}
               <div className="font-bold" style={{ fontSize: st.fontPx + 4 }}>{h.businessName}</div>
               {h.businessLines.map((l, i) => (
                 <div key={i} className="text-muted" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
@@ -275,7 +275,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
       case 'bandCenter':
         return (
           <div className="text-center">
-            {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} center invert={h.logoInvert} /> : null}
+            {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} center /> : null}
             <div style={{ background: accent, color: onAcc, textTransform: 'uppercase', letterSpacing: '0.3em', fontWeight: 700, fontSize: st.fontPx + 6, padding: '10px 0', margin: '8px 0' }}>{h.invoiceTitle}</div>
             <div className="text-muted" style={{ fontSize: small }}>
               {h.invoiceNumber} · {h.issueLabel} {h.issueValue}{h.dueValue ? ` · ${h.dueLabel} ${h.dueValue}` : ''}
@@ -286,7 +286,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
         return (
           <div className="flex justify-between gap-6 pb-4" style={{ borderBottom: `2px solid ${accent}` }}>
             <div>
-              {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} invert={h.logoInvert} /> : null}
+              {h.showLogo && h.logoUrl ? <Logo url={h.logoUrl} maxHeight={st.logoPx} /> : null}
               <div className="font-bold" style={{ fontSize: st.fontPx + 4 }}>{h.businessName}</div>
               {h.businessLines.map((l, i) => (
                 <div key={i} className="text-muted" style={{ fontSize: small, marginTop: 2 }}>{l}</div>
@@ -417,7 +417,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
       if (el.kind === 'logo') {
         return vm.header.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={vm.header.logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', ...(vm.header.logoInvert ? { filter: 'invert(1)' } : null) }} />
+          <img src={vm.header.logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
         ) : null;
       }
       if (el.kind === 'shape') {

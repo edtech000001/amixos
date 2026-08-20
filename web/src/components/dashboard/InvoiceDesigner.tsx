@@ -19,7 +19,6 @@ import {
   setFont,
   setDensity,
   setShowLogo,
-  setLogoInvert,
   setLogoPx,
   effectiveLogoPx,
   LOGO_PX_MIN,
@@ -824,12 +823,6 @@ export function InvoiceDesigner({ value, onChange, branding, customFields = [], 
                       className="w-40 accent-primary cursor-pointer"
                     />
                     <span className="text-xs text-muted tabular-nums w-9 text-right">{effectiveLogoPx(value)}px</span>
-                  </label>
-                ) : null}
-                {value.showLogo ? (
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={value.logoInvert === true} onChange={e => change(setLogoInvert(value, e.target.checked))} />
-                    <span className="text-sm text-muted">{t.invertLogo}</span>
                   </label>
                 ) : null}
               </div>
