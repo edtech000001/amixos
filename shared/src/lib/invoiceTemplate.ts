@@ -1494,8 +1494,13 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     }
   };
 
-  const headerHtml = `${headerByArchetype()}
-    ${h.headerNote ? `<div class="inv-note-top">${br(h.headerNote)}</div>` : ''}`;
+  // No headerNote block: the theme-level header note was retired from the
+  // designer (the per-invoice Notes field covers top-of-invoice text) and
+  // neither React renderer draws it. Businesses with a legacy value stored in
+  // their theme were still getting it printed on mobile PDFs only — invisible
+  // on web and impossible to edit. An explicitly placed freeform `headerNote`
+  // field still resolves, same as `status`.
+  const headerHtml = headerByArchetype();
 
   const billToHtml = `
     <div class="inv-billto">
@@ -1537,8 +1542,8 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
       <div class="inv-totrow"><span>${escapeHtml(L.subtotal)}</span><span>${escapeHtml(vm.totals.subtotal)}</span></div>
       ${vm.totals.taxLabel ? `<div class="inv-totrow"><span>${escapeHtml(vm.totals.taxLabel)}</span><span>${escapeHtml(vm.totals.taxValue ?? '')}</span></div>` : ''}`;
   const totalsHtml = vm.totalBar
-    ? `<div class="inv-totals">${subtaxRows}</div>
-       <div class="inv-totalbar"><span>${escapeHtml(L.total)}</span><span>${escapeHtml(vm.totals.total)}</span></div>`
+    ? `<div class="inv-totalgroup"><div class="inv-totals">${subtaxRows}</div>
+       <div class="inv-totalbar"><span>${escapeHtml(L.total)}</span><span>${escapeHtml(vm.totals.total)}</span></div></div>`
     : `<div class="inv-totals">${subtaxRows}
        <div class="inv-totrow grand"><span>${escapeHtml(L.total)}</span><span>${escapeHtml(vm.totals.total)}</span></div>
     </div>`;
@@ -1737,10 +1742,12 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     .inv-meta { text-align: right; }
     .inv-title { text-transform: uppercase; letter-spacing: 0.08em; color: ${accent}; font-weight: 700; font-size: ${st.fontPx + 6}px; }
     .inv-number { font-weight: 600; margin-top: 2px; }
-    .inv-status { display: inline-block; margin-top: 4px; font-size: ${st.fontPx - 3}px; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; }
+    .arch-centered .inv-number, .arch-titleLeft .inv-number { color: #6b7280; font-size: ${st.fontPx - 2}px; }
+    .arch-elegant .inv-number { color: #6b7280; font-size: ${st.fontPx - 2}px; font-weight: 400; }
+    .arch-hero .inv-number { margin-top: 6px; }
     .inv-metaline { font-size: ${st.fontPx - 2}px; color: #374151; margin-top: 4px; }
+    .inv-metaline + .inv-metaline { margin-top: 0; }
     .inv-metaline span { color: #9ca3af; }
-    .inv-note-top { font-size: ${st.fontPx - 1}px; color: #374151; }
     /* — band archetype — */
     .inv-band { display: flex; justify-content: space-between; gap: 24px; background: ${accent}; padding: ${gap}px ${gap + 4}px; border-radius: 10px; }
     .inv-band .inv-bizname.onacc { color: ${onAcc}; }
@@ -1780,7 +1787,6 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     .inv-stamp-chip { display: inline-block; background: ${accent}; color: ${onAcc}; border-radius: 8px; padding: 8px 12px; }
     .inv-stamp-title { font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: ${st.fontPx + 4}px; color: ${onAcc}; }
     .inv-stamp-num { font-weight: 600; font-size: ${st.fontPx}px; color: ${onAcc}; margin-top: 1px; }
-    .inv-stamp-status { font-size: ${st.fontPx - 3}px; text-transform: uppercase; letter-spacing: 0.04em; color: ${subtleOnAcc}; margin-top: 2px; }
     .inv-stamp-dates { margin-top: 8px; }
     /* — hero archetype — */
     .inv-hero { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
@@ -1836,7 +1842,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     .inv-deco-top { position: absolute; top: 0; left: 0; width: 100%; z-index: 0; pointer-events: none; }
     .inv-deco-bot { position: absolute; bottom: 0; left: 0; width: 100%; z-index: 0; pointer-events: none; }
     .inv-doc { position: relative; z-index: 1; }
-    .inv-footerbar { position: relative; z-index: 1; margin-top: ${gap}px; background: ${accent}; color: ${onAcc}; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border-radius: 8px; font-size: ${st.fontPx - 2}px; }
+    .inv-footerbar { position: relative; z-index: 1; margin-top: ${gap}px; background: ${accent}; color: ${onAcc}; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; padding: 13px ${st.pad}px; font-size: ${st.fontPx - 2}px; text-align: center; }
     .inv-footerbar .fb-name { font-weight: 700; }
     .inv-footerbar .fb-sep { color: ${subtleOnAcc}; }
     .inv-sectlabel { text-transform: uppercase; letter-spacing: 0.05em; font-size: ${st.fontPx - 3}px; color: #9ca3af; font-weight: 600; margin-bottom: 6px; }
@@ -1850,6 +1856,8 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     .inv-table.th-dark th { background: #1f2937; color: #fff; border-bottom: none; }
     .inv-table.th-tint th { background: ${tint}; color: #4b5563; border-bottom: none; }
     .inv-table td { padding: ${cellPad}; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+    .inv-table tbody td.ta-c, .inv-table tbody td.ta-r { color: #6b7280; }
+    .inv-table tbody td.strong { color: #111827; }
     .inv-table tr { break-inside: avoid; }
     .inv-table thead { display: table-header-group; }
     .ta-l { text-align: left; } .ta-c { text-align: center; } .ta-r { text-align: right; }
@@ -1859,11 +1867,14 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     .inv-totrow span:last-child { min-width: 110px; text-align: right; }
     .inv-totrow.grand { border-top: 2px solid #e5e7eb; padding-top: 8px; margin-top: 2px; font-weight: 700; font-size: ${st.fontPx + 4}px; }
     .inv-totrow.grand span:last-child { color: ${accent}; }
+    .inv-totalgroup { break-inside: avoid; }
+    .inv-totalgroup .inv-totalbar { margin-top: 10px; }
     .inv-totalbar { display: flex; justify-content: space-between; align-items: center; gap: 24px; background: ${accent}; color: ${onAcc}; padding: 10px 16px; border-radius: 8px; font-weight: 700; font-size: ${st.fontPx + 4}px; break-inside: avoid; }
     .inv-block { break-inside: avoid; }
-    .inv-cfrow { display: flex; justify-content: space-between; gap: 16px; font-size: ${st.fontPx - 1}px; padding: 2px 0; }
+    .inv-cfrow { display: flex; justify-content: space-between; gap: 16px; font-size: ${st.fontPx - 2}px; padding: 2px 0; }
     .inv-cfrow span:first-child { color: #6b7280; }
-    .inv-text { font-size: ${st.fontPx - 1}px; color: #4b5563; white-space: pre-wrap; line-height: 1.5; }
+    .inv-cfrow span:last-child { color: #111827; font-weight: 500; }
+    .inv-text { font-size: ${st.fontPx - 2}px; color: #4b5563; white-space: pre-wrap; line-height: 1.5; }
     .inv-footer { border-top: 1px solid #e5e7eb; padding-top: 10px; color: #9ca3af; font-size: ${st.fontPx - 2}px; text-align: center; white-space: pre-wrap; }
     .inv-approval { border-top: 1px solid #e5e7eb; padding-top: 10px; }
     .inv-approval .inv-sectlabel { color: ${accent}; }
