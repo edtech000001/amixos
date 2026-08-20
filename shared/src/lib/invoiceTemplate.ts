@@ -1269,8 +1269,12 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
   const subtleOnAcc = onAcc === '#FFFFFF' ? 'rgba(255,255,255,0.82)' : 'rgba(17,24,39,0.68)';
   const tint = withAlpha(st.accent, 0.1);
 
+  // "Invert logo colors" (Ajustes → Factura) exists so a dark logo stays
+  // visible on an accent/dark header. Same CSS filter the web renderer uses —
+  // without it, PDFs printed from the phone had a black logo on a black band.
+  const logoInvertCss = h.logoInvert ? ' style="filter:invert(1)"' : '';
   const logoTag = (cls: string) =>
-    h.showLogo && h.logoUrl ? `<img class="${cls}" src="${escapeHtml(h.logoUrl)}" alt="">` : '';
+    h.showLogo && h.logoUrl ? `<img class="${cls}" src="${escapeHtml(h.logoUrl)}" alt=""${logoInvertCss}>` : '';
   const bizLines = (cls: string) =>
     h.businessLines.map(l => `<div class="${cls}">${escapeHtml(l)}</div>`).join('');
 
@@ -1624,7 +1628,7 @@ export function buildInvoiceHtml(vm: InvoiceViewModel): string {
     return `<div style="width:100%;height:100%;background:${fill};border-radius:${radius}"></div>`;
   };
   const elInner = (el: InvoiceElement): string => {
-    if (el.kind === 'logo') return h.logoUrl ? `<img class="inv-el-logo" src="${escapeHtml(h.logoUrl)}" alt="">` : '';
+    if (el.kind === 'logo') return h.logoUrl ? `<img class="inv-el-logo" src="${escapeHtml(h.logoUrl)}" alt=""${h.logoInvert ? ' style="filter:invert(1)"' : ''}>` : '';
     if (el.kind === 'shape') return shapeHtml(el);
     if (el.kind === 'icon') return iconSvg(el);
     if (el.kind === 'text') return `<div class="inv-el-text">${br(el.text ?? '')}</div>`;
