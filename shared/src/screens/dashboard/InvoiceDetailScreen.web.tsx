@@ -540,6 +540,14 @@ export function InvoiceDetailScreen({
         <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
           {(() => {
             const seen = new Set<string>();
+            // Jobs contributing exactly one non-add-on line to this invoice.
+            const jobLineCount = new Map<string, number>();
+            for (const li of invoice.lineItems) {
+              if (li.job_id && !li.addon) jobLineCount.set(li.job_id, (jobLineCount.get(li.job_id) ?? 0) + 1);
+            }
+            const singleLineJobs = new Set(
+              Array.from(jobLineCount.entries()).filter(([, n]) => n === 1).map(([id]) => id),
+            );
             return invoice.lineItems.map((li, idx) => {
               const q = Number(li.qty) || 0;
               const r = Number(li.rate) || 0;
@@ -547,7 +555,12 @@ export function InvoiceDetailScreen({
               // Split-off flat add-on lines (e.g. a loading fee) keep the job_id
               // so they move/remove with the job, but show their own name.
               const isAddon = !!li.addon;
-              const title = (jid && !isAddon && jobTitles?.[jid]) || li.description;
+              // The job title stands in for the line name only when the job
+              // bills as a SINGLE line (its one line IS the job). An itemized
+              // job must show each line's own description — otherwise every
+              // row repeats the job name and "4 Tower Assembly" / "Travel Fee"
+              // are nowhere to be seen.
+              const title = (jid && !isAddon && singleLineJobs.has(jid) && jobTitles?.[jid]) || li.description;
               const showActions = editable && canEdit && !!jid && !isAddon && !!onRemoveJob && !seen.has(jid);
               if (jid) seen.add(jid);
               return (
