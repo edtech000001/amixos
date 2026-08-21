@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { formatMoneyInput } from '@amixos/shared/lib/format';
 import {
   View,
   Text,
@@ -745,7 +746,7 @@ export default function NuevaFacturaRoute() {
                     <View className="flex-1">
                       <Text className="text-[10px] text-faint mb-1">{t.colRate}</Text>
                       <TextInput
-                        value={line.rateText ?? (line.rate ? String(line.rate) : '')}
+                        value={formatMoneyInput(line.rateText ?? (line.rate ? String(line.rate) : ''))}
                         onChangeText={(v) => {
                           const clean = v.replace(/[^0-9.-]/g, '').replace(/(?!^)-/g, '');
                           updateLine(line.id, 'rateText', clean);

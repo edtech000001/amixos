@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { formatMoneyInput } from '@amixos/shared/lib/format';
 import { Trash2, ArrowLeft, X, Search, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -602,7 +603,7 @@ function NuevaFacturaContent() {
                   type="text"
                   inputMode="decimal"
                   placeholder="0.00"
-                  value={line.rateText ?? (line.rate ? String(line.rate) : '')}
+                  value={formatMoneyInput(line.rateText ?? (line.rate ? String(line.rate) : ''))}
                   onChange={e => {
                     const clean = e.target.value.replace(/[^0-9.-]/g, '').replace(/(?!^)-/g, '');
                     updateLine(i, 'rateText', clean);
