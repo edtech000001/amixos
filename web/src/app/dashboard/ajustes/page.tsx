@@ -106,6 +106,7 @@ import { diffById, isDirty, isTempId, newTempId } from '@amixos/shared/lib/draft
 import { SortableList } from '@/components/dashboard/SortableList';
 import { PricingModal } from '@/components/PricingModal';
 import { PLANS } from '@amixos/shared/lib/plans';
+import { LogoCropper } from '@/components/dashboard/LogoCropper';
 import { normalizeImageFile } from '@/lib/imageFile';
 import {
   activePlanKey,
@@ -644,6 +645,9 @@ export default function AjustesPage() {
 
   // Logo upload is immediate (pick → upload → persist → refetch), separate
   // from the form's Save button — same bucket path as onboarding.
+  // Picking a logo opens the cropper first; uploadLogo runs on what it returns.
+  const [cropFile, setCropFile] = useState<File | null>(null);
+
   const onPickLogo = async (rawFile: File | null) => {
     if (!rawFile || !business) return;
     const file = await normalizeImageFile(rawFile);
@@ -652,6 +656,12 @@ export default function AjustesPage() {
       setBizMsg(t.business.logoSizeError);
       return;
     }
+    setCropFile(file);
+  };
+
+  const uploadLogo = async (file: File) => {
+    if (!business) return;
+    setCropFile(null);
     setUploadingLogo(true);
     setBizMsg('');
     try {
@@ -2392,7 +2402,7 @@ export default function AjustesPage() {
                     <Building2 size={44} className="text-faint" />
                   </div>
                 )}
-                <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={e => onPickLogo(e.target.files?.[0] ?? null)} />
+                <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0] ?? null; e.target.value = ''; void onPickLogo(f); }} />
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => logoInputRef.current?.click()}
@@ -3929,6 +3939,8 @@ export default function AjustesPage() {
         </div>
 
       {/* ── Add field modal ─────────────────────────────────────── */}
+      <LogoCropper file={cropFile} onCancel={() => setCropFile(null)} onDone={f => void uploadLogo(f)} />
+
       <Modal open={addFieldModal} onClose={() => setAddFieldModal(false)} title={t.customFields.addModalTitle} size="sm">
         <div className="flex flex-col gap-4">
           <Input label={t.customFields.fieldNameLabelEs} placeholder={t.customFields.fieldNamePlaceholder}

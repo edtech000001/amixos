@@ -1642,6 +1642,14 @@ export type DashboardDict = {
       logoUploading: string;
       logoError: string;
       logoSizeError: string;
+      cropper: {
+        title: string;
+        hint: string;
+        zoomLabel: string;
+        autoFitBtn: string;
+        resetBtn: string;
+        applyBtn: string;
+      };
       contactHeading: string;
       emailLabel: string;
       phoneLabel: string;
@@ -4668,6 +4676,14 @@ export const dashboard: Record<Locale, DashboardDict> = {
         logoUploading: 'Subiendo…',
         logoError: 'No se pudo subir el logo. Intenta de nuevo.',
         logoSizeError: 'La imagen supera el límite de 2 MB.',
+        cropper: {
+          title: 'Ajustar logo',
+          hint: 'Acerca y arrastra para que el logo llene el cuadro. "Ajustar solo" recorta el espacio vacío alrededor.',
+          zoomLabel: 'Zoom',
+          autoFitBtn: 'Ajustar solo',
+          resetBtn: 'Restablecer',
+          applyBtn: 'Usar este recorte',
+        },
         contactHeading: 'Contacto',
         emailLabel: 'Correo electrónico',
         phoneLabel: 'Teléfono',
@@ -7702,6 +7718,14 @@ export const dashboard: Record<Locale, DashboardDict> = {
         logoUploading: 'Uploading…',
         logoError: "Couldn't upload the logo. Try again.",
         logoSizeError: 'Image exceeds the 2 MB limit.',
+        cropper: {
+          title: 'Adjust logo',
+          hint: 'Zoom and drag so the logo fills the box. "Auto-fit" trims the empty space around it.',
+          zoomLabel: 'Zoom',
+          autoFitBtn: 'Auto-fit',
+          resetBtn: 'Reset',
+          applyBtn: 'Use this crop',
+        },
         contactHeading: 'Contact',
         emailLabel: 'Email',
         phoneLabel: 'Phone',

@@ -13,6 +13,7 @@ import {
 import { useLang } from '@/i18n/LangProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { normalizeImageFile } from '@/lib/imageFile';
+import { LogoCropper } from '@/components/dashboard/LogoCropper';
 
 export default function OnboardingPage() {
   const supabase = createSupabaseClient();
@@ -70,22 +71,43 @@ export default function OnboardingPage() {
     return null;
   };
 
+  // Picking opens the cropper; the pending promise stays open until the user
+  // applies a crop (uploadLogoFile) or cancels it.
+  const [cropFile, setCropFile] = useState<File | null>(null);
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawFile = e.target.files?.[0];
+    e.target.value = '';
+    if (!pendingResolveRef.current) return;
+
+    const file = rawFile ? await normalizeImageFile(rawFile) : undefined;
+    if (!file) {
+      const resolve = pendingResolveRef.current;
+      pendingResolveRef.current = null;
+      resolve?.(null); // cancelled at the file picker
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      const resolve = pendingResolveRef.current;
+      pendingResolveRef.current = null;
+      resolve?.({ error: t.logo.sizeError });
+      return;
+    }
+    setCropFile(file);
+  };
+
+  const cancelCrop = () => {
+    setCropFile(null);
+    const resolve = pendingResolveRef.current;
+    pendingResolveRef.current = null;
+    resolve?.(null);
+  };
+
+  const uploadLogoFile = async (file: File) => {
+    setCropFile(null);
     const resolve = pendingResolveRef.current;
     pendingResolveRef.current = null;
     if (!resolve) return;
-
-    const rawFile = e.target.files?.[0];
-    const file = rawFile ? await normalizeImageFile(rawFile) : undefined;
-    if (!file) {
-      resolve(null); // cancelled
-      return;
-    }
-
-    if (file.size > 2 * 1024 * 1024) {
-      resolve({ error: t.logo.sizeError });
-      return;
-    }
 
     // The cookie/SSR client doesn't attach the user token to storage uploads,
     // so they go out anonymous and the logos RLS policy denies them ("new row
@@ -205,6 +227,7 @@ export default function OnboardingPage() {
         className="hidden"
         onChange={handleFileChange}
       />
+      <LogoCropper file={cropFile} onCancel={cancelCrop} onDone={f => void uploadLogoFile(f)} />
     </>
   );
 }
