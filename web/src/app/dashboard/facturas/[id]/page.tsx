@@ -30,7 +30,7 @@ import { autonameEnabled, autonameJobTitle, detectAutonameType } from '@amixos/s
 import { sortInvoiceLinesByDate, setLineItemExcluded, removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
 import { applicableRate, rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
-import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
+import { formatDateLong, formatNumberGrouped, formatMoneyInput } from '@amixos/shared/lib/format';
 import { secureShareToken } from '@amixos/shared/lib/shareToken';
 import { normalizeImageFile } from '@/lib/imageFile';
 
@@ -1157,7 +1157,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
               />
               <div className="flex gap-2">
                 <input
-                  value={manualQty}
+                  value={formatNumberGrouped(manualQty)}
                   inputMode="decimal"
                   onChange={e => setManualQty(e.target.value.replace(/[^0-9.]/g, ''))}
                   placeholder={tj.new.colQty}
@@ -1166,7 +1166,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                 <div className="relative flex-1">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint text-sm">$</span>
                   <input
-                    value={manualRate}
+                    value={formatMoneyInput(manualRate)}
                     inputMode="decimal"
                     onChange={e => setManualRate(cleanAmount(e.target.value))}
                     placeholder={tj.detail.colUnitPriceShort}
@@ -1248,7 +1248,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
           />
           <div className="flex gap-2">
             <input
-              value={editQty}
+              value={formatNumberGrouped(editQty)}
               inputMode="decimal"
               onChange={e => setEditQty(e.target.value.replace(/[^0-9.]/g, ''))}
               placeholder={tj.new.colQty}
@@ -1257,7 +1257,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
             <div className="relative flex-1">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint text-sm">$</span>
               <input
-                value={editRate}
+                value={formatMoneyInput(editRate)}
                 inputMode="decimal"
                 onChange={e => setEditRate(cleanAmount(e.target.value))}
                 placeholder={tj.detail.colUnitPriceShort}

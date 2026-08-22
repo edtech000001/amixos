@@ -32,7 +32,7 @@ import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { sortInvoiceLinesByDate, setLineItemExcluded, removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
 import { applicableRate, rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
-import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
+import { formatDateLong, formatMoneyInput, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { can } from '@amixos/shared/lib/permissions';
 import {
   resolveConfig,
@@ -1245,7 +1245,7 @@ export default function FacturaDetailRoute() {
             />
             <View className="flex-row gap-2 mb-4">
               <TextInput
-                value={manualQty}
+                value={formatNumberGrouped(manualQty)}
                 onChangeText={v => setManualQty(v.replace(/[^0-9.]/g, ''))}
                 keyboardType="decimal-pad"
                 placeholder={tj.new.colQty}
@@ -1263,7 +1263,7 @@ export default function FacturaDetailRoute() {
               <View className="flex-1 relative justify-center">
                 <Text className="absolute left-3 z-10 text-faint">$</Text>
                 <TextInput
-                  value={manualRate}
+                  value={formatMoneyInput(manualRate)}
                   onChangeText={v => setManualRate(cleanAmount(v))}
                   keyboardType="decimal-pad"
                   placeholder={tj.detail.colUnitPriceShort}
@@ -1356,7 +1356,7 @@ export default function FacturaDetailRoute() {
             />
             <View className="flex-row gap-2 mb-4">
               <TextInput
-                value={editQty}
+                value={formatNumberGrouped(editQty)}
                 onChangeText={v => setEditQty(v.replace(/[^0-9.]/g, ''))}
                 keyboardType="decimal-pad"
                 placeholder={tj.new.colQty}
@@ -1374,7 +1374,7 @@ export default function FacturaDetailRoute() {
               <View className="flex-1 relative justify-center">
                 <Text className="absolute left-3 z-10 text-faint">$</Text>
                 <TextInput
-                  value={editRate}
+                  value={formatMoneyInput(editRate)}
                   onChangeText={v => setEditRate(cleanAmount(v))}
                   keyboardType="decimal-pad"
                   placeholder={tj.detail.colUnitPriceShort}
