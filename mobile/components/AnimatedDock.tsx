@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Pressable, type LayoutChangeEvent } from 'react-native';
+import { View, Pressable, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import Animated, {
@@ -164,7 +164,14 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
   // from the navigator's LIVE state at press time, never the render snapshot.
   const lastPressRef = useRef(0);
 
-  const [barWidth, setBarWidth] = useState(0);
+  // The dock is full-bleed (left:0/right:0), so the bar's width IS the window
+  // width. Seeding from useWindowDimensions (instead of waiting for onLayout)
+  // is what keeps the notch and bubble aligned with the icons through an
+  // orientation change — on iPad, rotating out and back used to leave the
+  // geometry measured for the other orientation.
+  const { width: winWidth } = useWindowDimensions();
+  const [barWidth, setBarWidth] = useState(winWidth);
+  useEffect(() => { setBarWidth(winWidth); }, [winWidth]);
   const numTabs = Math.max(1, visibleRoutes.length);
   const tabWidth = barWidth / numTabs;
   // Natural icon center (flex-1 distribution across full bar width)
@@ -177,8 +184,16 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
 
   const notchX = useSharedValue(targetX);
 
+  // Tab changes glide; a width change (rotation) snaps — springing across a
+  // resized bar reads as the bubble sliding in from the wrong place.
+  const lastWidthRef = useRef(barWidth);
   useEffect(() => {
     if (!barWidth) return;
+    if (lastWidthRef.current !== barWidth) {
+      lastWidthRef.current = barWidth;
+      notchX.value = targetX;
+      return;
+    }
     notchX.value = withSpring(targetX, { damping: 18, stiffness: 200, mass: 0.7 });
   }, [targetX, barWidth, notchX]);
 

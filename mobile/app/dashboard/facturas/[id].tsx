@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
-import { Alert, Share, View, Text, Pressable, ScrollView, Modal as RNModal, Linking, TextInput, KeyboardAvoidingView, Platform, Image } from 'react-native';
+import { Alert, Share, View, Text, Pressable, ScrollView, Modal as RNModal, Linking, TextInput, KeyboardAvoidingView, Keyboard, Platform, Image, Dimensions } from 'react-native';
 import { X, Camera, ImagePlus, RotateCw } from 'lucide-react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -9,7 +9,7 @@ import { signedUrl } from '@amixos/shared/lib/storageUrls';
 import { INVOICE_PAYMENT_BUCKET, paymentPhotoPath } from '@amixos/shared/lib/invoicePayments';
 import { autonameEnabled, autonameJobTitle, detectAutonameType } from '@amixos/shared/lib/autoname';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
 import { WEB_APP_URL } from '@/lib/webUrl';
 import { useApp } from '@/lib/AppContext';
@@ -128,6 +128,7 @@ export default function FacturaDetailRoute() {
   const { business, currentRole } = useApp();
   const { t: full, locale } = useLang();
   const c = useThemeColors();
+  const insets = useSafeAreaInsets();
   const tInv = full.dashboard.invoices;
   const tc = full.common;
   const { confirm, confirmSheet } = useConfirmSheet();
@@ -1208,14 +1209,29 @@ export default function FacturaDetailRoute() {
       {/* Add-completed-jobs picker */}
       <RNModal visible={addOpen} transparent animationType="fade" onRequestClose={closeAdd}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <Pressable onPress={closeAdd} className="flex-1 bg-black/40 justify-end">
-          <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
+        <View className="flex-1 justify-end">
+          <Pressable
+            onPress={closeAdd}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+            className="bg-black/40"
+          />
+          <View
+            className="bg-card rounded-t-3xl px-5 pt-5 pb-10"
+            style={{ maxHeight: Dimensions.get('window').height - insets.top - 24 }}
+          >
             <View className="flex-row items-center justify-between mb-3">
               <Text className="text-lg font-bold text-ink">{linkIndex !== null ? jobsT.linkTitle : jobsT.addTitle}</Text>
               <Pressable onPress={closeAdd} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
                 <X size={22} color={c.faint} />
               </Pressable>
             </View>
+            {/* Tapping empty space inside the sheet dismisses the keyboard. */}
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              showsVerticalScrollIndicator={false}
+            >
+            <Pressable onPress={Keyboard.dismiss}>
 
             {/* Manual line item — hidden in link mode (associating a line). */}
             {linkIndex === null ? (<>
@@ -1234,7 +1250,7 @@ export default function FacturaDetailRoute() {
                 keyboardType="decimal-pad"
                 placeholder={tj.new.colQty}
                 placeholderTextColor={c.faint}
-                className="w-20 bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-center text-ink"
+                className="flex-1 bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-center text-ink"
               />
               <Pressable
                 onPress={() => setManualRate(toggleSign(manualRate))}
@@ -1273,7 +1289,7 @@ export default function FacturaDetailRoute() {
             {addCandidates.length === 0 ? (
               <Text className="text-sm text-faint pb-2">{jobsT.addEmpty}</Text>
             ) : (
-              <ScrollView style={{ maxHeight: 280 }}>
+              <View>
                 {addCandidates.map(j => {
                   const picked = addPicked.has(j.id);
                   const otherClient = j.client_id !== invClientId && !!j.clientName;
@@ -1302,21 +1318,29 @@ export default function FacturaDetailRoute() {
                     </Pressable>
                   );
                 })}
-              </ScrollView>
+              </View>
             )}
+            </Pressable>
+            </ScrollView>
+            {/* Outside the scroller so it stays reachable with a long list. */}
             <Pressable onPress={doAdd} disabled={jobBusy} className="mt-4 py-3.5 rounded-2xl bg-primary items-center active:opacity-90">
               <Text className="text-sm font-semibold text-white">{linkIndex !== null ? jobsT.linkBtn : jobsT.addConfirm}</Text>
             </Pressable>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
         </KeyboardAvoidingView>
       </RNModal>
 
       {/* Edit a manual line item */}
       <RNModal visible={editOpen} transparent animationType="fade" onRequestClose={() => setEditOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <Pressable onPress={() => setEditOpen(false)} className="flex-1 bg-black/40 justify-end">
-          <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
+        <View className="flex-1 justify-end">
+          <Pressable
+            onPress={() => setEditOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+            className="bg-black/40"
+          />
+          <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-10" onPress={Keyboard.dismiss}>
             <View className="flex-row items-center justify-between mb-3">
               <Text className="text-lg font-bold text-ink">{jobsT.editItemTitle}</Text>
               <Pressable onPress={() => setEditOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
@@ -1337,7 +1361,7 @@ export default function FacturaDetailRoute() {
                 keyboardType="decimal-pad"
                 placeholder={tj.new.colQty}
                 placeholderTextColor={c.faint}
-                className="w-20 bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-center text-ink"
+                className="flex-1 bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-center text-ink"
               />
               <Pressable
                 onPress={() => setEditRate(toggleSign(editRate))}
@@ -1368,7 +1392,7 @@ export default function FacturaDetailRoute() {
               <Text className="text-sm font-semibold text-white">{tc.buttons.save}</Text>
             </Pressable>
           </Pressable>
-        </Pressable>
+        </View>
         </KeyboardAvoidingView>
       </RNModal>
 
