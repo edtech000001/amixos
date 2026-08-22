@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { formatMoneyInput } from '@amixos/shared/lib/format';
+import { formatMoneyInput, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { Trash2, ArrowLeft, X, Search, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -275,8 +275,15 @@ function NuevaFacturaContent() {
       const updated = prev.map((l, idx) => idx === i
         ? { ...l, [field]: value, ...(l.job_id && field !== 'qtyText' && field !== 'rateText' ? { edited: true } : {}) }
         : l);
-      // Auto-add a new row when the last row's description is filled
-      if (field === 'description' && i === updated.length - 1 && (value as string).trim()) {
+      // Auto-add a new row once the last row has SOMETHING in it — a qty or a
+      // price counts, not just the description.
+      const last = updated[updated.length - 1];
+      const filled = !!last && (
+        last.description.trim() !== '' ||
+        (last.qtyText ?? '').trim() !== '' ||
+        (last.rateText ?? '').trim() !== ''
+      );
+      if (i === updated.length - 1 && filled) {
         updated.push({ ...EMPTY_LINE });
       }
       return updated;
@@ -591,7 +598,7 @@ function NuevaFacturaContent() {
                 <input
                   type="text"
                   inputMode="decimal"
-                  value={line.qtyText ?? (line.qty ? String(line.qty) : '')}
+                  value={formatNumberGrouped(line.qtyText ?? (line.qty ? String(line.qty) : ''))}
                   onChange={e => {
                     const clean = e.target.value.replace(/[^0-9.]/g, '');
                     updateLine(i, 'qtyText', clean);

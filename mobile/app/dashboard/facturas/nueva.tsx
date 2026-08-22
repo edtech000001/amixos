@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { formatMoneyInput } from '@amixos/shared/lib/format';
+import { formatMoneyInput, formatNumberGrouped } from '@amixos/shared/lib/format';
 import {
   View,
   Text,
@@ -287,13 +287,18 @@ export default function NuevaFacturaRoute() {
     };
   }, [business?.id, editId, locale]);
 
-  // Auto-append a blank line when the last row has a description.
+  // Auto-append a blank line once every row has SOMETHING in it — filling in
+  // a qty or a price counts, not just the description (typing a price and
+  // getting no next row read as the form being stuck).
+  const lineHasContent = (l: LineItem) =>
+    l.description.trim() !== '' || (l.qtyText ?? '').trim() !== '' || (l.rateText ?? '').trim() !== '';
   useEffect(() => {
     if (lines.length === 0) return;
-    if (lines.every((l) => l.description.trim() !== '')) {
+    if (lines.every(lineHasContent)) {
       setLines((prev) => [...prev, newLine()]);
     }
-  }, [lines.map((l) => l.description).join('|')]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines.map((l) => `${l.description}~${l.qtyText ?? ''}~${l.rateText ?? ''}`).join('|')]);
 
   const filteredClients = useMemo(() => {
     const q = clientSearch.trim().toLowerCase();
@@ -727,11 +732,11 @@ export default function NuevaFacturaRoute() {
                     className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink"
                     style={{ minHeight: 40, maxHeight: 120, textAlignVertical: 'top' }}
                   />
-                  <View className="flex-row items-center gap-2 mt-2">
+                  <View className="flex-row items-end gap-2 mt-2">
                     <View className="flex-1">
                       <Text className="text-[10px] text-faint mb-1">{t.colQty}</Text>
                       <TextInput
-                        value={line.qtyText ?? (line.qty ? String(line.qty) : '')}
+                        value={formatNumberGrouped(line.qtyText ?? (line.qty ? String(line.qty) : ''))}
                         onChangeText={(v) => {
                           const clean = v.replace(/[^0-9.]/g, '');
                           updateLine(line.id, 'qtyText', clean);
@@ -758,25 +763,25 @@ export default function NuevaFacturaRoute() {
                         className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink text-right"
                       />
                     </View>
-                    <View className="flex-1">
-                      <Text className="text-[10px] text-faint mb-1">Total</Text>
-                      <View className="rounded-xl bg-card px-3 py-2 border border-border-soft">
-                        <Text className="text-sm font-semibold text-ink text-right">
-                          {fmtMoney(line.qty * line.rate)}
-                        </Text>
-                      </View>
+                  </View>
+                  {/* Total gets its own row: sharing one with qty + price
+                      squeezed a seven-figure amount into a wrapped column. */}
+                  <View className="flex-row items-center justify-between mt-2.5">
+                    <Text className="text-[11px] text-faint">Total</Text>
+                    <View className="flex-row items-center gap-3">
+                      <Text className="text-base font-semibold text-ink">
+                        {fmtMoney(line.qty * line.rate)}
+                      </Text>
+                      {lines.length > 1 ? (
+                        <Pressable
+                          onPress={() => removeLine(line.id)}
+                          hitSlop={8}
+                          className="p-1.5 rounded-xl active:bg-red-500/10"
+                        >
+                          <Trash2 size={16} color={c.danger} />
+                        </Pressable>
+                      ) : null}
                     </View>
-                    {lines.length > 1 ? (
-                      <Pressable
-                        onPress={() => removeLine(line.id)}
-                        hitSlop={8}
-                        className="p-2 rounded-xl active:bg-red-500/10 self-end"
-                      >
-                        <Trash2 size={16} color={c.danger} />
-                      </Pressable>
-                    ) : (
-                      <View style={{ width: 32 }} />
-                    )}
                   </View>
                 </View>
               ))}
