@@ -287,18 +287,16 @@ export default function NuevaFacturaRoute() {
     };
   }, [business?.id, editId, locale]);
 
-  // Auto-append a blank line once every row has SOMETHING in it — filling in
-  // a qty or a price counts, not just the description (typing a price and
-  // getting no next row read as the form being stuck).
-  const lineHasContent = (l: LineItem) =>
-    l.description.trim() !== '' || (l.qtyText ?? '').trim() !== '' || (l.rateText ?? '').trim() !== '';
+  // Auto-append a blank line when every row has a DESCRIPTION. Deliberately
+  // not qty/price: a line without a description is dropped on save, so
+  // spawning the next row off a bare amount would promise a line that never
+  // gets stored.
   useEffect(() => {
     if (lines.length === 0) return;
-    if (lines.every(lineHasContent)) {
+    if (lines.every((l) => l.description.trim() !== '')) {
       setLines((prev) => [...prev, newLine()]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines.map((l) => `${l.description}~${l.qtyText ?? ''}~${l.rateText ?? ''}`).join('|')]);
+  }, [lines.map((l) => l.description).join('|')]);
 
   const filteredClients = useMemo(() => {
     const q = clientSearch.trim().toLowerCase();

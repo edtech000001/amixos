@@ -275,15 +275,10 @@ function NuevaFacturaContent() {
       const updated = prev.map((l, idx) => idx === i
         ? { ...l, [field]: value, ...(l.job_id && field !== 'qtyText' && field !== 'rateText' ? { edited: true } : {}) }
         : l);
-      // Auto-add a new row once the last row has SOMETHING in it — a qty or a
-      // price counts, not just the description.
-      const last = updated[updated.length - 1];
-      const filled = !!last && (
-        last.description.trim() !== '' ||
-        (last.qtyText ?? '').trim() !== '' ||
-        (last.rateText ?? '').trim() !== ''
-      );
-      if (i === updated.length - 1 && filled) {
+      // Auto-add a new row when the last row's DESCRIPTION is filled. Not on
+      // qty/price: a line without a description is dropped on save, so a bare
+      // amount shouldn't promise a line that never gets stored.
+      if (field === 'description' && i === updated.length - 1 && (value as string).trim()) {
         updated.push({ ...EMPTY_LINE });
       }
       return updated;
