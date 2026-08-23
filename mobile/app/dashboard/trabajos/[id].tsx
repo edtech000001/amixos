@@ -223,8 +223,8 @@ export default function JobDetailRoute() {
     useLocalSearchParams<{ id: string; from?: string; invoice?: string; worker?: string }>();
   // ?from=map → back returns to the map module; ?from=calendar → back returns
   // to the calendar; ?from=invoice → back to that invoice; ?from=nomina → back
-  // to payroll, reopening that worker's breakdown. Otherwise default behavior
-  // (trabajos list).
+  // to payroll, reopening that worker's breakdown; ?from=home → back to the
+  // dashboard. Otherwise default behavior (trabajos list).
   const goBack = () => {
     if (from === 'map') {
       router.replace('/dashboard/mas/modulos/map' as never);
@@ -236,6 +236,11 @@ export default function JobDetailRoute() {
       );
     } else if (from === 'invoice' && fromInvoice) {
       router.replace(`/dashboard/facturas/${fromInvoice}` as never);
+    } else if (from === 'home') {
+      // Opened from the field dashboard, which lives in the HOME tab while this
+      // screen belongs to the TRABAJOS stack — router.back() would pop to the
+      // last job viewed from the dashboard instead of the dashboard itself.
+      router.replace('/dashboard' as never);
     } else if (router.canGoBack()) {
       // Pop back to the existing list screen (each section is its own Stack)
       // so the list keeps its scroll position and loaded data — replace()

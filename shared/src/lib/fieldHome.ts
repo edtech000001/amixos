@@ -140,10 +140,12 @@ export async function fetchFieldHome(
   const anchor = payroll?.anchor ?? null;
   const customDays = payroll?.customDays ?? null;
 
-  // Calendar week (Sun–Sat) + month windows for the toggle views.
-  const weekStart = new Date(now); weekStart.setHours(0, 0, 0, 0);
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-  const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6);
+  // "Week" is a ROLLING last-7-days window (today back 6 days), not a Sun–Sat
+  // calendar week: on a calendar week the tile reset to 0h every Sunday even
+  // though the crew had been logging work all along, which reads as broken.
+  // The pay-cycle figure lives in the "Active" tab next to it.
+  const weekEnd = new Date(now); weekEnd.setHours(0, 0, 0, 0);
+  const weekStart = new Date(weekEnd); weekStart.setDate(weekStart.getDate() - 6);
   const weekStartStr = ymdLocal(weekStart);
   const weekEndStr = ymdLocal(weekEnd);
   const monthStartStr = ymdLocal(new Date(now.getFullYear(), now.getMonth(), 1));

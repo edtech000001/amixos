@@ -103,7 +103,7 @@ export function FieldHomeContainer() {
         readOnly={readOnly}
         showClock={showClock}
         onToggleClock={onToggleClock}
-        onJobPress={(id) => router.push(`/dashboard/trabajos/${id}`)}
+        onJobPress={(id) => router.push(`/dashboard/trabajos/${id}?from=home` as never)}
         onAdvanceStatus={onAdvanceStatus}
       />
     </View>
