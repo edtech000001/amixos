@@ -108,6 +108,7 @@ import { PricingModal } from '@/components/PricingModal';
 import { PLANS } from '@amixos/shared/lib/plans';
 import { LogoCropper } from '@/components/dashboard/LogoCropper';
 import { normalizeImageFile } from '@/lib/imageFile';
+import { Tooltip } from '@amixos/shared/ui/Tooltip';
 import {
   activePlanKey,
   isTrialExpired,
@@ -2618,11 +2619,12 @@ export default function AjustesPage() {
                             return (
                               <div>
                               <div className="flex items-center gap-2 px-4 py-3 bg-card">
-                                <button type="button" {...attributes} {...listeners}
-                                  className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-faint hover:text-muted hover:bg-surface transition-colors shrink-0"
-                                  aria-label="Drag to reorder">
-                                  <GripVertical size={14} />
-                                </button>
+                                <Tooltip tip="dragToReorder">
+                                  <button type="button" {...attributes} {...listeners}
+                                    className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-faint hover:text-muted hover:bg-surface transition-colors shrink-0">
+                                    <GripVertical size={14} />
+                                  </button>
+                                </Tooltip>
                                 <div className="flex flex-col shrink-0">
                                   <button onClick={() => moveFieldInSection(key, 'up')} disabled={firstInSec}
                                     className="p-0.5 rounded hover:bg-border-soft disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move up">
@@ -2939,11 +2941,12 @@ export default function AjustesPage() {
                             const lastInSec = i === keys.length - 1;
                             return (
                               <div className="flex items-center gap-2 px-4 py-3 bg-card">
-                                <button type="button" {...attributes} {...listeners}
-                                  className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-faint hover:text-muted hover:bg-surface transition-colors shrink-0"
-                                  aria-label="Drag to reorder">
-                                  <GripVertical size={14} />
-                                </button>
+                                <Tooltip tip="dragToReorder">
+                                  <button type="button" {...attributes} {...listeners}
+                                    className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-faint hover:text-muted hover:bg-surface transition-colors shrink-0">
+                                    <GripVertical size={14} />
+                                  </button>
+                                </Tooltip>
                                 <div className="flex flex-col shrink-0">
                                   <button onClick={() => moveClientFieldInSection(key, 'up')} disabled={firstInSec}
                                     className="p-0.5 rounded hover:bg-border-soft disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move up">
@@ -3087,11 +3090,12 @@ export default function AjustesPage() {
                             const lastInSec = i === keys.length - 1;
                             return (
                               <div className="flex items-center gap-2 px-4 py-3 bg-card">
-                                <button type="button" {...attributes} {...listeners}
-                                  className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-faint hover:text-muted hover:bg-surface transition-colors shrink-0"
-                                  aria-label="Drag to reorder">
-                                  <GripVertical size={14} />
-                                </button>
+                                <Tooltip tip="dragToReorder">
+                                  <button type="button" {...attributes} {...listeners}
+                                    className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-faint hover:text-muted hover:bg-surface transition-colors shrink-0">
+                                    <GripVertical size={14} />
+                                  </button>
+                                </Tooltip>
                                 <div className="flex flex-col shrink-0">
                                   <button onClick={() => moveEmpFieldInSection(key, 'up')} disabled={firstInSec}
                                     className="p-0.5 rounded hover:bg-border-soft disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move up">
@@ -3711,11 +3715,12 @@ export default function AjustesPage() {
                             const lastInSec = i === keys.length - 1;
                             return (
                               <div className="flex items-center gap-2 px-4 py-3 bg-card">
-                                <button type="button" {...attributes} {...listeners}
-                                  className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-faint hover:text-muted hover:bg-surface transition-colors shrink-0"
-                                  aria-label="Drag to reorder">
-                                  <GripVertical size={14} />
-                                </button>
+                                <Tooltip tip="dragToReorder">
+                                  <button type="button" {...attributes} {...listeners}
+                                    className="p-1 -ml-1 rounded cursor-grab active:cursor-grabbing text-faint hover:text-muted hover:bg-surface transition-colors shrink-0">
+                                    <GripVertical size={14} />
+                                  </button>
+                                </Tooltip>
                                 <div className="flex flex-col shrink-0">
                                   <button onClick={() => moveInvoiceFieldInSection(key, 'up')} disabled={firstInSec}
                                     className="p-0.5 rounded hover:bg-border-soft disabled:opacity-30 disabled:cursor-not-allowed transition-colors" aria-label="Move up">

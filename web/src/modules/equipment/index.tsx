@@ -62,6 +62,7 @@ import { formatDateLong, formatDateTimeLong, formatPhoneInput } from '@amixos/sh
 import { nextRotation } from '@amixos/shared/lib/jobPhotos';
 import { can } from '@amixos/shared/lib/permissions';
 import { normalizeImageFiles } from '@/lib/imageFile';
+import { Tooltip } from '@amixos/shared/ui/Tooltip';
 import {
   groupEquipment,
   parseEquipmentGroupKey,
@@ -1109,13 +1110,15 @@ export default function EquipmentModule() {
                           </div>
                         ))}
                     {(modal === 'add' ? pendingPhotos.length : photos.length) < MAX_PHOTOS_PER_EQUIPMENT ? (
-                      <button
-                        type="button"
-                        onClick={onPickFile}
-                        className="aspect-square rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors flex items-center justify-center"
-                      >
-                        <Plus size={18} className="text-faint" />
-                      </button>
+                      <Tooltip tip="uploadPhoto">
+                        <button
+                          type="button"
+                          onClick={onPickFile}
+                          className="aspect-square rounded-lg border-2 border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors flex items-center justify-center"
+                        >
+                          <Plus size={18} className="text-faint" />
+                        </button>
+                      </Tooltip>
                     ) : null}
                   </div>
                   {uploadingPhoto ? (

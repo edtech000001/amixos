@@ -15,6 +15,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 import { useLang } from '@/i18n/LangProvider';
+import { Tooltip } from '@amixos/shared/ui/Tooltip';
 import {
   DEFAULT_ROLE_PERMISSIONS,
   RESOURCE_KEYS,
@@ -218,9 +219,11 @@ export default function RolesSettingsPage() {
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-ink truncate">{roleLabel(selected, locale)}</h2>
                 {custom ? (
-                  <button type="button" onClick={openRename} className="text-muted hover:text-ink" title={t.renameRole}>
-                    <Pencil size={14} />
-                  </button>
+                  <Tooltip tip="renameRole">
+                    <button type="button" onClick={openRename} className="text-muted hover:text-ink">
+                      <Pencil size={14} />
+                    </button>
+                  </Tooltip>
                 ) : null}
               </div>
               <p className="text-xs text-muted mt-0.5">{custom ? t.customRoleDesc : roleDescription(selected, locale)}</p>

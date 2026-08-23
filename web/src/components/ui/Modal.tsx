@@ -2,6 +2,7 @@
 
 import { ReactNode, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { Tooltip } from '@amixos/shared/ui/Tooltip';
 
 interface Props {
   open: boolean;
@@ -34,9 +35,11 @@ export function Modal({ open, onClose, title, children, size = 'md', headerActio
           <h2 className="text-base font-semibold text-ink">{title}</h2>
           <div className="flex items-center gap-1">
             {headerAction}
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-border-soft transition-colors">
-              <X size={16} className="text-muted" />
-            </button>
+            <Tooltip tip="close">
+              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-border-soft transition-colors">
+                <X size={16} className="text-muted" />
+              </button>
+            </Tooltip>
           </div>
         </div>
         <div className="overflow-y-auto overflow-x-hidden py-6 px-7">

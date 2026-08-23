@@ -22,6 +22,7 @@ import {
   type InventoryStats,
 } from '@amixos/shared/lib/inventoryQuery';
 import { can } from '@amixos/shared/lib/permissions';
+import { Tooltip } from '@amixos/shared/ui/Tooltip';
 
 interface RawItem {
   id: string;
@@ -250,9 +251,11 @@ export default function InventoryModule() {
               value={form.sku ?? ''}
               onChange={e => setForm(f => ({ ...f, sku: e.target.value }))}
               rightIcon={
-                <button type="button" onClick={genSku} title={t.modal.generateSku} aria-label={t.modal.generateSku} className="p-1 text-primary hover:opacity-70">
-                  <Sparkles size={16} />
-                </button>
+                <Tooltip tip="generateSku">
+                  <button type="button" onClick={genSku} className="p-1 text-primary hover:opacity-70">
+                    <Sparkles size={16} />
+                  </button>
+                </Tooltip>
               }
             />
             <Input label={t.modal.categoryLabel} placeholder={t.modal.categoryPlaceholder} value={form.category ?? ''} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} list="inventory-categories" />

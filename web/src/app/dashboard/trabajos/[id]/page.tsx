@@ -36,6 +36,7 @@ import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { JobPhotosSection } from '@/components/jobs/JobPhotosSection';
 import { JobDocumentsSection } from '@/components/jobs/JobDocumentsSection';
 import { SignaturePad } from '@/components/SignaturePad';
+import { Tooltip } from '@amixos/shared/ui/Tooltip';
 
 interface Job {
   id: string; business_id: string;
@@ -911,11 +912,12 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             )}
             {isProposal && (
               <>
-                <button onClick={emailProposal}
-                  className="p-2 rounded-xl text-primary hover:bg-primary/5 transition-colors"
-                  title={td.emailTooltip}>
-                  <Mail size={16}/>
-                </button>
+                <Tooltip tip="emailProposal">
+                  <button onClick={emailProposal}
+                    className="p-2 rounded-xl text-primary hover:bg-primary/5 transition-colors">
+                    <Mail size={16}/>
+                  </button>
+                </Tooltip>
                 <button onClick={shareProposal}
                   className="p-2 rounded-xl text-primary hover:bg-primary/5 transition-colors relative"
                   title={td.shareTooltip}>
@@ -926,11 +928,12 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                     </span>
                   )}
                 </button>
-                <button onClick={openPrintView}
-                  className="p-2 rounded-xl text-faint hover:text-primary hover:bg-primary/5 transition-colors"
-                  title={td.printTooltip}>
-                  <Download size={16}/>
-                </button>
+                <Tooltip tip="downloadProposal">
+                  <button onClick={openPrintView}
+                    className="p-2 rounded-xl text-faint hover:text-primary hover:bg-primary/5 transition-colors">
+                    <Download size={16}/>
+                  </button>
+                </Tooltip>
               </>
             )}
             {/* Crew share only once the work is actually scheduled — before
@@ -1520,9 +1523,11 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                 <div className="flex items-center justify-between mt-1">
                   <button onClick={addRow} className="text-sm font-semibold text-primary hover:underline">+ {td.addItemsBtn}</button>
                   {priceItems.length > 0 ? (
-                    <button onClick={autopriceRows} className="flex items-center gap-1.5 text-sm font-semibold text-primary hover:bg-primary/5 px-3 py-1.5 rounded-lg">
-                      <DollarSign size={14} /> {td.autopriceBtn}
-                    </button>
+                    <Tooltip tip="autoprice" labelled>
+                      <button onClick={autopriceRows} className="flex items-center gap-1.5 text-sm font-semibold text-primary hover:bg-primary/5 px-3 py-1.5 rounded-lg">
+                        <DollarSign size={14} /> {td.autopriceBtn}
+                      </button>
+                    </Tooltip>
                   ) : null}
                 </div>
                 {showPriceVerify ? (

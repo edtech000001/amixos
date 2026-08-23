@@ -66,6 +66,51 @@ export type CommonDict = {
     subtitle: string;
     openBtn: string;
   };
+  // Hover tooltips for the dashboard's icon-only buttons
+  // (shared/src/ui/Tooltip.web.tsx). Kept in one block rather than scattered
+  // through each screen's dict so the same action reads the same way
+  // everywhere — a trash can says "Eliminar" on every screen, not "Borrar" on
+  // one and "Quitar" on the next.
+  tips: {
+    // Generic
+    edit: string;
+    delete: string;
+    back: string;
+    close: string;
+    exitSelection: string;
+    send: string;
+    print: string;
+    shareLink: string;
+    settings: string;
+    dragToReorder: string;
+    collapseSidebar: string;
+    expandSidebar: string;
+    clearFilters: string;
+    clearDate: string;
+    // Clients / employees
+    importClients: string;
+    addContact: string;
+    deleteEmployee: string;
+    loans: string;
+    // Jobs / invoices
+    autoprice: string;
+    sendInvoice: string;
+    createInvoice: string;
+    emailProposal: string;
+    downloadProposal: string;
+    generateSku: string;
+    // Settings
+    renameRole: string;
+    // Assistant
+    assistant: string;
+    resetChat: string;
+    voiceInput: string;
+    voiceCall: string;
+    // Modules
+    uploadPhoto: string;
+    openFile: string;
+    resetMapView: string;
+  };
 };
 
 export const common: Record<Locale, CommonDict> = {
@@ -131,6 +176,40 @@ export const common: Record<Locale, CommonDict> = {
       subtitle: 'Mejor experiencia en la app.',
       openBtn: 'Abrir',
     },
+    tips: {
+      edit: 'Editar',
+      delete: 'Eliminar',
+      back: 'Volver',
+      close: 'Cerrar',
+      exitSelection: 'Salir de la selección',
+      send: 'Enviar',
+      print: 'Imprimir',
+      shareLink: 'Copiar un enlace para compartir',
+      settings: 'Ajustes',
+      dragToReorder: 'Arrastra para reordenar',
+      collapseSidebar: 'Ocultar el menú',
+      expandSidebar: 'Mostrar el menú',
+      clearFilters: 'Quitar los filtros',
+      clearDate: 'Quitar la fecha',
+      importClients: 'Importar clientes desde un archivo CSV',
+      addContact: 'Agregar un contacto',
+      deleteEmployee: 'Eliminar este empleado',
+      loans: 'Préstamos y descuentos',
+      autoprice: 'Poner los precios desde tu lista de precios',
+      sendInvoice: 'Enviar la factura al cliente por correo',
+      createInvoice: 'Crear una factura con los trabajos seleccionados',
+      emailProposal: 'Enviar la propuesta por correo',
+      downloadProposal: 'Descargar el PDF',
+      generateSku: 'Generar un SKU',
+      renameRole: 'Cambiar el nombre',
+      assistant: 'Ami, tu asistente',
+      resetChat: 'Empezar una conversación nueva',
+      voiceInput: 'Dictar con la voz',
+      voiceCall: 'Hablar con Ami',
+      uploadPhoto: 'Subir una foto',
+      openFile: 'Abrir',
+      resetMapView: 'Centrar el mapa',
+    },
   },
   en: {
     appMetadata: {
@@ -193,6 +272,40 @@ export const common: Record<Locale, CommonDict> = {
       title: 'Amixos for iPhone',
       subtitle: 'Better experience in the app.',
       openBtn: 'Open',
+    },
+    tips: {
+      edit: 'Edit',
+      delete: 'Delete',
+      back: 'Back',
+      close: 'Close',
+      exitSelection: 'Leave selection mode',
+      send: 'Send',
+      print: 'Print',
+      shareLink: 'Copy a share link',
+      settings: 'Settings',
+      dragToReorder: 'Drag to reorder',
+      collapseSidebar: 'Hide the menu',
+      expandSidebar: 'Show the menu',
+      clearFilters: 'Clear the filters',
+      clearDate: 'Clear the date',
+      importClients: 'Import clients from a CSV file',
+      addContact: 'Add a contact',
+      deleteEmployee: 'Delete this employee',
+      loans: 'Loans and deductions',
+      autoprice: 'Fill the prices from your price sheet',
+      sendInvoice: 'Email the invoice to the client',
+      createInvoice: 'Create one invoice from the selected jobs',
+      emailProposal: 'Email the proposal',
+      downloadProposal: 'Download the PDF',
+      generateSku: 'Generate a SKU',
+      renameRole: 'Rename',
+      assistant: 'Ami, your assistant',
+      resetChat: 'Start a new conversation',
+      voiceInput: 'Dictate with your voice',
+      voiceCall: 'Talk to Ami',
+      uploadPhoto: 'Upload a photo',
+      openFile: 'Open',
+      resetMapView: 'Recenter the map',
     },
   },
 };

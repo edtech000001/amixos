@@ -12,6 +12,7 @@ import { useLang } from '@/i18n/LangProvider';
 import { formatDateLong } from '@amixos/shared/lib/format';
 import { fetchCrewFinderData, type CrewFinderTarget } from '@amixos/shared/lib/crewFinderData';
 import { buildCrewSuggestions, type CrewSuggestion } from '@amixos/shared/lib/crewFinder';
+import { Tooltip } from '@amixos/shared/ui/Tooltip';
 
 interface Props {
   businessId: string;
@@ -75,9 +76,11 @@ export function CrewFinderPanel({ businessId, target, currentCrew, onAddCrew, on
               <p className="text-xs text-faint">{t.subtitle}</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-border-soft" aria-label={t.close}>
-            <X size={16} className="text-muted" />
-          </button>
+          <Tooltip tip="close">
+            <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-border-soft">
+              <X size={16} className="text-muted" />
+            </button>
+          </Tooltip>
         </div>
 
         {(needsAddresses > 0 || targetNoCoords) && !loading ? (

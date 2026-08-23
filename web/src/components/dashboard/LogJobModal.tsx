@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { X, Search, Check, MapPin } from 'lucide-react';
 import { useLang } from '@/i18n/LangProvider';
 import type { FieldClient, FieldJobLocation } from '@amixos/shared/lib/fieldHome';
+import { Tooltip } from '@amixos/shared/ui/Tooltip';
 
 export interface LogJobModalProps {
   open: boolean;
@@ -75,7 +76,9 @@ export function LogJobModal({ open, onClose, clients, clientsLoading, onSubmit }
       <div className="relative bg-card rounded-2xl shadow-xl w-full max-w-lg max-h-[88vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-soft">
           <h2 className="text-lg font-bold text-ink">{f.logTitle}</h2>
-          <button onClick={close} className="p-1 rounded-lg hover:bg-border-soft"><X size={20} className="text-muted" /></button>
+          <Tooltip tip="close">
+            <button onClick={close} className="p-1 rounded-lg hover:bg-border-soft"><X size={20} className="text-muted" /></button>
+          </Tooltip>
         </div>
 
         <div className="px-5 py-4 overflow-y-auto">

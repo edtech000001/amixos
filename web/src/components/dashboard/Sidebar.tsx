@@ -18,6 +18,7 @@ import { LocationSwitcher } from '@/components/dashboard/LocationSwitcher';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 import { can, type Role } from '@amixos/shared/lib/permissions';
+import { Tooltip } from '@amixos/shared/ui/Tooltip';
 
 // Build identifier for the footer: app version (from package.json, injected via
 // next.config) + the short git commit SHA (auto-set by Vercel on deploy). Falls
@@ -247,25 +248,27 @@ export function Sidebar() {
           </div>
           <div className="flex items-center gap-1">
             <ThemeToggle />
-            <button
-              onClick={toggleCollapsed}
-              title={t.collapseSidebar}
-              className="hidden md:inline-flex p-1.5 rounded-lg hover:bg-border-soft text-muted"
-            >
-              <PanelLeftClose size={16} />
-            </button>
+            <Tooltip tip="collapseSidebar">
+              <button
+                onClick={toggleCollapsed}
+                className="hidden md:inline-flex p-1.5 rounded-lg hover:bg-border-soft text-muted"
+              >
+                <PanelLeftClose size={16} />
+              </button>
+            </Tooltip>
           </div>
         </div>
       ) : (
         <div className="py-3 border-t border-border-soft flex flex-col items-center gap-2">
           <ThemeToggle />
-          <button
-            onClick={toggleCollapsed}
-            title={t.expandSidebar}
-            className="p-1.5 rounded-lg hover:bg-border-soft text-muted"
-          >
-            <PanelLeftOpen size={16} />
-          </button>
+          <Tooltip tip="expandSidebar">
+            <button
+              onClick={toggleCollapsed}
+              className="p-1.5 rounded-lg hover:bg-border-soft text-muted"
+            >
+              <PanelLeftOpen size={16} />
+            </button>
+          </Tooltip>
         </div>
       )}
     </div>

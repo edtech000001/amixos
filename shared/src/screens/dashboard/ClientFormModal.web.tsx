@@ -12,6 +12,7 @@ import { confirm } from '../../ui/confirmBus';
 import { usStateName } from '../../lib/usStates';
 import { parseHiddenFields, isFieldHidden } from '../../lib/fieldLayout';
 import { groupNumberString, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '../../lib/fieldTemplates';
+import { Tooltip } from '../../ui/Tooltip';
 import {
   CLIENT_FIELD_SECTIONS,
   CLIENT_FIELDS_ALWAYS_SHOWN,
@@ -430,13 +431,15 @@ export function ClientFormModal({
           <h2 className="text-base font-semibold text-ink">
             {mode === 'add' ? t.modal.addTitle : t.modal.editTitle}
           </h2>
-          <button
-            type="button"
-            onClick={guardedClose}
-            className="p-1.5 rounded-lg hover:bg-border-soft transition-colors"
-          >
-            <X size={16} className="text-muted" />
-          </button>
+          <Tooltip tip="close">
+            <button
+              type="button"
+              onClick={guardedClose}
+              className="p-1.5 rounded-lg hover:bg-border-soft transition-colors"
+            >
+              <X size={16} className="text-muted" />
+            </button>
+          </Tooltip>
         </div>
 
         {/* Body — fully data-driven: each section renders its visible fields

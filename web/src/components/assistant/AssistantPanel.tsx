@@ -17,6 +17,7 @@ import { useAssistant } from './useAssistant';
 import { useSpeechToText } from './useSpeechToText';
 import { useVoiceCall } from './useVoiceCall';
 import { MessageList } from './MessageList';
+import { Tooltip } from '@amixos/shared/ui/Tooltip';
 
 interface AssistantPanelProps {
   open: boolean;
@@ -106,23 +107,24 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
             <p className="text-sm font-semibold text-ink">{t.title}</p>
             <p className="truncate text-xs text-muted">{t.subtitle}</p>
           </div>
-          <button
-            type="button"
-            onClick={reset}
-            aria-label={t.newChat}
-            title={t.newChat}
-            className="rounded-lg p-2 text-faint transition-colors hover:bg-surface hover:text-muted"
-          >
-            <RotateCcw className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={full.common.buttons.close}
-            className="rounded-lg p-2 text-faint transition-colors hover:bg-surface hover:text-muted"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <Tooltip tip="resetChat">
+            <button
+              type="button"
+              onClick={reset}
+              className="rounded-lg p-2 text-faint transition-colors hover:bg-surface hover:text-muted"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </button>
+          </Tooltip>
+          <Tooltip tip="close">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg p-2 text-faint transition-colors hover:bg-surface hover:text-muted"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </Tooltip>
         </div>
 
         {/* Messages */}
@@ -203,41 +205,41 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
               className="min-w-0 flex-1 resize-none rounded-2xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:border-primary focus:outline-none"
             />
             {supported && (
-              <button
-                type="button"
-                onClick={handleMic}
-                aria-label={listening ? t.listening : t.send}
-                title={listening ? t.listening : undefined}
-                className={`shrink-0 rounded-full p-2.5 transition-colors ${
-                  listening
-                    ? 'animate-pulse bg-red-100 text-red-600'
-                    : 'text-faint hover:bg-surface hover:text-muted'
-                }`}
-              >
-                <Mic className="h-5 w-5" />
-              </button>
+              <Tooltip tip="voiceInput">
+                <button
+                  type="button"
+                  onClick={handleMic}
+                  className={`shrink-0 rounded-full p-2.5 transition-colors ${
+                    listening
+                      ? 'animate-pulse bg-red-100 text-red-600'
+                      : 'text-faint hover:bg-surface hover:text-muted'
+                  }`}
+                >
+                  <Mic className="h-5 w-5" />
+                </button>
+              </Tooltip>
             )}
             {call.supported && (
+              <Tooltip tip="voiceCall">
+                <button
+                  type="button"
+                  onClick={call.start}
+                  className="shrink-0 rounded-full p-2.5 text-faint transition-colors hover:bg-surface hover:text-muted"
+                >
+                  <AudioLines className="h-5 w-5" />
+                </button>
+              </Tooltip>
+            )}
+            <Tooltip tip="send">
               <button
                 type="button"
-                onClick={call.start}
-                aria-label={t.callButton}
-                title={t.callButton}
-                className="shrink-0 rounded-full p-2.5 text-faint transition-colors hover:bg-surface hover:text-muted"
+                onClick={handleSend}
+                disabled={sending || !input.trim()}
+                className="shrink-0 rounded-full bg-primary p-2.5 text-white transition-opacity hover:opacity-90 disabled:opacity-40"
               >
-                <AudioLines className="h-5 w-5" />
+                <Send className="h-5 w-5" />
               </button>
-            )}
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={sending || !input.trim()}
-              aria-label={t.send}
-              title={t.send}
-              className="shrink-0 rounded-full bg-primary p-2.5 text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-            >
-              <Send className="h-5 w-5" />
-            </button>
+            </Tooltip>
           </div>
           )}
         </div>

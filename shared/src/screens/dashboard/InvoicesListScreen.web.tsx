@@ -13,6 +13,7 @@ import { usStateName } from '../../lib/usStates';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { INVOICES_FILTERS_KEY, parseInvoicesFilters } from '../../lib/invoicesFilters';
 import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
+import { Tooltip } from '../../ui/Tooltip';
 
 export interface InvoiceListItem {
   id: string;
@@ -380,14 +381,14 @@ export function InvoicesListScreen({
           </button>
         ) : null}
         {dateActive ? (
-          <button
-            onClick={clearDate}
-            title={tdate.clear}
-            aria-label={tdate.clear}
-            className="shrink-0 flex items-center justify-center p-2.5 rounded-2xl border border-red-200 bg-red-500/10 text-red-600 shadow-sm hover:bg-red-100 transition-colors"
-          >
-            <XCircle size={16} />
-          </button>
+          <Tooltip tip="clearDate">
+            <button
+              onClick={clearDate}
+              className="shrink-0 flex items-center justify-center p-2.5 rounded-2xl border border-red-200 bg-red-500/10 text-red-600 shadow-sm hover:bg-red-100 transition-colors"
+            >
+              <XCircle size={16} />
+            </button>
+          </Tooltip>
         ) : null}
         {/* Date range */}
         <div className="relative shrink-0">

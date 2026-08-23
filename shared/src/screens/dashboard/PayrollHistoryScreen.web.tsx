@@ -13,6 +13,7 @@ import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { confirm } from '../../ui/confirmBus';
 import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
 import type { PayrollBreakdown } from '../../lib/payroll';
+import { Tooltip } from '../../ui/Tooltip';
 
 export interface PayrollHistoryEntry {
   id: string;
@@ -174,9 +175,11 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
     <div className={`px-6 lg:px-8 pt-6 ${selectMode ? 'pb-28' : 'pb-12'}`}>
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <button type="button" onClick={onBack} className="p-2 rounded-xl hover:bg-border-soft transition-colors">
-          <ChevronLeft size={18} className="text-muted" />
-        </button>
+        <Tooltip tip="back">
+          <button type="button" onClick={onBack} className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+            <ChevronLeft size={18} className="text-muted" />
+          </button>
+        </Tooltip>
         <h1 className="text-xl font-bold text-ink">{t.historyTitle}</h1>
       </div>
 

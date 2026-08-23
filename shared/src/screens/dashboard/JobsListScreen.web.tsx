@@ -68,6 +68,7 @@ import {
 } from '../../lib/jobsFilters';
 import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
 import { formatHours } from '../../lib/fieldHome';
+import { Tooltip } from '../../ui/Tooltip';
 
 export interface JobListItem {
   id: string;
@@ -815,14 +816,14 @@ export function JobsListScreen({
           ) : null}
         </div>
         {filtersActive ? (
-          <button
-            onClick={clearFilters}
-            title={t.clearFilters}
-            aria-label={t.clearFilters}
-            className="shrink-0 flex items-center justify-center p-2.5 rounded-2xl border border-red-200 bg-red-500/10 text-red-600 shadow-sm hover:bg-red-100 transition-colors"
-          >
-            <XCircle size={16} />
-          </button>
+          <Tooltip tip="clearFilters">
+            <button
+              onClick={clearFilters}
+              className="shrink-0 flex items-center justify-center p-2.5 rounded-2xl border border-red-200 bg-red-500/10 text-red-600 shadow-sm hover:bg-red-100 transition-colors"
+            >
+              <XCircle size={16} />
+            </button>
+          </Tooltip>
         ) : null}
         {onCreateInvoice || canDelete ? (
           <button
@@ -1280,13 +1281,15 @@ export function JobsListScreen({
                 <Trash2 size={15} /> {t.bulkDelete}{selectedJobs.length > 0 ? ` · ${selectedJobs.length}` : ''}
               </button>
             ) : null}
-            <button
-              onClick={runCreateInvoice}
-              disabled={selectedJobs.length === 0 || !allInvoiceable || creatingInvoice}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-white hover:opacity-90 disabled:opacity-40"
-            >
-              <FileText size={15} /> {creatingInvoice ? t.batchInvoice.creating : t.batchInvoice.createButton}
-            </button>
+            <Tooltip tip="createInvoice" labelled>
+              <button
+                onClick={runCreateInvoice}
+                disabled={selectedJobs.length === 0 || !allInvoiceable || creatingInvoice}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-white hover:opacity-90 disabled:opacity-40"
+              >
+                <FileText size={15} /> {creatingInvoice ? t.batchInvoice.creating : t.batchInvoice.createButton}
+              </button>
+            </Tooltip>
           </div>
         </div>
       ) : null}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Smartphone, X } from 'lucide-react';
 import { useLang } from '@/i18n/LangProvider';
+import { Tooltip } from '@amixos/shared/ui/Tooltip';
 
 /**
  * Top-of-page banner shown to mobile-browser users nudging them toward
@@ -71,14 +72,15 @@ export function MobileAppBanner() {
       >
         {t.openBtn}
       </a>
-      <button
-        type="button"
-        onClick={dismiss}
-        className="p-1 -mr-1 shrink-0"
-        aria-label="Dismiss"
-      >
-        <X size={16} />
-      </button>
+      <Tooltip tip="close">
+        <button
+          type="button"
+          onClick={dismiss}
+          className="p-1 -mr-1 shrink-0"
+        >
+          <X size={16} />
+        </button>
+      </Tooltip>
     </div>
   );
 }

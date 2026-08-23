@@ -34,6 +34,7 @@ import {
   storageLimitBytes, wouldExceedStorage, storagePercent, formatBytes,
 } from '@amixos/shared/lib/storageLimits';
 import type { SubscriptionInfo } from '@amixos/shared/lib/subscription';
+import { Tooltip } from '@amixos/shared/ui/Tooltip';
 
 // A breadcrumb crumb identifies a location: categoryId null = home (list of
 // top-level folders); folderId null = at a top-level folder's root.
@@ -341,7 +342,9 @@ export default function FilesModule() {
       {/* Selection bar (files + folders) — visible whenever selection mode is on */}
       {canManage && selectionMode && (
         <div className="flex items-center gap-3 mb-4 rounded-xl bg-primary/5 border border-primary/20 px-4 py-2.5">
-          <button onClick={clearSelection} aria-label={t.clearSelectionBtn} title={t.clearSelectionBtn} className="p-1 rounded-lg hover:bg-primary/10"><X size={15} className="text-primary" /></button>
+          <Tooltip label={t.clearSelectionBtn}>
+            <button onClick={clearSelection} className="p-1 rounded-lg hover:bg-primary/10"><X size={15} className="text-primary" /></button>
+          </Tooltip>
           <span className="text-sm font-medium text-primary">
             {selectionCount > 0 ? t.selectedCount.replace('{{count}}', String(selectionCount)) : t.selectPrompt}
           </span>
@@ -493,8 +496,12 @@ function FolderCard({ name, count, badge, onOpen, canManage, onEdit, onDelete, s
       </button>
       {!inSelect && canManage && (
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={onEdit} className="p-2 rounded-lg text-muted hover:text-primary hover:bg-primary/5"><Pencil size={14} /></button>
-          <button onClick={onDelete} className="p-2 rounded-lg text-red-500 hover:bg-red-500/10"><Trash2 size={14} /></button>
+          <Tooltip tip="edit">
+            <button onClick={onEdit} className="p-2 rounded-lg text-muted hover:text-primary hover:bg-primary/5"><Pencil size={14} /></button>
+          </Tooltip>
+          <Tooltip tip="delete">
+            <button onClick={onDelete} className="p-2 rounded-lg text-red-500 hover:bg-red-500/10"><Trash2 size={14} /></button>
+          </Tooltip>
         </div>
       )}
       {!inSelect && <ChevronRight size={16} className="text-faint shrink-0" />}
@@ -530,11 +537,17 @@ function FileRow({ entry, officeOnly, metaLabel, canManage, selected, selectionM
       </button>
       {!inSelect && (
         <>
-          <button onClick={onOpen} className="p-2 rounded-lg text-faint hover:text-primary hover:bg-primary/5 shrink-0"><ExternalLink size={15} /></button>
+          <Tooltip tip="openFile">
+            <button onClick={onOpen} className="p-2 rounded-lg text-faint hover:text-primary hover:bg-primary/5 shrink-0"><ExternalLink size={15} /></button>
+          </Tooltip>
           {canManage && (
             <>
-              <button onClick={onEdit} className="p-2 rounded-lg text-muted hover:text-primary hover:bg-primary/5 shrink-0"><Pencil size={14} /></button>
-              <button onClick={onDelete} className="p-2 rounded-lg text-red-500 hover:bg-red-500/10 shrink-0"><Trash2 size={14} /></button>
+              <Tooltip tip="edit">
+                <button onClick={onEdit} className="p-2 rounded-lg text-muted hover:text-primary hover:bg-primary/5 shrink-0"><Pencil size={14} /></button>
+              </Tooltip>
+              <Tooltip tip="delete">
+                <button onClick={onDelete} className="p-2 rounded-lg text-red-500 hover:bg-red-500/10 shrink-0"><Trash2 size={14} /></button>
+              </Tooltip>
             </>
           )}
         </>
@@ -774,7 +787,9 @@ function MoveModal({ categories, folders, count, selectedFolderIds, startCategor
         {/* Current location + up control */}
         <div className="flex items-center gap-2">
           {!atHome && (
-            <button onClick={goUp} aria-label={t.goUpBtn} title={t.goUpBtn} className="w-8 h-8 rounded-lg bg-border-soft hover:bg-border flex items-center justify-center shrink-0"><ChevronLeft size={16} className="text-ink" /></button>
+            <Tooltip label={t.goUpBtn}>
+              <button onClick={goUp} className="w-8 h-8 rounded-lg bg-border-soft hover:bg-border flex items-center justify-center shrink-0"><ChevronLeft size={16} className="text-ink" /></button>
+            </Tooltip>
           )}
           <Folder size={15} className="text-primary shrink-0" />
           <span className="text-sm font-semibold text-ink truncate">{atHome ? t.title : crumb.label}</span>

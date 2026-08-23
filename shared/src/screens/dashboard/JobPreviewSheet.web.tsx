@@ -12,6 +12,7 @@ import { useLang } from '../../i18n';
 import { jobRefLabel } from '../../lib/jobRef';
 import { formatDateLong, formatTime12h, formatNumberGrouped } from '../../lib/format';
 import { localizeTemplates } from '../../lib/fieldTemplates';
+import { Tooltip } from '../../ui/Tooltip';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseLike = any;
@@ -115,7 +116,9 @@ export function JobPreviewSheet({ supabase, jobId, onClose, onOpenFull }: JobPre
             <p className="text-lg font-bold text-ink">{job?.title ?? '—'}</p>
             {clientName ? <p className="text-sm font-semibold text-primary">{clientName}{job?.clients?.company ? ` · ${job.clients.company}` : ''}</p> : null}
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-border-soft shrink-0"><X size={18} className="text-faint" /></button>
+          <Tooltip tip="close">
+            <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-border-soft shrink-0"><X size={18} className="text-faint" /></button>
+          </Tooltip>
         </div>
 
         {loading ? (

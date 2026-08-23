@@ -34,6 +34,7 @@ import { resolveAccess, type AccessMember, type AccessInvite } from '@amixos/sha
 import { INVITABLE_ROLES, roleLabel, getActiveCustomRoles, can, type Role } from '@amixos/shared/lib/permissions';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
 import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
+import { Tooltip } from '@amixos/shared/ui/Tooltip';
 import {
   EMPLOYEE_FIELD_SECTIONS,
   EMPLOYEE_FIELDS_ALWAYS_SHOWN,
@@ -521,14 +522,16 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
                 </button>
               ) : null}
               {canDeleteEmployee ? (
-                <button
-                  type="button"
-                  onClick={deleteEmployee}
-                  disabled={accessBusy}
-                  className="p-2 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                >
-                  <Trash2 size={16} className="text-red-500" />
-                </button>
+                <Tooltip tip="deleteEmployee">
+                  <button
+                    type="button"
+                    onClick={deleteEmployee}
+                    disabled={accessBusy}
+                    className="p-2 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 size={16} className="text-red-500" />
+                  </button>
+                </Tooltip>
               ) : null}
             </>
           ) : null}

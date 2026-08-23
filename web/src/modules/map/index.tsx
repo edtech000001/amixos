@@ -36,6 +36,7 @@ import { buildPinMarkerIcon } from './pinIcons';
 import { MapSettingsPanel, type DeviceMapSettings } from './MapSettingsPanel';
 import { Modal } from '@/components/ui/Modal';
 import { createSupabaseClient } from '@/lib/supabase';
+import { Tooltip } from '@amixos/shared/ui/Tooltip';
 
 type Layer = 'clients' | 'jobs' | 'employees';
 
@@ -941,14 +942,14 @@ export default function MapModule() {
 
         {/* Reset-view button — re-frames all pins (the "default view"). */}
         {isLoaded && !loading ? (
-          <button
-            onClick={resetView}
-            className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-card shadow-md border border-border flex items-center justify-center text-muted hover:bg-surface"
-            aria-label={t.resetView}
-            title={t.resetView}
-          >
-            <LocateFixed size={16} />
-          </button>
+          <Tooltip tip="resetMapView">
+            <button
+              onClick={resetView}
+              className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-card shadow-md border border-border flex items-center justify-center text-muted hover:bg-surface"
+            >
+              <LocateFixed size={16} />
+            </button>
+          </Tooltip>
         ) : null}
 
         {/* Geocode banner — tap opens the list of affected clients so the
@@ -1159,9 +1160,11 @@ function WeatherPinCard({
             </p>
           ) : null}
         </div>
-        <button onClick={onClose} className="p-1 -mr-1 text-muted hover:text-ink">
-          <X size={18} />
-        </button>
+        <Tooltip tip="close">
+          <button onClick={onClose} className="p-1 -mr-1 text-muted hover:text-ink">
+            <X size={18} />
+          </button>
+        </Tooltip>
       </div>
 
       {/* Scrollable detail body */}
@@ -1545,9 +1548,11 @@ function SelectedPinCard({
             <p className="text-base font-bold text-ink truncate">{displayName}</p>
             {subtitle ? <p className="text-xs text-muted mt-0.5 line-clamp-2">{subtitle}</p> : null}
           </div>
-          <button onClick={onClose} className="p-1 -mr-1 -mt-1 text-faint hover:text-ink">
-            <X size={20} />
-          </button>
+          <Tooltip tip="close">
+            <button onClick={onClose} className="p-1 -mr-1 -mt-1 text-faint hover:text-ink">
+              <X size={20} />
+            </button>
+          </Tooltip>
         </div>
 
         {/* Info rows */}

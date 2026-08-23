@@ -12,6 +12,7 @@ import { useLang } from '../../i18n';
 import { clientMatchesSearch, matchingContacts } from '../../lib/clientSearch';
 import { groupClients, parseClientGroupKey, CLIENTS_GROUP_KEY, type ClientGroupKey } from '../../lib/clientSections';
 import { usStateName } from '../../lib/usStates';
+import { Tooltip } from '../../ui/Tooltip';
 
 export interface ClientListItem {
   id: string;
@@ -224,9 +225,11 @@ export function ClientsListScreen({
         </div>
         <div className="flex gap-2">
           {onImportPress ? (
-            <button onClick={onImportPress} className="flex items-center gap-1.5 bg-card border border-border px-4 py-2.5 rounded-xl text-sm font-semibold text-ink hover:bg-surface">
-              <Upload size={15} /> {t.importBtn}
-            </button>
+            <Tooltip tip="importClients" labelled>
+              <button onClick={onImportPress} className="flex items-center gap-1.5 bg-card border border-border px-4 py-2.5 rounded-xl text-sm font-semibold text-ink hover:bg-surface">
+                <Upload size={15} /> {t.importBtn}
+              </button>
+            </Tooltip>
           ) : null}
           {onNewClientPress ? (
             <button onClick={onNewClientPress} className="flex items-center gap-1.5 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90">

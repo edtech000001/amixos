@@ -14,6 +14,7 @@ import { useLang } from '../../i18n';
 import { SkeletonRow } from '../../ui/Skeleton';
 import { formatRelativeLong, formatDateTimeLong } from '../../lib/format';
 import { confirm } from '../../ui/confirmBus';
+import { Tooltip } from '../../ui/Tooltip';
 import {
   fetchClientCommunications,
   logClientCommunication,
@@ -429,12 +430,16 @@ function CommRow({
       </div>
       {canWrite ? (
         <div className="flex gap-1 shrink-0">
-          <button type="button" onClick={onEdit} className="p-1.5 rounded-lg hover:bg-border-soft transition-colors" aria-label={t.form.edit}>
-            <Pencil size={14} className="text-faint" />
-          </button>
-          <button type="button" onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors" aria-label={t.form.delete}>
-            <Trash2 size={14} className="text-red-500" />
-          </button>
+          <Tooltip tip="edit">
+            <button type="button" onClick={onEdit} className="p-1.5 rounded-lg hover:bg-border-soft transition-colors">
+              <Pencil size={14} className="text-faint" />
+            </button>
+          </Tooltip>
+          <Tooltip tip="delete">
+            <button type="button" onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors">
+              <Trash2 size={14} className="text-red-500" />
+            </button>
+          </Tooltip>
         </div>
       ) : null}
     </div>

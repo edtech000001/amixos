@@ -324,12 +324,12 @@ export default function GenerarPreciosPage() {
           </div>
           {/* Compact actions — the picker gets the width, not the buttons. */}
           <div className="flex flex-wrap gap-1.5 shrink-0">
-            <button type="button" onClick={openCustomize} title={t.customizeBtn}
+            <button type="button" onClick={openCustomize}
               className="flex items-center justify-center gap-1 bg-card border border-border px-2.5 py-2 rounded-lg text-xs font-semibold text-ink hover:bg-surface">
               <Sliders size={14} /> {t.customizeBtn}
             </button>
             {mode === 'client' && selectedClient && clientEmail(selectedClient) ? (
-              <button type="button" onClick={emailSheet} title={t.emailBtn}
+              <button type="button" onClick={emailSheet}
                 className="flex items-center justify-center gap-1 bg-card border border-border px-2.5 py-2 rounded-lg text-xs font-semibold text-primary hover:bg-surface">
                 <Mail size={14} /> {t.emailBtn}
               </button>

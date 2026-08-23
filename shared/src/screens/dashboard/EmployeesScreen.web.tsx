@@ -19,6 +19,7 @@ import { roleLabel } from '../../lib/permissions';
 import type { AccessStatus } from '../../lib/teamPeople';
 import { splitMultiValue } from '../../lib/fieldTemplates';
 import { SkeletonList } from '../../ui/Skeleton';
+import { Tooltip } from '../../ui/Tooltip';
 
 export interface EmployeeListItem {
   id: string;
@@ -481,9 +482,11 @@ export function EmployeesScreen({
                 <Trash2 size={14} />
                 {`${t.bulkDelete}${selectedIds.size > 0 ? ` · ${selectedIds.size}` : ''}`}
               </button>
-              <button type="button" onClick={exitSelect} className="text-faint hover:text-muted p-1">
-                <X size={16} />
-              </button>
+              <Tooltip tip="exitSelection">
+                <button type="button" onClick={exitSelect} className="text-faint hover:text-muted p-1">
+                  <X size={16} />
+                </button>
+              </Tooltip>
             </div>
           </div>
         ) : null}

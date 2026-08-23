@@ -17,6 +17,7 @@ import { can } from '@amixos/shared/lib/permissions';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useSidebarCollapsed } from './useSidebarCollapsed';
+import { Tooltip } from '@amixos/shared/ui/Tooltip';
 
 // Same build identifier as the global Sidebar footer (app version + short SHA)
 // so the footer reads identically whether or not you're drilled into Settings.
@@ -143,13 +144,14 @@ export function SettingsNav({ activeTab, onTabClick }: Props) {
           </div>
           <div className="flex items-center gap-1">
             <ThemeToggle />
-            <button
-              onClick={toggleCollapsed}
-              title={full.dashboard.sidebar.collapseSidebar}
-              className="hidden md:inline-flex p-1.5 rounded-lg hover:bg-border-soft text-muted"
-            >
-              <PanelLeftClose size={16} />
-            </button>
+            <Tooltip tip="collapseSidebar">
+              <button
+                onClick={toggleCollapsed}
+                className="hidden md:inline-flex p-1.5 rounded-lg hover:bg-border-soft text-muted"
+              >
+                <PanelLeftClose size={16} />
+              </button>
+            </Tooltip>
           </div>
         </div>
       ) : (
@@ -159,13 +161,14 @@ export function SettingsNav({ activeTab, onTabClick }: Props) {
           </div>
           <div className="py-3 border-t border-border-soft hidden md:flex flex-col items-center gap-2">
             <ThemeToggle />
-            <button
-              onClick={toggleCollapsed}
-              title={full.dashboard.sidebar.expandSidebar}
-              className="p-1.5 rounded-lg hover:bg-border-soft text-muted"
-            >
-              <PanelLeftOpen size={16} />
-            </button>
+            <Tooltip tip="expandSidebar">
+              <button
+                onClick={toggleCollapsed}
+                className="p-1.5 rounded-lg hover:bg-border-soft text-muted"
+              >
+                <PanelLeftOpen size={16} />
+              </button>
+            </Tooltip>
           </div>
         </>
       )}

@@ -29,6 +29,7 @@ import {
   type WeatherConfig,
 } from '@amixos/shared/lib/weather';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import { Tooltip } from '@amixos/shared/ui/Tooltip';
 
 export type MapType = 'roadmap' | 'satellite' | 'hybrid' | 'terrain';
 export type PinSize = 'small' | 'medium' | 'large';
@@ -885,13 +886,15 @@ function StylePickerModal({
         <div className="flex items-center justify-between px-5 py-3 border-b border-border-soft">
           <p className="text-base font-semibold text-ink">{t.stylePickerTitle}</p>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-1.5 rounded-lg text-sm font-semibold text-muted hover:bg-border-soft"
-            >
-              <X size={16} />
-            </button>
+            <Tooltip tip="close">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-1.5 rounded-lg text-sm font-semibold text-muted hover:bg-border-soft"
+              >
+                <X size={16} />
+              </button>
+            </Tooltip>
             <button
               type="button"
               onClick={onClose}

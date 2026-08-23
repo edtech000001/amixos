@@ -28,6 +28,7 @@ import { parsePolicyAgents, agentFor, buildPolicyEmail, type PolicyDocKind } fro
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { CommunicationLog } from '@amixos/shared/screens/dashboard/CommunicationLog';
 import { useContactOutcomePrompt } from '@/modules/communications/useContactOutcomePrompt';
+import { Tooltip } from '@amixos/shared/ui/Tooltip';
 
 interface FieldTemplate {
   id: string; field_key: string; field_label: string;
@@ -633,9 +634,11 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-xs font-semibold text-faint uppercase tracking-wide">{td.contactPeople}</h2>
               {canEdit && (
-                <button onClick={openAddContact} className="p-1 rounded-lg hover:bg-border-soft transition-colors">
-                  <UserPlus size={14} className="text-faint"/>
-                </button>
+                <Tooltip tip="addContact">
+                  <button onClick={openAddContact} className="p-1 rounded-lg hover:bg-border-soft transition-colors">
+                    <UserPlus size={14} className="text-faint"/>
+                  </button>
+                </Tooltip>
               )}
             </div>
             {contacts.length === 0 ? (

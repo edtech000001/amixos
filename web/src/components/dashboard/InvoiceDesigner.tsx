@@ -62,6 +62,7 @@ import {
 } from '@amixos/shared/lib/invoiceTemplate';
 import { INVOICE_ICON_NODES } from '@amixos/shared/lib/invoiceIconNodes';
 import { PIN_ICON_CATEGORIES, ALL_PIN_ICONS, type PinIconCategory } from '@amixos/shared/lib/mapPinPresets';
+import { Tooltip } from '@amixos/shared/ui/Tooltip';
 
 const ACCENTS = ['#1F2937', '#4F46E5', '#0EA5E9', '#059669', '#DC2626', '#D97706', '#7C3AED', '#DB2777'];
 const DOC_W = 720; // fixed render width for the flow preview; scaled to fit
@@ -126,7 +127,9 @@ function ThemesModal({ open, onClose, currentId, onSelect, value, branding, samp
       <div className="bg-card rounded-2xl shadow-xl w-full max-w-4xl max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-soft">
           <h3 className="font-semibold text-ink">{t.themesTitle}</h3>
-          <button type="button" onClick={onClose} className="text-faint hover:text-ink"><X size={20} /></button>
+          <Tooltip tip="close">
+            <button type="button" onClick={onClose} className="text-faint hover:text-ink"><X size={20} /></button>
+          </Tooltip>
         </div>
         <div className="p-5 overflow-y-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 justify-items-center">
@@ -173,7 +176,9 @@ function CopyThemeModal({ open, onClose, onPick, value, branding, sample, t }: {
       <div className="bg-card rounded-2xl shadow-xl w-full max-w-3xl max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-border-soft">
           <h3 className="font-semibold text-ink">{t.copyThemeTitle}</h3>
-          <button type="button" onClick={onClose} className="text-faint hover:text-ink"><X size={20} /></button>
+          <Tooltip tip="close">
+            <button type="button" onClick={onClose} className="text-faint hover:text-ink"><X size={20} /></button>
+          </Tooltip>
         </div>
         <div className="p-5 overflow-y-auto">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 justify-items-center">

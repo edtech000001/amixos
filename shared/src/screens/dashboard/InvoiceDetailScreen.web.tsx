@@ -31,6 +31,7 @@ import {
   type InvoiceLang,
 } from '../../i18n/invoice';
 import { formatDateLong, formatDateTimeLong, daysOverdue, daysSince } from '../../lib/format';
+import { Tooltip } from '../../ui/Tooltip';
 import {
   type InvoiceBranding,
   type InvoiceTemplateConfig,
@@ -319,10 +320,12 @@ export function InvoiceDetailScreen({
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <button type="button" onClick={onBack} title={ui.common.buttons.back} aria-label={ui.common.buttons.back}
-            className="p-2 rounded-xl hover:bg-border-soft transition-colors">
-            <ArrowLeft size={18} className="text-muted" />
-          </button>
+          <Tooltip tip="back">
+            <button type="button" onClick={onBack}
+              className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+              <ArrowLeft size={18} className="text-muted" />
+            </button>
+          </Tooltip>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-ink">{invoice.invoiceNumber}</h1>
@@ -348,9 +351,11 @@ export function InvoiceDetailScreen({
             </button>
           ) : null}
           {onAutoprice && canEdit ? (
-            <button type="button" onClick={onAutoprice} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-surface text-sm font-semibold text-primary transition-colors mr-1">
-              <DollarSign size={15} /> {ui.dashboard.jobs.detail.autopriceBtn}
-            </button>
+            <Tooltip tip="autoprice" labelled>
+              <button type="button" onClick={onAutoprice} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-surface text-sm font-semibold text-primary transition-colors mr-1">
+                <DollarSign size={15} /> {ui.dashboard.jobs.detail.autopriceBtn}
+              </button>
+            </Tooltip>
           ) : null}
           {onAutoname && canEdit ? (
             <button type="button" onClick={onAutoname} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-surface text-sm font-semibold text-primary transition-colors mr-1">
@@ -358,33 +363,41 @@ export function InvoiceDetailScreen({
             </button>
           ) : null}
           {onClearPrices && canEdit ? (
-            <button type="button" onClick={onClearPrices} title={tInv.jobsSection.clearPricesBtn} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-surface text-sm font-semibold text-muted transition-colors mr-1">
+            <button type="button" onClick={onClearPrices} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-surface text-sm font-semibold text-muted transition-colors mr-1">
               <Eraser size={15} /> {tInv.jobsSection.clearPricesBtn}
             </button>
           ) : null}
           {onShareLink ? (
-            <button type="button" onClick={onShareLink} title={tInv.shareLinkAction} aria-label={tInv.shareLinkAction}
-              className="p-2 rounded-xl hover:bg-border-soft transition-colors">
-              <Link2 size={18} className="text-muted" />
-            </button>
+            <Tooltip tip="shareLink">
+              <button type="button" onClick={onShareLink}
+                className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+                <Link2 size={18} className="text-muted" />
+              </button>
+            </Tooltip>
           ) : null}
           {onPrint ? (
-            <button type="button" onClick={onPrint} title={tInv.printBtn} aria-label={tInv.printBtn}
-              className="p-2 rounded-xl hover:bg-border-soft transition-colors">
-              <Printer size={18} className="text-muted" />
-            </button>
+            <Tooltip tip="print">
+              <button type="button" onClick={onPrint}
+                className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+                <Printer size={18} className="text-muted" />
+              </button>
+            </Tooltip>
           ) : null}
           {onEdit && canEdit ? (
-            <button type="button" onClick={onEdit} title={ui.common.buttons.edit} aria-label={ui.common.buttons.edit}
-              className="p-2 rounded-xl hover:bg-border-soft transition-colors">
-              <Pencil size={18} className="text-muted" />
-            </button>
+            <Tooltip tip="edit">
+              <button type="button" onClick={onEdit}
+                className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+                <Pencil size={18} className="text-muted" />
+              </button>
+            </Tooltip>
           ) : null}
           {onDelete ? (
-            <button type="button" onClick={onDelete} title={ui.common.buttons.delete} aria-label={ui.common.buttons.delete}
-              className="p-2 rounded-xl hover:bg-red-500/10 transition-colors">
-              <Trash2 size={18} className="text-red-500" />
-            </button>
+            <Tooltip tip="delete">
+              <button type="button" onClick={onDelete}
+                className="p-2 rounded-xl hover:bg-red-500/10 transition-colors">
+                <Trash2 size={18} className="text-red-500" />
+              </button>
+            </Tooltip>
           ) : null}
         </div>
       </div>
@@ -703,9 +716,11 @@ export function InvoiceDetailScreen({
         {invoice.status === 'draft' && canEdit ? (
           <div className="flex flex-col gap-2">
             {onSendInvoice ? (
-              <button onClick={onSendInvoice} disabled={updating} className="flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-2xl font-semibold hover:opacity-90 disabled:opacity-60">
-                <Send size={16} /> {tInv.sendInvoice}
-              </button>
+              <Tooltip tip="sendInvoice" labelled>
+                <button onClick={onSendInvoice} disabled={updating} className="flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-2xl font-semibold hover:opacity-90 disabled:opacity-60">
+                  <Send size={16} /> {tInv.sendInvoice}
+                </button>
+              </Tooltip>
             ) : null}
             <button onClick={() => onUpdateStatus('sent')} disabled={updating} className="flex items-center justify-center gap-2 border border-border bg-card text-ink py-3 rounded-2xl font-semibold hover:bg-surface disabled:opacity-60">
               <CheckCircle size={16} /> {tInv.markSent}

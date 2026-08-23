@@ -30,6 +30,7 @@ import {
 import { useLang } from '../../i18n';
 import { DatePicker } from '../../ui/DatePicker';
 import { formatTime12h } from '../../lib/format';
+import { Tooltip } from '../../ui/Tooltip';
 import {
   type CalItem,
   type CalEventType,
@@ -145,7 +146,9 @@ function WebModal({ open, onClose, title, size = 'md', children }: {
       <div className={`relative bg-card rounded-2xl shadow-xl w-full ${w} max-h-[90vh] overflow-y-auto`}>
         <div className="sticky top-0 bg-card flex items-center justify-between px-5 py-4 border-b border-border-soft z-10">
           <h3 className="font-semibold text-ink capitalize">{title}</h3>
-          <button type="button" onClick={onClose} className="text-faint hover:text-ink"><X size={20} /></button>
+          <Tooltip tip="close">
+            <button type="button" onClick={onClose} className="text-faint hover:text-ink"><X size={20} /></button>
+          </Tooltip>
         </div>
         <div className="p-5">{children}</div>
       </div>

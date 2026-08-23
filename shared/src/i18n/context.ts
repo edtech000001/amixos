@@ -39,3 +39,12 @@ export const LangContext = createContext<LangContextValue>(defaultValue);
 export function useLang(): LangContextValue {
   return useContext(LangContext);
 }
+
+/** Tooltip vocabulary for icon-only buttons.
+ *
+ *  Most screens narrow `t` to their own dict slice (`t.dashboard.files`), which
+ *  puts `t.common.tips` out of reach without also keeping the full dictionary
+ *  around. This is the shortcut: `const tip = useTips()` → `tip.edit`. */
+export function useTips() {
+  return useContext(LangContext).t.common.tips;
+}

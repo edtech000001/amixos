@@ -13,6 +13,7 @@ import { confirm } from '../../ui/confirmBus';
 import type { PayrollFrequency, PayrollBreakdown, PayrollConfig, DriverPayMode } from '../../lib/payroll';
 import { getPayrollPeriod, parsePayrollAnchor } from '../../lib/payroll';
 import { formatMoneyInput } from '../../lib/format';
+import { Tooltip } from '../../ui/Tooltip';
 import {
   type FormulaFieldDef,
   type FormulaToken,
@@ -529,10 +530,12 @@ export function PayrollScreen({
     <div className="px-6 lg:px-8 pt-6 pb-12">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <button type="button" onClick={onBack} title={tc.buttons.back} aria-label={tc.buttons.back}
-          className="p-2 rounded-xl hover:bg-border-soft transition-colors">
-          <ChevronLeft size={18} className="text-muted" />
-        </button>
+        <Tooltip tip="back">
+          <button type="button" onClick={onBack}
+            className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+            <ChevronLeft size={18} className="text-muted" />
+          </button>
+        </Tooltip>
         <div className="flex-1">
           <h1 className="text-xl font-bold text-ink">{t.title}</h1>
           <p className="text-xs text-faint">{t.subtitle}</p>
@@ -548,9 +551,11 @@ export function PayrollScreen({
           </button>
         ) : null}
         {canManage && (
-          <button type="button" onClick={openSettings} title={t.settingsTitle} className="p-2 rounded-xl hover:bg-border-soft transition-colors">
-            <Settings size={18} className="text-muted" />
-          </button>
+          <Tooltip tip="settings">
+            <button type="button" onClick={openSettings} className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+              <Settings size={18} className="text-muted" />
+            </button>
+          </Tooltip>
         )}
       </div>
 
@@ -561,15 +566,19 @@ export function PayrollScreen({
 
         {/* Period navigator */}
         <div className="flex items-center justify-between bg-card rounded-2xl border border-border-soft shadow-sm px-2 py-2">
-          <button type="button" onClick={onPrevPeriod} title={t.prevPeriod} aria-label={t.prevPeriod}
-            className="p-2 rounded-xl hover:bg-border-soft">
-            <ChevronLeft size={18} className="text-muted" />
-          </button>
+          <Tooltip label={t.prevPeriod}>
+            <button type="button" onClick={onPrevPeriod}
+              className="p-2 rounded-xl hover:bg-border-soft">
+              <ChevronLeft size={18} className="text-muted" />
+            </button>
+          </Tooltip>
           <span className="text-sm font-semibold text-ink">{periodLabel}</span>
-          <button type="button" onClick={onNextPeriod} title={t.nextPeriod} aria-label={t.nextPeriod}
-            className="p-2 rounded-xl hover:bg-border-soft">
-            <ChevronRight size={18} className="text-muted" />
-          </button>
+          <Tooltip label={t.nextPeriod}>
+            <button type="button" onClick={onNextPeriod}
+              className="p-2 rounded-xl hover:bg-border-soft">
+              <ChevronRight size={18} className="text-muted" />
+            </button>
+          </Tooltip>
         </div>
 
         {/* Summary */}
@@ -600,10 +609,12 @@ export function PayrollScreen({
               </button>
             ) : null}
             {canManage && onAddLoan ? (
-              <button type="button" onClick={openLoansGlobal}
-                className="flex items-center gap-1.5 bg-card border border-border px-3 py-1.5 rounded-lg text-xs font-semibold text-ink hover:bg-surface transition-colors">
-                <Landmark size={13} /> {t.loanViewBtn}
-              </button>
+              <Tooltip tip="loans" labelled>
+                <button type="button" onClick={openLoansGlobal}
+                  className="flex items-center gap-1.5 bg-card border border-border px-3 py-1.5 rounded-lg text-xs font-semibold text-ink hover:bg-surface transition-colors">
+                  <Landmark size={13} /> {t.loanViewBtn}
+                </button>
+              </Tooltip>
             ) : null}
             <div className="inline-flex gap-1 bg-border-soft p-1 rounded-lg">
               {([['list', List], ['grid', LayoutGrid]] as const).map(([v, Icon]) => (

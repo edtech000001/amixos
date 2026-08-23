@@ -14,7 +14,7 @@ export type { Locale } from './locales';
 export { dictionaries, getDictionary } from './dict';
 export type { Dictionary } from './dict';
 
-export { LangContext, useLang } from './context';
+export { LangContext, useLang, useTips } from './context';
 export type { LangContextValue } from './context';
 
 export type { LandingDict } from './dict/landing';
