@@ -9,6 +9,7 @@ import { signedUrl } from '@amixos/shared/lib/storageUrls';
 import { INVOICE_PAYMENT_BUCKET, paymentPhotoPath } from '@amixos/shared/lib/invoicePayments';
 import { autonameEnabled, autonameJobTitle, detectAutonameType } from '@amixos/shared/lib/autoname';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { markSectionVisitor } from '@/lib/sectionEntry';
 import { StackActions, useRoute } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -1200,7 +1201,7 @@ export default function FacturaDetailRoute() {
         supabase={supabase}
         jobId={previewJobId}
         onClose={() => setPreviewJobId(null)}
-        onOpenFull={(jid) => { setPreviewJobId(null); router.push(`/dashboard/trabajos/${jid}?from=invoice&invoice=${id}` as never); }}
+        onOpenFull={(jid) => { setPreviewJobId(null); markSectionVisitor('trabajos'); router.push(`/dashboard/trabajos/${jid}?from=invoice&invoice=${id}` as never); }}
       />
 
       {/* Move-to-another-invoice picker */}

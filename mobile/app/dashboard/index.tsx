@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { markSectionVisitor } from '@/lib/sectionEntry';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -186,7 +187,10 @@ function OwnerDashboardHome() {
         onInvoicePress={(id) => router.push(`/dashboard/facturas/${id}`)}
         onViewAllInvoicesPress={() => router.push('/dashboard/facturas')}
         onCreateFirstInvoicePress={() => router.push('/dashboard/facturas/nueva')}
-        onJobPress={(id) => router.push(`/dashboard/trabajos/${id}`)}
+        onJobPress={(id) => {
+          markSectionVisitor('trabajos');
+          router.push(`/dashboard/trabajos/${id}?from=home` as never);
+        }}
         onViewAllJobsPress={() => router.push('/dashboard/trabajos')}
         onNewClientPress={() => router.push('/dashboard/clientes/nuevo')}
         onNewJobPress={() => router.push('/dashboard/trabajos/nuevo')}

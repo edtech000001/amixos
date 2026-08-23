@@ -2,6 +2,7 @@ import { todayLocalISO } from '@amixos/shared/lib/format';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, View, Text, Pressable, TextInput, ScrollView, Modal as RNModal } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { clearSectionVisitor } from '@/lib/sectionEntry';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
 import { queuedUpdate } from '@/lib/offline/mutate';
@@ -444,7 +445,11 @@ export default function TrabajosTab() {
         cachedAt={swr.cachedAt}
         jobs={jobs}
         payPeriod={business ? { frequency: business.payroll_frequency, anchorDate: business.payroll_anchor_date, customDays: business.payroll_custom_days } : undefined}
-        onJobPress={(id) => router.push(`/dashboard/trabajos/${id}` as never)}
+        onJobPress={(id) => {
+          // Opened from the section's own list — this one belongs here.
+          clearSectionVisitor('trabajos');
+          router.push(`/dashboard/trabajos/${id}` as never);
+        }}
         onUpdateStatus={updateStatus}
         onGenerateInvoice={(id) => router.push(`/dashboard/trabajos/${id}` as never)}
         onCreateInvoice={async (jobIds) => {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { markSectionVisitor } from '@/lib/sectionEntry';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -476,7 +477,7 @@ export default function NominaRoute() {
         onMarkPaid={onMarkPaid}
         onDeletePayment={onDeletePayment}
         onJobPress={(id, employeeId) =>
-          router.push(`/dashboard/trabajos/${id}?from=nomina&worker=${employeeId}` as never)}
+          { markSectionVisitor('trabajos'); router.push(`/dashboard/trabajos/${id}?from=nomina&worker=${employeeId}` as never); }}
         onClearPayments={onClearPayments}
         onBack={() => router.back()}
         canManage={canManage}

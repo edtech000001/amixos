@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { markSectionVisitor } from '@/lib/sectionEntry';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import {
@@ -109,7 +110,10 @@ export default function NominaHistorialScreen() {
         }}
         payPeriod={{ frequency: business?.payroll_frequency, anchorDate: business?.payroll_anchor_date, customDays: (business as { payroll_custom_days?: number | null } | null)?.payroll_custom_days }}
         onLoadBreakdown={loadBreakdown}
-        onJobPress={(id) => router.push(`/dashboard/trabajos/${id}` as never)}
+        onJobPress={(id) => {
+          markSectionVisitor('trabajos');
+          router.push(`/dashboard/trabajos/${id}` as never);
+        }}
       />
     </SafeAreaView>
   );

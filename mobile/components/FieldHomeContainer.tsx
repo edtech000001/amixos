@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { markSectionVisitor } from '@/lib/sectionEntry';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -103,7 +104,10 @@ export function FieldHomeContainer() {
         readOnly={readOnly}
         showClock={showClock}
         onToggleClock={onToggleClock}
-        onJobPress={(id) => router.push(`/dashboard/trabajos/${id}?from=home` as never)}
+        onJobPress={(id) => {
+          markSectionVisitor('trabajos');
+          router.push(`/dashboard/trabajos/${id}?from=home` as never);
+        }}
         onAdvanceStatus={onAdvanceStatus}
       />
     </View>

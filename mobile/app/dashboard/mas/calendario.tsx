@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { markSectionVisitor } from '@/lib/sectionEntry';
 import { createSupabaseClient } from '@/lib/supabase';
 import { loadCached } from '@/lib/offline/cache';
 import { queuedInsert, queuedUpdate, queuedDelete } from '@/lib/offline/mutate';
@@ -261,7 +262,10 @@ export default function CalendarioRoute() {
         onFetchRange={fetchItems}
         onSaveEvent={canEdit ? saveEvent : undefined}
         onDeleteEvent={canEdit ? deleteEvent : undefined}
-        onJobPress={id => router.push(`/dashboard/trabajos/${id}?from=calendar` as never)}
+        onJobPress={id => {
+          markSectionVisitor('trabajos');
+          router.push(`/dashboard/trabajos/${id}?from=calendar` as never);
+        }}
       />
     </SafeAreaView>
   );

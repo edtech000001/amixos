@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { StackActions } from '@react-navigation/native';
+import { clearSectionVisitor, hasSectionVisitor } from '@/lib/sectionEntry';
 import { useLeaveGuardStore } from '@/lib/leaveGuardStore';
 import { useApp } from '@/lib/AppContext';
 import { useThemeColors } from '@/lib/ThemeProvider';
@@ -335,26 +336,19 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
             // section's list to reach it, so landing on it (and having its
             // back arrow jump to the other section) is disorienting. Drop
             // those before entering, so the section opens on its list.
-            type NavNode = {
-              key?: string;
-              index?: number;
-              routes?: { params?: Record<string, unknown>; state?: NavNode }[];
-            };
-            // Walk to the deepest focused route of the target section — the
-            // stack may be nested more than one level — and pop that stack to
-            // its root when the screen sitting there was opened from elsewhere.
-            let node = (live.routes.find(r => r.key === route.key) as { state?: NavNode } | undefined)?.state;
-            let stackKey: string | undefined;
-            let stackIndex = 0;
-            let focused: { params?: Record<string, unknown>; state?: NavNode } | undefined;
-            while (node?.routes?.length) {
-              stackKey = node.key;
-              stackIndex = node.index ?? 0;
-              focused = node.routes[stackIndex];
-              node = focused?.state;
-            }
-            if (stackKey && stackIndex > 0 && focused?.params?.from) {
-              navigation.dispatch({ ...StackActions.popToTop(), target: stackKey });
+            // A section holding a screen the user never reached through its
+            // own list (opened from the dashboard, map, payroll, an invoice…)
+            // should open on its LIST, not on that leftover screen. The intent
+            // is recorded at navigation time (lib/sectionEntry) rather than
+            // read back off navigator state, which proved unreliable — params
+            // get cleared and nesting varies.
+            if (hasSectionVisitor(route.name)) {
+              clearSectionVisitor(route.name);
+              (navigation.navigate as (name: string, params?: object) => void)(
+                route.name,
+                { screen: 'index' } as object,
+              );
+              return;
             }
             // React Navigation's `navigate` is heavily overloaded on the route
             // name; with mobile's `strict: false` the per-name typing falls
