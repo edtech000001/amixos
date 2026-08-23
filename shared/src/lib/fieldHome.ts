@@ -17,18 +17,20 @@ import { fetchAll } from './supabaseFetch';
 import {
   getPayrollPeriod,
   normalizeFrequency,
-  employeeHoursInRange,
   type PayrollFrequency,
-  type PayrollTimesheet,
-  type PayrollJob,
 } from './payroll';
+
+/** Inclusive date-only window test ('YYYY-MM-DD' sorts lexicographically). */
+function inRange(dateStr: string | null, startStr: string, endStr: string): boolean {
+  return !!dateStr && dateStr >= startStr && dateStr <= endStr;
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseLike = any;
 
-// How many pay periods back (including the current one) "active hours" looks
-// for unpaid work. Bounds the lookback so an ancient never-marked-paid period
-// can't balloon the figure; covers the realistic span of owed hours.
+// How many pay periods back the hours FETCH reaches. The tile itself only
+// shows the current cycle / week / month, but the query is widened to the
+// oldest of those windows so one round trip covers all three tabs.
 const ACTIVE_HOURS_LOOKBACK_PERIODS = 6;
 
 export interface FieldHomeJob {
@@ -238,67 +240,53 @@ export async function fetchFieldHome(
   const jobs = ((jobsRes.data ?? []) as RawFieldJob[]).map(mapJob);
   const recentCompleted = ((recentRes.data ?? []) as RawFieldJob[]).map(mapJob);
 
-  // ── Payroll-style hours (active / week / month) ──
-  // Only a worker with a linked employees row accrues payroll hours; without
-  // one we can't match timesheets/assignments, so the figures read 0.
+  // ── Team hours ON THE JOBS THIS WORKER UPLOADED ──
+  // Not a pay figure. A field lead logs the day's work for their crew, and
+  // this tile reads back roughly how many crew hours they submitted — same
+  // "what did I upload" lens as the completed figures above.
+  //
+  // total_hours is credited PER crew member in payroll (employeeHoursInRange),
+  // i.e. it's each person's hours on that job, so a job's TEAM hours are
+  // total_hours × crew size, plus any driver hours.
+  //
+  // Windowed on completed_date, falling back to scheduled_date: a field-logged
+  // job always carries a completed date, while office-scheduled ones may only
+  // have a scheduled one.
   let hoursActive = 0;
   let hoursWeek = 0;
   let hoursMonth = 0;
-  if (employeeId) {
-    const [tsRes, jobsWindowRes, paymentsRes] = await Promise.all([
-      // Own timesheets in the window (RLS scopes to the caller's rows).
-      supabase
-        .from('timesheets')
-        .select('employee_id, hours_worked, work_date')
-        .eq('business_id', businessId)
-        .gte('work_date', windowStartStr),
-      // Crewed jobs in the window (RLS scopes to assigned). Same hours sources
-      // the Payroll page uses so the figure reconciles with Nómina.
-      supabase
-        .from('jobs')
-        .select('scheduled_date, total_hours, driver_employee_ids, driver_hours, job_assignments(employee_id, crew)')
-        .eq('business_id', businessId)
-        .gte('scheduled_date', windowStartStr),
-      // Which recent periods this worker has already been paid for.
-      supabase
-        .from('payroll_payments')
-        .select('period_start')
-        .eq('business_id', businessId)
-        .eq('employee_id', employeeId),
-    ]);
+  {
+    const { data: minedRaw } = await supabase
+      .from('jobs')
+      .select('scheduled_date, completed_date, total_hours, driver_hours, job_assignments(employee_id, crew)')
+      .eq('business_id', businessId)
+      .eq('created_by', userId)
+      .or(`completed_date.gte.${windowStartStr},scheduled_date.gte.${windowStartStr}`);
 
-    const timesheets = (tsRes.data ?? []) as PayrollTimesheet[];
-    const windowJobs: PayrollJob[] = (
-      (jobsWindowRes.data ?? []) as Array<{
-        scheduled_date: string | null;
-        total_hours: number | null;
-        driver_employee_ids: string[] | null;
-        driver_hours: number | null;
-        job_assignments: { employee_id: string | null; crew?: boolean | null }[];
-      }>
-    ).map((j) => ({
-      scheduled_date: j.scheduled_date,
-      total_hours: j.total_hours,
-      driver_employee_ids: j.driver_employee_ids,
-      driver_hours: j.driver_hours,
-      // crew=false rows are lead-only (migration 189) — no hour credit.
-      assignmentEmployeeIds: (j.job_assignments ?? [])
-        .filter((a) => a.crew !== false)
-        .map((a) => a.employee_id)
-        .filter((x): x is string => !!x),
-    }));
-    const paid = new Set(
-      ((paymentsRes.data ?? []) as Array<{ period_start: string }>).map((p) => p.period_start),
-    );
+    const mined = ((minedRaw ?? []) as Array<{
+      scheduled_date: string | null;
+      completed_date: string | null;
+      total_hours: number | null;
+      driver_hours: number | null;
+      job_assignments: { employee_id: string | null; crew?: boolean | null }[];
+    }>).map((j) => {
+      // crew=false rows are lead-only (migration 189) — they carry no hours.
+      const crew = (j.job_assignments ?? []).filter((a) => a.crew !== false).length;
+      return {
+        date: j.completed_date ?? j.scheduled_date,
+        teamHours: (j.total_hours ?? 0) * crew + (j.driver_hours ?? 0),
+      };
+    });
 
-    for (let off = -(ACTIVE_HOURS_LOOKBACK_PERIODS - 1); off <= 0; off++) {
-      const p = getPayrollPeriod(freq, now, off, anchor, customDays);
-      if (paid.has(p.startStr)) continue; // already paid out → no longer active
-      hoursActive += employeeHoursInRange({ employeeId, timesheets, jobs: windowJobs, startStr: p.startStr, endStr: p.endStr });
-    }
-    hoursActive = Math.round(hoursActive * 100) / 100;
-    hoursWeek = employeeHoursInRange({ employeeId, timesheets, jobs: windowJobs, startStr: weekStartStr, endStr: weekEndStr });
-    hoursMonth = employeeHoursInRange({ employeeId, timesheets, jobs: windowJobs, startStr: monthStartStr, endStr: monthEndStr });
+    const sumIn = (startStr: string, endStr: string) =>
+      Math.round(
+        mined.reduce((sum, j) => (inRange(j.date, startStr, endStr) ? sum + j.teamHours : sum), 0) * 100,
+      ) / 100;
+
+    // "Active" = the current work cycle, matching the completed list below it.
+    hoursActive = sumIn(currentPeriod.startStr, currentPeriod.endStr);
+    hoursWeek = sumIn(weekStartStr, weekEndStr);
+    hoursMonth = sumIn(monthStartStr, monthEndStr);
   }
 
   return {
