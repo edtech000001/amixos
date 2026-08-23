@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useCallback, useEffect, useState } from 'react';
+import { SkeletonRow } from '@amixos/shared/ui/Skeleton';
 import { Activity, Search } from 'lucide-react';
 import { SettingsNav } from '@/components/dashboard/SettingsNav';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -150,8 +151,8 @@ export default function ActividadPage() {
         )}
 
         {loading && rows.length === 0 ? (
-          <div className="py-10 flex justify-center">
-            <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{animationDelay: `${i*0.15}s`}}/>)}</div>
+          <div className="flex flex-col">
+            {[0, 1, 2, 3, 4].map(i => <SkeletonRow key={i} />)}
           </div>
         ) : rows.length === 0 ? (
           <p className="py-10 text-center text-sm text-faint">{t.emptyState}</p>

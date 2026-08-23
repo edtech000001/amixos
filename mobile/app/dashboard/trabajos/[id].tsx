@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { SkeletonBlock, SkeletonCard } from '@amixos/shared/ui/Skeleton';
 import {
   View,
   Text,
@@ -1042,8 +1043,13 @@ export default function JobDetailRoute() {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={['top']}>
-        <ActivityIndicator color={c.primary} />
+      <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+        <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }}>
+          <SkeletonBlock className="h-7 w-52" />
+          <SkeletonBlock className="h-16 w-full rounded-2xl" />
+          <SkeletonCard lines={5} />
+          <SkeletonCard lines={4} />
+        </ScrollView>
       </SafeAreaView>
     );
   }

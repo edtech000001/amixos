@@ -9,7 +9,8 @@
 // See migration 048 + shared/lib/clientCommunications.ts.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { SkeletonRow } from '../../ui/Skeleton';
+import { View, Text, Pressable, Alert } from 'react-native';
 import {
   Phone, MessageSquare, Mail, Users, MessageCircle, FileText,
   Plus, Pencil, Trash2,
@@ -263,8 +264,8 @@ export function CommunicationLog({
       </View>
 
       {entries === null ? (
-        <View className="py-8 items-center">
-          <ActivityIndicator color={c.primary} />
+        <View>
+          {[0, 1, 2].map(i => <SkeletonRow key={i} />)}
         </View>
       ) : entries.length === 0 ? (
         <View className="py-6 items-center">

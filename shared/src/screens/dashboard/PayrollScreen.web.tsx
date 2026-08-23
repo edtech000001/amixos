@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, type ReactNode } from 'react';
+import { SkeletonList } from '../../ui/Skeleton';
 import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, ChevronRight as Chevron, Wrench, Truck, Clock, Settings, List, LayoutGrid, History, Trash2, Pencil, Search } from 'lucide-react';
 import { useLang } from '../../i18n';
 // Import DatePicker from its file, NOT the '../../ui' barrel: the barrel also
@@ -169,6 +170,7 @@ export function PayrollScreen({
 }: PayrollScreenProps) {
   const { t: full } = useLang();
   const t = full.dashboard.reports.payroll;
+  const tc = full.common;
 
   // Settings modal — edits a DRAFT; nothing persists until Save.
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -527,7 +529,8 @@ export function PayrollScreen({
     <div className="px-6 lg:px-8 pt-6 pb-12">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <button type="button" onClick={onBack} className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+        <button type="button" onClick={onBack} title={tc.buttons.back} aria-label={tc.buttons.back}
+          className="p-2 rounded-xl hover:bg-border-soft transition-colors">
           <ChevronLeft size={18} className="text-muted" />
         </button>
         <div className="flex-1">
@@ -558,11 +561,13 @@ export function PayrollScreen({
 
         {/* Period navigator */}
         <div className="flex items-center justify-between bg-card rounded-2xl border border-border-soft shadow-sm px-2 py-2">
-          <button type="button" onClick={onPrevPeriod} className="p-2 rounded-xl hover:bg-border-soft">
+          <button type="button" onClick={onPrevPeriod} title={t.prevPeriod} aria-label={t.prevPeriod}
+            className="p-2 rounded-xl hover:bg-border-soft">
             <ChevronLeft size={18} className="text-muted" />
           </button>
           <span className="text-sm font-semibold text-ink">{periodLabel}</span>
-          <button type="button" onClick={onNextPeriod} className="p-2 rounded-xl hover:bg-border-soft">
+          <button type="button" onClick={onNextPeriod} title={t.nextPeriod} aria-label={t.nextPeriod}
+            className="p-2 rounded-xl hover:bg-border-soft">
             <ChevronRight size={18} className="text-muted" />
           </button>
         </div>
@@ -614,13 +619,7 @@ export function PayrollScreen({
 
         {/* Worker rows */}
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="flex gap-1">
-              {[0, 1, 2].map(i => (
-                <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-              ))}
-            </div>
-          </div>
+          <SkeletonList rows={6} />
         ) : rows.length === 0 ? (
           <p className="text-sm text-faint text-center py-12">{t.empty}</p>
         ) : view === 'grid' ? (

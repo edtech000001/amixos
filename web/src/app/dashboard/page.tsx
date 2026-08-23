@@ -14,6 +14,7 @@ export const dynamic = 'force-dynamic';
 // (more list rows, inline mini charts, chart totals).
 
 import { useEffect, useMemo, useState } from 'react';
+import { SkeletonBlock, SkeletonCard } from '@amixos/shared/ui/Skeleton';
 import { useRouter } from 'next/navigation';
 import {
   DollarSign, Users, FileText, AlertCircle, Clock, TrendingUp, Plus,
@@ -74,6 +75,18 @@ interface DashboardStats {
   jobsActive: number;
   /** Paid revenue per calendar month of the current year (index 0 = Jan). */
   monthly: number[];
+}
+/** A recently-added client, shown inside the Clients stat widget at md/lg. */
+interface RecentClient {
+  id: string;
+  name: string;
+  company: string | null;
+}
+interface RawRecentClient {
+  id: string;
+  first_name: string;
+  last_name: string;
+  company: string | null;
 }
 interface RecentInvoice {
   id: string;
@@ -251,13 +264,16 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recent, setRecent] = useState<RecentInvoice[]>([]);
   const [upcoming, setUpcoming] = useState<UpcomingJob[]>([]);
+  const [recentClients, setRecentClients] = useState<RecentClient[]>([]);
+  const [newClientsThisMonth, setNewClientsThisMonth] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const [editing, setEditing] = useState(false);
   const [visibleIds, setVisibleIds] = useState<DashboardWidgetId[]>([]);
   const [hiddenIds, setHiddenIds] = useState<DashboardWidgetId[]>([]);
   const [sizes, setSizes] = useState<Record<string, DashboardWidgetSize>>({});
-  const [saveError, setSaveError] = useState(false);
+  // null = saved. A string is the failure reason, printed under the banner.
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -290,7 +306,13 @@ export default function DashboardPage() {
   // Cache-first dashboard: cached numbers render instantly, one dashboard_stats
   // RPC (migration 181) + two small embed queries revalidate in the background.
   // Replaces 7 stat queries incl. an unbounded paid-invoice download.
-  type DashPayload = { stats: DashboardStats; recent: RecentInvoice[]; upcoming: UpcomingJob[] };
+  type DashPayload = {
+    stats: DashboardStats;
+    recent: RecentInvoice[];
+    upcoming: UpcomingJob[];
+    recentClients: RecentClient[];
+    newClientsThisMonth: number;
+  };
   const dashKey = business ? `dashboard_home_${business.id}` : null;
   const dash = useSwr<DashPayload>(
     dashKey,
@@ -300,12 +322,16 @@ export default function DashboardPage() {
       const startYear = new Date(now.getFullYear(), 0, 1).toISOString();
       const today = now.toISOString().split('T')[0];
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
-      const [statsRes, recentInv, upcomingJobs] = await Promise.all([
+      const [statsRes, recentInv, upcomingJobs, recentCl, newClientCount] = await Promise.all([
         supabase.rpc('dashboard_stats', {
           p_business_id: business!.id, p_start_month: startMonth, p_start_year: startYear, p_tz: tz,
         }),
         supabase.from('invoices').select('id, invoice_number, total_amount, status, due_date, clients(first_name, last_name)').eq('business_id', business!.id).order('created_at', { ascending: false }).limit(LIST_ROWS.lg),
         supabase.from('jobs').select('id, title, status, scheduled_date, clients(first_name, last_name)').eq('business_id', business!.id).in('status', ['scheduled', 'in_progress']).gte('scheduled_date', today).order('scheduled_date', { ascending: true }).limit(LIST_ROWS.lg),
+        // Both bounded — a .limit(4) peek and a count-only query, so neither
+        // needs the pagination loop the "load every row" reads do.
+        supabase.from('clients').select('id, first_name, last_name, company').eq('business_id', business!.id).order('created_at', { ascending: false }).limit(4),
+        supabase.from('clients').select('id', { head: true, count: 'exact' }).eq('business_id', business!.id).gte('created_at', startMonth),
       ]);
       if (statsRes.error) throw new Error(statsRes.error.message);
       if (recentInv.error) throw new Error(recentInv.error.message);
@@ -323,8 +349,17 @@ export default function DashboardPage() {
       };
       const rawInv = (recentInv.data ?? []) as unknown as RawRecentInvoice[];
       const rawJobs = (upcomingJobs.data ?? []) as unknown as RawUpcomingJob[];
+      // The two client extras are decorative — a failure there must not blank
+      // the whole dashboard, so they degrade to empty instead of throwing.
+      const rawClients = (recentCl.data ?? []) as unknown as RawRecentClient[];
       return {
         stats,
+        recentClients: rawClients.map(cl => ({
+          id: cl.id,
+          name: `${cl.first_name} ${cl.last_name}`.trim(),
+          company: cl.company,
+        })),
+        newClientsThisMonth: newClientCount.count ?? 0,
         recent: rawInv.map(inv => ({
           id: inv.id,
           invoiceNumber: inv.invoice_number,
@@ -348,6 +383,8 @@ export default function DashboardPage() {
     setStats(dash.data.stats);
     setRecent(dash.data.recent);
     setUpcoming(dash.data.upcoming);
+    setRecentClients(dash.data.recentClients);
+    setNewClientsThisMonth(dash.data.newClientsThisMonth);
     setLoading(false);
   }, [dash.data]);
   useEffect(() => { if (dash.error) setLoading(false); }, [dash.error]);
@@ -358,14 +395,19 @@ export default function DashboardPage() {
     nextSizes: Record<string, DashboardWidgetSize>,
   ) => {
     if (!user || !business) return;
-    setSaveError(false);
+    setSaveError(null);
     const layout = buildDashboardLayout(visible, hidden, nextSizes);
     const { error } = await supabase
       .from('user_dashboard_layouts')
       .upsert({ user_id: user.id, business_id: business.id, layout, updated_at: new Date().toISOString() },
               { onConflict: 'user_id,business_id' });
-    if (error) setSaveError(true);
-    else setProfileLayout(layout);
+    if (error) {
+      // Keep the reason: "couldn't save, try again" is untriagable on its own.
+      console.warn('[dashboard] layout save failed', error);
+      setSaveError([error.code, error.message].filter(Boolean).join(' · ') || 'Unknown error');
+    } else {
+      setProfileLayout(layout);
+    }
   };
 
   const handleDragEnd = (e: DragEndEvent) => {
@@ -427,14 +469,25 @@ export default function DashboardPage() {
     formatCurrency((stats?.earningsYear ?? 0) / (currentMonth + 1)),
   );
 
-  const statWidgets = useMemo<Partial<Record<DashboardWidgetId, { label: string; value: string | number; icon: LucideIcon; color: string; bg: string; sub: string; extra?: string | null; bars?: boolean }>>>(() => ({
+  // `list` fills the extra room at md/lg — a widget that carries one stops
+  // looking identical at every size, buying content instead of whitespace.
+  const statWidgets = useMemo<Partial<Record<DashboardWidgetId, { label: string; value: string | number; icon: LucideIcon; color: string; bg: string; sub: string; extra?: string | null; bars?: boolean; list?: { id: string; primary: string; secondary?: string | null }[]; listHeading?: string; onListItemPress?: (id: string) => void }>>>(() => ({
     invoicesPending: { label: t.home.widgets.invoicesPendingLabel, value: stats?.invoicesPending ?? 0, icon: FileText, color: 'text-primary', bg: 'bg-primary/10', sub: t.home.widgets.invoicesPendingSub },
-    clientsTotal: { label: t.home.widgets.clientsLabel, value: stats?.clientsTotal ?? 0, icon: Users, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-500/10', sub: t.home.widgets.clientsSub },
+    clientsTotal: {
+      label: t.home.widgets.clientsLabel, value: stats?.clientsTotal ?? 0, icon: Users,
+      color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-500/10', sub: t.home.widgets.clientsSub,
+      extra: newClientsThisMonth
+        ? t.home.widgets.clientsNewThisMonth.replace('{{count}}', String(newClientsThisMonth))
+        : null,
+      list: recentClients.map(cl => ({ id: cl.id, primary: cl.name, secondary: cl.company })),
+      listHeading: t.home.widgets.clientsRecentHeading,
+      onListItemPress: (id: string) => router.push(`/dashboard/clientes/${id}`),
+    },
     invoicesOverdue: { label: t.home.widgets.invoicesOverdueLabel, value: stats?.invoicesOverdue ?? 0, icon: AlertCircle, color: 'text-red-500 dark:text-red-400', bg: 'bg-red-500/10', sub: t.home.widgets.invoicesOverdueSub },
     clockedIn: { label: t.home.widgets.clockedInLabel, value: stats?.clockedInNow ?? 0, icon: Clock, color: 'text-orange-500 dark:text-orange-400', bg: 'bg-orange-500/10', sub: t.home.widgets.clockedInSub },
     earningsYear: { label: t.home.widgets.earningsYearLabel, value: yearAmount, icon: TrendingUp, color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-500/10', sub: t.home.widgets.earningsYearSub.replace('{{year}}', yearStr), extra: avgPerMonthLine, bars: true },
     jobsActive: { label: t.home.widgets.jobsActiveLabel, value: stats?.jobsActive ?? 0, icon: Briefcase, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-500/10', sub: t.home.widgets.jobsActiveSub },
-  }), [stats, t, yearAmount, yearStr, avgPerMonthLine]);
+  }), [stats, t, yearAmount, yearStr, avgPerMonthLine, recentClients, newClientsThisMonth, router]);
 
   const formatJobDate = (dateStr: string) => {
     const date = new Date(`${dateStr}T00:00:00`);
@@ -501,7 +554,30 @@ export default function DashboardPage() {
 
     const stat = statWidgets[id];
     if (stat) {
-      const { label, value, icon: Icon, color, bg, sub, extra, bars } = stat;
+      const { label, value, icon: Icon, color, bg, sub, extra, bars, list, listHeading, onListItemPress } = stat;
+      // lg has room for four rows, md for two.
+      const listRows = (list ?? []).slice(0, size === 'lg' ? 4 : 2);
+      const statList = listRows.length > 0 ? (
+        <div className="mt-4 pt-3 border-t border-border-soft">
+          {listHeading ? (
+            <p className="text-[10px] font-semibold text-faint uppercase tracking-wide mb-1.5">{listHeading}</p>
+          ) : null}
+          {listRows.map(row => (
+            <button
+              key={row.id}
+              type="button"
+              onClick={onListItemPress ? () => onListItemPress(row.id) : undefined}
+              disabled={!onListItemPress}
+              className="w-full flex items-center gap-2 py-1.5 text-left hover:opacity-70 disabled:cursor-default"
+            >
+              <span className="text-xs font-medium text-ink flex-1 truncate">{row.primary}</span>
+              {row.secondary ? (
+                <span className="text-[11px] text-faint truncate">{row.secondary}</span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      ) : null;
       // lg = horizontal banner (big icon left, value right) — clearly
       // different from the vertical sm/md tiles even with zero data.
       if (size === 'lg') {
@@ -521,6 +597,7 @@ export default function DashboardPage() {
               </div>
               {bars ? <MiniBars monthly={monthly} /> : null}
             </div>
+            {statList}
           </div>
         );
       }
@@ -537,6 +614,7 @@ export default function DashboardPage() {
           {size === 'md' && extra ? (
             <p className="text-xs font-semibold text-muted mt-1">{extra}</p>
           ) : null}
+          {size === 'md' ? statList : null}
         </div>
       );
     }
@@ -719,10 +797,23 @@ export default function DashboardPage() {
   }
 
   if (appLoading || loading) {
+    // Same header + widget-grid shape the loaded page uses, so the layout
+    // doesn't jump when the data lands.
     return (
-      <div className="p-8 flex items-center justify-center min-h-[60vh]">
-        <div className="flex gap-1">
-          {[0, 1, 2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}
+      <div className="p-6 lg:p-8">
+        <div className="flex items-start justify-between mb-6">
+          <div className="flex flex-col gap-2">
+            <SkeletonBlock className="h-7 w-56" />
+            <SkeletonBlock className="h-4 w-40" />
+          </div>
+          <SkeletonBlock className="h-10 w-32 rounded-xl" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+          {[2, 2, 2, 3, 3, 6].map((span, i) => (
+            <div key={i} className={span === 6 ? 'lg:col-span-6' : span === 3 ? 'lg:col-span-3' : 'lg:col-span-2'}>
+              <SkeletonCard lines={span === 2 ? 2 : 4} />
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -762,6 +853,7 @@ export default function DashboardPage() {
       {saveError && (
         <div className="mb-4 px-4 py-3 rounded-xl bg-red-500/10 border border-red-100 text-sm text-red-600">
           {t.home.customize.saveError}
+          <span className="block text-xs text-red-600/80 mt-1">{saveError}</span>
         </div>
       )}
 

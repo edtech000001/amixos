@@ -1,5 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { View, Text, Pressable, useWindowDimensions } from 'react-native';
+import { SkeletonBlock, SkeletonStats, SkeletonChart, SkeletonCard } from '../../ui/Skeleton';
+import { useBarScrub } from '../../ui/useBarScrub';
+import { niceCeil, axisTick } from '../../lib/chartAxis';
+import { View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import Animated, { useAnimatedRef } from 'react-native-reanimated';
 import Sortable from 'react-native-sortables';
 import type { SortableFlexDragEndParams } from 'react-native-sortables';
@@ -56,6 +59,13 @@ export interface DashboardRecentInvoice {
   clientName: string | null;
 }
 
+/** A recently-added client, shown inside the Clients stat widget at md/lg. */
+export interface DashboardRecentClient {
+  id: string;
+  name: string;
+  company: string | null;
+}
+
 export interface DashboardUpcomingJob {
   id: string;
   title: string;
@@ -79,10 +89,17 @@ export interface DashboardHomeScreenProps {
   stats: DashboardStats | null;
   recent: DashboardRecentInvoice[];
   upcomingJobs: DashboardUpcomingJob[];
+  /** Newest clients — fills the empty space in the md/lg Clients widget, which
+   *  otherwise renders the same single number at every size. */
+  recentClients?: DashboardRecentClient[];
+  /** Clients added since the 1st of this month. */
+  newClientsThisMonth?: number;
   /** businesses.dashboard_layout (migration 049). Null = default layout. */
   layout: DashboardLayout | null;
-  /** Persist a layout change. Resolve false to surface the save-error banner. */
-  onSaveLayout: (layout: DashboardLayout) => Promise<boolean>;
+  /** Persist a layout change. Resolve null on success, or the reason it failed
+   *  — the banner prints it, so a rejected write says WHY instead of just
+   *  "try again", which is untriagable from a screenshot. */
+  onSaveLayout: (layout: DashboardLayout) => Promise<string | null>;
   /** Called when the user leaves edit mode (e.g. to refetch the business). */
   onEditingDone?: () => void;
   onNewInvoicePress: () => void;
@@ -92,6 +109,8 @@ export interface DashboardHomeScreenProps {
   onJobPress: (id: string) => void;
   onViewAllJobsPress: () => void;
   onNewClientPress: () => void;
+  /** Open a client from the Clients widget's recent list. */
+  onClientPress?: (id: string) => void;
   onNewJobPress: () => void;
   onCalendarPress: () => void;
 }
@@ -101,6 +120,16 @@ const LIST_ROWS: Record<DashboardWidgetSize, number> = { sm: 3, md: 5, lg: 8 };
 
 const GAP = 12;
 const H_PAD = 24;
+
+// Revenue-chart scrub readout: bubble box, the flex gap between bars (needed to
+// map a finger x onto a bar), and the height of the month-label row under the
+// bars — `bottom` on the bubble is measured from below that row.
+const CHART_BUBBLE_W = 96;
+const CHART_BUBBLE_H = 24;
+const CHART_BAR_GAP = 6;
+const LABEL_ROW_H = 17;
+/** Y-axis gutter. Narrow — the small widget is only half the screen wide. */
+const AXIS_W = 34;
 
 const STATUS_PILL_BG: Record<string, string> = {
   draft: 'bg-border-soft',
@@ -183,6 +212,8 @@ export function DashboardHomeScreen({
   stats,
   recent,
   upcomingJobs,
+  recentClients,
+  newClientsThisMonth,
   layout,
   onSaveLayout,
   onEditingDone,
@@ -193,6 +224,7 @@ export function DashboardHomeScreen({
   onJobPress,
   onViewAllJobsPress,
   onNewClientPress,
+  onClientPress,
   onNewJobPress,
   onCalendarPress,
 }: DashboardHomeScreenProps) {
@@ -206,7 +238,16 @@ export function DashboardHomeScreen({
   const [visibleIds, setVisibleIds] = useState<DashboardWidgetId[]>([]);
   const [hiddenIds, setHiddenIds] = useState<DashboardWidgetId[]>([]);
   const [sizes, setSizes] = useState<Record<string, DashboardWidgetSize>>({});
-  const [saveError, setSaveError] = useState(false);
+  // null = saved. A string is the failure reason, shown under the banner.
+  const [saveError, setSaveError] = useState<string | null>(null);
+  // Hold-and-drag readout for the revenue widget. Its bar count depends on the
+  // widget's size (sm shows 6 months, md/lg the full year), and the gesture is
+  // off in edit mode so the widget stays draggable for reordering.
+  const scrub = useBarScrub({
+    count: (sizes.monthlyChart ?? defaultWidgetSize('monthlyChart')) === 'sm' ? 6 : 12,
+    gap: CHART_BAR_GAP,
+    enabled: !editing,
+  });
 
   // Re-resolve when the saved layout actually changes (auto-saves write the
   // same value back on refetch, so JSON-keying avoids clobbering edits).
@@ -227,10 +268,8 @@ export function DashboardHomeScreen({
     nextHidden: DashboardWidgetId[],
     nextSizes: Record<string, DashboardWidgetSize>,
   ) => {
-    setSaveError(false);
-    void onSaveLayout(buildDashboardLayout(nextVisible, nextHidden, nextSizes)).then(ok => {
-      if (!ok) setSaveError(true);
-    });
+    setSaveError(null);
+    void onSaveLayout(buildDashboardLayout(nextVisible, nextHidden, nextSizes)).then(setSaveError);
   };
 
   const handleDragEnd = ({ indexToKey }: SortableFlexDragEndParams) => {
@@ -269,14 +308,15 @@ export function DashboardHomeScreen({
   };
 
   if (loading) {
+    // Greeting + stat tiles + the earnings chart and list cards below them —
+    // the same shape the loaded home uses, so nothing jumps on arrival.
     return (
-      <View className="flex-1 items-center justify-center bg-surface py-20">
-        <View className="flex-row gap-1">
-          {[0, 1, 2].map(i => (
-            <View key={i} className="w-2 h-2 rounded-full bg-primary" />
-          ))}
-        </View>
-      </View>
+      <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ padding: 24, gap: 16 }}>
+        <SkeletonBlock className="h-7 w-56" />
+        <SkeletonStats count={4} />
+        <SkeletonChart />
+        <SkeletonCard lines={4} />
+      </ScrollView>
     );
   }
 
@@ -309,6 +349,12 @@ export function DashboardHomeScreen({
     sub: string;
     extra?: string | null;
     bars?: boolean;
+    /** Rows rendered under the tile at md/lg. Widgets that carry one stop
+     *  looking identical at every size — the extra width buys extra content,
+     *  not just whitespace. */
+    list?: { id: string; primary: string; secondary?: string | null }[];
+    listHeading?: string;
+    onListItemPress?: (id: string) => void;
   };
 
   const statWidgets: Partial<Record<DashboardWidgetId, StatWidget>> = {
@@ -327,6 +373,12 @@ export function DashboardHomeScreen({
       color: 'text-blue-600',
       bg: 'bg-blue-500/10',
       sub: t.home.widgets.clientsSub,
+      extra: newClientsThisMonth
+        ? t.home.widgets.clientsNewThisMonth.replace('{{count}}', String(newClientsThisMonth))
+        : null,
+      list: (recentClients ?? []).map(cl => ({ id: cl.id, primary: cl.name, secondary: cl.company })),
+      listHeading: t.home.widgets.clientsRecentHeading,
+      onListItemPress: onClientPress,
     },
     invoicesOverdue: {
       label: t.home.widgets.invoicesOverdueLabel,
@@ -430,7 +482,31 @@ export function DashboardHomeScreen({
 
     const stat = statWidgets[id];
     if (stat) {
-      const { label, value, icon: Icon, color, bg, sub, extra, bars } = stat;
+      const { label, value, icon: Icon, color, bg, sub, extra, bars, list, listHeading, onListItemPress } = stat;
+      // lg has room for four rows, md for two.
+      const listRows = (list ?? []).slice(0, size === 'lg' ? 4 : 2);
+      const statList = listRows.length > 0 ? (
+        <View className="mt-4 pt-3 border-t border-border-soft">
+          {listHeading ? (
+            <Text className="text-[10px] font-semibold text-faint uppercase tracking-wide mb-1.5">
+              {listHeading}
+            </Text>
+          ) : null}
+          {listRows.map(row => (
+            <Pressable
+              key={row.id}
+              onPress={onListItemPress ? () => onListItemPress(row.id) : undefined}
+              disabled={!onListItemPress}
+              className="flex-row items-center gap-2 py-1.5 active:opacity-70"
+            >
+              <Text className="text-xs font-medium text-ink flex-1" numberOfLines={1}>{row.primary}</Text>
+              {row.secondary ? (
+                <Text className="text-[11px] text-faint shrink" numberOfLines={1}>{row.secondary}</Text>
+              ) : null}
+            </Pressable>
+          ))}
+        </View>
+      ) : null;
       // lg = horizontal banner (big icon left, value right) — clearly
       // different from the vertical sm/md tiles even with zero data.
       if (size === 'lg') {
@@ -450,6 +526,7 @@ export function DashboardHomeScreen({
               </View>
               {bars ? <MiniBars monthly={monthly} /> : null}
             </View>
+            {statList}
           </View>
         );
       }
@@ -464,6 +541,7 @@ export function DashboardHomeScreen({
           {size === 'md' && extra ? (
             <Text className="text-xs font-semibold text-muted mt-1">{extra}</Text>
           ) : null}
+          {size === 'md' ? statList : null}
         </View>
       );
     }
@@ -555,6 +633,13 @@ export function DashboardHomeScreen({
         const barArea = size === 'sm' ? 64 : 96;
         const monthLabel = (i: number) =>
           new Intl.DateTimeFormat(t.dateLocale, { month: 'narrow' }).format(new Date(2026, i, 1));
+        // Scale to a rounded ceiling, not the raw peak, so the axis labels are
+        // round numbers and the tallest bar lands on the top gridline.
+        const axisMax = niceCeil(max);
+        // The small widget is half-width — two bands keep its labels legible.
+        const ticks = size === 'sm' ? 2 : 4;
+        const barH = (amount: number) =>
+          Math.max(amount > 0 ? 8 : 3, Math.round((amount / axisMax) * barArea));
         return (
           <View className="bg-card rounded-2xl border border-border-soft p-5 flex-1">
             <Text className="text-sm font-semibold text-ink mb-1">
@@ -572,31 +657,97 @@ export function DashboardHomeScreen({
                 {t.home.monthlyChart.empty}
               </Text>
             ) : (
-              <View className="flex-row items-end gap-1.5">
-                {shown.map((amount, idx) => {
-                  const i = startIdx + idx;
-                  return (
-                    <View key={i} className="flex-1 items-center gap-1">
-                      <View className="w-full justify-end" style={{ height: barArea }}>
-                        <View
-                          className={`w-full rounded-t-md ${
-                            i === currentMonth
-                              ? 'bg-primary'
-                              : amount > 0
-                                ? 'bg-primary/30'
-                                : 'bg-border-soft'
-                          }`}
-                          style={{ height: Math.max(amount > 0 ? 8 : 3, Math.round((amount / max) * barArea)) }}
-                        />
-                      </View>
-                      <Text
-                        className={`text-[10px] ${i === currentMonth ? 'text-primary font-semibold' : 'text-faint'}`}
-                      >
-                        {monthLabel(i)}
+              <View className="flex-row">
+                {/* Y axis — labels sit ON their gridline (same top = i × band
+                    formula), so the two can never drift apart. */}
+                <View style={{ width: AXIS_W, height: barArea }}>
+                  {Array.from({ length: ticks + 1 }, (_, i) => (
+                    <Text
+                      key={i}
+                      className="text-[9px] text-faint"
+                      style={{ position: 'absolute', top: (barArea / ticks) * i - 5, right: 6 }}
+                    >
+                      {axisTick((axisMax / ticks) * (ticks - i))}
+                    </Text>
+                  ))}
+                </View>
+
+                <View className="flex-1">
+                  <View style={{ height: barArea }}>
+                    {Array.from({ length: ticks + 1 }, (_, i) => (
+                      <View
+                        key={i}
+                        className="absolute left-0 right-0 h-px bg-border-soft"
+                        style={{ top: (barArea / ticks) * i }}
+                      />
+                    ))}
+
+                    <View className="flex-row items-end gap-1.5" style={{ height: barArea }}>
+                      {shown.map((amount, idx) => {
+                        const i = startIdx + idx;
+                        // While scrubbing, the held bar takes the highlight so
+                        // the finger — not today's date — is what the eye
+                        // follows.
+                        const lit = scrub.active === null ? i === currentMonth : scrub.active === idx;
+                        return (
+                          <View key={i} className="flex-1 justify-end" style={{ height: barArea }}>
+                            <View
+                              className={`w-full rounded-t-md ${
+                                lit ? 'bg-primary' : amount > 0 ? 'bg-primary/30' : 'bg-border-soft'
+                              }`}
+                              style={{ height: barH(amount) }}
+                            />
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  <View className="flex-row gap-1.5 mt-1">
+                    {shown.map((amount, idx) => {
+                      const i = startIdx + idx;
+                      const lit = scrub.active === null ? i === currentMonth : scrub.active === idx;
+                      return (
+                        <Text
+                          key={i}
+                          className={`flex-1 text-center text-[10px] ${lit ? 'text-primary font-semibold' : 'text-faint'}`}
+                        >
+                          {monthLabel(i)}
+                        </Text>
+                      );
+                    })}
+                  </View>
+
+                  {/* Value bubble, positioned in pixels over the held bar. */}
+                  {scrub.active !== null && scrub.width > 0 && shown[scrub.active] !== undefined ? (
+                    <View
+                      className="absolute bg-ink rounded-lg px-2 py-1"
+                      style={{
+                        width: CHART_BUBBLE_W,
+                        // `bottom` is measured from below the month-label row,
+                        // and clamped so a full-height bar can't push the
+                        // bubble out of the card (Android clips overflow).
+                        bottom: Math.min(
+                          barH(shown[scrub.active]) + 6 + LABEL_ROW_H,
+                          LABEL_ROW_H + barArea - CHART_BUBBLE_H,
+                        ),
+                        left: Math.min(
+                          Math.max(0, ((scrub.active + 0.5) / shown.length) * scrub.width - CHART_BUBBLE_W / 2),
+                          Math.max(0, scrub.width - CHART_BUBBLE_W),
+                        ),
+                      }}
+                    >
+                      <Text className="text-[10px] font-bold text-surface text-center" numberOfLines={1}>
+                        {formatCurrency(shown[scrub.active])}
                       </Text>
                     </View>
-                  );
-                })}
+                  ) : null}
+
+                  {/* Hold-and-slide layer, over the plot only (the axis gutter
+                      is outside it, so x maps straight onto a bar). Disabled in
+                      edit mode so the widget stays draggable for reordering. */}
+                  <View className="absolute left-0 right-0 top-0 bottom-0" {...scrub.handlers} />
+                </View>
               </View>
             )}
           </View>
@@ -771,6 +922,7 @@ export function DashboardHomeScreen({
       {saveError ? (
         <View className="mt-4 px-4 py-3 rounded-xl bg-red-500/10 border border-red-100">
           <Text className="text-sm text-red-600">{t.home.customize.saveError}</Text>
+          <Text className="text-xs text-red-600/80 mt-1">{saveError}</Text>
         </View>
       ) : null}
     </View>

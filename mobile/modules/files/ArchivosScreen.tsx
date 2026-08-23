@@ -5,6 +5,9 @@
 // One-hand conventions: FAB + bottom-sheet forms (fade), save at the bottom.
 
 import { useCallback, useMemo, useState } from 'react';
+import { loadCachedThenFresh, writeCacheAndStamp } from '@amixos/shared/lib/swrCache';
+import { useDataFingerprint } from '@amixos/shared/lib/dataFingerprint';
+import { SkeletonList } from '@amixos/shared/ui/Skeleton';
 import {
   View, Text, Pressable, ScrollView, ActivityIndicator, Alert, Linking,
   Modal as RNModal,
@@ -25,6 +28,7 @@ import { Input, Toggle, Button, Fab } from '@amixos/shared/ui';
 import { can } from '@amixos/shared/lib/permissions';
 import {
   fetchFilesTree, fileStoragePath, fileUid, fileMeta, fileIsCrewVisible,
+  type FilesTree,
   FILES_BUCKET, FILE_MAX_BYTES,
   type FileCategory, type FileFolder, type FileEntry, type FileEntryKind,
 } from '@amixos/shared/lib/files';
@@ -87,23 +91,63 @@ export default function ArchivosScreen() {
   // by long-pressing a row. Until then rows behave normally (tap = open/enter).
   const selectionMode = selectionCount > 0;
 
-  const load = useCallback(async () => {
-    if (!business) return;
-    const tree = await fetchFilesTree(supabase, business.id);
+  // The library changes rarely, so it's cache-first: the saved tree paints
+  // immediately and the query only re-runs when data_fingerprint reports a
+  // change to entries, folders or categories (migration 208). That matters
+  // most here — this screen reloads on every focus, which used to mean a full
+  // tree fetch each time the user came back to it.
+  const cacheKey = business ? `files_tree_${business.id}` : null;
+  const fingerprint = useDataFingerprint(supabase, business?.id, ['files']);
+
+  const applyTree = useCallback((tree: FilesTree) => {
     setCategories(tree.categories);
     setFolders(tree.folders);
     setEntries(tree.entries);
     setLoading(false);
-    // Refresh storage usage alongside the tree (after uploads/deletes too).
+  }, []);
+
+  // Storage meter — always refreshed, because it lives in component state and
+  // a cache hit would otherwise render 0 bytes.
+  const loadUsage = useCallback(async () => {
+    if (!business) return;
     const { data } = await supabase.rpc('business_storage_bytes', { p_business_id: business.id });
     setUsedBytes(Number(data ?? 0));
     // Breakdown (jobs vs library vs equipment) — best-effort: the RPC is
     // migration 149; if it isn't run yet the meter just shows the total.
     const { data: bd } = await supabase.rpc('business_storage_breakdown', { p_business_id: business.id });
     if (bd && typeof bd === 'object') setBreakdown(bd as Record<string, number>);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [business?.id]);
 
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
+  // Full refetch — what every mutation calls. Re-stamps so the next open is
+  // instant. Stamp read BEFORE the fetch (see writeCacheAndStamp).
+  const load = useCallback(async () => {
+    if (!business) return;
+    const stamp = fingerprint ? await fingerprint().catch(() => null) : null;
+    const tree = await fetchFilesTree(supabase, business.id);
+    applyTree(tree);
+    if (cacheKey) void writeCacheAndStamp(cacheKey, tree, stamp);
+    void loadUsage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id, fingerprint, cacheKey, applyTree, loadUsage]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!business) return;
+      let cancelled = false;
+      const businessId = business.id;
+      void loadCachedThenFresh<FilesTree>({
+        cacheKey,
+        fingerprint,
+        fetcher: () => fetchFilesTree(supabase, businessId),
+        cancelled: () => cancelled,
+        apply: applyTree,
+      }).catch(() => setLoading(false));
+      void loadUsage();
+      return () => { cancelled = true; };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [business?.id, cacheKey, fingerprint, applyTree, loadUsage]),
+  );
 
   const here = stack[stack.length - 1];
   const atHome = here.categoryId === null;
@@ -213,7 +257,7 @@ export default function ArchivosScreen() {
          huge gap under the header. flex-wrap handles deep paths. */}
       {stack.length > 1 ? (
         <View className="flex-row flex-wrap items-center gap-1 px-4 py-2.5 border-b border-border-soft">
-          <Pressable onPress={folderUp} hitSlop={8} className="mr-1.5 p-1.5 rounded-lg bg-border-soft active:bg-border">
+          <Pressable onPress={folderUp} hitSlop={8} accessibilityRole="button" accessibilityLabel={t.goUpBtn} className="mr-1.5 p-1.5 rounded-lg bg-border-soft active:bg-border">
             <CornerUpLeft size={14} color={c.muted} />
           </Pressable>
           {stack.map((crumb, i) => (
@@ -230,7 +274,7 @@ export default function ArchivosScreen() {
       {/* Selection bar (files + folders) */}
       {canManage && selectionCount > 0 ? (
         <View className="flex-row items-center gap-3 px-4 py-2.5 bg-primary/5 border-b border-primary/20">
-          <Pressable onPress={clearSelection} hitSlop={8}><X size={16} color={c.primary} /></Pressable>
+          <Pressable onPress={clearSelection} hitSlop={8} accessibilityRole="button" accessibilityLabel={t.clearSelectionBtn}><X size={16} color={c.primary} /></Pressable>
           <Text className="text-sm font-medium text-primary flex-1">{t.selectedCount.replace('{{count}}', String(selectionCount))}</Text>
           <Pressable onPress={() => setSheet({ type: 'move' })} className="flex-row items-center gap-1.5 bg-primary px-3.5 py-1.5 rounded-full active:opacity-80">
             <FolderInput size={14} color="#FFFFFF" /><Text className="text-xs font-semibold text-white">{t.moveBtn}</Text>
@@ -288,7 +332,7 @@ export default function ArchivosScreen() {
         {atHome ? <Text className="text-sm text-muted mb-5">{t.subtitle}</Text> : null}
 
         {loading ? (
-          <View className="py-20 items-center"><ActivityIndicator color={c.primary} /></View>
+          <SkeletonList rows={8} />
         ) : isEmpty ? (
           <View className="py-16 items-center rounded-2xl border border-dashed border-border bg-surface">
             <FolderOpen size={30} color={c.faint} />

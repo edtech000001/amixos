@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { Fragment, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { SkeletonBlock, SkeletonStats, SkeletonCard, SkeletonList, SkeletonDetail } from '@amixos/shared/ui/Skeleton';
 import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -107,7 +108,13 @@ export default function NuevoTrabajoPage() {
 
 function NuevoTrabajoFallback() {
   const { t: full } = useLang();
-  return <div className="p-6">{full.common.states.loading}...</div>;
+  return (
+    <div className="p-6 max-w-4xl flex flex-col gap-4">
+      <SkeletonBlock className="h-7 w-64" />
+      <SkeletonCard lines={5} />
+      <SkeletonCard lines={4} />
+    </div>
+  );
 }
 
 function NuevoTrabajoContent() {
@@ -1633,9 +1640,13 @@ function NuevoTrabajoContent() {
   );
   const confirmDiscard = useUnsavedChanges(dirty);
 
+  // Form heading, then the field cards the editor renders.
   if (loadingEdit) return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i*0.15}s` }}/>)}</div>
+    <div className="p-6 max-w-4xl flex flex-col gap-4">
+      <SkeletonBlock className="h-7 w-64" />
+      <SkeletonCard lines={5} />
+      <SkeletonCard lines={4} />
+      <SkeletonCard lines={3} />
     </div>
   );
 

@@ -2,7 +2,9 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
+import { swrRead, swrReadFingerprint, writeCacheAndStamp } from '@amixos/shared/lib/swrCache';
+import { useDataFingerprint } from '@amixos/shared/lib/dataFingerprint';
 import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import { useRouter } from 'next/navigation';
 import { Clock, DollarSign, UserX, UserCheck, Pencil, Eye } from 'lucide-react';
@@ -124,6 +126,18 @@ const EMPTY_EMP = {
 };
 const EMPTY_TS  = { id: '', employee_id: '', worker_name: '', work_date: todayLocalISO(), hours_worked: 8, job_description: '' };
 
+/** What the Empleados screen caches between visits. `invites` is deliberately
+ *  excluded — it comes from the API, not a table, so no fingerprint domain can
+ *  vouch for it; it is always refetched. */
+interface EmployeesPageCache {
+  employees: RawEmployee[];
+  timesheets: RawTimesheet[];
+  hourTotals: HourTotalItem[];
+  payPeriodLabel: string | null;
+  templates: FieldTemplate[];
+  members: AccessMember[];
+}
+
 export default function EmpleadosPage() {
   const router = useRouter();
   const { t: full, locale } = useLang();
@@ -145,6 +159,11 @@ export default function EmpleadosPage() {
     can.writeOwnTimesheet(currentRole) ||
     (can.seeAllTimesheets(currentRole) && !isReadOnly(currentRole));
   const [employees, setEmployees] = useState<RawEmployee[]>([]);
+  // Stamp captured when the current data was fetched — see the cache effect.
+  const empStampRef = useRef<string | null>(null);
+  // First load in flight — the list renders placeholders instead of the
+  // "no employees yet" empty state, which is otherwise indistinguishable.
+  const [loading, setLoading] = useState(true);
   // Coming back from an employee detail lands at the top otherwise — restore
   // the list scroll position once the rows have rendered. (This page has no
   // loading flag; rows present = ready.)
@@ -469,7 +488,66 @@ export default function EmpleadosPage() {
     setEmployees(emps);
   };
 
-  useEffect(() => { loadPeople(); loadTimesheets(); loadHourTotals(); loadTemplates(); }, [business]);
+  // The roster changes rarely, so the first load is cache-first: last session's
+  // rows paint immediately and the four-query burst below only runs when
+  // data_fingerprint reports a change (migration 208). `invites` comes from the
+  // API, not a table, so it is NOT covered by the stamp — invite actions
+  // refresh it directly via loadPeople(), which is the only way it changes.
+  const empCacheKey = business ? `employees_page_${business.id}` : null;
+  const empFingerprint = useDataFingerprint(
+    supabase, business?.id, ['employees', 'timesheets', 'jobs', 'templates'],
+  );
+
+  useEffect(() => {
+    if (!business) return;
+    let cancelled = false;
+    setLoading(true);
+    void (async () => {
+      let painted = false;
+      if (empCacheKey) {
+        const hit = await swrRead<EmployeesPageCache>(empCacheKey);
+        if (hit && !cancelled) {
+          setEmployees(hit.data.employees);
+          setTimesheets(hit.data.timesheets);
+          setHourTotals(hit.data.hourTotals);
+          setPayPeriodLabel(hit.data.payPeriodLabel);
+          setTemplates(hit.data.templates);
+          setMembers(hit.data.members);
+          setLoading(false);
+          painted = true;
+        }
+      }
+      // Probed before the refetch so the stamp can only lag the data it
+      // describes, never lead it (see writeCacheAndStamp).
+      const stamp = empFingerprint ? await empFingerprint().catch(() => null) : null;
+      if (cancelled) return;
+      if (painted && empCacheKey && stamp != null) {
+        const saved = await swrReadFingerprint(empCacheKey);
+        // Even on a hit we still refresh people: it is the only source of
+        // `invites`, and it is one small query rather than four.
+        if (saved != null && saved === stamp) { void loadPeople(); return; }
+      }
+      await Promise.all([loadPeople(), loadTimesheets(), loadHourTotals(), loadTemplates()]);
+      if (!cancelled) setLoading(false);
+      empStampRef.current = stamp;
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id]);
+
+  // Persist whatever is on screen once a load settles, stamped with the state
+  // the fetch started from. Mutations reuse the individual loaders, so this
+  // keeps the cache current after edits too — with a stale stamp, which errs
+  // toward an extra refetch rather than serving data that moved on.
+  useEffect(() => {
+    if (!empCacheKey || loading) return;
+    void writeCacheAndStamp(
+      empCacheKey,
+      { employees, timesheets, hourTotals, payPeriodLabel, templates, members } satisfies EmployeesPageCache,
+      empStampRef.current,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empCacheKey, loading, employees, timesheets, hourTotals, payPeriodLabel, templates, members]);
 
   // Worker↔branch assignments for the active business (for per-branch scoping).
   useEffect(() => {
@@ -1238,6 +1316,7 @@ export default function EmpleadosPage() {
         boolean: tpl.field_type === 'boolean',
       }))}
       employees={empList}
+      loading={loading}
       timesheets={tsList}
       hourTotals={hourTotals}
       payPeriodLabel={payPeriodLabel}

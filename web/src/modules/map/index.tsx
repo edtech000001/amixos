@@ -9,6 +9,7 @@
 // only downloads when the user visits /dashboard/modulos/map.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { SkeletonRow } from '@amixos/shared/ui/Skeleton';
 import { useRouter } from 'next/navigation';
 import {
   GoogleMap,
@@ -1367,16 +1368,8 @@ function UnresolvedClientsModal({
       <div className="-mx-7 -my-6 flex flex-col" style={{ maxHeight: '70vh' }}>
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="py-12 flex items-center justify-center">
-              <div className="flex gap-1">
-                {[0, 1, 2].map(i => (
-                  <div
-                    key={i}
-                    className="w-2 h-2 rounded-full bg-primary animate-bounce"
-                    style={{ animationDelay: `${i * 0.15}s` }}
-                  />
-                ))}
-              </div>
+            <div className="flex flex-col">
+              {[0, 1, 2, 3, 4].map(i => <SkeletonRow key={i} />)}
             </div>
           ) : rows.length === 0 ? (
             <p className="text-xs text-faint italic text-center py-8">

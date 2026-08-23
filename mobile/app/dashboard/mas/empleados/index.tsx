@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { useDataFingerprint } from '@amixos/shared/lib/dataFingerprint';
 import {
   View,
   Text,
@@ -17,7 +18,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { queuedInsert } from '@/lib/offline/mutate';
 import { newUuid } from '@/lib/offline/ids';
 import { useApp } from '@/lib/AppContext';
-import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
+import { swrRead, swrWrite, swrReadFingerprint, writeCacheAndStamp } from '@amixos/shared/lib/swrCache';
 import { LocationSwitcher } from '@/components/LocationSwitcher';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
@@ -150,6 +151,18 @@ const EMPTY_TS = (): TsForm => ({
   job_description: '',
 });
 
+/** What the Empleados screen caches between visits. `invites` is deliberately
+ *  excluded — it comes from the API, not a table, so no fingerprint domain can
+ *  vouch for it; it is always refetched. */
+interface EmployeesPageCache {
+  employees: RawEmployee[];
+  timesheets: RawTimesheet[];
+  hourTotals: HourTotalItem[];
+  payPeriodLabel: string | null;
+  templates: FieldTemplate[];
+  members: AccessMember[];
+}
+
 export default function EmpleadosRoute() {
   const router = useRouter();
   const supabase = createSupabaseClient();
@@ -183,6 +196,9 @@ export default function EmpleadosRoute() {
   };
 
   const [employees, setEmployees] = useState<RawEmployee[]>([]);
+  // First load in flight — the list renders placeholders instead of the
+  // "no employees yet" empty state, which is otherwise indistinguishable.
+  const [loading, setLoading] = useState(true);
   // Worker↔branch links — scope the list to the active branch (borrowed workers
   // appear in both). Empty in single-location mode.
   const [empLocations, setEmpLocations] = useState<EmployeeLocation[]>([]);
@@ -375,19 +391,70 @@ export default function EmpleadosRoute() {
   // dedicated /nuevo and /[id] screens appear when the user navigates back.
   // Throttled: these are five whole-table reads — refreshing more than once
   // per few seconds (e.g. rapid tab switches) is pure waste.
+  // Cache-first, and the throttle stays: the roster changes rarely, so a focus
+  // now costs one fingerprint probe (migration 208) instead of four whole-table
+  // reads, and only refetches when something actually moved. `invites` comes
+  // from the API rather than a table, so no stamp can vouch for it — loadPeople
+  // runs on every focus regardless, which is also the one query that returns it.
+  const empCacheKey = business ? `employees_page_${business.id}` : null;
+  const empFingerprint = useDataFingerprint(
+    supabase, business?.id, ['employees', 'timesheets', 'jobs', 'templates'],
+  );
+  const empStampRef = useRef<string | null>(null);
+
   const lastFocusLoadRef = useRef(0);
   useFocusEffect(
     useCallback(() => {
       const now = Date.now();
       if (now - lastFocusLoadRef.current < 3_000) return;
       lastFocusLoadRef.current = now;
-      void loadPeople();
-      void loadTimesheets();
-      void loadHourTotals();
-      void loadTemplates();
+      let cancelled = false;
+      void (async () => {
+        let painted = false;
+        if (empCacheKey) {
+          const hit = await swrRead<EmployeesPageCache>(empCacheKey);
+          if (hit && !cancelled) {
+            setEmployees(hit.data.employees);
+            setTimesheets(hit.data.timesheets);
+            setHourTotals(hit.data.hourTotals);
+            setPayPeriodLabel(hit.data.payPeriodLabel);
+            setTemplates(hit.data.templates);
+            setMembers(hit.data.members);
+            setLoading(false);
+            painted = true;
+          }
+        }
+        // Probed before the refetch so the stamp can only lag the data it
+        // describes, never lead it (see writeCacheAndStamp).
+        const stamp = empFingerprint ? await empFingerprint().catch(() => null) : null;
+        if (cancelled) return;
+        if (painted && empCacheKey && stamp != null) {
+          const saved = await swrReadFingerprint(empCacheKey);
+          if (saved != null && saved === stamp) { void loadPeople(); return; }
+        }
+        await Promise.all([loadPeople(), loadTimesheets(), loadHourTotals(), loadTemplates()]);
+        if (!cancelled) setLoading(false);
+        empStampRef.current = stamp;
+      })();
       if (business) fetchEmployeeLocations(supabase, business.id).then(setEmpLocations).catch(() => setEmpLocations([]));
-    }, [business?.id, locale]),
+      return () => { cancelled = true; };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [business?.id, locale, empCacheKey, empFingerprint]),
   );
+
+  // Persist whatever is on screen once a load settles, stamped with the state
+  // the fetch started from. Mutations reuse the individual loaders, so this
+  // keeps the cache current after edits too — with a stale stamp, which errs
+  // toward an extra refetch rather than serving data that moved on.
+  useEffect(() => {
+    if (!empCacheKey || loading) return;
+    void writeCacheAndStamp(
+      empCacheKey,
+      { employees, timesheets, hourTotals, payPeriodLabel, templates, members } satisfies EmployeesPageCache,
+      empStampRef.current,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empCacheKey, loading, employees, timesheets, hourTotals, payPeriodLabel, templates, members]);
 
   const empList: EmployeeListItem[] = useMemo(
     () => {
@@ -1042,6 +1109,7 @@ export default function EmpleadosRoute() {
           boolean: tpl.field_type === 'boolean',
         }))}
         employees={empList}
+        loading={loading}
         timesheets={tsList}
         hourTotals={hourTotals}
         payPeriodLabel={payPeriodLabel}

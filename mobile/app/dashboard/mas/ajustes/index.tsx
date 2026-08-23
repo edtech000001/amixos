@@ -199,11 +199,10 @@ export default function AjustesIndex() {
           <Text className="text-2xl font-bold text-ink ml-1">{t.title}</Text>
         </View>
 
-        {/* Appearance — dark mode toggle */}
-        <Pressable
-          onPress={toggle}
-          className="flex-row items-center gap-3 px-4 py-4 mb-4 rounded-2xl border border-border-soft bg-card active:opacity-90"
-        >
+        {/* Appearance — dark mode toggle. The CARD is inert: only the switch
+            flips the theme. Making the whole row pressable meant brushing the
+            card while scrolling could silently invert the app. */}
+        <View className="flex-row items-center gap-3 px-4 py-4 mb-4 rounded-2xl border border-border-soft bg-card">
           <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
             {resolved === 'dark' ? <Moon size={18} color={c.primary} /> : <Sun size={18} color={c.primary} />}
           </View>
@@ -213,11 +212,21 @@ export default function AjustesIndex() {
               {resolved === 'dark' ? (es ? 'Modo oscuro' : 'Dark mode') : (es ? 'Modo claro' : 'Light mode')}
             </Text>
           </View>
-          {/* Pill switch */}
-          <View className={`w-12 h-7 rounded-full p-0.5 ${resolved === 'dark' ? 'bg-primary' : 'bg-border'}`}>
-            <View className={`w-6 h-6 rounded-full bg-card ${resolved === 'dark' ? 'ml-auto' : ''}`} />
-          </View>
-        </Pressable>
+          {/* Pill switch — hitSlop keeps it comfortable to hit without
+              enlarging the visible control. */}
+          <Pressable
+            onPress={toggle}
+            hitSlop={12}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: resolved === 'dark' }}
+            accessibilityLabel={es ? 'Apariencia' : 'Appearance'}
+            className="active:opacity-80"
+          >
+            <View className={`w-12 h-7 rounded-full p-0.5 ${resolved === 'dark' ? 'bg-primary' : 'bg-border'}`}>
+              <View className={`w-6 h-6 rounded-full bg-card ${resolved === 'dark' ? 'ml-auto' : ''}`} />
+            </View>
+          </Pressable>
+        </View>
 
         <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
           {items.map((item, i) => {

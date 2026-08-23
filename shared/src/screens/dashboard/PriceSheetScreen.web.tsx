@@ -7,6 +7,9 @@
 // overrides that autoprice reads via applicableRate().
 
 import { useEffect, useMemo, useState } from 'react';
+import { loadCachedThenFresh, writeCacheAndStamp } from '../../lib/swrCache';
+import { useDataFingerprint } from '../../lib/dataFingerprint';
+import { SkeletonList } from '../../ui/Skeleton';
 import { Plus, X, Trash2, Pencil, Copy, DollarSign, FileText, Search } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
@@ -87,20 +90,50 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
     })).sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })));
   };
 
-  // silent = refetch WITHOUT the spinner, so a post-save reload doesn't swap the
-  // list for a loader (which collapses the page height and resets scroll to top).
-  const load = async (silent = false) => {
-    if (!silent) setLoading(true);
+  // Price lists change rarely, so this screen is cache-first: the saved
+  // rows paint immediately and the query only re-runs when the
+  // data_fingerprint probe says price_sheet_items actually moved
+  // (migration 208) — including edits made by a teammate.
+  const cacheKey = businessId ? `price_sheet_${businessId}` : null;
+  const fingerprint = useDataFingerprint(supabase, businessId, ['price_sheets']);
+
+  const fetchRows = async (): Promise<PriceSheetRow[]> => {
     const { data } = await supabase
       .from('price_sheet_items')
       .select('id, name, category, pricing_mode, unit_label, rate, state_rates, client_rates, match_terms, is_addon, addon_inline, sort_order, active')
       .eq('business_id', businessId)
       .order('sort_order')
       .order('name');
-    setItems(((data ?? []) as PriceSheetRow[]).map(rowToPriceSheetItem));
+    return (data ?? []) as PriceSheetRow[];
+  };
+
+  // silent = refetch WITHOUT the spinner, so a post-save reload doesn't swap
+  // the list for a loader (which collapses the page height and resets
+  // scroll to top). Always re-stamps the cache so the next open is instant.
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
+    // Stamp captured before the refetch — see writeCacheAndStamp for why the
+    // order matters.
+    const stamp = fingerprint ? await fingerprint().catch(() => null) : null;
+    const rows = await fetchRows();
+    setItems(rows.map(rowToPriceSheetItem));
+    if (cacheKey) void writeCacheAndStamp(cacheKey, rows, stamp);
     if (!silent) setLoading(false);
   };
-  useEffect(() => { void load(); void loadClients(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [businessId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadCachedThenFresh<PriceSheetRow[]>({
+      cacheKey,
+      fingerprint,
+      fetcher: fetchRows,
+      cancelled: () => cancelled,
+      apply: (rows) => { setItems(rows.map(rowToPriceSheetItem)); setLoading(false); },
+    }).catch(() => setLoading(false));
+    void loadClients();
+    return () => { cancelled = true; };
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [businessId]);
 
   // Search filter across name, category, and match terms.
   const visibleItems = useMemo(() => {
@@ -246,9 +279,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="flex gap-1">{[0, 1, 2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
-        </div>
+        <SkeletonList rows={6} />
       ) : items.length === 0 ? (
         <div className="flex flex-col items-center py-16 text-center">
           <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-3"><DollarSign size={20} className="text-primary" /></div>

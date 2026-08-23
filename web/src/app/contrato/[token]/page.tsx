@@ -7,6 +7,7 @@
 // flow at /propuesta/[token].
 
 import { useEffect, useState } from 'react';
+import { SkeletonCard } from '@amixos/shared/ui/Skeleton';
 import { SignaturePad } from '@/components/SignaturePad';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/i18n/LangProvider';
@@ -87,11 +88,11 @@ export default function LeaseSignPage({ params }: { params: { token: string } })
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-surface">
-        <div className="flex gap-1">
-          {[0, 1, 2].map(i => (
-            <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-          ))}
+      <div className="min-h-screen bg-surface py-10 px-4">
+        <div className="max-w-3xl mx-auto flex flex-col gap-4">
+          <SkeletonCard lines={3} />
+          <SkeletonCard lines={10} />
+          <SkeletonCard lines={3} />
         </div>
       </div>
     );

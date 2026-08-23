@@ -6,6 +6,7 @@
 // bundler resolves this .web.tsx variant automatically.
 
 import { Fragment, memo, useEffect, useMemo, useState, type ReactNode, useRef } from 'react';
+import { SkeletonRow } from '../../ui/Skeleton';
 import { Plus, Search, Upload, Trash2, Phone, Mail, MapPin, Pencil, User, Users, X, Layers, Check, ListChecks } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { clientMatchesSearch, matchingContacts } from '../../lib/clientSearch';
@@ -381,9 +382,13 @@ export function ClientsListScreen({
           {serverMode ? (
             <>
               {loadingMore ? (
-                <div className="flex items-center justify-center py-6">
-                  <div className="flex gap-1">{[0, 1, 2].map((i) => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
-                </div>
+                <>
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="border-t border-border-soft">
+                      <SkeletonRow />
+                    </div>
+                  ))}
+                </>
               ) : null}
               <div ref={sentinelRef} className="h-1" />
             </>

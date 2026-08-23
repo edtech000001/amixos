@@ -9,6 +9,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { SkeletonCard, SkeletonDetail } from '@amixos/shared/ui/Skeleton';
 import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -463,7 +464,14 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
 
   // ─── Render ───────────────────────────────────────────────────────
   if (loading) {
-    return <div className="p-6 text-sm text-faint">{tc.states.loading}...</div>;
+    return (
+      <div className="p-6 max-w-4xl">
+        <SkeletonDetail>
+          <SkeletonCard lines={5} />
+          <SkeletonCard lines={4} />
+        </SkeletonDetail>
+      </div>
+    );
   }
   if (notFound || !employee) {
     return (

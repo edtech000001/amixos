@@ -18,6 +18,7 @@ import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { roleLabel } from '../../lib/permissions';
 import type { AccessStatus } from '../../lib/teamPeople';
 import { splitMultiValue } from '../../lib/fieldTemplates';
+import { SkeletonList } from '../../ui/Skeleton';
 
 export interface EmployeeListItem {
   id: string;
@@ -101,6 +102,9 @@ export interface EmployeesScreenProps {
   bulkDeleting?: boolean;
   /** Optional slot for modals/dialogs rendered on web. */
   modalsSlot?: ReactNode;
+  /** First load still in flight. Renders placeholders instead of the empty
+   *  state — an empty roster and an unloaded one look identical otherwise. */
+  loading?: boolean;
   /** Custom-field definitions (from employee_field_templates) — drive the
    *  filter panel so deleted fields never appear and labels are the real
    *  field names, not the snake_case keys. */
@@ -124,6 +128,7 @@ export function EmployeesScreen({
   bulkDeleting,
   customFieldDefs,
   modalsSlot,
+  loading,
 }: EmployeesScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.employees;
@@ -482,7 +487,9 @@ export function EmployeesScreen({
             </div>
           </div>
         ) : null}
-        {employees.length === 0 ? (
+        {loading && employees.length === 0 ? (
+          <SkeletonList rows={6} />
+        ) : employees.length === 0 ? (
           <div className="flex flex-col items-center py-20">
             <UserCheck size={40} className="text-faint" />
             <p className="text-sm text-faint mt-3">{t.emptyEmployees}</p>
@@ -582,7 +589,9 @@ export function EmployeesScreen({
               {t.hoursThisPeriod.replace('{{period}}', payPeriodLabel)}
             </p>
           ) : null}
-          {(hourTotals ?? []).length === 0 ? (
+          {loading && (hourTotals ?? []).length === 0 ? (
+            <SkeletonList rows={5} />
+          ) : (hourTotals ?? []).length === 0 ? (
             <div className="flex flex-col items-center py-20">
               <ClipboardList size={40} className="text-faint" />
               <p className="text-sm text-faint mt-3">{t.emptyHourTotals}</p>
@@ -634,7 +643,9 @@ export function EmployeesScreen({
               </button>
             ) : null}
           </div>
-          {filteredTimesheets.length === 0 ? (
+          {loading && timesheets.length === 0 ? (
+            <SkeletonList rows={6} />
+          ) : filteredTimesheets.length === 0 ? (
             <div className="flex flex-col items-center py-20">
               <ClipboardList size={40} className="text-faint" />
               <p className="text-sm text-faint mt-3">{tsSearch ? t.hoursNoResults : t.emptyTimesheets}</p>

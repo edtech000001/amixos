@@ -7,6 +7,7 @@
 // so web and mobile behave identically.
 
 import { useCallback, useEffect, useState } from 'react';
+import { SkeletonBlock, SkeletonStats, SkeletonCard, SkeletonList, SkeletonDetail } from '@amixos/shared/ui/Skeleton';
 import { useRouter } from 'next/navigation';
 import { Clock, MapPin, Play, CheckCircle2, CalendarDays, Briefcase, Timer, type LucideIcon } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -126,11 +127,13 @@ export function FieldHome() {
   };
 
   if (appLoading || loading) {
+    // Greeting, clock-in card, hour tiles, then the assigned-jobs list.
     return (
-      <div className="p-8 flex items-center justify-center min-h-[60vh]">
-        <div className="flex gap-1">
-          {[0, 1, 2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}
-        </div>
+      <div className="p-6 lg:p-8 flex flex-col gap-4">
+        <SkeletonBlock className="h-7 w-56" />
+        <SkeletonCard lines={2} />
+        <SkeletonStats count={3} />
+        <SkeletonList rows={4} />
       </div>
     );
   }

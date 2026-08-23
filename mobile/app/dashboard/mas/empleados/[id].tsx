@@ -4,6 +4,7 @@
 // view ↔ edit, access section, history timeline.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { SkeletonBlock, SkeletonCard } from '@amixos/shared/ui/Skeleton';
 import {
   View,
   Text,
@@ -699,9 +700,11 @@ export default function EmpleadoDetailRoute() {
     return (
       <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
         <Header onBack={goBack} />
-        <View className="flex-1 items-center justify-center">
-          <Text className="text-sm text-faint">{tc.states.loading}...</Text>
-        </View>
+        <ScrollView className="flex-1" contentContainerStyle={{ padding: 24, gap: 16 }}>
+          <SkeletonBlock className="h-7 w-52" />
+          <SkeletonCard lines={5} />
+          <SkeletonCard lines={4} />
+        </ScrollView>
       </SafeAreaView>
     );
   }

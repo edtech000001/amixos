@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { SkeletonBlock, SkeletonCard } from '@amixos/shared/ui/Skeleton';
 import {
   View,
   Text,
@@ -1912,8 +1913,13 @@ export default function NuevoTrabajoRoute() {
 
   if (loadingEdit) {
     return (
-      <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={['top']}>
-        <ActivityIndicator color={c.primary} />
+      <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+        <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }}>
+          <SkeletonBlock className="h-7 w-56" />
+          <SkeletonCard lines={5} />
+          <SkeletonCard lines={4} />
+          <SkeletonCard lines={3} />
+        </ScrollView>
       </SafeAreaView>
     );
   }

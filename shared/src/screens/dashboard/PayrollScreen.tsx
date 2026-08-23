@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, type ReactNode } from 'react';
+import { SkeletonList } from '../../ui/Skeleton';
 import { View, Text, Pressable, ScrollView, TextInput, Modal as RNModal, Alert, Keyboard, useWindowDimensions, KeyboardAvoidingView, Platform } from 'react-native';
 import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, Wrench, Truck, Clock, Settings, List, LayoutGrid, History, Trash2, Pencil, Search, ChevronDown } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -640,11 +641,7 @@ export function PayrollScreen({
 
         {/* Worker rows */}
         {loading ? (
-          <View className="items-center py-10">
-            <View className="flex-row gap-1">
-              {[0, 1, 2].map(i => <View key={i} className="w-2 h-2 rounded-full bg-primary" />)}
-            </View>
-          </View>
+          <SkeletonList rows={6} />
         ) : rows.length === 0 ? (
           <Text className="text-sm text-faint text-center py-10">{t.empty}</Text>
         ) : view === 'grid' ? (

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SkeletonRow } from '../../ui/Skeleton';
 import { View, Text, Pressable, ScrollView, Modal as RNModal, Platform } from 'react-native';
 import {
   UserPlus,
@@ -123,11 +124,13 @@ export function TeamScreen({
       </Text>
       <View className="bg-card rounded-2xl border border-border-soft overflow-hidden mb-5">
         {loading ? (
-          <View className="px-5 py-8 items-center">
-            <View className="flex-row gap-1">
-              {[0,1,2].map(i => <View key={i} className="w-2 h-2 rounded-full bg-primary" />)}
-            </View>
-          </View>
+          <>
+            {[0, 1, 2].map(i => (
+              <View key={i} className={i > 0 ? 'border-t border-border-soft' : undefined}>
+                <SkeletonRow />
+              </View>
+            ))}
+          </>
         ) : members.length === 0 ? (
           <View className="px-5 py-8">
             <Text className="text-sm text-faint text-center">{t.noMembersYet}</Text>

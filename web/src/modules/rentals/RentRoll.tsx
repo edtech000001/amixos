@@ -12,6 +12,7 @@
 // and YTD are cash by payment/expense date.
 
 import { useEffect, useMemo, useState } from 'react';
+import { SkeletonBlock, SkeletonStats, SkeletonChart, SkeletonList } from '@amixos/shared/ui/Skeleton';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
@@ -281,10 +282,14 @@ export function RentRoll({ supabase, businessId, properties, tenants, leases, lo
     </div>
   );
 
+  // Month stepper, KPI grid, the 12-month chart, then the rent-roll table.
   if (loading || dataLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="flex gap-1">{[0, 1, 2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
+      <div className="flex flex-col gap-4">
+        <SkeletonBlock className="h-9 w-56 rounded-xl" />
+        <SkeletonStats count={6} />
+        <SkeletonChart />
+        <SkeletonList rows={6} />
       </div>
     );
   }

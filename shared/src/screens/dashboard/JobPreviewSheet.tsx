@@ -5,6 +5,7 @@
 // the card scrolls (see CLAUDE.md).
 
 import { useEffect, useState } from 'react';
+import { SkeletonCard } from '../../ui/Skeleton';
 import { View, Text, Pressable, ScrollView, ActivityIndicator, Modal as RNModal } from 'react-native';
 import { X, ArrowRight, Calendar, Clock } from 'lucide-react-native';
 import { useLang } from '../../i18n';
@@ -120,7 +121,7 @@ export function JobPreviewSheet({ supabase, jobId, onClose, onOpenFull }: JobPre
           </View>
 
           {loading ? (
-            <View className="items-center py-10"><ActivityIndicator color={c.primary} /></View>
+            <SkeletonCard lines={5} />
           ) : job ? (
             <ScrollView keyboardShouldPersistTaps="handled">
               <View className="flex-row items-center gap-2 flex-wrap mb-3">

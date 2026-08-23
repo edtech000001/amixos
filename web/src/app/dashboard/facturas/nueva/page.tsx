@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { SkeletonBlock, SkeletonCard } from '@amixos/shared/ui/Skeleton';
 import { formatMoneyInput, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { Trash2, ArrowLeft, X, Search, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
@@ -62,7 +63,13 @@ function addDaysISO(iso: string, days: number): string {
 
 export default function NuevaFacturaPage() {
   return (
-    <Suspense fallback={<div className="p-6">…</div>}>
+    <Suspense fallback={
+      <div className="p-6 max-w-4xl flex flex-col gap-4">
+        <SkeletonBlock className="h-7 w-64" />
+        <SkeletonCard lines={5} />
+        <SkeletonCard lines={4} />
+      </div>
+    }>
       <NuevaFacturaContent />
     </Suspense>
   );
@@ -516,8 +523,11 @@ function NuevaFacturaContent() {
 
   if (loadingEdit) {
     return (
-      <div className="p-6 max-w-4xl">
-        <p className="text-sm text-faint">…</p>
+      <div className="p-6 max-w-4xl flex flex-col gap-4">
+        <SkeletonBlock className="h-7 w-64" />
+        <SkeletonCard lines={5} />
+        <SkeletonCard lines={4} />
+        <SkeletonCard lines={3} />
       </div>
     );
   }

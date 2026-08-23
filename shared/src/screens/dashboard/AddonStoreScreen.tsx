@@ -1,4 +1,5 @@
 import { View, Text, ScrollView, Pressable, TextInput } from 'react-native';
+import { SkeletonCard } from '../../ui/Skeleton';
 import { useMemo, useState } from 'react';
 import { Check, Search } from 'lucide-react-native';
 import { useLang } from '../../i18n';
@@ -144,12 +145,8 @@ export function AddonStoreScreen({
       </ScrollView>
 
       {loading ? (
-        <View className="py-10 items-center">
-          <View className="flex-row gap-1">
-            {[0, 1, 2].map(i => (
-              <View key={i} className="w-2 h-2 rounded-full bg-primary" />
-            ))}
-          </View>
+        <View className="gap-4">
+          {[0, 1, 2, 3].map(i => <SkeletonCard key={i} lines={3} />)}
         </View>
       ) : (
         filtered.length === 0 ? (

@@ -5,6 +5,7 @@
 // automatically instead of rendering the RN version through react-native-web.
 
 import { useEffect, useState } from 'react';
+import { SkeletonRow } from '../../ui/Skeleton';
 import { Briefcase, DollarSign, UserCheck, UserX, FileText, Award } from 'lucide-react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useLang } from '../../i18n';
@@ -65,16 +66,8 @@ export function EmployeeHistoryView({ supabase, employeeId }: Props) {
 
   if (entries === null) {
     return (
-      <div className="py-8 flex items-center justify-center">
-        <div className="flex gap-1">
-          {[0, 1, 2].map(i => (
-            <div
-              key={i}
-              className="w-2 h-2 rounded-full bg-primary animate-bounce"
-              style={{ animationDelay: `${i * 0.15}s` }}
-            />
-          ))}
-        </div>
+      <div className="flex flex-col">
+        {[0, 1, 2].map(i => <SkeletonRow key={i} />)}
       </div>
     );
   }

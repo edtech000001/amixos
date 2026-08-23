@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { SkeletonRow } from '../../ui/Skeleton';
 import { View, Text, Pressable, ScrollView, Platform } from 'react-native';
 import {
   ChevronLeft,
@@ -493,7 +494,17 @@ export function CalendarScreen({
         {/* Agenda list for the focused day */}
         <View className="mt-6" onLayout={e => { agendaYRef.current = e.nativeEvent.layout.y; }}>
           <AgendaHeader day={agendaDay} count={agendaItems.length} dateLocale={dateLocale} t={t} />
-          {agendaItems.length === 0 ? (
+          {loading && agendaItems.length === 0 ? (
+            /* Events still loading: row placeholders instead of the "nothing
+               scheduled" empty state, which reads as a fact. */
+            <View className="gap-2">
+              {[0, 1, 2].map(i => (
+                <View key={i} className="bg-card rounded-2xl border border-border-soft">
+                  <SkeletonRow />
+                </View>
+              ))}
+            </View>
+          ) : agendaItems.length === 0 ? (
             canEdit ? (
               <Pressable
                 onPress={() => openNew(agendaDay)}

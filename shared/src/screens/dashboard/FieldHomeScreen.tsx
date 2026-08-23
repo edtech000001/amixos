@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from 'react';
+import { SkeletonBlock, SkeletonStats, SkeletonCard, SkeletonList } from '../../ui/Skeleton';
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { Clock, MapPin, Play, CheckCircle2, CalendarDays, Briefcase, Timer, type LucideIcon } from 'lucide-react-native';
 import { useLang } from '../../i18n';
@@ -70,12 +71,14 @@ export function FieldHomeScreen({
   const [hoursView, setHoursView] = useState<HoursView>('active');
 
   if (loading) {
+    // Greeting, clock-in card, hour tiles, then the assigned-jobs list.
     return (
-      <View className="flex-1 items-center justify-center bg-surface py-20">
-        <View className="flex-row gap-1">
-          {[0, 1, 2].map(i => <View key={i} className="w-2 h-2 rounded-full bg-primary" />)}
-        </View>
-      </View>
+      <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ padding: 24, gap: 16 }}>
+        <SkeletonBlock className="h-7 w-48" />
+        <SkeletonCard lines={2} />
+        <SkeletonStats count={3} />
+        <SkeletonList rows={3} />
+      </ScrollView>
     );
   }
 

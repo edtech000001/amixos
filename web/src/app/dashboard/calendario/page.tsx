@@ -88,6 +88,9 @@ export default function CalendarioPage() {
   const canEdit = can.editCalendar(currentRole);
 
   const [items, setItems] = useState<CalItem[]>([]);
+  // Events for the visible range still in flight — the agenda shows row
+  // placeholders instead of "nothing scheduled".
+  const [loading, setLoading] = useState(true);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
   const [leads, setLeads] = useState<{ id: string; name: string }[]>([]);
   const rangeRef = useRef<{ start: Date; end: Date } | null>(null);
@@ -187,7 +190,12 @@ export default function CalendarioPage() {
 
   const load = useCallback(
     async (start: Date, end: Date) => {
-      setItems(await fetchItems(start, end));
+      setLoading(true);
+      try {
+        setItems(await fetchItems(start, end));
+      } finally {
+        setLoading(false);
+      }
     },
     [fetchItems],
   );
@@ -246,6 +254,7 @@ export default function CalendarioPage() {
   return (
     <CalendarScreen
       items={items}
+      loading={loading}
       clients={clients}
       leads={leads}
       onRangeChange={onRangeChange}

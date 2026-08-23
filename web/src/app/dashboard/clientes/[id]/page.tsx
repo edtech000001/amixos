@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useRef, useState } from 'react';
+import { SkeletonBlock, SkeletonStats, SkeletonCard, SkeletonList, SkeletonDetail } from '@amixos/shared/ui/Skeleton';
 import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -483,9 +484,14 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
     setContacts(prev => prev.filter(c => c.id !== ctId));
   };
 
+  // Header, contact card, then the jobs / invoices panels.
   if (loading) return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i*0.15}s` }}/>)}</div>
+    <div className="p-6">
+      <SkeletonDetail>
+        <SkeletonStats count={3} />
+        <SkeletonCard lines={5} />
+        <SkeletonList rows={4} />
+      </SkeletonDetail>
     </div>
   );
   if (!client) return <div className="p-6 text-faint">{t.notFound}</div>;

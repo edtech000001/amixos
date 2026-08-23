@@ -4,6 +4,7 @@
 // an active employee.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { SkeletonCard, SkeletonRow } from '@amixos/shared/ui/Skeleton';
 import {
   View,
   Text,
@@ -1092,10 +1093,8 @@ export default function EquipmentScreen() {
         ItemSeparatorComponent={() => <View className="h-3" />}
         ListEmptyComponent={
           loading && equipment.length === 0 ? (
-            <View className="items-center py-16">
-              <View className="flex-row gap-1">
-                {[0, 1, 2].map(i => (<View key={i} className="w-2 h-2 rounded-full bg-primary" />))}
-              </View>
+            <View className="gap-3">
+              {[0, 1, 2, 3].map(i => <SkeletonCard key={i} lines={3} />)}
             </View>
           ) : (
             <View className="bg-card rounded-2xl border border-border-soft p-8 items-center">
@@ -1114,10 +1113,8 @@ export default function EquipmentScreen() {
         onEndReached={() => { if (hasMore && !loadingMore) void loadMore(); }}
         ListFooterComponent={
           loadingMore ? (
-            <View className="items-center py-6">
-              <View className="flex-row gap-1">
-                {[0, 1, 2].map(i => (<View key={i} className="w-2 h-2 rounded-full bg-primary" />))}
-              </View>
+            <View>
+              {[0, 1, 2].map(i => <SkeletonRow key={i} />)}
             </View>
           ) : null
         }

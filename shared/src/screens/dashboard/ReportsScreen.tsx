@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { SkeletonBlock, SkeletonStats, SkeletonChart } from '../../ui/Skeleton';
+import { useBarScrub } from '../../ui/useBarScrub';
+import { niceCeil, axisTick } from '../../lib/chartAxis';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { DollarSign, FileText, ClipboardList, Clock, BarChart3, CalendarRange, ChevronRight, MapPin, Wallet, PiggyBank } from 'lucide-react-native';
 import { ChipScroll } from '../../ui/ChipScroll';
@@ -34,6 +37,14 @@ function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(cents);
 }
 
+/** Plot height of the revenue chart, and how many bands the Y axis is cut into. */
+const CHART_H = 120;
+const CHART_TICKS = 4;
+/** Fixed tooltip box — the width centres the bubble over its bar, the height
+ *  keeps it inside the plot when a bar reaches the top gridline. */
+const BUBBLE_W = 84;
+const BUBBLE_H = 24;
+
 const KPI_BG: Record<string, string> = {
   emerald: 'bg-emerald-500/10', amber: 'bg-amber-500/10', indigo: 'bg-indigo-500/10', purple: 'bg-purple-500/10',
   red: 'bg-red-500/10', blue: 'bg-blue-500/10',
@@ -43,6 +54,31 @@ const KPI_COLOR: Record<string, string> = {
   red: '#DC2626', blue: '#2563EB',
 };
 
+// Section / Kpi live at module scope on purpose. Declared inside the component
+// they would be a NEW component type on every render, so React would unmount
+// and remount every section's subtree on each state change — which tore down
+// the revenue chart's gesture overlay mid-scrub and made the hold-and-drag
+// readout drop out constantly.
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <View className="bg-card rounded-2xl border border-border-soft p-5 mb-4">
+      <Text className="text-sm font-bold text-ink mb-4">{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+function Kpi({ icon, label, value, sub, color }: { icon: React.ReactNode; label: string; value: string; sub?: string; color: string }) {
+  return (
+    <View className="bg-card rounded-2xl border border-border-soft p-4" style={{ width: '48%' }}>
+      <View className={`w-9 h-9 rounded-xl items-center justify-center mb-2 ${KPI_BG[color]}`}>{icon}</View>
+      <Text className="text-xl font-black text-ink">{value}</Text>
+      <Text className="text-xs text-muted mt-0.5">{label}</Text>
+      {sub ? <Text className="text-[11px] text-faint mt-0.5" numberOfLines={1}>{sub}</Text> : null}
+    </View>
+  );
+}
+
 export function ReportsScreen({ loading, range, onRangeChange, metrics, inventoryEnabled, customFrom, customTo, onCustomChange, onOpenPayroll }: ReportsScreenProps) {
   const { t: full } = useLang();
   const c = useThemeColors();
@@ -51,13 +87,20 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
   const tdate = full.dashboard.jobs.dateFilter; // reuse the date-filter labels
   const dateLocale = full.dashboard.dateLocale;
   const [dateOpen, setDateOpen] = useState(false);
+  // Hold-and-drag readout for the revenue chart. Bars are flush (no flex gap),
+  // so the default gap of 0 maps x → bar directly.
+  const scrub = useBarScrub({ count: metrics?.monthlyRevenue.length ?? 0 });
   const customActive = !!customFrom || !!customTo;
 
   if (loading || !metrics) {
+    // Range chips, KPI tiles, then the chart cards.
     return (
-      <View className="flex-1 items-center justify-center bg-surface py-20">
-        <View className="flex-row gap-1">{[0, 1, 2].map(i => <View key={i} className="w-2 h-2 rounded-full bg-primary" />)}</View>
-      </View>
+      <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ padding: 24, gap: 16 }}>
+        <SkeletonBlock className="h-9 w-full rounded-xl" />
+        <SkeletonStats count={6} />
+        <SkeletonChart />
+        <SkeletonChart />
+      </ScrollView>
     );
   }
   const m = metrics;
@@ -71,24 +114,14 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
     return jobsTabs[k] ?? status;
   };
 
-  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <View className="bg-card rounded-2xl border border-border-soft p-5 mb-4">
-      <Text className="text-sm font-bold text-ink mb-4">{title}</Text>
-      {children}
-    </View>
-  );
-
-  const Kpi = ({ icon, label, value, sub, color }: { icon: React.ReactNode; label: string; value: string; sub?: string; color: string }) => (
-    <View className="bg-card rounded-2xl border border-border-soft p-4" style={{ width: '48%' }}>
-      <View className={`w-9 h-9 rounded-xl items-center justify-center mb-2 ${KPI_BG[color]}`}>{icon}</View>
-      <Text className="text-xl font-black text-ink">{value}</Text>
-      <Text className="text-xs text-muted mt-0.5">{label}</Text>
-      {sub ? <Text className="text-[11px] text-faint mt-0.5" numberOfLines={1}>{sub}</Text> : null}
-    </View>
-  );
-
   // Revenue bars
   const maxRev = Math.max(1, ...m.monthlyRevenue.map(x => x.revenue));
+  // Bars scale to the rounded axis top, not the raw peak, so the tallest
+  // bar lines up with a gridline instead of floating above all of them.
+  const axisMax = niceCeil(maxRev);
+  // A zero month still gets a 2px stub so the axis reads as a series.
+  const barHeight = (revenue: number) =>
+    Math.max(revenue > 0 ? 4 : 2, Math.round((revenue / axisMax) * CHART_H));
   const revEmpty = m.monthlyRevenue.every(x => x.revenue === 0);
   // Job status bars
   const maxJob = Math.max(1, ...m.jobStatus.map(x => x.value));
@@ -170,15 +203,90 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
             <Text className="text-sm text-faint mt-2">{t.empty.revenue}</Text>
           </View>
         ) : (
-          <View className="flex-row items-end justify-between" style={{ height: 140 }}>
-            {m.monthlyRevenue.map((x, i) => (
-              <View key={i} className="flex-1 items-center justify-end" style={{ height: '100%' }}>
-                <View className="w-full px-0.5 justify-end" style={{ height: 110 }}>
-                  <View className="bg-primary rounded-t-md w-full" style={{ height: Math.max(x.revenue > 0 ? 4 : 2, Math.round((x.revenue / maxRev) * 110)) }} />
+          <View className="flex-row">
+            {/* Y axis — same rounded ticks the web chart shows, top value first. */}
+            <View style={{ width: 44, height: CHART_H }}>
+              {Array.from({ length: CHART_TICKS + 1 }, (_, i) => (
+                <Text
+                  key={i}
+                  className="text-[9px] text-faint"
+                  // Absolute, not space-between: the gridlines below use the
+                  // same top = i × band formula, so label and line always meet.
+                  style={{ position: 'absolute', top: (CHART_H / CHART_TICKS) * i - 5, right: 8 }}
+                >
+                  {axisTick((axisMax / CHART_TICKS) * (CHART_TICKS - i))}
+                </Text>
+              ))}
+            </View>
+
+            <View className="flex-1">
+              <View style={{ height: CHART_H }}>
+                {/* Gridlines behind the bars */}
+                {Array.from({ length: CHART_TICKS + 1 }, (_, i) => (
+                  <View
+                    key={i}
+                    className="absolute left-0 right-0 h-px bg-border-soft"
+                    style={{ top: (CHART_H / CHART_TICKS) * i }}
+                  />
+                ))}
+
+                <View className="flex-row items-end" style={{ height: CHART_H }}>
+                  {m.monthlyRevenue.map((x, i) => (
+                    <View key={i} className="flex-1 justify-end" style={{ height: CHART_H }}>
+                      <View className="w-full px-0.5">
+                        <View
+                          className={`rounded-t-md w-full ${scrub.active === i ? 'bg-primary' : 'bg-primary/80'}`}
+                          style={{ height: barHeight(x.revenue) }}
+                        />
+                      </View>
+                    </View>
+                  ))}
                 </View>
-                <Text className="text-[10px] text-faint mt-1">{x.name}</Text>
+
+                {/* One bubble for the whole plot, not one per column: a column
+                    is ~30px wide and Android clips children that overflow, so
+                    a per-column tooltip would lose its own edges. */}
+                {scrub.active !== null && scrub.width > 0 && m.monthlyRevenue[scrub.active] ? (
+                  <View
+                    className="absolute bg-ink rounded-lg px-2 py-1"
+                    style={{
+                      width: BUBBLE_W,
+                      // Sits above the bar, but never past the top of the plot
+                      // — Android clips children that overflow their parent, so
+                      // a full-height bar tucks the bubble just inside instead.
+                      bottom: Math.min(
+                        barHeight(m.monthlyRevenue[scrub.active].revenue) + 6,
+                        CHART_H - BUBBLE_H,
+                      ),
+                      left: Math.min(
+                        Math.max(0, ((scrub.active + 0.5) / m.monthlyRevenue.length) * scrub.width - BUBBLE_W / 2),
+                        Math.max(0, scrub.width - BUBBLE_W),
+                      ),
+                    }}
+                  >
+                    <Text className="text-[10px] font-bold text-surface text-center" numberOfLines={1}>
+                      {fmt(m.monthlyRevenue[scrub.active].revenue)}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {/* Transparent touch layer: hold, then slide across the bars.
+                    It owns the gesture (see useBarScrub) and has no children,
+                    so locationX maps cleanly onto a bar index. */}
+                <View className="absolute left-0 right-0 top-0 bottom-0" {...scrub.handlers} />
               </View>
-            ))}
+
+              <View className="flex-row">
+                {m.monthlyRevenue.map((x, i) => (
+                  <Text
+                    key={i}
+                    className={`flex-1 text-center text-[10px] mt-1 ${scrub.active === i ? 'text-primary font-semibold' : 'text-faint'}`}
+                  >
+                    {x.name}
+                  </Text>
+                ))}
+              </View>
+            </View>
           </View>
         )}
       </Section>

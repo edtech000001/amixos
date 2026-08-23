@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { SkeletonCard, SkeletonDetail } from '../../ui/Skeleton';
 import { View, Text, Pressable, ScrollView, Image, Modal as RNModal } from 'react-native';
 import {
   ArrowLeft,
@@ -273,14 +274,14 @@ export function InvoiceDetailScreen({
   // null = auto (expand short lists, collapse 3+); a tap pins the choice.
 
   if (loading) {
+    // Header block, then the document card and its line items / totals.
     return (
-      <View className="flex-1 items-center justify-center bg-surface py-20">
-        <View className="flex-row gap-1">
-          {[0, 1, 2].map(i => (
-            <View key={i} className="w-2 h-2 rounded-full bg-primary" />
-          ))}
-        </View>
-      </View>
+      <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ padding: 24 }}>
+        <SkeletonDetail>
+          <SkeletonCard lines={2} />
+          <SkeletonCard lines={8} />
+        </SkeletonDetail>
+      </ScrollView>
     );
   }
 

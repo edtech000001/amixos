@@ -5,6 +5,7 @@
 // resolves this .web.tsx variant automatically.
 
 import { useState } from 'react';
+import { SkeletonCard, SkeletonDetail } from '../../ui/Skeleton';
 import {
   ArrowLeft,
   Eye,
@@ -266,14 +267,12 @@ export function InvoiceDetailScreen({
   // null = auto (expand short lists, collapse 3+); a click pins the choice.
 
   if (loading) {
+    // Back arrow + invoice title, then the document card and its totals block.
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="flex gap-1">
-          {[0, 1, 2].map(i => (
-            <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-          ))}
-        </div>
-      </div>
+      <SkeletonDetail>
+        <SkeletonCard lines={2} />
+        <SkeletonCard lines={8} />
+      </SkeletonDetail>
     );
   }
 
@@ -320,7 +319,8 @@ export function InvoiceDetailScreen({
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <button type="button" onClick={onBack} className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+          <button type="button" onClick={onBack} title={ui.common.buttons.back} aria-label={ui.common.buttons.back}
+            className="p-2 rounded-xl hover:bg-border-soft transition-colors">
             <ArrowLeft size={18} className="text-muted" />
           </button>
           <div>
@@ -363,22 +363,26 @@ export function InvoiceDetailScreen({
             </button>
           ) : null}
           {onShareLink ? (
-            <button type="button" onClick={onShareLink} className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+            <button type="button" onClick={onShareLink} title={tInv.shareLinkAction} aria-label={tInv.shareLinkAction}
+              className="p-2 rounded-xl hover:bg-border-soft transition-colors">
               <Link2 size={18} className="text-muted" />
             </button>
           ) : null}
           {onPrint ? (
-            <button type="button" onClick={onPrint} className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+            <button type="button" onClick={onPrint} title={tInv.printBtn} aria-label={tInv.printBtn}
+              className="p-2 rounded-xl hover:bg-border-soft transition-colors">
               <Printer size={18} className="text-muted" />
             </button>
           ) : null}
           {onEdit && canEdit ? (
-            <button type="button" onClick={onEdit} className="p-2 rounded-xl hover:bg-border-soft transition-colors">
+            <button type="button" onClick={onEdit} title={ui.common.buttons.edit} aria-label={ui.common.buttons.edit}
+              className="p-2 rounded-xl hover:bg-border-soft transition-colors">
               <Pencil size={18} className="text-muted" />
             </button>
           ) : null}
           {onDelete ? (
-            <button type="button" onClick={onDelete} className="p-2 rounded-xl hover:bg-red-500/10 transition-colors">
+            <button type="button" onClick={onDelete} title={ui.common.buttons.delete} aria-label={ui.common.buttons.delete}
+              className="p-2 rounded-xl hover:bg-red-500/10 transition-colors">
               <Trash2 size={18} className="text-red-500" />
             </button>
           ) : null}

@@ -5,6 +5,7 @@
 // ledger math comes from shared/lib/rentals.ts.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { SkeletonStats, SkeletonCard, SkeletonList } from '@amixos/shared/ui/Skeleton';
 import { confirm } from '@amixos/shared/ui/confirmBus';
 import {
   ArrowLeft, BadgeX, Camera, ChevronDown, ChevronLeft, ChevronRight, FileText,
@@ -1379,8 +1380,10 @@ export function PropertyDetail({
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="flex gap-1">{[0, 1, 2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
+        <div className="flex flex-col gap-4">
+          <SkeletonStats count={4} />
+          <SkeletonCard lines={5} />
+          <SkeletonList rows={4} />
         </div>
       ) : null}
 

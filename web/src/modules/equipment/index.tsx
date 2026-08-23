@@ -7,6 +7,7 @@
 // component is the UI on top.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { SkeletonCard, SkeletonRow } from '@amixos/shared/ui/Skeleton';
 import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import {
   Forklift,
@@ -827,8 +828,8 @@ export default function EquipmentModule() {
       </div>
 
       {loading && equipment.length === 0 ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="flex gap-1">{[0, 1, 2].map((i) => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {[0, 1, 2, 3, 4, 5].map((i) => <SkeletonCard key={i} lines={3} />)}
         </div>
       ) : filtered.length === 0 ? (
         <div className="bg-card rounded-2xl border border-border-soft p-10 text-center">
@@ -912,8 +913,8 @@ export default function EquipmentModule() {
           {modeRef.current === 'page' ? (
             <>
               {loadingMore ? (
-                <div className="flex items-center justify-center py-4">
-                  <div className="flex gap-1">{[0, 1, 2].map((i) => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
+                <div className="flex flex-col">
+                  {[0, 1, 2].map((i) => <SkeletonRow key={i} />)}
                 </div>
               ) : null}
               <div ref={sentinelRef} className="h-1" />

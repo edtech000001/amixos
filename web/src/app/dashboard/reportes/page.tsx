@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState, useMemo } from 'react';
+import { SkeletonBlock, SkeletonStat, SkeletonChart } from '@amixos/shared/ui/Skeleton';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -16,6 +17,8 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { fetchReportsMetricsServer, type ReportsMetrics, type ReportRange } from '@amixos/shared/lib/reports';
+import { useSwr } from '@amixos/shared/lib/swrCache';
+import { useDataFingerprint } from '@amixos/shared/lib/dataFingerprint';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -165,27 +168,45 @@ export default function ReportesPage() {
   // full-table downloads; range changes refetch (tiny payloads). The payroll
   // estimate — incl. totalHours — uses the payroll engine (job + driver
   // credits), matching mobile and the Nómina page.
-  useEffect(() => {
-    if (!business) return;
-    let cancelled = false;
-    setLoading(true);
-    fetchReportsMetricsServer({
+  // Cached with a freshness probe: the report opens instantly from the last
+  // payload, and the expensive aggregate RPCs only re-run when data_fingerprint
+  // says something behind them actually moved (migration 208). Reports are
+  // derived from these five domains, so a new invoice, a logged hour or an
+  // edited job all invalidate it — including changes made by teammates.
+  const reportsFingerprint = useDataFingerprint(
+    supabase, business?.id,
+    inventoryEnabled
+      ? ['jobs', 'invoices', 'clients', 'employees', 'timesheets', 'inventory']
+      : ['jobs', 'invoices', 'clients', 'employees', 'timesheets'],
+  );
+  // The range is part of the identity: a cached "this year" payload must never
+  // be served under the "this month" chip.
+  const rangeKey = customActive ? `custom_${customFrom}_${customTo}` : range;
+  const reportsKey = business ? `reports_${business.id}_${rangeKey}_${inventoryEnabled ? 'inv' : 'noinv'}` : null;
+  const reportsQuery = useSwr<ReportsMetrics>(
+    reportsKey,
+    () => fetchReportsMetricsServer({
       supabase,
-      businessId: business.id,
+      businessId: business!.id,
       range: range as ReportRange,
       dateLocale,
       custom: { from: customFrom || null, to: customTo || null },
       unassignedLocationLabel: locale === 'es' ? 'Sin ubicación' : 'No location',
-      payrollConfig: business.payroll_config,
+      payrollConfig: business!.payroll_config,
       inventoryEnabled,
-    }).then(m => {
-      if (!cancelled) { setMetrics(m); setLoading(false); }
-    }).catch(() => {
-      if (!cancelled) setLoading(false); // offline / migration missing — keep previous
-    });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [business?.id, inventoryEnabled, range, customFrom, customTo, dateLocale, locale, business?.payroll_config]);
+    }),
+    {
+      cacheKey: reportsKey,
+      resetKey: `${business?.id ?? ''}_${dateLocale}`,
+      fingerprint: reportsFingerprint,
+    },
+  );
+  useEffect(() => {
+    if (reportsQuery.data) setMetrics(reportsQuery.data);
+    // Keep the previous report on screen while a new range loads, matching the
+    // old behaviour (the catch there deliberately did not clear metrics).
+    setLoading(reportsQuery.loading);
+  }, [reportsQuery.data, reportsQuery.loading]);
 
   // Derived values keep their historical names so the render stays unchanged.
   const totalRevenue = metrics?.totalRevenue ?? 0;
@@ -239,11 +260,24 @@ export default function ReportesPage() {
     return (metrics?.jobStatus ?? []).map(r => ({ name: tabs[r.status] ?? r.status, value: r.value, color: r.color }));
   }, [metrics?.jobStatus, full.dashboard.jobs.tabs]);
 
+  // Header + KPI row + chart cards, in the shape the loaded report uses.
   if (loading) return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="flex gap-1">{[0,1,2].map(i => (
-        <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i*0.15}s` }}/>
-      ))}</div>
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col gap-2">
+          <SkeletonBlock className="h-7 w-40" />
+          <SkeletonBlock className="h-4 w-56" />
+        </div>
+        <SkeletonBlock className="h-10 w-72 rounded-xl" />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+        {[0, 1, 2, 3, 4, 5].map(i => <SkeletonStat key={i} />)}
+      </div>
+      <SkeletonChart className="mb-6" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <SkeletonChart />
+        <SkeletonChart />
+      </div>
     </div>
   );
 

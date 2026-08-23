@@ -9,6 +9,7 @@
 // stays in this module; ledger math lives in shared/lib/rentals.ts.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { SkeletonCard } from '@amixos/shared/ui/Skeleton';
 import { confirm } from '@amixos/shared/ui/confirmBus';
 import { Building2, Home, Plus, Search, Users, LayoutDashboard } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -618,8 +619,8 @@ export default function RentalsModule() {
           </div>
 
           {loading && properties.length === 0 ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="flex gap-1">{[0, 1, 2].map((i) => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {[0, 1, 2, 3, 4, 5].map((i) => <SkeletonCard key={i} lines={3} />)}
             </div>
           ) : properties.length === 0 ? (
             <div className="bg-card rounded-2xl border border-border-soft p-10 text-center">
@@ -677,8 +678,8 @@ export default function RentalsModule() {
           )}
           <div ref={sentinelRef} />
           {loadingMore ? (
-            <div className="flex justify-center py-4">
-              <div className="flex gap-1">{[0, 1, 2].map((i) => <div key={i} className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+              {[0, 1, 2].map((i) => <SkeletonCard key={i} lines={3} />)}
             </div>
           ) : null}
         </>

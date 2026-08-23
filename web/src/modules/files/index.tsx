@@ -7,6 +7,9 @@
 // visibility. Lazy-loaded from /dashboard/modulos/files.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { loadCachedThenFresh, writeCacheAndStamp } from '@amixos/shared/lib/swrCache';
+import { useDataFingerprint } from '@amixos/shared/lib/dataFingerprint';
+import { SkeletonList } from '@amixos/shared/ui/Skeleton';
 import {
   FolderOpen, FolderPlus, FilePlus2, Folder, ChevronRight, ChevronLeft, FileText, Link2,
   Trash2, Pencil, ExternalLink, Upload, Lock, Users, Check, FolderInput, X, Home,
@@ -22,6 +25,7 @@ import { can } from '@amixos/shared/lib/permissions';
 import { confirm } from '@amixos/shared/ui/confirmBus';
 import {
   fetchFilesTree, fileStoragePath, fileUid, fileMeta, fileIsCrewVisible,
+  type FilesTree,
   FILES_BUCKET, FILE_MAX_BYTES,
   type FileCategory, type FileFolder, type FileEntry, type FileEntryKind,
 } from '@amixos/shared/lib/files';
@@ -78,16 +82,47 @@ export default function FilesModule() {
   const [fileModal, setFileModal] = useState<{ editing: FileEntry | null } | null>(null);
   const [moveOpen, setMoveOpen] = useState(false);
 
-  const load = async () => {
-    if (!business) return;
-    const tree = await fetchFilesTree(supabase, business.id);
+  // The library changes rarely, so it's cache-first: the saved tree paints
+  // immediately and the query only re-runs when data_fingerprint reports a
+  // change to entries, folders or categories (migration 208).
+  const cacheKey = business ? `files_tree_${business.id}` : null;
+  const fingerprint = useDataFingerprint(supabase, business?.id, ['files']);
+
+  const applyTree = (tree: FilesTree) => {
     setCategories(tree.categories);
     setFolders(tree.folders);
     setEntries(tree.entries);
     setLoading(false);
+  };
+
+  // Full refetch — what every mutation calls. Re-stamps so the next open is
+  // instant. Stamp read BEFORE the fetch (see writeCacheAndStamp).
+  const load = async () => {
+    if (!business) return;
+    const stamp = fingerprint ? await fingerprint().catch(() => null) : null;
+    const tree = await fetchFilesTree(supabase, business.id);
+    applyTree(tree);
+    if (cacheKey) void writeCacheAndStamp(cacheKey, tree, stamp);
     void loadUsage();
   };
-  useEffect(() => { void load(); }, [business?.id]);
+
+  useEffect(() => {
+    if (!business) return;
+    let cancelled = false;
+    const businessId = business.id;
+    void loadCachedThenFresh<FilesTree>({
+      cacheKey,
+      fingerprint,
+      fetcher: () => fetchFilesTree(supabase, businessId),
+      cancelled: () => cancelled,
+      apply: applyTree,
+    }).catch(() => setLoading(false));
+    // Always refreshed: the meter is component state, so a cache hit would
+    // otherwise render 0 bytes until the next write.
+    void loadUsage();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id]);
 
   const here = stack[stack.length - 1];
   const atHome = here.categoryId === null;
@@ -306,7 +341,7 @@ export default function FilesModule() {
       {/* Selection bar (files + folders) — visible whenever selection mode is on */}
       {canManage && selectionMode && (
         <div className="flex items-center gap-3 mb-4 rounded-xl bg-primary/5 border border-primary/20 px-4 py-2.5">
-          <button onClick={clearSelection} className="p-1 rounded-lg hover:bg-primary/10"><X size={15} className="text-primary" /></button>
+          <button onClick={clearSelection} aria-label={t.clearSelectionBtn} title={t.clearSelectionBtn} className="p-1 rounded-lg hover:bg-primary/10"><X size={15} className="text-primary" /></button>
           <span className="text-sm font-medium text-primary">
             {selectionCount > 0 ? t.selectedCount.replace('{{count}}', String(selectionCount)) : t.selectPrompt}
           </span>
@@ -318,9 +353,7 @@ export default function FilesModule() {
       )}
 
       {loading ? (
-        <div className="flex gap-1 py-20 justify-center">
-          {[0, 1, 2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}
-        </div>
+        <SkeletonList rows={8} />
       ) : isEmpty ? (
         <div className="text-center py-20 rounded-2xl border border-dashed border-border bg-surface">
           <FolderOpen size={32} className="text-faint mx-auto mb-3" />
@@ -741,7 +774,7 @@ function MoveModal({ categories, folders, count, selectedFolderIds, startCategor
         {/* Current location + up control */}
         <div className="flex items-center gap-2">
           {!atHome && (
-            <button onClick={goUp} className="w-8 h-8 rounded-lg bg-border-soft hover:bg-border flex items-center justify-center shrink-0"><ChevronLeft size={16} className="text-ink" /></button>
+            <button onClick={goUp} aria-label={t.goUpBtn} title={t.goUpBtn} className="w-8 h-8 rounded-lg bg-border-soft hover:bg-border flex items-center justify-center shrink-0"><ChevronLeft size={16} className="text-ink" /></button>
           )}
           <Folder size={15} className="text-primary shrink-0" />
           <span className="text-sm font-semibold text-ink truncate">{atHome ? t.title : crumb.label}</span>

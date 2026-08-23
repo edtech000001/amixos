@@ -4,7 +4,8 @@
 // trail and the landing spot for future features (filters, export…).
 
 import { useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, ActivityIndicator, TextInput, Alert, Modal as RNModal } from 'react-native';
+import { SkeletonList, SkeletonCard } from '../../ui/Skeleton';
+import { View, Text, Pressable, ScrollView, TextInput, Alert, Modal as RNModal } from 'react-native';
 import { ChevronLeft, Search, Check, Trash2, Calendar, X, Wrench, Truck, Clock } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
@@ -206,8 +207,8 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
       </View>
 
       {loading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color={c.primary} />
+        <View className="px-4 pt-2">
+          <SkeletonList rows={6} />
         </View>
       ) : groups.length === 0 ? (
         <Text className="text-sm text-faint text-center py-16 px-6">{search ? t.historyNoResults : t.historyEmpty}</Text>
@@ -284,8 +285,8 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
             </View>
 
             {detail?.loading ? (
-              <View className="items-center py-10">
-                <ActivityIndicator color={c.primary} />
+              <View className="py-2">
+                <SkeletonCard lines={4} />
               </View>
             ) : detail?.breakdown ? (
               <>

@@ -5,6 +5,7 @@
 // resolves this .web.tsx variant automatically.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { SkeletonRow, SkeletonList } from '../../ui/Skeleton';
 import {
   Plus,
   Search,
@@ -205,13 +206,7 @@ export function InventoryScreen({
 
       {/* List */}
       {loading && filtered.length === 0 ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="flex gap-1">
-            {[0, 1, 2].map(i => (
-              <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-            ))}
-          </div>
-        </div>
+        <SkeletonList rows={8} />
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center py-20">
           <Package size={40} className="text-faint" />
@@ -286,9 +281,13 @@ export function InventoryScreen({
           {serverMode ? (
             <>
               {loadingMore ? (
-                <div className="flex items-center justify-center py-6">
-                  <div className="flex gap-1">{[0, 1, 2].map((i) => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
-                </div>
+                <>
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="border-t border-border-soft">
+                      <SkeletonRow />
+                    </div>
+                  ))}
+                </>
               ) : null}
               <div ref={sentinelRef} className="h-1" />
             </>

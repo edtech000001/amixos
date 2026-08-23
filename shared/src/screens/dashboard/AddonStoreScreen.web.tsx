@@ -6,6 +6,7 @@
 // registry (lucide-react-native) and render as SVG via react-native-svg.
 
 import { useMemo, useState } from 'react';
+import { SkeletonCard } from '../../ui/Skeleton';
 import { Check, Search } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
@@ -119,12 +120,8 @@ export function AddonStoreScreen({
       </div>
 
       {loading ? (
-        <div className="py-10 flex items-center justify-center">
-          <div className="flex gap-1">
-            {[0, 1, 2].map(i => (
-              <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-            ))}
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[0, 1, 2, 3, 4, 5].map(i => <SkeletonCard key={i} lines={3} />)}
         </div>
       ) : filtered.length === 0 ? (
         <div className="py-10 flex items-center justify-center">

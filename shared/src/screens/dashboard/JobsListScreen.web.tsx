@@ -6,6 +6,7 @@
 // bundler resolves this .web.tsx variant automatically.
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { SkeletonRow } from '../../ui/Skeleton';
 import {
   Plus,
   Search,
@@ -1216,9 +1217,13 @@ export function JobsListScreen({
           {serverMode ? (
             <>
               {loadingMore ? (
-                <div className="flex items-center justify-center py-6">
-                  <div className="flex gap-1">{[0, 1, 2].map((i) => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
-                </div>
+                <>
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="border-t border-border-soft">
+                      <SkeletonRow />
+                    </div>
+                  ))}
+                </>
               ) : null}
               <div ref={sentinelRef} className="h-1" />
             </>

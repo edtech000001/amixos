@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useLang } from '../../i18n';
+import { SkeletonRow } from '../../ui/Skeleton';
 import { formatRelativeLong, formatDateTimeLong } from '../../lib/format';
 import { confirm } from '../../ui/confirmBus';
 import {
@@ -235,12 +236,8 @@ export function CommunicationLog({
       </div>
 
       {entries === null ? (
-        <div className="py-8 flex justify-center">
-          <div className="flex gap-1">
-            {[0, 1, 2].map(i => (
-              <span key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-            ))}
-          </div>
+        <div className="flex flex-col">
+          {[0, 1, 2].map(i => <SkeletonRow key={i} />)}
         </div>
       ) : entries.length === 0 ? (
         <div className="py-6 flex justify-center">

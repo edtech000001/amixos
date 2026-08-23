@@ -9,6 +9,7 @@
 // shared/lib/rentals.ts.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { SkeletonBlock, SkeletonStats, SkeletonChart, SkeletonCard, SkeletonList } from '@amixos/shared/ui/Skeleton';
 import {
   Alert, Dimensions, FlatList, Image, KeyboardAvoidingView, Linking, Modal as RNModal,
   Platform, Pressable, ScrollView, Share, Text, TextInput, View, ActivityIndicator,
@@ -1687,7 +1688,11 @@ export default function RentalsScreen() {
         </View>
 
         {detailLoading ? (
-          <View className="flex-1 items-center justify-center"><ActivityIndicator color={c.primary} /></View>
+          <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, gap: 16 }}>
+            <SkeletonStats count={4} />
+            <SkeletonCard lines={5} />
+            <SkeletonList rows={4} />
+          </ScrollView>
         ) : (
           <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 220 }}>
             {detailTab === 'overview' ? (
@@ -2391,7 +2396,12 @@ export default function RentalsScreen() {
 
       {tab === 'overview' ? (
         monthLoading || peopleLoading ? (
-          <View className="flex-1 items-center justify-center"><ActivityIndicator color={c.primary} /></View>
+          <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, gap: 16 }}>
+            <SkeletonBlock className="h-9 w-56 rounded-xl" />
+            <SkeletonStats count={6} />
+            <SkeletonChart />
+            <SkeletonList rows={5} />
+          </ScrollView>
         ) : (
           <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 220 }}>
             {/* Month stepper */}
@@ -2679,7 +2689,9 @@ export default function RentalsScreen() {
             </View>
           </View>
           {loading && properties.length === 0 ? (
-            <View className="flex-1 items-center justify-center"><ActivityIndicator color={c.primary} /></View>
+            <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, gap: 12 }}>
+              {[0, 1, 2, 3].map(i => <SkeletonCard key={i} lines={3} />)}
+            </ScrollView>
           ) : properties.length === 0 ? (
             <View className="flex-1 items-center justify-center px-8">
               <Building2 size={36} color={c.faint} />
@@ -2694,7 +2706,7 @@ export default function RentalsScreen() {
               contentContainerStyle={{ padding: 16, paddingBottom: 220, gap: 12 }}
               onEndReached={() => { if (cursor) void loadMore(); }}
               onEndReachedThreshold={0.4}
-              ListFooterComponent={loadingMore ? <ActivityIndicator color={c.primary} /> : null}
+              ListFooterComponent={loadingMore ? <SkeletonCard lines={3} /> : null}
               renderItem={({ item: p }) => {
                 const cover = coverPhotos[p.id];
                 const activeCount = activeLeases.filter(l => l.property_id === p.id).length;
@@ -2742,7 +2754,7 @@ export default function RentalsScreen() {
 
       {tab === 'tenants' ? (
         peopleLoading && tenants.length === 0 ? (
-          <View className="flex-1 items-center justify-center"><ActivityIndicator color={c.primary} /></View>
+          <View className="p-4"><SkeletonList rows={6} /></View>
         ) : sortedTenants.length === 0 ? (
           <View className="flex-1 items-center justify-center px-8">
             <Users size={36} color={c.faint} />

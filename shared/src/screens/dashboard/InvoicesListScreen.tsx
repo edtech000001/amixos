@@ -10,7 +10,7 @@ import { Fab } from '../../ui/Fab';
 import { formatDateLong, daysOverdue, daysSince } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
-import { SkeletonList } from '../../ui/Skeleton';
+import { SkeletonList, SkeletonRow } from '../../ui/Skeleton';
 import { ChipScroll } from '../../ui/ChipScroll';
 import { INVOICES_FILTERS_KEY, parseInvoicesFilters } from '../../lib/invoicesFilters';
 import { useThemeColors } from '../../theme';
@@ -540,10 +540,8 @@ export function InvoicesListScreen({
         onEndReached={() => { if (serverMode && hasMore && !loadingMore) onLoadMore?.(); }}
         ListFooterComponent={
           serverMode && loadingMore ? (
-            <View className="items-center py-6">
-              <View className="flex-row gap-1">
-                {[0, 1, 2].map(i => (<View key={i} className="w-2 h-2 rounded-full bg-primary" />))}
-              </View>
+            <View>
+              {[0, 1, 2].map(i => <SkeletonRow key={i} />)}
             </View>
           ) : null
         }

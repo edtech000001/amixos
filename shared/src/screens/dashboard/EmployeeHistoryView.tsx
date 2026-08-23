@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
+import { SkeletonRow } from '../../ui/Skeleton';
+import { View, Text } from 'react-native';
 import { Briefcase, DollarSign, UserCheck, UserX, FileText, Award } from 'lucide-react-native';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useLang } from '../../i18n';
@@ -63,8 +64,8 @@ export function EmployeeHistoryView({ supabase, employeeId }: Props) {
 
   if (entries === null) {
     return (
-      <View className="py-8 items-center">
-        <ActivityIndicator color={c.primary} />
+      <View>
+        {[0, 1, 2].map(i => <SkeletonRow key={i} />)}
       </View>
     );
   }

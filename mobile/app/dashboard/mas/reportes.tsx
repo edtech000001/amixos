@@ -11,6 +11,8 @@ import {
   type ReportsMetrics,
   type ReportRange,
 } from '@amixos/shared/lib/reports';
+import { useSwr } from '@amixos/shared/lib/swrCache';
+import { useDataFingerprint } from '@amixos/shared/lib/dataFingerprint';
 
 export default function ReportesRoute() {
   const supabase = createSupabaseClient();
@@ -32,28 +34,45 @@ export default function ReportesRoute() {
   const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
   const inventoryEnabled = enabledModules.some(m => m.id === 'inventory');
 
-  // Server-side aggregates (migration 186): two RPCs replace the old
-  // seven full-table downloads; range changes refetch (still tiny payloads).
-  useEffect(() => {
-    if (!business) return;
-    let cancelled = false;
-    setLoading(true);
-    fetchReportsMetricsServer({
+  // Server-side aggregates (migration 186): two RPCs replace the old seven
+  // full-table downloads. Now cached behind a freshness probe (migration 208):
+  // the report opens instantly from the last payload and the RPCs only re-run
+  // when data_fingerprint says one of the domains behind them actually moved —
+  // including changes made by a teammate on another device.
+  const reportsFingerprint = useDataFingerprint(
+    supabase, business?.id,
+    inventoryEnabled
+      ? ['jobs', 'invoices', 'clients', 'employees', 'timesheets', 'inventory']
+      : ['jobs', 'invoices', 'clients', 'employees', 'timesheets'],
+  );
+  // The range is part of the identity: a cached "this year" payload must never
+  // be served under the "this month" chip.
+  const rangeKey = customFrom || customTo ? `custom_${customFrom ?? ''}_${customTo ?? ''}` : range;
+  const reportsKey = business ? `reports_${business.id}_${rangeKey}_${inventoryEnabled ? 'inv' : 'noinv'}` : null;
+  const reportsQuery = useSwr<ReportsMetrics>(
+    reportsKey,
+    () => fetchReportsMetricsServer({
       supabase,
-      businessId: business.id,
+      businessId: business!.id,
       range,
       dateLocale,
       custom: { from: customFrom, to: customTo },
       unassignedLocationLabel: unassignedLocation,
-      payrollConfig: business.payroll_config,
+      payrollConfig: business!.payroll_config,
       inventoryEnabled,
-    }).then(m => {
-      if (!cancelled) { setMetrics(m); setLoading(false); }
-    }).catch(() => {
-      if (!cancelled) setLoading(false); // offline / migration missing — keep previous
-    });
-    return () => { cancelled = true; };
-  }, [business?.id, inventoryEnabled, range, customFrom, customTo, dateLocale, unassignedLocation, business?.payroll_config]);
+    }),
+    {
+      cacheKey: reportsKey,
+      resetKey: `${business?.id ?? ''}_${dateLocale}`,
+      fingerprint: reportsFingerprint,
+    },
+  );
+  useEffect(() => {
+    if (reportsQuery.data) setMetrics(reportsQuery.data);
+    // Keep the previous report on screen while a new range loads, matching the
+    // old behaviour (the catch there deliberately did not clear metrics).
+    setLoading(reportsQuery.loading);
+  }, [reportsQuery.data, reportsQuery.loading]);
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>

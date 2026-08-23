@@ -6,6 +6,7 @@
 // scanned fast. "Go to job" opens the full editable page.
 
 import { useEffect, useState } from 'react';
+import { SkeletonCard } from '../../ui/Skeleton';
 import { X, ArrowRight, Calendar, Clock } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { jobRefLabel } from '../../lib/jobRef';
@@ -118,7 +119,7 @@ export function JobPreviewSheet({ supabase, jobId, onClose, onOpenFull }: JobPre
         </div>
 
         {loading ? (
-          <div className="flex justify-center py-8"><div className="flex gap-1">{[0, 1, 2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div></div>
+          <SkeletonCard lines={5} />
         ) : job ? (
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2 flex-wrap">

@@ -37,7 +37,7 @@ import { Input } from '../../ui/Input';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
 import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
 import { Fab } from '../../ui/Fab';
-import { SkeletonList } from '../../ui/Skeleton';
+import { SkeletonList, SkeletonRow } from '../../ui/Skeleton';
 import { ChipScroll } from '../../ui/ChipScroll';
 import { formatDateLong, formatTime12h } from '../../lib/format';
 import { formatProjectDuration } from '../../lib/duration';
@@ -1136,10 +1136,8 @@ export function JobsListScreen({
         onEndReached={() => { if (serverMode && hasMore && !loadingMore) onLoadMore?.(); }}
         onEndReachedThreshold={0.6}
         ListFooterComponent={serverMode && loadingMore ? (
-          <View className="items-center py-5">
-            <View className="flex-row gap-1">
-              {[0, 1, 2].map(i => <View key={i} className="w-2 h-2 rounded-full bg-primary" />)}
-            </View>
+          <View>
+            {[0, 1, 2].map(i => <SkeletonRow key={i} />)}
           </View>
         ) : null}
         ListEmptyComponent={loading ? (

@@ -8,6 +8,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { ChevronLeft, Search, X, Check, Trash2, Calendar, Wrench, Truck, Clock } from 'lucide-react';
 import { useLang } from '../../i18n';
+import { SkeletonList, SkeletonCard } from '../../ui/Skeleton';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { confirm } from '../../ui/confirmBus';
 import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
@@ -280,13 +281,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-16">
-          <div className="flex gap-1">
-            {[0, 1, 2].map(i => (
-              <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-            ))}
-          </div>
-        </div>
+        <SkeletonList rows={6} />
       ) : groups.length === 0 ? (
         <p className="text-sm text-faint text-center py-16">{search ? t.historyNoResults : t.historyEmpty}</p>
       ) : (
@@ -360,13 +355,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
             </div>
 
             {detail.loading ? (
-              <div className="flex justify-center py-10">
-                <div className="flex gap-1">
-                  {[0, 1, 2].map(i => (
-                    <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-                  ))}
-                </div>
-              </div>
+              <SkeletonCard lines={4} />
             ) : detail.breakdown ? (
               <>
                 <div className="grid grid-cols-3 gap-2 mb-4">

@@ -323,8 +323,11 @@ export function computeReports(
   const totalPayroll = payrollRows.reduce((s, r) => s + r.pay, 0);
 
   // Per-branch breakdown — only when the business runs multiple locations.
-  // jobCount = jobs created in range; revenue = total_amount of completed /
-  // invoiced jobs in range (invoices carry no location, so jobs are the proxy).
+  // jobCount = jobs created in range; revenue = the completed / invoiced jobs
+  // in range (invoices carry no location, so jobs are the proxy), valued with
+  // the same best-available amount avgJobValue uses: the job's own
+  // total_amount, else its invoice line items (perJobRevenue). Businesses that
+  // price on the invoice leave every job at 0, which reported $0.00 per branch.
   let byLocation: ReportsMetrics['byLocation'] = [];
   if (data.locations.length > 0) {
     const agg = new Map<string, { jobCount: number; revenue: number }>();
@@ -335,7 +338,8 @@ export function computeReports(
       agg.set(key, cur);
     };
     filteredJobs.forEach(j => {
-      const earned = j.status === 'completed' || j.status === 'invoiced' ? j.total_amount : 0;
+      const value = (j.total_amount ?? 0) > 0 ? j.total_amount : (perJobRevenue.get(j.id) ?? 0);
+      const earned = j.status === 'completed' || j.status === 'invoiced' ? value : 0;
       bump(j.location_id ?? '__none__', earned);
     });
     byLocation = data.locations.map(l => ({

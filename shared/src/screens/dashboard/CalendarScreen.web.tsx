@@ -8,6 +8,7 @@
 // its own .web variant, so it's reused for the date/time fields.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { SkeletonRow } from '../../ui/Skeleton';
 import {
   ChevronLeft,
   ChevronRight,
@@ -231,7 +232,7 @@ function whenLabel(it: CalItem, locale: string, t: CalDict): string {
 }
 
 export function CalendarScreen({
-  items, clients, leads, onRangeChange, onFetchRange, onSaveEvent, onDeleteEvent, onJobPress,
+  items, clients, leads, loading, onRangeChange, onFetchRange, onSaveEvent, onDeleteEvent, onJobPress,
 }: CalendarScreenProps) {
   const { t: full } = useLang();
   const t = full.dashboard.calendar;
@@ -449,7 +450,17 @@ export function CalendarScreen({
             </div>
             {agendaItems.length > 0 ? <div className="text-xs text-faint">{t.agenda.count.replace('{{count}}', String(agendaItems.length))}</div> : null}
           </div>
-          {agendaItems.length === 0 ? (
+          {loading && agendaItems.length === 0 ? (
+            /* Events still loading: show row placeholders rather than the
+               "nothing scheduled" empty state, which reads as a fact. */
+            <div className="flex flex-col gap-2">
+              {[0, 1, 2].map(i => (
+                <div key={i} className="bg-card rounded-2xl border border-border-soft">
+                  <SkeletonRow />
+                </div>
+              ))}
+            </div>
+          ) : agendaItems.length === 0 ? (
             canEdit ? (
               <button type="button" onClick={() => openNew(agendaDay)}
                 className="w-full flex flex-col items-center justify-center py-10 rounded-2xl border border-dashed border-border bg-surface/50 hover:bg-surface">

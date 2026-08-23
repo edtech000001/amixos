@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic';
 // color, section order, and per-unit price label — persisted per business.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { SkeletonCard } from '@amixos/shared/ui/Skeleton';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Printer, ArrowLeft, Sliders, ChevronUp, ChevronDown, Search, Mail, X } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -382,7 +383,9 @@ export default function GenerarPreciosPage() {
         )}
 
         {loading ? (
-          <p className="text-sm text-faint text-center py-12">…</p>
+          <div className="pt-5 flex flex-col gap-4">
+            {[0, 1, 2].map(i => <SkeletonCard key={i} lines={4} />)}
+          </div>
         ) : (
           <div className={`pt-5 print:pt-3 flex flex-col ${theme.outerGap} print:gap-2`}>
             {orderedSectionKeys.map(key => {

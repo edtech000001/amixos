@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { UserPlus, Mail, ChevronRight, X, Trash2, Copy, Check } from 'lucide-react';
 import { useLang } from '../../i18n';
+import { SkeletonRow } from '../../ui/Skeleton';
 import { ROLE_LABELS, ROLE_DESCRIPTIONS, INVITABLE_ROLES, type Role } from '../../lib/permissions';
 
 export interface TeamMember {
@@ -122,13 +123,13 @@ export function TeamScreen({
       </p>
       <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden mb-5">
         {loading ? (
-          <div className="px-5 py-8 flex items-center justify-center">
-            <div className="flex gap-1">
-              {[0, 1, 2].map(i => (
-                <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-              ))}
-            </div>
-          </div>
+          <>
+            {[0, 1, 2].map(i => (
+              <div key={i} className={i > 0 ? 'border-t border-border-soft' : undefined}>
+                <SkeletonRow />
+              </div>
+            ))}
+          </>
         ) : members.length === 0 ? (
           <div className="px-5 py-8">
             <p className="text-sm text-faint text-center">{t.noMembersYet}</p>

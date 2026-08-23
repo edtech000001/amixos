@@ -8,6 +8,7 @@
 // the API. One-tap → backfill → reload.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { SkeletonRow } from '@amixos/shared/ui/Skeleton';
 import { View, Text, Pressable, Alert, ActivityIndicator, Modal as RNModal, Linking, TextInput, ScrollView } from 'react-native';
 import MapView, { Marker, type Region } from 'react-native-maps';
 import ClusteredMapView from 'react-native-map-clustering';
@@ -1691,8 +1692,8 @@ function UnresolvedClientsModal({
 
           <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ paddingBottom: 8 }}>
             {loading ? (
-              <View className="py-12 items-center">
-                <ActivityIndicator size="small" color={c.primary} />
+              <View>
+                {[0, 1, 2, 3].map(i => <SkeletonRow key={i} />)}
               </View>
             ) : rows.length === 0 ? (
               <Text className="text-xs text-faint italic text-center py-8">

@@ -157,6 +157,8 @@ export type DashboardDict = {
       invoicesPendingSub: string;
       clientsLabel: string;
       clientsSub: string;
+      clientsNewThisMonth: string;
+      clientsRecentHeading: string;
       invoicesOverdueLabel: string;
       invoicesOverdueSub: string;
       clockedInLabel: string;
@@ -2789,6 +2791,8 @@ export type DashboardDict = {
       title: string;
       subtitle: string;
       entry: string;
+      prevPeriod: string;
+      nextPeriod: string;
       freqLabel: string;
       freqWeekly: string;
       freqCustom: string;
@@ -3063,6 +3067,7 @@ export type DashboardDict = {
     newFolder: string; folderNameLabel: string; folderNamePlaceholder: string;
     deleteFolderConfirm: string; emptyFolder: string;
     visibilityLabel: string; visInherit: string;
+    clearSelectionBtn: string; goUpBtn: string;
   };
   // Date locale for short month formatting in lists
   dateLocale: string;
@@ -3216,6 +3221,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         invoicesPendingSub: 'esperando pago',
         clientsLabel: 'Clientes',
         clientsSub: 'en tu lista',
+        clientsNewThisMonth: '+{{count}} este mes',
+        clientsRecentHeading: 'Agregados recientemente',
         invoicesOverdueLabel: 'Facturas vencidas',
         invoicesOverdueSub: 'requieren atención',
         clockedInLabel: 'Activos ahora',
@@ -5805,6 +5812,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         title: 'Nómina',
         subtitle: 'Horas y pago por trabajador',
         entry: 'Nómina',
+        prevPeriod: 'Período anterior',
+        nextPeriod: 'Período siguiente',
         freqLabel: 'Frecuencia',
         freqWeekly: 'Semanal',
         freqCustom: 'Personalizado',
@@ -6108,6 +6117,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       emptyFolder: 'Esta carpeta está vacía',
       visibilityLabel: 'Visibilidad',
       visInherit: 'Heredar',
+      clearSelectionBtn: 'Quitar selección', goUpBtn: 'Subir un nivel',
     },
     dateLocale: 'es-MX',
   },
@@ -6258,6 +6268,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         invoicesPendingSub: 'awaiting payment',
         clientsLabel: 'Clients',
         clientsSub: 'in your list',
+        clientsNewThisMonth: '+{{count}} this month',
+        clientsRecentHeading: 'Recently added',
         invoicesOverdueLabel: 'Overdue invoices',
         invoicesOverdueSub: 'need attention',
         clockedInLabel: 'Active now',
@@ -8847,6 +8859,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         title: 'Payroll',
         subtitle: 'Hours and pay per worker',
         entry: 'Payroll',
+        prevPeriod: 'Previous period',
+        nextPeriod: 'Next period',
         freqLabel: 'Frequency',
         freqWeekly: 'Weekly',
         freqCustom: 'Custom',
@@ -9150,6 +9164,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       emptyFolder: 'This folder is empty',
       visibilityLabel: 'Visibility',
       visInherit: 'Inherit',
+      clearSelectionBtn: 'Clear selection', goUpBtn: 'Go up one level',
     },
     dateLocale: 'en-US',
   },

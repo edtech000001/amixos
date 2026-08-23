@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
+import { SkeletonBlock } from '@amixos/shared/ui/Skeleton';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Building2, Check, X, ArrowRight, Smartphone } from 'lucide-react';
@@ -85,8 +86,10 @@ export default function AceptarInvitacionPage({ params }: { params: { token: str
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-white to-primary/10 px-6">
       <div className="bg-white rounded-3xl border border-gray-100 shadow-lg max-w-md w-full p-8">
         {status === 'loading' && (
-          <div className="py-10 flex justify-center">
-            <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{animationDelay: `${i*0.15}s`}}/>)}</div>
+          <div className="py-6 flex flex-col gap-3">
+            <SkeletonBlock className="h-6 w-3/5" />
+            <SkeletonBlock className="h-4 w-4/5" />
+            <SkeletonBlock className="h-11 w-full rounded-xl" />
           </div>
         )}
 

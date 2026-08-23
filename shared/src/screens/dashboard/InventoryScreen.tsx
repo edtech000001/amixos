@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { SkeletonList, SkeletonRow } from '../../ui/Skeleton';
 import { View, Text, Pressable, FlatList } from 'react-native';
 import {
   Search,
@@ -227,13 +228,7 @@ export function InventoryScreen({
         ItemSeparatorComponent={() => <View className="h-3" />}
         ListEmptyComponent={
           loading ? (
-            <View className="items-center py-20">
-              <View className="flex-row gap-1">
-                {[0, 1, 2].map(i => (
-                  <View key={i} className="w-2 h-2 rounded-full bg-primary" />
-                ))}
-              </View>
-            </View>
+            <SkeletonList rows={8} />
           ) : (
             <View className="items-center py-20">
               <Package size={40} color={c.faint} />
@@ -257,10 +252,8 @@ export function InventoryScreen({
         onEndReached={() => { if (serverMode && hasMore && !loadingMore) onLoadMore?.(); }}
         ListFooterComponent={
           serverMode && loadingMore ? (
-            <View className="items-center py-6">
-              <View className="flex-row gap-1">
-                {[0, 1, 2].map(i => (<View key={i} className="w-2 h-2 rounded-full bg-primary" />))}
-              </View>
+            <View>
+              {[0, 1, 2].map(i => <SkeletonRow key={i} />)}
             </View>
           ) : null
         }

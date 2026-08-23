@@ -10,6 +10,7 @@ import {
   type DashboardStats,
   type DashboardRecentInvoice,
   type DashboardUpcomingJob,
+  type DashboardRecentClient,
 } from '@amixos/shared/screens/dashboard/DashboardHomeScreen';
 import { type DashboardLayout } from '@amixos/shared/lib/dashboardWidgets';
 import { useSwr } from '@amixos/shared/lib/swrCache';
@@ -36,6 +37,12 @@ interface RawRecentInvoice {
   clients: { first_name: string; last_name: string } | null;
 }
 
+interface RawRecentClient {
+  id: string;
+  first_name: string;
+  last_name: string;
+  company: string | null;
+}
 interface RawUpcomingJob {
   id: string;
   title: string;
@@ -52,6 +59,8 @@ function OwnerDashboardHome() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recent, setRecent] = useState<DashboardRecentInvoice[]>([]);
   const [upcoming, setUpcoming] = useState<DashboardUpcomingJob[]>([]);
+  const [recentClients, setRecentClients] = useState<DashboardRecentClient[]>([]);
+  const [newClientsThisMonth, setNewClientsThisMonth] = useState(0);
   const [loading, setLoading] = useState(true);
   // Dashboard layout is scoped PER-USER-PER-BUSINESS
   // (user_dashboard_layouts) — not a business setting — so one member's
@@ -87,7 +96,13 @@ function OwnerDashboardHome() {
   // Cache-first dashboard: cached numbers render instantly, one dashboard_stats
   // RPC (migration 181) + two small embed queries revalidate in the background.
   // Replaces 7 stat queries incl. an unbounded paid-invoice download.
-  type DashPayload = { stats: DashboardStats; recent: DashboardRecentInvoice[]; upcoming: DashboardUpcomingJob[] };
+  type DashPayload = {
+    stats: DashboardStats;
+    recent: DashboardRecentInvoice[];
+    upcoming: DashboardUpcomingJob[];
+    recentClients: DashboardRecentClient[];
+    newClientsThisMonth: number;
+  };
   const dashKey = business ? `dashboard_home_${business.id}` : null;
   const dash = useSwr<DashPayload>(
     dashKey,
@@ -97,7 +112,7 @@ function OwnerDashboardHome() {
       const startYear = new Date(now.getFullYear(), 0, 1).toISOString();
       const today = now.toISOString().split('T')[0];
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
-      const [statsRes, recentInv, upcomingJobs] = await Promise.all([
+      const [statsRes, recentInv, upcomingJobs, recentCl, newClientCount] = await Promise.all([
         supabase.rpc('dashboard_stats', {
           p_business_id: business!.id, p_start_month: startMonth, p_start_year: startYear, p_tz: tz,
         }),
@@ -113,10 +128,23 @@ function OwnerDashboardHome() {
           .gte('scheduled_date', today)
           .order('scheduled_date', { ascending: true })
           .limit(8),
+        // Both bounded — a .limit(4) peek and a count-only query, so neither
+        // needs the pagination loop the "load every row" reads do.
+        supabase.from('clients')
+          .select('id, first_name, last_name, company')
+          .eq('business_id', business!.id)
+          .order('created_at', { ascending: false })
+          .limit(4),
+        supabase.from('clients')
+          .select('id', { head: true, count: 'exact' })
+          .eq('business_id', business!.id)
+          .gte('created_at', startMonth),
       ]);
       if (statsRes.error) throw new Error(statsRes.error.message);
       if (recentInv.error) throw new Error(recentInv.error.message);
       if (upcomingJobs.error) throw new Error(upcomingJobs.error.message);
+      // The two client extras are decorative — a failure there must not blank
+      // the whole dashboard, so they degrade to empty instead of throwing.
       const d = (statsRes.data ?? {}) as Record<string, unknown>;
       const stats: DashboardStats = {
         earningsMonth: Number(d.earnings_month ?? 0),
@@ -130,8 +158,15 @@ function OwnerDashboardHome() {
       };
       const rawInv = (recentInv.data ?? []) as unknown as RawRecentInvoice[];
       const rawJobs = (upcomingJobs.data ?? []) as unknown as RawUpcomingJob[];
+      const rawClients = (recentCl.data ?? []) as unknown as RawRecentClient[];
       return {
         stats,
+        recentClients: rawClients.map(cl => ({
+          id: cl.id,
+          name: `${cl.first_name} ${cl.last_name}`.trim(),
+          company: cl.company,
+        })),
+        newClientsThisMonth: newClientCount.count ?? 0,
         recent: rawInv.map(inv => ({
           id: inv.id,
           invoiceNumber: inv.invoice_number,
@@ -155,18 +190,27 @@ function OwnerDashboardHome() {
     setStats(dash.data.stats);
     setRecent(dash.data.recent);
     setUpcoming(dash.data.upcoming);
+    setRecentClients(dash.data.recentClients);
+    setNewClientsThisMonth(dash.data.newClientsThisMonth);
     setLoading(false);
   }, [dash.data]);
   useEffect(() => { if (dash.error) setLoading(false); }, [dash.error]);
 
-  const saveLayout = async (layout: DashboardLayout): Promise<boolean> => {
-    if (!user || !business) return false;
+  // Resolves null on success, else the reason — the banner shows it, so a
+  // failed write is diagnosable from the phone instead of needing Metro logs.
+  const saveLayout = async (layout: DashboardLayout): Promise<string | null> => {
+    if (!user) return 'No session';
+    if (!business) return 'No business selected';
     const { error } = await supabase
       .from('user_dashboard_layouts')
       .upsert({ user_id: user.id, business_id: business.id, layout, updated_at: new Date().toISOString() },
               { onConflict: 'user_id,business_id' });
-    if (!error) setProfileLayout(layout);
-    return !error;
+    if (error) {
+      console.warn('[dashboard] layout save failed', error);
+      return [error.code, error.message].filter(Boolean).join(' · ') || 'Unknown error';
+    }
+    setProfileLayout(layout);
+    return null;
   };
 
   return (
@@ -180,6 +224,8 @@ function OwnerDashboardHome() {
         stats={stats}
         recent={recent}
         upcomingJobs={upcoming}
+        recentClients={recentClients}
+        newClientsThisMonth={newClientsThisMonth}
         layout={profileLayout ?? null}
         onSaveLayout={saveLayout}
         onEditingDone={() => {}}
@@ -193,6 +239,10 @@ function OwnerDashboardHome() {
         }}
         onViewAllJobsPress={() => router.push('/dashboard/trabajos')}
         onNewClientPress={() => router.push('/dashboard/clientes/nuevo')}
+        onClientPress={(id) => {
+          markSectionVisitor('clientes');
+          router.push(`/dashboard/clientes/${id}` as never);
+        }}
         onNewJobPress={() => router.push('/dashboard/trabajos/nuevo')}
         onCalendarPress={() => router.push('/dashboard/mas/calendario')}
       />

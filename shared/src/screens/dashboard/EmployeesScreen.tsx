@@ -13,6 +13,7 @@ import { Fab } from '../../ui/Fab';
 import { roleLabel } from '../../lib/permissions';
 import type { AccessStatus } from '../../lib/teamPeople';
 import { splitMultiValue } from '../../lib/fieldTemplates';
+import { SkeletonList } from '../../ui/Skeleton';
 
 export interface EmployeeListItem {
   id: string;
@@ -96,6 +97,9 @@ export interface EmployeesScreenProps {
   bulkDeleting?: boolean;
   /** Optional slot for modals/dialogs rendered on web. */
   modalsSlot?: ReactNode;
+  /** First load still in flight. Renders placeholders instead of the empty
+   *  state — an empty roster and an unloaded one look identical otherwise. */
+  loading?: boolean;
   /** Custom-field definitions (from employee_field_templates) — drive the
    *  filter panel so deleted fields never appear and labels are the real
    *  field names, not the snake_case keys. */
@@ -119,6 +123,7 @@ export function EmployeesScreen({
   bulkDeleting,
   customFieldDefs,
   modalsSlot,
+  loading,
 }: EmployeesScreenProps) {
   const { t: full, locale } = useLang();
   const c = useThemeColors();
@@ -434,7 +439,9 @@ export function EmployeesScreen({
               {t.hoursThisPeriod.replace('{{period}}', payPeriodLabel)}
             </Text>
           ) : null}
-          {(hourTotals ?? []).length === 0 ? (
+          {loading && (hourTotals ?? []).length === 0 ? (
+            <SkeletonList rows={5} />
+          ) : (hourTotals ?? []).length === 0 ? (
             <View className="items-center py-20">
               <ClipboardList size={40} color={c.faint} />
               <Text className="text-sm text-faint mt-3">{t.emptyHourTotals}</Text>
@@ -538,15 +545,19 @@ export function EmployeesScreen({
           renderItem={renderEmployee}
           ListHeaderComponent={teamHeader}
           ListEmptyComponent={
-            <View className="items-center py-20">
-              <UserCheck size={40} color={c.faint} />
-              <Text className="text-sm text-faint mt-3">{t.emptyEmployees}</Text>
-              {onAddEmployee ? (
-                <Pressable onPress={onAddEmployee} className="mt-1">
-                  <Text className="text-primary text-sm font-medium">{t.addFirst}</Text>
-                </Pressable>
-              ) : null}
-            </View>
+            loading ? (
+              <SkeletonList rows={6} />
+            ) : (
+              <View className="items-center py-20">
+                <UserCheck size={40} color={c.faint} />
+                <Text className="text-sm text-faint mt-3">{t.emptyEmployees}</Text>
+                {onAddEmployee ? (
+                  <Pressable onPress={onAddEmployee} className="mt-1">
+                    <Text className="text-primary text-sm font-medium">{t.addFirst}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            )
           }
           contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: selectionMode ? 320 : 176 }}
           keyboardShouldPersistTaps="handled"
@@ -561,10 +572,14 @@ export function EmployeesScreen({
           renderItem={renderTimesheet}
           ListHeaderComponent={<>{topBar}{historySearchBar}</>}
           ListEmptyComponent={
-            <View className="items-center py-20">
-              <ClipboardList size={40} color={c.faint} />
-              <Text className="text-sm text-faint mt-3">{tsSearch ? t.hoursNoResults : t.emptyTimesheets}</Text>
-            </View>
+            loading && timesheets.length === 0 ? (
+              <SkeletonList rows={6} />
+            ) : (
+              <View className="items-center py-20">
+                <ClipboardList size={40} color={c.faint} />
+                <Text className="text-sm text-faint mt-3">{tsSearch ? t.hoursNoResults : t.emptyTimesheets}</Text>
+              </View>
+            )
           }
           contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 176 }}
           keyboardShouldPersistTaps="handled"

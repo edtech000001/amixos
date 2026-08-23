@@ -5,6 +5,7 @@
 // alone gates this PII.
 
 import { useEffect, useMemo, useState } from 'react';
+import { SkeletonList } from '@amixos/shared/ui/Skeleton';
 import { confirm } from '@amixos/shared/ui/confirmBus';
 import { ArrowLeft, FileText, Mail, Pencil, Phone, Plus, Trash2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -340,9 +341,7 @@ export function TenantsTab({
       ) : null}
 
       {loading && tenants.length === 0 ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="flex gap-1">{[0, 1, 2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />)}</div>
-        </div>
+        <SkeletonList rows={6} />
       ) : sorted.length === 0 ? (
         <div className="bg-card rounded-2xl border border-border-soft p-10 text-center">
           <Users size={32} className="text-faint mx-auto mb-3" />

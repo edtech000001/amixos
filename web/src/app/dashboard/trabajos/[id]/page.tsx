@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState, useRef } from 'react';
+import { SkeletonBlock, SkeletonStats, SkeletonCard, SkeletonList, SkeletonDetail } from '@amixos/shared/ui/Skeleton';
 import Link from 'next/link';
 import {
   ArrowLeft, MapPin, Calendar, Users, DollarSign,
@@ -764,9 +765,14 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     window.open(`/propuesta/${token}?print=1`, '_blank');
   };
 
+  // Header, status pipeline, then the detail + items cards.
   if (loading) return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="flex gap-1">{[0,1,2].map(i => <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i*0.15}s` }}/>)}</div>
+    <div className="p-6">
+      <SkeletonDetail>
+        <SkeletonBlock className="h-16 w-full rounded-2xl" />
+        <SkeletonCard lines={5} />
+        <SkeletonCard lines={4} />
+      </SkeletonDetail>
     </div>
   );
   if (!job) return <div className="p-6 text-faint">{t.notFound}</div>;
