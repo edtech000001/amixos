@@ -245,9 +245,9 @@ export async function fetchFieldHome(
   // this tile reads back roughly how many crew hours they submitted — same
   // "what did I upload" lens as the completed figures above.
   //
-  // total_hours is credited PER crew member in payroll (employeeHoursInRange),
-  // i.e. it's each person's hours on that job, so a job's TEAM hours are
-  // total_hours × crew size, plus any driver hours.
+  // Sums each job's own recorded hours (total_hours) — NOT multiplied by crew
+  // size. Payroll credits total_hours to each crew member separately; this
+  // tile is "how many project hours did I log", so the job counts once.
   //
   // Windowed on completed_date, falling back to scheduled_date: a field-logged
   // job always carries a completed date, while office-scheduled ones may only
@@ -258,7 +258,7 @@ export async function fetchFieldHome(
   {
     const { data: minedRaw } = await supabase
       .from('jobs')
-      .select('scheduled_date, completed_date, total_hours, driver_hours, job_assignments(employee_id, crew)')
+      .select('scheduled_date, completed_date, total_hours')
       .eq('business_id', businessId)
       .eq('created_by', userId)
       .or(`completed_date.gte.${windowStartStr},scheduled_date.gte.${windowStartStr}`);
@@ -267,16 +267,10 @@ export async function fetchFieldHome(
       scheduled_date: string | null;
       completed_date: string | null;
       total_hours: number | null;
-      driver_hours: number | null;
-      job_assignments: { employee_id: string | null; crew?: boolean | null }[];
-    }>).map((j) => {
-      // crew=false rows are lead-only (migration 189) — they carry no hours.
-      const crew = (j.job_assignments ?? []).filter((a) => a.crew !== false).length;
-      return {
-        date: j.completed_date ?? j.scheduled_date,
-        teamHours: (j.total_hours ?? 0) * crew + (j.driver_hours ?? 0),
-      };
-    });
+    }>).map((j) => ({
+      date: j.completed_date ?? j.scheduled_date,
+      teamHours: j.total_hours ?? 0,
+    }));
 
     const sumIn = (startStr: string, endStr: string) =>
       Math.round(

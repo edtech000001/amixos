@@ -66,6 +66,7 @@ import {
   type JobsFilters,
 } from '../../lib/jobsFilters';
 import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
+import { formatHours } from '../../lib/fieldHome';
 
 export interface JobListItem {
   id: string;
@@ -1179,6 +1180,17 @@ export function JobsListScreen({
                             {job.jobState ? `, ${job.jobState}` : ''}
                           </span>
                         </span>
+                      ) : null}
+                    </div>
+
+                    {/* Hours recorded on the job (mobile shows this bottom-right
+                        of the card; here it reads as its own column). */}
+                    <div className="hidden md:flex w-16 shrink-0 justify-end items-center gap-1">
+                      {job.totalHours ? (
+                        <>
+                          <Clock size={12} className="text-faint shrink-0" />
+                          <span className="text-xs font-semibold text-muted">{formatHours(job.totalHours)}</span>
+                        </>
                       ) : null}
                     </div>
 

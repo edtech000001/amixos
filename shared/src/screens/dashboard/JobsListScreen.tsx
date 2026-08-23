@@ -43,6 +43,7 @@ import { formatDateLong, formatTime12h } from '../../lib/format';
 import { formatProjectDuration } from '../../lib/duration';
 import { searchMatches, usStateName } from '../../lib/usStates';
 import { jobRefLabel } from '../../lib/jobRef';
+import { formatHours } from '../../lib/fieldHome';
 import {
   matchJobAlert,
   isJobOverdue,
@@ -79,6 +80,8 @@ export interface JobListItem {
   /** Multi-day finish + manual estimate + end time, for the duration label. */
   endDate?: string | null;
   estimatedHours?: number | null;
+  /** jobs.total_hours — the hours actually recorded on the job. */
+  totalHours?: number | null;
   timeEnd?: string | null;
   issueDate: string | null;
   expiryDate: string | null;
@@ -524,6 +527,32 @@ export function JobsListScreen({
   const inProgressRevenue = jobs.filter(j => j.status === 'in_progress')
     .reduce((s, j) => s + j.totalAmount, 0);
 
+  /** Hours actually recorded on the job, bottom-right of the card. */
+  const renderCardFooter = (job: JobListItem) => {
+    const actions = renderActionBar(job);
+    const hours = job.totalHours ?? 0;
+    if (!hours) return actions;
+    const hoursChip = (
+      <View className="flex-row items-center gap-1">
+        <Clock size={11} color={c.faint} />
+        <Text className="text-xs font-semibold text-muted">{formatHours(hours)}</Text>
+      </View>
+    );
+    if (!actions) {
+      return (
+        <View className="border-t border-border-soft px-5 py-2.5 items-end">{hoursChip}</View>
+      );
+    }
+    return (
+      <View className="relative">
+        {actions}
+        <View className="absolute right-5 top-0 bottom-0 justify-center" pointerEvents="none">
+          {hoursChip}
+        </View>
+      </View>
+    );
+  };
+
   const renderActionBar = (job: JobListItem) => {
     const expired = isExpired(job);
     if (job.status === 'posible') {
@@ -880,7 +909,7 @@ export function JobsListScreen({
           {selectMode ? null : <ChevronRight size={16} color={c.faint} />}
         </Pressable>
 
-        {selectMode ? null : renderActionBar(job)}
+        {selectMode ? null : renderCardFooter(job)}
       </View>
       </View>
     );
