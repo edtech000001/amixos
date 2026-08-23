@@ -70,7 +70,8 @@ export interface FieldHomeStats {
 
 export interface FieldHomeData {
   jobs: FieldHomeJob[];
-  /** Jobs the worker completed in the last 7 days (most recent first). */
+  /** Jobs this worker UPLOADED that are complete, in the current work
+   *  cycle (most recent first). Not a pay figure — see the query. */
   recentCompleted: FieldHomeJob[];
   openTimesheet: OpenTimesheet | null;
   stats: FieldHomeStats;
@@ -151,9 +152,10 @@ export async function fetchFieldHome(
   const oldestPeriod = getPayrollPeriod(freq, now, -(ACTIVE_HOURS_LOOKBACK_PERIODS - 1), anchor, customDays);
   const windowStartStr = [oldestPeriod.startStr, weekStartStr, monthStartStr].sort()[0];
 
-  // "Recently completed" spans the CURRENT pay period — the crew reads it as
-  // "what am I getting paid for this check", so it must match Payroll exactly
-  // (a fixed 7-day lookback drifted from the period boundaries).
+  // The completed list spans the current PAY-PERIOD window — not because it's
+  // a pay figure (it isn't; it's scoped to what this worker uploaded), but
+  // because the period is the work cycle everyone here already thinks in, and
+  // a fixed 7-day lookback drifted from those boundaries.
   const currentPeriod = getPayrollPeriod(freq, now, 0, anchor, customDays);
 
   const [jobsRes, employeeRes, timesheetRes, completedRes, recentRes] = await Promise.all([
@@ -181,20 +183,29 @@ export async function fetchFieldHome(
       .order('clock_in', { ascending: false })
       .limit(1)
       .maybeSingle(),
-    // Completed-this-month count (RLS scopes to the worker's assigned jobs).
+    // Completed-this-month count — jobs THIS worker uploaded (see the
+    // recent-completed note below on why it's created_by, not assignment).
     supabase
       .from('jobs')
       .select('id', { count: 'exact', head: true })
       .eq('business_id', businessId)
+      .eq('created_by', userId)
       .in('status', ['completed', 'invoiced'])
       .gte('completed_date', monthStartStr),
-    // Recently completed — the current pay period, most recent first.
+    // Recently completed — jobs THIS worker uploaded, in the current work
+    // cycle, most recent first. Scoped by created_by on purpose: a field role
+    // is normally a lead logging the work their crew did that day, so this
+    // screen is a read-back of what they submitted ("did my 4 uploads land,
+    // roughly how many team hours"). Jobs they were merely added to as crew
+    // would inflate the count against what they remember uploading. It is NOT
+    // a pay figure — payroll pays by assignment and lives in Payroll.
     supabase
       .from('jobs')
       .select(
         'id, title, status, scheduled_date, completed_date, time_start, job_address, job_city, job_state, clients(first_name, last_name), job_assignments(is_lead, employees(user_id))',
       )
       .eq('business_id', businessId)
+      .eq('created_by', userId)
       .in('status', ['completed', 'invoiced'])
       .gte('completed_date', currentPeriod.startStr)
       .lte('completed_date', currentPeriod.endStr)
