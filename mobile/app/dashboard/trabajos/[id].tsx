@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import { useRoute } from '@react-navigation/native';
+import { StackActions, useRoute } from '@react-navigation/native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -251,14 +251,19 @@ export default function JobDetailRoute() {
     }
   };
 
-  // The cross-section origin (?from=nomina/invoice/…) is only valid while the
-  // user stays inside that flow. Leaving this screen via the DOCK keeps it
-  // mounted in the Trabajos stack — if the params survived, coming back later
-  // through the dock would resurrect a stale back-target (back arrow jumping
-  // to payroll long after leaving it). On blur, if this screen is still the
-  // top of its stack (blur ⇒ tab switch, not a pushed child like the edit
-  // form, whose round trip must keep the origin), drop the origin params so
-  // the screen degrades to a normal job view (back → jobs list).
+  // A job opened from ANOTHER section (?from=home/map/calendar/nomina/invoice)
+  // is a visitor in the Trabajos stack: it was pushed there by path, but the
+  // user never navigated the jobs list to reach it. Leaving via the dock — or
+  // via the back arrow, which returns to that other section — leaves it
+  // mounted, so four jobs opened from the dashboard stacked up four deep and
+  // the Jobs tab needed four back presses to reach its list.
+  //
+  // On blur, if this screen is still the TOP of its stack (blur ⇒ tab switch,
+  // not a pushed child like the edit form, whose round trip must keep the
+  // origin), pop it off. Params are cleared first so that if the pop can't
+  // run — this screen being the stack's only route — the screen at least
+  // degrades to a normal job view (back → jobs list) instead of resurrecting
+  // a stale back-target later.
   const navigation = useNavigation();
   const routeKey = useRoute().key;
   useEffect(() => {
@@ -266,9 +271,10 @@ export default function JobDetailRoute() {
     return navigation.addListener('blur', () => {
       const st = navigation.getState();
       const top = st?.routes?.[st.index ?? 0];
-      if (top?.key === routeKey) {
-        navigation.setParams({ from: undefined, invoice: undefined, worker: undefined } as never);
-      }
+      if (top?.key !== routeKey) return;
+      navigation.setParams({ from: undefined, invoice: undefined, worker: undefined } as never);
+      // Never pop the last route out from under the navigator.
+      if ((st?.index ?? 0) > 0) navigation.dispatch(StackActions.pop());
     });
   }, [from, navigation, routeKey]);
   const supabase = createSupabaseClient();
