@@ -335,13 +335,26 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
             // section's list to reach it, so landing on it (and having its
             // back arrow jump to the other section) is disorienting. Drop
             // those before entering, so the section opens on its list.
-            const liveTarget = live.routes.find(r => r.key === route.key) as
-              | { state?: { key?: string; index?: number; routes?: { params?: Record<string, unknown> }[] } }
-              | undefined;
-            const nested = liveTarget?.state;
-            const nestedTop = nested?.routes?.[nested.index ?? 0];
-            if (nested?.key && (nested.index ?? 0) > 0 && nestedTop?.params?.from) {
-              navigation.dispatch({ ...StackActions.popToTop(), target: nested.key });
+            type NavNode = {
+              key?: string;
+              index?: number;
+              routes?: { params?: Record<string, unknown>; state?: NavNode }[];
+            };
+            // Walk to the deepest focused route of the target section — the
+            // stack may be nested more than one level — and pop that stack to
+            // its root when the screen sitting there was opened from elsewhere.
+            let node = (live.routes.find(r => r.key === route.key) as { state?: NavNode } | undefined)?.state;
+            let stackKey: string | undefined;
+            let stackIndex = 0;
+            let focused: { params?: Record<string, unknown>; state?: NavNode } | undefined;
+            while (node?.routes?.length) {
+              stackKey = node.key;
+              stackIndex = node.index ?? 0;
+              focused = node.routes[stackIndex];
+              node = focused?.state;
+            }
+            if (stackKey && stackIndex > 0 && focused?.params?.from) {
+              navigation.dispatch({ ...StackActions.popToTop(), target: stackKey });
             }
             // React Navigation's `navigate` is heavily overloaded on the route
             // name; with mobile's `strict: false` the per-name typing falls

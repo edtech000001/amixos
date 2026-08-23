@@ -272,8 +272,11 @@ export default function JobDetailRoute() {
       const st = navigation.getState();
       const top = st?.routes?.[st.index ?? 0];
       if (top?.key !== routeKey) return;
-      navigation.setParams({ from: undefined, invoice: undefined, worker: undefined } as never);
-      // Never pop the last route out from under the navigator.
+      // Never pop the last route out from under the navigator. The origin
+      // params are deliberately LEFT INTACT: if this pop doesn't land, the
+      // dock reads ?from on the section's top route to spot a visitor and
+      // clears it on entry — wiping the param here would disguise this
+      // screen as one the user opened from the list, and it would stay.
       if ((st?.index ?? 0) > 0) navigation.dispatch(StackActions.pop());
     });
   }, [from, navigation, routeKey]);

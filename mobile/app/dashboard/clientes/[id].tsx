@@ -199,8 +199,8 @@ export default function ClienteDetailRoute() {
       const st = navigation.getState();
       const top = st?.routes?.[st.index ?? 0];
       if (top?.key !== routeKey) return;
-      navigation.setParams({ from: undefined, jobId: undefined, invoice: undefined } as never);
-      // Never pop the last route out from under the navigator.
+      // Origin params stay put — the dock needs ?from to recognise a visitor
+      // if this pop doesn't land. Never pop the navigator's last route.
       if ((st?.index ?? 0) > 0) navigation.dispatch(StackActions.pop());
     });
   }, [from, navigation, routeKey]);
