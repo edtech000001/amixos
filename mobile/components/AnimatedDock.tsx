@@ -329,6 +329,20 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
               resetSection({ name: route.name, state: liveRoute?.state });
               return;
             }
+            // Switching INTO a section restores its stack as you left it —
+            // but a detail screen opened from ANOTHER section (?from=home/
+            // map/invoice/…) is a visitor there: you never walked that
+            // section's list to reach it, so landing on it (and having its
+            // back arrow jump to the other section) is disorienting. Drop
+            // those before entering, so the section opens on its list.
+            const liveTarget = live.routes.find(r => r.key === route.key) as
+              | { state?: { key?: string; index?: number; routes?: { params?: Record<string, unknown> }[] } }
+              | undefined;
+            const nested = liveTarget?.state;
+            const nestedTop = nested?.routes?.[nested.index ?? 0];
+            if (nested?.key && (nested.index ?? 0) > 0 && nestedTop?.params?.from) {
+              navigation.dispatch({ ...StackActions.popToTop(), target: nested.key });
+            }
             // React Navigation's `navigate` is heavily overloaded on the route
             // name; with mobile's `strict: false` the per-name typing falls
             // through to a `never` parameter. Cast to a loose signature so

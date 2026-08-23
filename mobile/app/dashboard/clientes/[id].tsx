@@ -10,7 +10,8 @@ import {
   Modal as RNModal,
   TextInput,
 } from 'react-native';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { StackActions, useRoute } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ChevronLeft,
@@ -181,6 +182,29 @@ export default function ClienteDetailRoute() {
       router.replace('/dashboard/clientes' as never);
     }
   };
+
+  // A client opened from ANOTHER section (?from=job/invoice/map) is a visitor
+  // in the Clientes stack: pushed there by path, never reached through the
+  // clients list. Left mounted, several of them stack up and the Clientes tab
+  // needs one back press each to reach its list. On blur, if this screen is
+  // still the TOP of its stack (blur ⇒ tab switch, not a pushed child whose
+  // round trip must keep the origin), clear the origin and pop it off. Mirrors
+  // the job detail's cleanup; the dock also drops visitors when you enter a
+  // section, so the two together cover both exits.
+  const navigation = useNavigation();
+  const routeKey = useRoute().key;
+  useEffect(() => {
+    if (!from) return undefined;
+    return navigation.addListener('blur', () => {
+      const st = navigation.getState();
+      const top = st?.routes?.[st.index ?? 0];
+      if (top?.key !== routeKey) return;
+      navigation.setParams({ from: undefined, jobId: undefined, invoice: undefined } as never);
+      // Never pop the last route out from under the navigator.
+      if ((st?.index ?? 0) > 0) navigation.dispatch(StackActions.pop());
+    });
+  }, [from, navigation, routeKey]);
+
   const supabase = createSupabaseClient();
   const { business, user, currentRole } = useApp();
   // Write gates: viewer / field can read a client but not edit or delete it,

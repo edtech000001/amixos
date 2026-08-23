@@ -8,7 +8,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { signedUrl } from '@amixos/shared/lib/storageUrls';
 import { INVOICE_PAYMENT_BUCKET, paymentPhotoPath } from '@amixos/shared/lib/invoicePayments';
 import { autonameEnabled, autonameJobTitle, detectAutonameType } from '@amixos/shared/lib/autoname';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { StackActions, useRoute } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
 import { WEB_APP_URL } from '@/lib/webUrl';
@@ -124,6 +125,25 @@ export default function FacturaDetailRoute() {
       router.replace('/dashboard/facturas' as never);
     }
   };
+
+  // An invoice opened from a job or a client is a visitor in the Facturas
+  // stack — pushed by path, not reached through the invoices list. Clear the
+  // origin and pop it on blur so those don't stack up (mirrors the job and
+  // client detail screens; the dock drops visitors on section entry too).
+  const navigation = useNavigation();
+  const routeKey = useRoute().key;
+  useEffect(() => {
+    if (!params.from) return undefined;
+    return navigation.addListener('blur', () => {
+      const st = navigation.getState();
+      const top = st?.routes?.[st.index ?? 0];
+      if (top?.key !== routeKey) return;
+      navigation.setParams({ from: undefined, jobId: undefined, clientId: undefined } as never);
+      // Never pop the last route out from under the navigator.
+      if ((st?.index ?? 0) > 0) navigation.dispatch(StackActions.pop());
+    });
+  }, [params.from, navigation, routeKey]);
+
   const supabase = createSupabaseClient();
   const { business, currentRole } = useApp();
   const { t: full, locale } = useLang();
