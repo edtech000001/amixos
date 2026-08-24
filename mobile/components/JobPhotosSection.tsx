@@ -342,24 +342,24 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
             <View className="bg-surface rounded-2xl overflow-hidden">
               <Pressable
                 onPress={() => pickAndUpload('camera')}
-                className="flex-row items-center gap-3 px-5 py-4 active:bg-border-soft border-b border-border-soft"
+                className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft border-b border-border-soft"
               >
-                <Camera size={18} color={c.primary} />
-                <Text className="text-sm font-semibold text-ink">{t.takePhoto}</Text>
+                <Camera size={24} color={c.primary} />
+                <Text className="text-lg font-semibold text-ink">{t.takePhoto}</Text>
               </Pressable>
               <Pressable
                 onPress={() => pickAndUpload('library')}
-                className="flex-row items-center gap-3 px-5 py-4 active:bg-border-soft"
+                className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft"
               >
-                <ImagePlus size={18} color={c.primary} />
-                <Text className="text-sm font-semibold text-ink">{t.chooseFromLibrary}</Text>
+                <ImagePlus size={24} color={c.primary} />
+                <Text className="text-lg font-semibold text-ink">{t.chooseFromLibrary}</Text>
               </Pressable>
             </View>
             <Pressable
               onPress={() => setPickerOpen(false)}
-              className="mt-3 items-center py-3.5 rounded-2xl bg-border-soft active:bg-border"
+              className="mt-3 items-center py-4 rounded-2xl bg-border-soft active:bg-border"
             >
-              <Text className="text-sm font-semibold text-ink">{tc.buttons.cancel}</Text>
+              <Text className="text-lg font-semibold text-ink">{tc.buttons.cancel}</Text>
             </Pressable>
           </Pressable>
         </Pressable>

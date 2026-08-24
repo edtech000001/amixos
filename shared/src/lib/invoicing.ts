@@ -831,7 +831,12 @@ export async function autopriceInvoice(
     // Prefer the mapped qty custom field (e.g. "Total ft"), then the line's own
     // qty, then a number pulled from the description.
     const fromField = placeholderQtyFor({ custom_fields: jctx?.custom_fields ?? null }, opts.qtyField);
-    const measured = fromField ?? (qty > 1 ? qty : (extractQuantity(li.description ?? '') ?? 1));
+    // When the business maps a qty custom field (e.g. "Total ft / lbs"), that
+    // field is the source of truth: if the crew left it blank/0 we default to 1
+    // so the user sees an obviously-unset qty, rather than scraping a number
+    // out of the job title (a "Grain Bin 36x7R" title priced 36 lbs).
+    const scraped = opts.qtyField && jctx ? null : extractQuantity(li.description ?? '');
+    const measured = fromField ?? (qty > 1 ? qty : (scraped ?? 1));
     // Job's own state (normalized), else the client's state.
     const state = normStateCode(jctx?.job_state) ?? normStateCode(clientState);
     const priced = autopriceLine(item, measured, { state, clientId: opts.clientId }, addons, { splitFlatAddons: true });

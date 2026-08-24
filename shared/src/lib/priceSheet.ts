@@ -369,12 +369,24 @@ export function diagnosePriceMatches(
   return out;
 }
 
-/** Pull a measured quantity out of free text ("1200 ft", "6-180ft", "205'").
- *  Prefers a number adjacent to a unit; else the largest standalone number. */
+/** Size/model designations that are NOT quantities: "36x7R", "36 x 7",
+ *  "12X20". Scraping these produced nonsense qtys (a "Grain Bin 36x7R" line
+ *  autopriced at qty 36), so they're stripped before the bare-number pass. */
+const DIMENSION_TOKEN = /\d[\d.,]*\s*[x×]\s*\d[\d.,]*[a-z0-9]*/g;
+
+/** A standalone number — not glued to letters on either side, so model codes
+ *  like "7R" / "R12" never read as a quantity. Leading group = the boundary
+ *  char it consumed (no lookbehind: Hermes support is inconsistent). */
+const STANDALONE_NUMBER = /(?:^|[^0-9a-z.])(\d[\d,]*(?:\.\d+)?)(?![0-9a-z])/g;
+
+/** Pull a measured quantity out of free text ("1200 ft", "6-180ft", "205'",
+ *  "8500 lbs"). Prefers a number adjacent to a unit; else the largest
+ *  standalone number. Returns null when the text has no quantity-like number —
+ *  the caller then falls back to 1 instead of inventing one. */
 export function extractQuantity(text: string): number | null {
   const t = text.toLowerCase();
-  // Number immediately before ft / feet / ' / " .
-  const unit = /(\d[\d,]*(?:\.\d+)?)\s*(?:ft|feet|'|foot)/g;
+  // Number immediately before a measured unit: ft / feet / foot / ' / " / lbs.
+  const unit = /(\d[\d,]*(?:\.\d+)?)\s*(?:(?:ft|feet|foot|lbs|lb|pounds|pound)\b|['"])/g;
   let m: RegExpExecArray | null;
   let best: number | null = null;
   while ((m = unit.exec(t))) {
@@ -382,9 +394,16 @@ export function extractQuantity(text: string): number | null {
     if (Number.isFinite(n) && (best == null || n > best)) best = n;
   }
   if (best != null) return best;
-  // Fallback: the largest bare number (avoids matching "7 Tower" → 7 when a
-  // real footage exists, but still returns something).
-  const nums = (t.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map(x => parseFloat(x.replace(/,/g, '')));
-  const max = nums.filter(Number.isFinite).sort((a, b) => b - a)[0];
+  // Fallback: the largest standalone number (avoids matching "7 Tower" → 7 when
+  // a real footage exists, but still returns something). Dimensions and
+  // letter-glued model codes are excluded — they are not quantities.
+  const cleaned = t.replace(DIMENSION_TOKEN, ' ');
+  const nums: number[] = [];
+  STANDALONE_NUMBER.lastIndex = 0;
+  while ((m = STANDALONE_NUMBER.exec(cleaned))) {
+    const n = parseFloat(m[1].replace(/,/g, ''));
+    if (Number.isFinite(n)) nums.push(n);
+  }
+  const max = nums.sort((a, b) => b - a)[0];
   return max ?? null;
 }

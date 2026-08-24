@@ -1575,17 +1575,17 @@ export default function RentalsScreen() {
         <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
           <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
           <View className="bg-surface rounded-2xl overflow-hidden">
-            <Pressable onPress={() => onPick('camera')} className="flex-row items-center gap-3 px-5 py-4 active:bg-border-soft border-b border-border-soft">
-              <Camera size={18} color={c.primary} />
-              <Text className="text-sm font-semibold text-ink">{t.photos.takePhoto}</Text>
+            <Pressable onPress={() => onPick('camera')} className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft border-b border-border-soft">
+              <Camera size={24} color={c.primary} />
+              <Text className="text-lg font-semibold text-ink">{t.photos.takePhoto}</Text>
             </Pressable>
-            <Pressable onPress={() => onPick('library')} className="flex-row items-center gap-3 px-5 py-4 active:bg-border-soft">
-              <ImagePlus size={18} color={c.primary} />
-              <Text className="text-sm font-semibold text-ink">{t.photos.chooseFromLibrary}</Text>
+            <Pressable onPress={() => onPick('library')} className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft">
+              <ImagePlus size={24} color={c.primary} />
+              <Text className="text-lg font-semibold text-ink">{t.photos.chooseFromLibrary}</Text>
             </Pressable>
           </View>
-          <Pressable onPress={onClose} className="mt-3 items-center py-3.5 rounded-2xl bg-border-soft active:bg-border">
-            <Text className="text-sm font-semibold text-ink">{tc.buttons.cancel}</Text>
+          <Pressable onPress={onClose} className="mt-3 items-center py-4 rounded-2xl bg-border-soft active:bg-border">
+            <Text className="text-lg font-semibold text-ink">{tc.buttons.cancel}</Text>
           </Pressable>
         </View>
       </View>
@@ -2282,17 +2282,17 @@ export default function RentalsScreen() {
             <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
               <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
               <View className="bg-surface rounded-2xl overflow-hidden">
-                <Pressable onPress={() => addPropertyPhoto('camera')} className="flex-row items-center gap-3 px-5 py-4 active:bg-border-soft border-b border-border-soft">
-                  <Camera size={18} color={c.primary} />
-                  <Text className="text-sm font-semibold text-ink">{t.photos.takePhoto}</Text>
+                <Pressable onPress={() => addPropertyPhoto('camera')} className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft border-b border-border-soft">
+                  <Camera size={24} color={c.primary} />
+                  <Text className="text-lg font-semibold text-ink">{t.photos.takePhoto}</Text>
                 </Pressable>
-                <Pressable onPress={() => addPropertyPhoto('library')} className="flex-row items-center gap-3 px-5 py-4 active:bg-border-soft">
-                  <ImagePlus size={18} color={c.primary} />
-                  <Text className="text-sm font-semibold text-ink">{t.photos.chooseFromLibrary}</Text>
+                <Pressable onPress={() => addPropertyPhoto('library')} className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft">
+                  <ImagePlus size={24} color={c.primary} />
+                  <Text className="text-lg font-semibold text-ink">{t.photos.chooseFromLibrary}</Text>
                 </Pressable>
               </View>
-              <Pressable onPress={() => setPhotoChooserOpen(false)} className="mt-3 items-center py-3.5 rounded-2xl bg-border-soft active:bg-border">
-                <Text className="text-sm font-semibold text-ink">{tc.buttons.cancel}</Text>
+              <Pressable onPress={() => setPhotoChooserOpen(false)} className="mt-3 items-center py-4 rounded-2xl bg-border-soft active:bg-border">
+                <Text className="text-lg font-semibold text-ink">{tc.buttons.cancel}</Text>
               </Pressable>
             </View>
           </View>

@@ -27,7 +27,7 @@ import {
   type InvoiceDetail,
   type InvoicePaymentRow,
 } from '@amixos/shared/screens/dashboard/InvoiceDetailScreen';
-import { DatePicker, Select } from '@amixos/shared/ui';
+import { DatePicker } from '@amixos/shared/ui';
 import type { InvoiceLang } from '@amixos/shared';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
@@ -43,7 +43,9 @@ import {
   type InvoiceBranding,
 } from '@amixos/shared/lib/invoiceTemplate';
 
-const PAY_METHODS = ['cash', 'check', 'card', 'transfer', 'zelle', 'cashapp', 'venmo', 'paypal', 'moneyOrder', 'other'] as const;
+// Check first — the default and most common method for these businesses.
+const PAY_METHODS = ['check', 'cash', 'card', 'transfer', 'zelle', 'cashapp', 'venmo', 'paypal', 'moneyOrder', 'other'] as const;
+const DEFAULT_PAY_METHOD = 'check';
 type PayMethodKey = (typeof PAY_METHODS)[number];
 
 const genToken = () => secureShareToken();
@@ -545,7 +547,7 @@ export default function FacturaDetailRoute() {
   const [payments, setPayments] = useState<InvoicePaymentRow[]>([]);
   const [payOpen, setPayOpen] = useState(false);
   const [payAmount, setPayAmount] = useState('');
-  const [payMethodKey, setPayMethodKey] = useState<PayMethodKey>('cash');
+  const [payMethodKey, setPayMethodKey] = useState<PayMethodKey>(DEFAULT_PAY_METHOD);
   const [payMethodOther, setPayMethodOther] = useState('');
   const [payDate, setPayDate] = useState('');
   const [payBusy, setPayBusy] = useState(false);
@@ -619,7 +621,7 @@ export default function FacturaDetailRoute() {
     const remaining = Math.max(0, invoice.totalAmount - paid);
     setPayEditId(null);
     setPayAmount(remaining > 0 ? String(Math.round(remaining * 100) / 100) : '');
-    setPayMethodKey('cash');
+    setPayMethodKey(DEFAULT_PAY_METHOD);
     setPayMethodOther('');
     setPayDate(new Date().toISOString().slice(0, 10));
     setPayPhotoUri(null);
@@ -634,7 +636,7 @@ export default function FacturaDetailRoute() {
     const key = PAY_METHODS.find(k => tInv.payments.methods[k] === p.method);
     setPayEditId(p.id);
     setPayAmount(String(p.amount));
-    setPayMethodKey(key ?? (p.method ? 'other' : 'cash'));
+    setPayMethodKey(key ?? (p.method ? 'other' : DEFAULT_PAY_METHOD));
     setPayMethodOther(key || !p.method ? '' : p.method);
     setPayDate(p.paidOn);
     setPayPhotoUri(null);
@@ -1420,47 +1422,85 @@ export default function FacturaDetailRoute() {
       {/* Record payment — amount defaults to the remaining balance */}
       <RNModal visible={payOpen} transparent animationType="fade" onRequestClose={() => setPayOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <Pressable onPress={() => setPayOpen(false)} className="flex-1 bg-black/40 justify-end">
-          <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
-            <View className="flex-row items-center justify-between mb-3">
-              <Text className="text-lg font-bold text-ink">{payEditId ? tInv.payments.editTitle : tInv.payments.recordTitle}</Text>
-              <Pressable onPress={() => setPayOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                <X size={22} color={c.faint} />
+        {/* Backdrop is an absolute FIRST child and the card a plain sibling —
+            the card renders on top, so its ScrollView drags natively. */}
+        <View className="flex-1 justify-end">
+          <Pressable onPress={() => setPayOpen(false)} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)' }} />
+          <View className="bg-card rounded-t-3xl pt-3 pb-10" style={{ maxHeight: '92%' }}>
+            <View className="items-center pb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
+            <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">
+              <Text className="text-xl font-bold text-ink">{payEditId ? tInv.payments.editTitle : tInv.payments.recordTitle}</Text>
+              <Pressable onPress={() => setPayOpen(false)} hitSlop={10} className="p-1 -mr-1 active:opacity-60">
+                <X size={24} color={c.faint} />
               </Pressable>
             </View>
 
-            <Text className="text-sm font-semibold text-ink mb-1.5">{tInv.payments.amountLabel}</Text>
-            <View className="relative justify-center mb-1">
-              <Text className="absolute left-3 z-10 text-faint">$</Text>
-              <TextInput
-                value={payAmount}
-                onChangeText={v => setPayAmount(v.replace(/[^0-9.]/g, ''))}
-                keyboardType="decimal-pad"
-                placeholderTextColor={c.faint}
-                className="bg-card border border-border rounded-xl pl-6 pr-32 py-2.5 text-sm text-ink"
-              />
-              <Pressable
-                onPress={() => {
-                  if (!invoice) return;
-                  const remaining = Math.max(0, invoice.totalAmount - payments.filter(p => p.id !== payEditId).reduce((sum, p) => sum + p.amount, 0));
-                  setPayAmount(String(Math.round(remaining * 100) / 100));
-                }}
-                className="absolute right-2 rounded-full bg-indigo-500/10 px-2.5 py-1 active:bg-indigo-100"
-              >
-                <Text className="text-xs font-semibold text-indigo-600">{tInv.payments.fullAmountBtn}</Text>
-              </Pressable>
-            </View>
-            {invoice && parseFloat(payAmount) > 0 && parseFloat(payAmount) >= (invoice.totalAmount - payments.filter(p => p.id !== payEditId).reduce((sum, p) => sum + p.amount, 0)) - 0.005 ? (
-              <Text className="text-xs text-emerald-600 mb-2">{tInv.payments.paidInFullHint}</Text>
-            ) : <View className="mb-2" />}
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 4 }} keyboardShouldPersistTaps="handled">
+            {(() => {
+              // Balance still owed excluding the payment being edited — drives
+              // the context line, the "Full amount" chip and the paid-in-full
+              // hint, so all three agree.
+              const otherPaid = payments.filter(p => p.id !== payEditId).reduce((sum, p) => sum + p.amount, 0);
+              const remaining = invoice ? Math.max(0, invoice.totalAmount - otherPaid) : 0;
+              const entered = parseFloat(payAmount);
+              const settlesInFull = !!invoice && entered > 0 && entered >= remaining - 0.005;
+              return (
+                <>
+                  <View className="flex-row items-baseline justify-between mb-2">
+                    <Text className="text-base font-semibold text-ink">{tInv.payments.amountLabel}</Text>
+                    {invoice ? (
+                      <Text className="text-sm text-muted">
+                        {tInv.payments.remaining}: <Text className="font-semibold text-ink">${formatNumberGrouped((Math.round(remaining * 100) / 100).toFixed(2))}</Text>
+                      </Text>
+                    ) : null}
+                  </View>
+                  {/* Big money field — this is the number the user is checking. */}
+                  <View className="flex-row items-center bg-surface border border-border rounded-2xl px-4 py-3">
+                    <Text className="text-2xl font-semibold text-faint mr-1.5">$</Text>
+                    <TextInput
+                      value={formatMoneyInput(payAmount)}
+                      onChangeText={v => setPayAmount(v.replace(/[^0-9.]/g, ''))}
+                      keyboardType="decimal-pad"
+                      placeholder="0"
+                      placeholderTextColor={c.faint}
+                      className="flex-1 text-3xl font-bold text-ink p-0"
+                      style={{ paddingVertical: 2 }}
+                    />
+                    <Pressable
+                      onPress={() => setPayAmount(String(Math.round(remaining * 100) / 100))}
+                      className="rounded-full bg-primary/10 px-3.5 py-2 active:opacity-70"
+                    >
+                      <Text className="text-sm font-semibold text-primary">{tInv.payments.fullAmountBtn}</Text>
+                    </Pressable>
+                  </View>
+                  <View style={{ minHeight: 22 }} className="justify-center">
+                    {settlesInFull ? (
+                      <Text className="text-sm font-medium text-emerald-600 mt-1.5">{tInv.payments.paidInFullHint}</Text>
+                    ) : null}
+                  </View>
+                </>
+              );
+            })()}
 
-            <View className="mb-3">
-              <Select
-                label={tInv.payments.methodLabel}
-                value={payMethodKey}
-                onValueChange={v => setPayMethodKey(v as PayMethodKey)}
-                options={PAY_METHODS.map(k => ({ value: k, label: tInv.payments.methods[k] }))}
-              />
+            {/* Methods as tappable pills, NOT a Select: Select opens its own
+                RNModal, and iOS refuses to present a second modal over this
+                sheet. Pills are also one-tap and bigger. Check is first. */}
+            <View className="mt-3">
+              <Text className="text-sm font-semibold text-ink mb-2">{tInv.payments.methodLabel}</Text>
+              <View className="flex-row flex-wrap gap-2">
+                {PAY_METHODS.map(k => {
+                  const on = payMethodKey === k;
+                  return (
+                    <Pressable
+                      key={k}
+                      onPress={() => setPayMethodKey(k)}
+                      className={`rounded-full px-4 py-2.5 border ${on ? 'bg-primary border-primary' : 'bg-surface border-border'} active:opacity-70`}
+                    >
+                      <Text className={`text-base font-semibold ${on ? 'text-white' : 'text-ink'}`}>{tInv.payments.methods[k]}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             </View>
             {payMethodKey === 'other' ? (
               <TextInput
@@ -1468,25 +1508,33 @@ export default function FacturaDetailRoute() {
                 onChangeText={setPayMethodOther}
                 placeholder={tInv.payments.otherPlaceholder}
                 placeholderTextColor={c.faint}
-                className="bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-ink mb-3"
+                className="bg-card border border-border rounded-2xl px-4 py-3.5 text-base text-ink mt-2"
               />
             ) : null}
 
-            <DatePicker label={tInv.payments.dateLabel} value={payDate} onChange={setPayDate} />
+            <View className="mt-4">
+              <DatePicker label={tInv.payments.dateLabel} value={payDate} onChange={setPayDate} />
+            </View>
 
-            {/* Optional payment photo (e.g. a picture of the check). */}
-            <View className="mt-3">
-              <Text className="text-sm font-semibold text-ink mb-1.5">{tInv.payments.photoLabel}</Text>
+            {/* Optional payment photo (e.g. a picture of the check) — a tall
+                dashed drop tile, since a check photo is the point of it. */}
+            <View className="mt-4">
+              <Text className="text-sm font-semibold text-ink mb-2">{tInv.payments.photoLabel}</Text>
               {payPhotoUri || payPhotoExistingUrl ? (
-                <View className="flex-row items-center gap-3">
-                  <Image source={{ uri: payPhotoUri ?? payPhotoExistingUrl ?? '' }} style={{ width: 56, height: 56, borderRadius: 8 }} />
-                  <Pressable onPress={() => setPayPhotoChooserOpen(true)} className="active:opacity-60"><Text className="text-sm text-primary font-semibold">{tInv.payments.changePhoto}</Text></Pressable>
-                  <Pressable onPress={() => { setPayPhotoUri(null); setPayPhotoPath(null); setPayPhotoExistingUrl(null); setPayPhotoRemoved(true); }} className="active:opacity-60"><Text className="text-sm text-red-600 font-semibold">{tInv.payments.removePhoto}</Text></Pressable>
+                <View className="flex-row items-center gap-4 bg-surface border border-border rounded-2xl p-3">
+                  <Image source={{ uri: payPhotoUri ?? payPhotoExistingUrl ?? '' }} style={{ width: 72, height: 72, borderRadius: 12 }} />
+                  <View className="flex-1 gap-2">
+                    <Pressable onPress={() => setPayPhotoChooserOpen(true)} className="active:opacity-60"><Text className="text-base text-primary font-semibold">{tInv.payments.changePhoto}</Text></Pressable>
+                    <Pressable onPress={() => { setPayPhotoUri(null); setPayPhotoPath(null); setPayPhotoExistingUrl(null); setPayPhotoRemoved(true); }} className="active:opacity-60"><Text className="text-base text-red-600 font-semibold">{tInv.payments.removePhoto}</Text></Pressable>
+                  </View>
                 </View>
               ) : (
-                <Pressable onPress={() => setPayPhotoChooserOpen(true)} className="flex-row items-center gap-2 bg-border-soft rounded-xl py-2.5 px-3 active:opacity-80">
-                  <Camera size={18} color={c.muted} />
-                  <Text className="text-sm text-muted font-medium">{tInv.payments.addPhoto}</Text>
+                <Pressable
+                  onPress={() => setPayPhotoChooserOpen(true)}
+                  className="items-center justify-center gap-2 bg-surface border border-dashed border-border rounded-2xl py-7 px-4 active:opacity-80"
+                >
+                  <Camera size={26} color={c.muted} />
+                  <Text className="text-base text-muted font-medium">{tInv.payments.addPhoto}</Text>
                 </Pressable>
               )}
             </View>
@@ -1494,12 +1542,13 @@ export default function FacturaDetailRoute() {
             <Pressable
               onPress={submitPayment}
               disabled={payBusy || !(parseFloat(payAmount) >= 0)}
-              className="mt-4 py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50"
+              className="mt-6 py-4 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50"
             >
-              <Text className="text-sm font-semibold text-white">{payEditId ? tc.buttons.save : tInv.payments.recordBtn}</Text>
+              <Text className="text-base font-bold text-white">{payEditId ? tc.buttons.save : tInv.payments.recordBtn}</Text>
             </Pressable>
-          </Pressable>
-        </Pressable>
+            </ScrollView>
+          </View>
+        </View>
 
         {/* Camera / library chooser — an in-modal absolute overlay, NOT a
             nested RNModal (iOS silently refuses to present a second one). */}
@@ -1513,24 +1562,24 @@ export default function FacturaDetailRoute() {
               <View className="bg-surface rounded-2xl overflow-hidden">
                 <Pressable
                   onPress={() => pickPaymentPhoto('camera')}
-                  className="flex-row items-center gap-3 px-5 py-4 active:bg-border-soft border-b border-border-soft"
+                  className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft border-b border-border-soft"
                 >
-                  <Camera size={18} color={c.primary} />
-                  <Text className="text-sm font-semibold text-ink">{tj.detail.photos.takePhoto}</Text>
+                  <Camera size={24} color={c.primary} />
+                  <Text className="text-lg font-semibold text-ink">{tj.detail.photos.takePhoto}</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => pickPaymentPhoto('library')}
-                  className="flex-row items-center gap-3 px-5 py-4 active:bg-border-soft"
+                  className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft"
                 >
-                  <ImagePlus size={18} color={c.primary} />
-                  <Text className="text-sm font-semibold text-ink">{tj.detail.photos.chooseFromLibrary}</Text>
+                  <ImagePlus size={24} color={c.primary} />
+                  <Text className="text-lg font-semibold text-ink">{tj.detail.photos.chooseFromLibrary}</Text>
                 </Pressable>
               </View>
               <Pressable
                 onPress={() => setPayPhotoChooserOpen(false)}
-                className="mt-3 items-center py-3.5 rounded-2xl bg-border-soft active:bg-border"
+                className="mt-3 items-center py-4 rounded-2xl bg-border-soft active:bg-border"
               >
-                <Text className="text-sm font-semibold text-ink">{tc.buttons.cancel}</Text>
+                <Text className="text-lg font-semibold text-ink">{tc.buttons.cancel}</Text>
               </Pressable>
             </View>
           </View>

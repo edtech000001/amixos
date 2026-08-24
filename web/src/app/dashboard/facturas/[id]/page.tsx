@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
-import { RotateCw, X } from 'lucide-react';
+import { Camera, RotateCw, X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useLang } from '@/i18n/LangProvider';
@@ -34,7 +34,9 @@ import { formatDateLong, formatNumberGrouped, formatMoneyInput } from '@amixos/s
 import { secureShareToken } from '@amixos/shared/lib/shareToken';
 import { normalizeImageFile } from '@/lib/imageFile';
 
-const PAY_METHODS = ['cash', 'check', 'card', 'transfer', 'zelle', 'cashapp', 'venmo', 'paypal', 'moneyOrder', 'other'] as const;
+// Check first — the default and most common method for these businesses.
+const PAY_METHODS = ['check', 'cash', 'card', 'transfer', 'zelle', 'cashapp', 'venmo', 'paypal', 'moneyOrder', 'other'] as const;
+const DEFAULT_PAY_METHOD = 'check';
 type PayMethodKey = (typeof PAY_METHODS)[number];
 
 const genToken = () => secureShareToken();
@@ -127,7 +129,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const [payments, setPayments] = useState<InvoicePaymentRow[]>([]);
   const [payOpen, setPayOpen] = useState(false);
   const [payAmount, setPayAmount] = useState('');
-  const [payMethodKey, setPayMethodKey] = useState<PayMethodKey>('cash');
+  const [payMethodKey, setPayMethodKey] = useState<PayMethodKey>(DEFAULT_PAY_METHOD);
   const [payMethodOther, setPayMethodOther] = useState('');
   const [payDate, setPayDate] = useState('');
   const [payBusy, setPayBusy] = useState(false);
@@ -675,7 +677,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     const remaining = Math.max(0, invoice.totalAmount - paid);
     setPayEditId(null);
     setPayAmount(remaining > 0 ? String(Math.round(remaining * 100) / 100) : '');
-    setPayMethodKey('cash');
+    setPayMethodKey(DEFAULT_PAY_METHOD);
     setPayMethodOther('');
     setPayDate(new Date().toISOString().slice(0, 10));
     setPayPhotoFile(null);
@@ -689,7 +691,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     const key = PAY_METHODS.find(k => tInv.payments.methods[k] === p.method);
     setPayEditId(p.id);
     setPayAmount(String(p.amount));
-    setPayMethodKey(key ?? (p.method ? 'other' : 'cash'));
+    setPayMethodKey(key ?? (p.method ? 'other' : DEFAULT_PAY_METHOD));
     setPayMethodOther(key || !p.method ? '' : p.method);
     setPayDate(p.paidOn);
     setPayPhotoFile(null);
@@ -1281,80 +1283,111 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       </Modal>
 
       {/* Record payment — amount defaults to the remaining balance */}
-      <Modal open={payOpen} onClose={() => setPayOpen(false)} title={payEditId ? tInv.payments.editTitle : tInv.payments.recordTitle} size="sm">
+      <Modal open={payOpen} onClose={() => setPayOpen(false)} title={payEditId ? tInv.payments.editTitle : tInv.payments.recordTitle} size="md">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-ink">{tInv.payments.amountLabel}</label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint text-sm">$</span>
-              <input
-                value={payAmount}
-                inputMode="decimal"
-                onChange={e => setPayAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-                className="w-full rounded-xl border border-border bg-card pl-6 pr-32 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (!invoice) return;
-                  const remaining = Math.max(0, invoice.totalAmount - payments.filter(p => p.id !== payEditId).reduce((sum, p) => sum + p.amount, 0));
-                  setPayAmount(String(Math.round(remaining * 100) / 100));
-                }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-primary/10 text-primary hover:bg-primary/20 px-2.5 py-1 text-xs font-semibold transition"
-              >
-                {tInv.payments.fullAmountBtn}
-              </button>
-            </div>
-            {invoice && parseFloat(payAmount) >= (invoice.totalAmount - payments.filter(p => p.id !== payEditId).reduce((sum, p) => sum + p.amount, 0)) - 0.005 && parseFloat(payAmount) > 0 ? (
-              <p className="text-xs text-emerald-600">{tInv.payments.paidInFullHint}</p>
-            ) : null}
+            {(() => {
+              // Balance still owed excluding the payment being edited — drives
+              // the context line, the "Full amount" chip and the paid-in-full
+              // hint, so all three agree.
+              const otherPaid = payments.filter(p => p.id !== payEditId).reduce((sum, p) => sum + p.amount, 0);
+              const remaining = invoice ? Math.max(0, invoice.totalAmount - otherPaid) : 0;
+              const entered = parseFloat(payAmount);
+              const settlesInFull = !!invoice && entered > 0 && entered >= remaining - 0.005;
+              return (
+                <>
+                  <div className="flex items-baseline justify-between">
+                    <label className="text-sm font-semibold text-ink">{tInv.payments.amountLabel}</label>
+                    {invoice ? (
+                      <span className="text-sm text-muted">
+                        {tInv.payments.remaining}: <span className="font-semibold text-ink">${formatNumberGrouped((Math.round(remaining * 100) / 100).toFixed(2))}</span>
+                      </span>
+                    ) : null}
+                  </div>
+                  {/* Big money field — this is the number the user is checking. */}
+                  <div className="flex items-center gap-2 rounded-2xl border border-border bg-surface px-4 py-3 focus-within:ring-2 focus-within:ring-primary">
+                    <span className="text-2xl font-semibold text-faint">$</span>
+                    <input
+                      value={formatMoneyInput(payAmount)}
+                      inputMode="decimal"
+                      placeholder="0"
+                      onChange={e => setPayAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+                      className="min-w-0 flex-1 bg-transparent text-3xl font-bold text-ink focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPayAmount(String(Math.round(remaining * 100) / 100))}
+                      className="shrink-0 rounded-full bg-primary/10 text-primary hover:bg-primary/20 px-3.5 py-2 text-sm font-semibold transition"
+                    >
+                      {tInv.payments.fullAmountBtn}
+                    </button>
+                  </div>
+                  <div className="min-h-[20px]">
+                    {settlesInFull ? <p className="text-sm font-medium text-emerald-600">{tInv.payments.paidInFullHint}</p> : null}
+                  </div>
+                </>
+              );
+            })()}
           </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-ink">{tInv.payments.methodLabel}</label>
-            <select
-              value={payMethodKey}
-              onChange={e => setPayMethodKey(e.target.value as PayMethodKey)}
-              className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
-            >
+          {/* Methods as one-click pills (Check first) instead of a dropdown —
+              the common case is one tap, and the choice stays visible. */}
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-semibold text-ink">{tInv.payments.methodLabel}</label>
+            <div className="flex flex-wrap gap-2">
               {PAY_METHODS.map(k => (
-                <option key={k} value={k}>{tInv.payments.methods[k]}</option>
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setPayMethodKey(k)}
+                  className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                    payMethodKey === k
+                      ? 'bg-primary border-primary text-white'
+                      : 'bg-surface border-border text-ink hover:bg-border-soft'
+                  }`}
+                >
+                  {tInv.payments.methods[k]}
+                </button>
               ))}
-            </select>
+            </div>
             {payMethodKey === 'other' ? (
               <input
                 value={payMethodOther}
                 onChange={e => setPayMethodOther(e.target.value)}
                 placeholder={tInv.payments.otherPlaceholder}
-                className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                className="rounded-xl border border-border bg-card px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
               />
             ) : null}
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-ink">{tInv.payments.dateLabel}</label>
+            <label className="text-sm font-semibold text-ink">{tInv.payments.dateLabel}</label>
             <input
               type="date"
               value={payDate}
               onChange={e => setPayDate(e.target.value)}
-              className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+              className="rounded-xl border border-border bg-card px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
             />
           </div>
-          {/* Optional payment photo (e.g. a picture of the check). */}
+          {/* Optional payment photo (e.g. a picture of the check) — a tall
+              dashed drop tile, since a check photo is the point of it. */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-ink">{tInv.payments.photoLabel}</label>
+            <label className="text-sm font-semibold text-ink">{tInv.payments.photoLabel}</label>
             {payPhotoFile || payPhotoExistingUrl ? (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={payPhotoFile ? URL.createObjectURL(payPhotoFile) : payPhotoExistingUrl!} alt="" className="w-14 h-14 rounded-lg object-cover border border-border" />
-                <label className="text-sm text-primary font-semibold cursor-pointer hover:underline">
-                  {tInv.payments.changePhoto}
-                  <input type="file" accept="image/*" className="hidden" onChange={async e => { const f = e.target.files?.[0]; setPayPhotoFile(f ? await normalizeImageFile(f) : null); }} />
-                </label>
-                <button type="button" onClick={() => { setPayPhotoFile(null); setPayPhotoPath(null); setPayPhotoExistingUrl(null); setPayPhotoRemoved(true); }} className="text-sm text-red-600 font-semibold hover:underline">
-                  {tInv.payments.removePhoto}
-                </button>
+                <img src={payPhotoFile ? URL.createObjectURL(payPhotoFile) : payPhotoExistingUrl!} alt="" className="w-20 h-20 rounded-xl object-cover border border-border" />
+                <div className="flex flex-col items-start gap-2">
+                  <label className="text-sm text-primary font-semibold cursor-pointer hover:underline">
+                    {tInv.payments.changePhoto}
+                    <input type="file" accept="image/*" className="hidden" onChange={async e => { const f = e.target.files?.[0]; setPayPhotoFile(f ? await normalizeImageFile(f) : null); }} />
+                  </label>
+                  <button type="button" onClick={() => { setPayPhotoFile(null); setPayPhotoPath(null); setPayPhotoExistingUrl(null); setPayPhotoRemoved(true); }} className="text-sm text-red-600 font-semibold hover:underline">
+                    {tInv.payments.removePhoto}
+                  </button>
+                </div>
               </div>
             ) : (
-              <label className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-surface px-3 py-2.5 text-sm text-muted font-medium cursor-pointer hover:bg-border-soft">
+              <label className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-surface px-4 py-8 text-base text-muted font-medium cursor-pointer hover:bg-border-soft transition">
+                <Camera size={26} className="text-muted" />
                 {tInv.payments.addPhoto}
                 <input type="file" accept="image/*" className="hidden" onChange={async e => { const f = e.target.files?.[0]; setPayPhotoFile(f ? await normalizeImageFile(f) : null); }} />
               </label>
