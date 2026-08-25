@@ -891,6 +891,8 @@ export type DashboardDict = {
         addBtn: string;
         takePhoto: string;
         chooseFromLibrary: string;
+        pastePhoto: string;
+        pasteEmpty: string;
         empty: string;
         uploading: string;
         uploadError: string;
@@ -2440,6 +2442,8 @@ export type DashboardDict = {
         addBtn: string;
         takePhoto: string;
         chooseFromLibrary: string;
+        pastePhoto: string;
+        pasteEmpty: string;
         uploading: string;
         limitHit: string;
         uploadError: string;
@@ -3939,6 +3943,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
           addBtn: 'Agregar foto',
           takePhoto: 'Tomar foto',
           chooseFromLibrary: 'Elegir de la galería',
+          pastePhoto: 'Pegar foto copiada',
+          pasteEmpty: 'No hay ninguna foto copiada.',
           empty: 'Aún no hay fotos de este trabajo.',
           uploading: 'Subiendo...',
           uploadError: 'No se pudo subir la foto. Intenta de nuevo.',
@@ -5461,6 +5467,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
           addBtn: 'Agregar',
           takePhoto: 'Tomar foto',
           chooseFromLibrary: 'Elegir de la galería',
+          pastePhoto: 'Pegar foto copiada',
+          pasteEmpty: 'No hay ninguna foto copiada.',
           uploading: 'Subiendo…',
           limitHit: 'Máximo {{max}} fotos por propiedad.',
           uploadError: 'No se pudo subir la foto. Intenta de nuevo.',
@@ -6986,6 +6994,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
           addBtn: 'Add photo',
           takePhoto: 'Take photo',
           chooseFromLibrary: 'Choose from library',
+          pastePhoto: 'Paste copied photo',
+          pasteEmpty: 'No copied photo found.',
           empty: 'No photos for this job yet.',
           uploading: 'Uploading...',
           uploadError: "Couldn't upload the photo. Try again.",
@@ -8508,6 +8518,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
           addBtn: 'Add',
           takePhoto: 'Take photo',
           chooseFromLibrary: 'Choose from library',
+          pastePhoto: 'Paste copied photo',
+          pasteEmpty: 'No copied photo found.',
           uploading: 'Uploading…',
           limitHit: 'Maximum {{max}} photos per property.',
           uploadError: "Couldn't upload the photo. Try again.",

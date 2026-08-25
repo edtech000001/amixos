@@ -25,6 +25,8 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { normalizeImageFiles } from '@/lib/imageFile';
+import { usePasteImage } from '@/lib/usePasteImage';
+import { PasteHint } from '@/components/ui/PasteHint';
 import {
   EXPENSE_CATEGORIES,
   LEASE_DOC_MAX_BYTES,
@@ -713,12 +715,30 @@ export function PropertyDetail({
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
+  // Ctrl/Cmd+V routes to whichever photo the open modal is asking for — the
+  // payment's check picture, the expense's receipt, else the property gallery.
+  usePasteImage(
+    true,
+    files => {
+      if (payOpen) { setPayPhotoFile(files[0]); setPayPhotoRemoved(false); return; }
+      if (expenseFormOpen) { setReceiptFile(files[0]); setReceiptRemoved(false); return; }
+      void uploadPropertyPhotos(files);
+    },
+    [payOpen, expenseFormOpen, photos],
+  );
+
   const onPhotosChosen = async (ev: React.ChangeEvent<HTMLInputElement>) => {
     // Copy BEFORE clearing: input.files is a LIVE FileList, so resetting
     // value empties the reference too — the old order silently dropped every
     // selection (the "photo does nothing" bug).
     const files = Array.from(ev.target.files ?? []);
     ev.target.value = '';
+    await uploadPropertyPhotos(files);
+  };
+
+  /** Resize + upload images into the property gallery. Shared by the file
+   *  input and the Ctrl/Cmd+V paste path. */
+  const uploadPropertyPhotos = async (files: File[]) => {
     if (files.length === 0 || !business) return;
     const picked = await normalizeImageFiles(files);
     if (photos.length + picked.length > MAX_PHOTOS_PER_PROPERTY) {
@@ -1558,15 +1578,18 @@ export function PropertyDetail({
       {!loading && tab === 'photos' ? (
         <div className="flex flex-col gap-3">
           {canEdit ? (
-            <div className="flex justify-end items-center gap-2">
-              <select value={photoCat} onChange={e => setPhotoCat(e.target.value)}
-                title={t.photos.categoryLabel}
-                className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary">
-                {photoCatOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-              <Button size="sm" onClick={() => photoInputRef.current?.click()} loading={uploadingPhoto}>
-                <Plus size={13} className="mr-1.5" />{t.photos.addBtn}
-              </Button>
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-end items-center gap-2">
+                <select value={photoCat} onChange={e => setPhotoCat(e.target.value)}
+                  title={t.photos.categoryLabel}
+                  className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary">
+                  {photoCatOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <Button size="sm" onClick={() => photoInputRef.current?.click()} loading={uploadingPhoto}>
+                  <Plus size={13} className="mr-1.5" />{t.photos.addBtn}
+                </Button>
+              </div>
+              <PasteHint className="text-right" />
             </div>
           ) : null}
           {photos.length === 0 ? (
@@ -1797,11 +1820,14 @@ export function PropertyDetail({
                 <button onClick={() => { setPayPhotoFile(null); setPayPhotoRemoved(true); }} className="text-xs font-semibold text-red-600 hover:underline">{t.payments.removePhoto}</button>
               </div>
             ) : (
-              <button onClick={() => payPhotoInputRef.current?.click()}
-                className="inline-flex items-center gap-2 rounded-xl bg-border-soft px-3 py-2 text-sm text-muted hover:bg-border">
-                <Camera size={15} />
-                {t.payments.addPhoto}
-              </button>
+              <div className="flex flex-col items-start gap-1">
+                <button onClick={() => payPhotoInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 rounded-xl bg-border-soft px-3 py-2 text-sm text-muted hover:bg-border">
+                  <Camera size={15} />
+                  {t.payments.addPhoto}
+                </button>
+                <PasteHint />
+              </div>
             )}
           </div>
           <div className="flex justify-end gap-2">
@@ -1936,11 +1962,14 @@ export function PropertyDetail({
                 <button onClick={() => { setReceiptFile(null); setReceiptRemoved(true); }} className="text-xs font-semibold text-red-600 hover:underline">{t.expenses.form.removeReceipt}</button>
               </div>
             ) : (
-              <button onClick={() => receiptInputRef.current?.click()}
-                className="inline-flex items-center gap-2 rounded-xl bg-border-soft px-3 py-2 text-sm text-muted hover:bg-border">
-                <Camera size={15} />
-                {t.expenses.form.addReceipt}
-              </button>
+              <div className="flex flex-col items-start gap-1">
+                <button onClick={() => receiptInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 rounded-xl bg-border-soft px-3 py-2 text-sm text-muted hover:bg-border">
+                  <Camera size={15} />
+                  {t.expenses.form.addReceipt}
+                </button>
+                <PasteHint />
+              </div>
             )}
           </div>
           <div className="flex justify-end gap-2">

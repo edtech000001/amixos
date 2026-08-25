@@ -15,7 +15,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, ImagePlus, X, Trash2, RotateCw, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { Camera, ImagePlus, ClipboardPaste, X, Trash2, RotateCw, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { hasClipboardImage, readClipboardImageToFile } from '@/lib/clipboardPhoto';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -62,6 +63,14 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Probed when the chooser opens — the Paste row only appears when the
+  // clipboard actually holds an image, so it never sits there dead.
+  const [canPaste, setCanPaste] = useState(false);
+  const openPicker = () => {
+    setCanPaste(false);
+    setPickerOpen(true);
+    void hasClipboardImage().then(setCanPaste);
+  };
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const viewerListRef = useRef<FlatList<JobPhoto>>(null);
 
@@ -79,12 +88,35 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
     void load();
   }, [load]);
 
-  const pickAndUpload = async (source: 'camera' | 'library') => {
-    setPickerOpen(false);
+  /** Guard shared by every add path — returns false when the job is full. */
+  const roomForAnother = () => {
     if (photos.length + pending.length >= MAX_PHOTOS_PER_JOB) {
       setError(t.limitHit.replace('{{max}}', String(MAX_PHOTOS_PER_JOB)));
+      return false;
+    }
+    return true;
+  };
+
+  /** Paste an image copied from Messages/WhatsApp/etc. — no save-to-gallery
+   *  round trip. The clipboard image is written to a durable file, then goes
+   *  through the SAME upload path as a picked photo (offline outbox included). */
+  const pasteAndUpload = async () => {
+    setPickerOpen(false);
+    if (!roomForAnother()) return;
+    setUploading(true);
+    setError('');
+    const uri = await readClipboardImageToFile();
+    if (!uri) {
+      setUploading(false);
+      setError(t.pasteEmpty);
       return;
     }
+    await uploadPhoto(uri, true);
+  };
+
+  const pickAndUpload = async (source: 'camera' | 'library') => {
+    setPickerOpen(false);
+    if (!roomForAnother()) return;
     const perm =
       source === 'camera'
         ? await ImagePicker.requestCameraPermissionsAsync()
@@ -109,17 +141,25 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
 
     setUploading(true);
     setError('');
+    await uploadPhoto(asset.uri);
+  };
+
+  /** Upload one local image uri + insert its job_photos row. Shared by the
+   *  camera, library and paste paths. Caller has already set `uploading`.
+   *  `durable` = the uri already lives in documentDirectory (paste writes it
+   *  there), so the offline copy step can be skipped. */
+  const uploadPhoto = async (sourceUri: string, durable = false) => {
     try {
       const path = jobPhotoPath(businessId, jobId, jobPhotoFilename('jpg'));
       // Offline: copy the image into the document dir so the queued upload
       // survives an app restart (the picker's temp uri can be cleared).
-      let uploadUri = asset.uri;
-      if (!isOnlineNow()) {
+      let uploadUri = sourceUri;
+      if (!durable && !isOnlineNow()) {
         try {
           const FileSystem = require('expo-file-system');
-          const durable = `${FileSystem.documentDirectory}offline_photo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.jpg`;
-          await FileSystem.copyAsync({ from: asset.uri, to: durable });
-          uploadUri = durable;
+          const durableUri = `${FileSystem.documentDirectory}offline_photo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.jpg`;
+          await FileSystem.copyAsync({ from: sourceUri, to: durableUri });
+          uploadUri = durableUri;
         } catch {
           /* expo-file-system not present yet — fall back to the temp uri */
         }
@@ -311,7 +351,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
 
           {canWrite && !atLimit ? (
             <Pressable
-              onPress={() => setPickerOpen(true)}
+              onPress={openPicker}
               disabled={uploading}
               style={{ width: tileSize, height: tileSize }}
               className="rounded-xl border-2 border-dashed border-border items-center justify-center active:bg-surface"
@@ -349,11 +389,20 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
               </Pressable>
               <Pressable
                 onPress={() => pickAndUpload('library')}
-                className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft"
+                className={`flex-row items-center gap-4 px-5 py-5 active:bg-border-soft${canPaste ? ' border-b border-border-soft' : ''}`}
               >
                 <ImagePlus size={24} color={c.primary} />
                 <Text className="text-lg font-semibold text-ink">{t.chooseFromLibrary}</Text>
               </Pressable>
+              {canPaste ? (
+                <Pressable
+                  onPress={pasteAndUpload}
+                  className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft"
+                >
+                  <ClipboardPaste size={24} color={c.primary} />
+                  <Text className="text-lg font-semibold text-ink">{t.pastePhoto}</Text>
+                </Pressable>
+              ) : null}
             </View>
             <Pressable
               onPress={() => setPickerOpen(false)}

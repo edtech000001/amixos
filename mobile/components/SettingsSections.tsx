@@ -23,6 +23,7 @@ import {
   X,
   Contrast,
 } from 'lucide-react-native';
+import { hasClipboardImage, readClipboardImageToFile, type PhotoSource } from '@/lib/clipboardPhoto';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { useApp } from '@/lib/AppContext';
@@ -309,17 +310,30 @@ export function BusinessSection() {
 
   // Logo upload is immediate (pick → upload → persist → refetch), separate
   // from the form's save pill — same flow + bucket path as onboarding.
-  const pickAndUploadLogo = async () => {
+  // Probed on mount — the Paste button only appears when the clipboard
+  // actually holds an image, so it never sits there dead.
+  const [canPasteLogo, setCanPasteLogo] = useState(false);
+  useEffect(() => { void hasClipboardImage().then(setCanPasteLogo); }, []);
+
+  const pickAndUploadLogo = async (source: PhotoSource = 'library') => {
     if (!business) return;
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) { setMsg({ text: t.business.logoError, isError: true }); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-      allowsEditing: true,
-    });
-    if (result.canceled) return;
-    const asset = result.assets?.[0];
+    let asset: { uri: string; fileSize?: number | null; mimeType?: string | null } | undefined;
+    if (source === 'paste') {
+      // A logo copied off a website or a designer's email — no save-first step.
+      const uri = await readClipboardImageToFile();
+      if (!uri) return;
+      asset = { uri, mimeType: 'image/jpeg' };
+    } else {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) { setMsg({ text: t.business.logoError, isError: true }); return; }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+        allowsEditing: true,
+      });
+      if (result.canceled) return;
+      asset = result.assets?.[0];
+    }
     if (!asset) return;
     if (asset.fileSize && asset.fileSize > 2 * 1024 * 1024) {
       setMsg({ text: t.business.logoSizeError, isError: true });
@@ -491,7 +505,7 @@ export function BusinessSection() {
           )}
           <View className="flex-row items-center gap-2">
             <Pressable
-              onPress={pickAndUploadLogo}
+              onPress={() => void pickAndUploadLogo('library')}
               disabled={uploadingLogo}
               className={`px-3.5 py-1.5 rounded-xl ${uploadingLogo ? 'bg-primary/5' : 'bg-primary/10 active:bg-primary/20'}`}
             >
@@ -499,6 +513,14 @@ export function BusinessSection() {
                 {uploadingLogo ? t.business.logoUploading : (business?.logo_url ? t.business.logoChangeBtn : t.business.logoUploadBtn)}
               </Text>
             </Pressable>
+            {canPasteLogo && !uploadingLogo ? (
+              <Pressable
+                onPress={() => void pickAndUploadLogo('paste')}
+                className="px-3.5 py-1.5 rounded-xl bg-primary/10 active:bg-primary/20"
+              >
+                <Text className="text-sm font-semibold text-primary">{full.dashboard.jobs.detail.photos.pastePhoto}</Text>
+              </Pressable>
+            ) : null}
             {business?.logo_url && !uploadingLogo && (
               <Pressable
                 onPress={removeLogo}

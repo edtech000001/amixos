@@ -108,6 +108,8 @@ import { PricingModal } from '@/components/PricingModal';
 import { PLANS } from '@amixos/shared/lib/plans';
 import { LogoCropper } from '@/components/dashboard/LogoCropper';
 import { normalizeImageFile } from '@/lib/imageFile';
+import { usePasteImage } from '@/lib/usePasteImage';
+import { PasteHint } from '@/components/ui/PasteHint';
 import { Tooltip } from '@amixos/shared/ui/Tooltip';
 import {
   activePlanKey,
@@ -648,6 +650,10 @@ export default function AjustesPage() {
   // from the form's Save button — same bucket path as onboarding.
   // Picking a logo opens the cropper first; uploadLogo runs on what it returns.
   const [cropFile, setCropFile] = useState<File | null>(null);
+
+  // Ctrl/Cmd+V feeds a copied image straight into the logo cropper — handy for
+  // a logo lifted off a website or a designer's email.
+  usePasteImage(true, files => void onPickLogo(files[0]));
 
   const onPickLogo = async (rawFile: File | null) => {
     if (!rawFile || !business) return;
@@ -2421,6 +2427,7 @@ export default function AjustesPage() {
                     </button>
                   )}
                 </div>
+                <PasteHint className="mt-1.5" />
               </div>
 
               {/* Full-screen logo viewer — click the logo to zoom; click anywhere to close. */}

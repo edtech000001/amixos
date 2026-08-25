@@ -35,7 +35,9 @@ import {
   Eye,
   ImagePlus,
   Camera,
+  ClipboardPaste,
 } from 'lucide-react-native';
+import { hasClipboardImage, readClipboardImageToFile, type PhotoSource } from '@/lib/clipboardPhoto';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { createSupabaseClient } from '@/lib/supabase';
 import { queuedInsert, queuedUpdate, queuedDelete, queuedUpload } from '@/lib/offline/mutate';
@@ -1495,23 +1497,36 @@ export default function NuevoTrabajoRoute() {
   // exists. Edit mode uses the live JobPhotosSection gallery.
   const [pendingPhotos, setPendingPhotos] = useState<{ uri: string }[]>([]);
 
-  const pickPendingPhoto = async (source: 'camera' | 'library') => {
+  // Probed on mount — the Paste button only appears when the clipboard
+  // actually holds an image, so it never sits there dead.
+  const [canPastePhoto, setCanPastePhoto] = useState(false);
+  useEffect(() => { void hasClipboardImage().then(setCanPastePhoto); }, []);
+
+  const pickPendingPhoto = async (source: PhotoSource) => {
     if (pendingPhotos.length >= MAX_PHOTOS_PER_JOB) return;
-    const perm =
-      source === 'camera'
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
-    // Picker-side quality 0.6 — same compression as the detail gallery.
-    const result =
-      source === 'camera'
-        ? await ImagePicker.launchCameraAsync({ quality: 0.6 })
-        : await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            quality: 0.6,
-          });
-    if (result.canceled || !result.assets?.[0]) return;
-    const uri = result.assets[0].uri;
+    let uri: string;
+    if (source === 'paste') {
+      // Clipboard image → durable file, so it behaves like a picked asset.
+      const pasted = await readClipboardImageToFile();
+      if (!pasted) return;
+      uri = pasted;
+    } else {
+      const perm =
+        source === 'camera'
+          ? await ImagePicker.requestCameraPermissionsAsync()
+          : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) return;
+      // Picker-side quality 0.6 — same compression as the detail gallery.
+      const result =
+        source === 'camera'
+          ? await ImagePicker.launchCameraAsync({ quality: 0.6 })
+          : await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              quality: 0.6,
+            });
+      if (result.canceled || !result.assets?.[0]) return;
+      uri = result.assets[0].uri;
+    }
     setPendingPhotos(prev => [...prev, { uri }].slice(0, MAX_PHOTOS_PER_JOB));
   };
 
@@ -2164,6 +2179,17 @@ export default function NuevoTrabajoRoute() {
                       </Text>
                     </Pressable>
                   </View>
+                ) : null}
+                {pendingPhotos.length < MAX_PHOTOS_PER_JOB && canPastePhoto ? (
+                  <Pressable
+                    onPress={() => void pickPendingPhoto('paste')}
+                    className="flex-row items-center justify-center rounded-xl border border-border py-2.5 mt-2.5 active:bg-surface"
+                  >
+                    <ClipboardPaste size={16} color={c.muted} />
+                    <Text className="text-sm font-medium text-muted ml-1.5">
+                      {full.dashboard.jobs.detail.photos.pastePhoto}
+                    </Text>
+                  </Pressable>
                 ) : null}
                 {pendingPhotos.length > 0 ? (
                   <Text className="text-xs text-faint mt-2.5">

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { Alert, Share, View, Text, Pressable, ScrollView, Modal as RNModal, Linking, TextInput, KeyboardAvoidingView, Keyboard, Platform, Image, Dimensions } from 'react-native';
-import { X, Camera, ImagePlus, RotateCw } from 'lucide-react-native';
+import { X, Camera, ImagePlus, ClipboardPaste, RotateCw } from 'lucide-react-native';
+import { hasClipboardImage, readClipboardImageToFile } from '@/lib/clipboardPhoto';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
@@ -613,6 +614,24 @@ export default function FacturaDetailRoute() {
         ? await ImagePicker.launchCameraAsync({ quality: 0.6 })
         : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.6 });
     if (!r.canceled && r.assets[0]) setPayPhotoUri(r.assets[0].uri);
+  };
+
+  /** Paste a check photo someone texted you — skips the save-to-gallery step.
+   *  The clipboard image is written to a durable file, so it looks exactly
+   *  like a picked asset to the submit path. */
+  const pastePaymentPhoto = async () => {
+    setPayPhotoChooserOpen(false);
+    const uri = await readClipboardImageToFile();
+    if (uri) setPayPhotoUri(uri);
+  };
+
+  // Probed when the chooser opens — the Paste row only appears when the
+  // clipboard actually holds an image, so it never sits there dead.
+  const [payCanPaste, setPayCanPaste] = useState(false);
+  const openPayPhotoChooser = () => {
+    setPayCanPaste(false);
+    setPayPhotoChooserOpen(true);
+    void hasClipboardImage().then(setPayCanPaste);
   };
 
   const openRecordPayment = () => {
@@ -1524,13 +1543,13 @@ export default function FacturaDetailRoute() {
                 <View className="flex-row items-center gap-4 bg-surface border border-border rounded-2xl p-3">
                   <Image source={{ uri: payPhotoUri ?? payPhotoExistingUrl ?? '' }} style={{ width: 72, height: 72, borderRadius: 12 }} />
                   <View className="flex-1 gap-2">
-                    <Pressable onPress={() => setPayPhotoChooserOpen(true)} className="active:opacity-60"><Text className="text-base text-primary font-semibold">{tInv.payments.changePhoto}</Text></Pressable>
+                    <Pressable onPress={openPayPhotoChooser} className="active:opacity-60"><Text className="text-base text-primary font-semibold">{tInv.payments.changePhoto}</Text></Pressable>
                     <Pressable onPress={() => { setPayPhotoUri(null); setPayPhotoPath(null); setPayPhotoExistingUrl(null); setPayPhotoRemoved(true); }} className="active:opacity-60"><Text className="text-base text-red-600 font-semibold">{tInv.payments.removePhoto}</Text></Pressable>
                   </View>
                 </View>
               ) : (
                 <Pressable
-                  onPress={() => setPayPhotoChooserOpen(true)}
+                  onPress={openPayPhotoChooser}
                   className="items-center justify-center gap-2 bg-surface border border-dashed border-border rounded-2xl py-7 px-4 active:opacity-80"
                 >
                   <Camera size={26} color={c.muted} />
@@ -1569,11 +1588,20 @@ export default function FacturaDetailRoute() {
                 </Pressable>
                 <Pressable
                   onPress={() => pickPaymentPhoto('library')}
-                  className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft"
+                  className={`flex-row items-center gap-4 px-5 py-5 active:bg-border-soft${payCanPaste ? ' border-b border-border-soft' : ''}`}
                 >
                   <ImagePlus size={24} color={c.primary} />
                   <Text className="text-lg font-semibold text-ink">{tj.detail.photos.chooseFromLibrary}</Text>
                 </Pressable>
+                {payCanPaste ? (
+                  <Pressable
+                    onPress={pastePaymentPhoto}
+                    className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft"
+                  >
+                    <ClipboardPaste size={24} color={c.primary} />
+                    <Text className="text-lg font-semibold text-ink">{tj.detail.photos.pastePhoto}</Text>
+                  </Pressable>
+                ) : null}
               </View>
               <Pressable
                 onPress={() => setPayPhotoChooserOpen(false)}

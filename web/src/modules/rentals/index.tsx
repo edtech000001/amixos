@@ -24,6 +24,8 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
 import { toUsStateAbbr, usStateName } from '@amixos/shared/lib/usStates';
 import { normalizeImageFiles } from '@/lib/imageFile';
+import { usePasteImage } from '@/lib/usePasteImage';
+import { PasteHint } from '@/components/ui/PasteHint';
 import {
   MAX_PHOTOS_PER_PROPERTY,
   PROPERTY_TYPES,
@@ -303,6 +305,19 @@ export default function RentalsModule() {
     setFormOpen(true);
   };
 
+  // Ctrl/Cmd+V stages a copied image alongside the picked ones.
+  usePasteImage(
+    true,
+    files => void normalizeImageFiles(files).then(picked => {
+      if (pendingPhotos.length + picked.length > MAX_PHOTOS_PER_PROPERTY) {
+        setError(t.photos.limitHit.replace('{{max}}', String(MAX_PHOTOS_PER_PROPERTY)));
+        return;
+      }
+      setPendingPhotos(prev => [...prev, ...picked]);
+    }),
+    [pendingPhotos],
+  );
+
   const onPendingPhotosChosen = async (ev: React.ChangeEvent<HTMLInputElement>) => {
     // Copy BEFORE clearing: input.files is a LIVE FileList, so resetting
     // value empties the reference too — the old order silently dropped every
@@ -506,6 +521,7 @@ export default function RentalsModule() {
                 <Plus size={18} />
               </button>
             </div>
+            <PasteHint className="mt-1.5" />
             <input ref={pendingPhotoInputRef} type="file" accept="image/*" multiple className="hidden" onChange={onPendingPhotosChosen} />
           </div>
         ) : null}

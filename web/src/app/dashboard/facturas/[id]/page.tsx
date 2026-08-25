@@ -31,6 +31,8 @@ import { sortInvoiceLinesByDate, setLineItemExcluded, removeJobFromInvoice, move
 import { applicableRate, rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { formatDateLong, formatNumberGrouped, formatMoneyInput } from '@amixos/shared/lib/format';
+import { usePasteImage } from '@/lib/usePasteImage';
+import { PasteHint } from '@/components/ui/PasteHint';
 import { secureShareToken } from '@amixos/shared/lib/shareToken';
 import { normalizeImageFile } from '@/lib/imageFile';
 
@@ -154,6 +156,10 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   // True once an existing photo is removed — otherwise we OMIT photo_path so
   // payments still record where migration 174 hasn't been applied yet.
   const [payPhotoRemoved, setPayPhotoRemoved] = useState(false);
+  // Ctrl/Cmd+V while the payment sheet is open attaches a copied image — a
+  // check someone texted you never has to be saved to disk first.
+  usePasteImage(payOpen, files =>
+    void normalizeImageFile(files[0]).then(f => { setPayPhotoFile(f); setPayPhotoRemoved(false); }));
   // Full-screen payment-photo viewer: id + rotation ride along so the rotate
   // button can persist (invoice_payments.photo_rotation, migration 190).
   const [viewPhoto, setViewPhoto] = useState<{ id: string; url: string; rotation: number } | null>(null);
@@ -1389,6 +1395,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
               <label className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-surface px-4 py-8 text-base text-muted font-medium cursor-pointer hover:bg-border-soft transition">
                 <Camera size={26} className="text-muted" />
                 {tInv.payments.addPhoto}
+                <PasteHint className="font-normal" />
                 <input type="file" accept="image/*" className="hidden" onChange={async e => { const f = e.target.files?.[0]; setPayPhotoFile(f ? await normalizeImageFile(f) : null); }} />
               </label>
             )}

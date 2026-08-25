@@ -53,7 +53,9 @@ import {
   Wallet,
   CalendarClock,
   type LucideIcon,
+  ClipboardPaste,
 } from 'lucide-react-native';
+import { hasClipboardImage, readClipboardImageToFile, type PhotoSource } from '@/lib/clipboardPhoto';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
@@ -315,6 +317,7 @@ export default function EquipmentScreen() {
   const multiLocation = (locations?.length ?? 0) > 1;
   const { t: full, locale } = useLang();
   const t = full.dashboard.modules.equipment;
+  const tPhotos = full.dashboard.jobs.detail.photos;
   const tc = full.common;
   const c = useThemeColors();
 
@@ -826,7 +829,15 @@ export default function EquipmentScreen() {
     });
   };
 
-  const pickPhoto = async (source: 'camera' | 'library') => {
+  // Probed whenever the add/edit sheet opens — the Paste button only appears
+  // when the clipboard actually holds an image, so it never sits there dead.
+  const [canPastePhoto, setCanPastePhoto] = useState(false);
+  useEffect(() => {
+    if (modal !== 'add' && modal !== 'edit') { setCanPastePhoto(false); return; }
+    void hasClipboardImage().then(setCanPastePhoto);
+  }, [modal]);
+
+  const pickPhoto = async (source: PhotoSource) => {
     if (!business) return;
     // Cap counts the live photos (edit) or the queued ones (add).
     const count = selected ? photos.length : pendingPhotos.length;
@@ -834,21 +845,29 @@ export default function EquipmentScreen() {
       setError(t.photoLimitHit.replace('{{n}}', String(MAX_PHOTOS_PER_EQUIPMENT)));
       return;
     }
-    const perm =
-      source === 'camera'
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
+    let uri: string;
+    if (source === 'paste') {
+      // Clipboard image → durable file, so it behaves like a picked asset.
+      const pasted = await readClipboardImageToFile();
+      if (!pasted) return;
+      uri = pasted;
+    } else {
+      const perm =
+        source === 'camera'
+          ? await ImagePicker.requestCameraPermissionsAsync()
+          : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) return;
 
-    const result =
-      source === 'camera'
-        ? await ImagePicker.launchCameraAsync({ quality: 0.85 })
-        : await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            quality: 0.85,
-          });
-    if (result.canceled || !result.assets?.[0]) return;
-    const uri = result.assets[0].uri;
+      const result =
+        source === 'camera'
+          ? await ImagePicker.launchCameraAsync({ quality: 0.85 })
+          : await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              quality: 0.85,
+            });
+      if (result.canceled || !result.assets?.[0]) return;
+      uri = result.assets[0].uri;
+    }
 
     // Add mode: no equipment row yet — queue locally, upload on save.
     if (!selected) {
@@ -1339,6 +1358,16 @@ export default function EquipmentScreen() {
                         <Text className="text-sm font-semibold text-ink">{t.photoLibraryBtn}</Text>
                       </Pressable>
                     </View>
+                    {canPastePhoto ? (
+                      <Pressable
+                        onPress={() => pickPhoto('paste')}
+                        disabled={uploadingPhoto}
+                        className="flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-border-soft active:opacity-70 disabled:opacity-50"
+                      >
+                        <ClipboardPaste size={16} color={c.muted} />
+                        <Text className="text-sm font-semibold text-ink">{tPhotos.pastePhoto}</Text>
+                      </Pressable>
+                    ) : null}
                     {uploadingPhoto ? (
                       <View className="flex-row items-center gap-2">
                         <ActivityIndicator size="small" color={c.primary} />

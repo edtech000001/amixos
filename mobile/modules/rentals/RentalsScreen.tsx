@@ -23,8 +23,9 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import {
   Building2, Camera, ChevronDown, ChevronLeft, ChevronRight, FileText, Home,
-  BadgeX, Download, ImagePlus, Pencil, Phone, Plus, RotateCw, Search, Star, Trash2, Users, Wrench, X,
+  BadgeX, ClipboardPaste, Download, ImagePlus, Pencil, Phone, Plus, RotateCw, Search, Star, Trash2, Users, Wrench, X,
 } from 'lucide-react-native';
+import { hasClipboardImage, readClipboardImageToFile, type PhotoSource } from '@/lib/clipboardPhoto';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -507,7 +508,18 @@ export default function RentalsScreen() {
 
   // ── Photo helpers (camera/library chooser as in-modal overlay in sheets;
   //    standalone RNModal chooser when no sheet is open) ──────────────────────
-  const pickImage = async (source: 'camera' | 'library'): Promise<string | null> => {
+  // Probed whenever a chooser opens — the Paste row only shows when the
+  // clipboard actually holds an image, so it never sits there dead.
+  const [canPastePhoto, setCanPastePhoto] = useState(false);
+  const probeClipboard = () => {
+    setCanPastePhoto(false);
+    void hasClipboardImage().then(setCanPastePhoto);
+  };
+
+  const pickImage = async (source: PhotoSource): Promise<string | null> => {
+    // Paste: an image copied from Messages/WhatsApp, written to a durable file
+    // so it behaves exactly like a picked asset downstream.
+    if (source === 'paste') return await readClipboardImageToFile();
     const perm = source === 'camera'
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -567,7 +579,7 @@ export default function RentalsScreen() {
     setPropFormOpen(true);
   };
 
-  const pickPropFormPhoto = async (source: 'camera' | 'library') => {
+  const pickPropFormPhoto = async (source: PhotoSource) => {
     setPropPhotoChooserOpen(false);
     if (pendingPhotoUris.length >= MAX_PHOTOS_PER_PROPERTY) {
       Alert.alert('', t.photos.limitHit.replace('{{max}}', String(MAX_PHOTOS_PER_PROPERTY)));
@@ -928,7 +940,7 @@ export default function RentalsScreen() {
     setPayOpen(true);
   };
 
-  const pickPayPhoto = async (source: 'camera' | 'library') => {
+  const pickPayPhoto = async (source: PhotoSource) => {
     setPayChooserOpen(false);
     const uri = await pickImage(source);
     if (uri) { setPayPhotoUri(uri); setPayPhotoRemoved(false); }
@@ -1025,7 +1037,7 @@ export default function RentalsScreen() {
     setExpenseFormOpen(true);
   };
 
-  const pickReceipt = async (source: 'camera' | 'library') => {
+  const pickReceipt = async (source: PhotoSource) => {
     setReceiptChooserOpen(false);
     const uri = await pickImage(source);
     if (uri) { setReceiptUri(uri); setReceiptRemoved(false); }
@@ -1178,7 +1190,7 @@ export default function RentalsScreen() {
     return groups;
   }, [propPhotos, photoCatOptions, t]);
 
-  const addPropertyPhoto = async (source: 'camera' | 'library') => {
+  const addPropertyPhoto = async (source: PhotoSource) => {
     setPhotoChooserOpen(false);
     if (!business || !detail) return;
     if (propPhotos.length >= MAX_PHOTOS_PER_PROPERTY) {
@@ -1568,7 +1580,7 @@ export default function RentalsScreen() {
 
   /** Camera/library chooser as an in-modal absolute overlay (never a nested
    *  RNModal — iOS silently refuses to present a second one). */
-  const chooserOverlay = (open: boolean, onClose: () => void, onPick: (s: 'camera' | 'library') => void) =>
+  const chooserOverlay = (open: boolean, onClose: () => void, onPick: (s: PhotoSource) => void) =>
     open ? (
       <View className="justify-end" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
         <Pressable onPress={onClose} style={sheetScrim} />
@@ -1579,10 +1591,16 @@ export default function RentalsScreen() {
               <Camera size={24} color={c.primary} />
               <Text className="text-lg font-semibold text-ink">{t.photos.takePhoto}</Text>
             </Pressable>
-            <Pressable onPress={() => onPick('library')} className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft">
+            <Pressable onPress={() => onPick('library')} className={`flex-row items-center gap-4 px-5 py-5 active:bg-border-soft${canPastePhoto ? ' border-b border-border-soft' : ''}`}>
               <ImagePlus size={24} color={c.primary} />
               <Text className="text-lg font-semibold text-ink">{t.photos.chooseFromLibrary}</Text>
             </Pressable>
+            {canPastePhoto ? (
+              <Pressable onPress={() => onPick('paste')} className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft">
+                <ClipboardPaste size={24} color={c.primary} />
+                <Text className="text-lg font-semibold text-ink">{t.photos.pastePhoto}</Text>
+              </Pressable>
+            ) : null}
           </View>
           <Pressable onPress={onClose} className="mt-3 items-center py-4 rounded-2xl bg-border-soft active:bg-border">
             <Text className="text-lg font-semibold text-ink">{tc.buttons.cancel}</Text>
@@ -2145,7 +2163,7 @@ export default function RentalsScreen() {
                     ))}
                     {canEdit ? (
                       <View className="flex-row flex-wrap gap-3">
-                        <Pressable onPress={() => setPhotoChooserOpen(true)} disabled={uploadingPhoto}
+                        <Pressable onPress={() => { probeClipboard(); setPhotoChooserOpen(true); }} disabled={uploadingPhoto}
                           className="rounded-xl border-2 border-dashed border-border items-center justify-center active:bg-card"
                           style={{ width: tileW, height: tileH }}>
                           {uploadingPhoto ? <ActivityIndicator color={c.primary} /> : (
@@ -2286,10 +2304,16 @@ export default function RentalsScreen() {
                   <Camera size={24} color={c.primary} />
                   <Text className="text-lg font-semibold text-ink">{t.photos.takePhoto}</Text>
                 </Pressable>
-                <Pressable onPress={() => addPropertyPhoto('library')} className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft">
+                <Pressable onPress={() => addPropertyPhoto('library')} className={`flex-row items-center gap-4 px-5 py-5 active:bg-border-soft${canPastePhoto ? ' border-b border-border-soft' : ''}`}>
                   <ImagePlus size={24} color={c.primary} />
                   <Text className="text-lg font-semibold text-ink">{t.photos.chooseFromLibrary}</Text>
                 </Pressable>
+                {canPastePhoto ? (
+                  <Pressable onPress={() => addPropertyPhoto('paste')} className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft">
+                    <ClipboardPaste size={24} color={c.primary} />
+                    <Text className="text-lg font-semibold text-ink">{t.photos.pastePhoto}</Text>
+                  </Pressable>
+                ) : null}
               </View>
               <Pressable onPress={() => setPhotoChooserOpen(false)} className="mt-3 items-center py-4 rounded-2xl bg-border-soft active:bg-border">
                 <Text className="text-lg font-semibold text-ink">{tc.buttons.cancel}</Text>
@@ -2931,7 +2955,7 @@ export default function RentalsScreen() {
                   </Pressable>
                 </View>
               ))}
-              <Pressable onPress={() => setPropPhotoChooserOpen(true)}
+              <Pressable onPress={() => { probeClipboard(); setPropPhotoChooserOpen(true); }}
                 className="rounded-xl border-2 border-dashed border-border items-center justify-center active:bg-surface"
                 style={{ width: 72, height: 72 }}>
                 <ImagePlus size={20} color={c.faint} />
@@ -3129,7 +3153,7 @@ export default function RentalsScreen() {
             {payPhotoUri || (payPhotoPath && !payPhotoRemoved) ? (
               <View className="flex-row items-center gap-3">
                 {payPhotoUri ? <Image source={{ uri: payPhotoUri }} style={{ width: 56, height: 56, borderRadius: 8 }} /> : <Camera size={20} color={c.muted} />}
-                <Pressable onPress={() => setPayChooserOpen(true)} className="active:opacity-60">
+                <Pressable onPress={() => { probeClipboard(); setPayChooserOpen(true); }} className="active:opacity-60">
                   <Text className="text-sm text-primary font-semibold">{t.payments.changePhoto}</Text>
                 </Pressable>
                 <Pressable onPress={() => { setPayPhotoUri(null); setPayPhotoRemoved(true); }} className="active:opacity-60">
@@ -3137,7 +3161,7 @@ export default function RentalsScreen() {
                 </Pressable>
               </View>
             ) : (
-              <Pressable onPress={() => setPayChooserOpen(true)}
+              <Pressable onPress={() => { probeClipboard(); setPayChooserOpen(true); }}
                 className="flex-row items-center gap-2 bg-border-soft rounded-xl py-2.5 px-3 active:opacity-80">
                 <Camera size={18} color={c.muted} />
                 <Text className="text-sm text-muted font-medium">{t.payments.addPhoto}</Text>
@@ -3303,7 +3327,7 @@ export default function RentalsScreen() {
             {receiptUri || (editingExpense?.receipt_path && !receiptRemoved) ? (
               <View className="flex-row items-center gap-3">
                 {receiptUri ? <Image source={{ uri: receiptUri }} style={{ width: 56, height: 56, borderRadius: 8 }} /> : <Camera size={20} color={c.muted} />}
-                <Pressable onPress={() => setReceiptChooserOpen(true)} className="active:opacity-60">
+                <Pressable onPress={() => { probeClipboard(); setReceiptChooserOpen(true); }} className="active:opacity-60">
                   <Text className="text-sm text-primary font-semibold">{t.expenses.form.changeReceipt}</Text>
                 </Pressable>
                 <Pressable onPress={() => { setReceiptUri(null); setReceiptRemoved(true); }} className="active:opacity-60">
@@ -3311,7 +3335,7 @@ export default function RentalsScreen() {
                 </Pressable>
               </View>
             ) : (
-              <Pressable onPress={() => setReceiptChooserOpen(true)}
+              <Pressable onPress={() => { probeClipboard(); setReceiptChooserOpen(true); }}
                 className="flex-row items-center gap-2 bg-border-soft rounded-xl py-2.5 px-3 active:opacity-80">
                 <Camera size={18} color={c.muted} />
                 <Text className="text-sm text-muted font-medium">{t.expenses.form.addReceipt}</Text>

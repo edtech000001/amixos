@@ -37,6 +37,9 @@ export type CommonDict = {
     justNow: string;
     refreshing: string;
   };
+  // Web-only discoverability hint: paste an image straight into a photo
+  // field. "{{keys}}" is the platform shortcut (⌘V on Mac, Ctrl+V else).
+  pasteImageHint: string;
   // Shown when the app can't load the user's account/business (e.g. a
   // not-yet-run DB migration). Deliberately reassures the user nothing was
   // lost and offers a retry.
@@ -150,6 +153,7 @@ export const common: Record<Locale, CommonDict> = {
       justNow: 'justo ahora',
       refreshing: 'Actualizando…',
     },
+    pasteImageHint: 'También puedes pegar una foto copiada con {{keys}}',
     loadError: {
       title: 'No pudimos cargar tu cuenta',
       body: 'Tu información sigue guardada. Esto suele pasar justo después de una actualización. Intenta de nuevo en un momento.',
@@ -247,6 +251,7 @@ export const common: Record<Locale, CommonDict> = {
       justNow: 'just now',
       refreshing: 'Refreshing…',
     },
+    pasteImageHint: 'You can also paste a copied photo with {{keys}}',
     loadError: {
       title: "We couldn't load your account",
       body: 'Your data is still safe. This usually happens right after an update — try again in a moment.',

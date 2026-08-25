@@ -31,6 +31,8 @@ import { detectJobConflicts, fetchJobsForConflictCheck, hasHardConflict, type Ex
 import { Modal } from '@/components/ui/Modal';
 import { evaluateOperatingHours, normalizeOperatingHours } from '@amixos/shared/lib/operatingHours';
 import { normalizeImageFiles } from '@/lib/imageFile';
+import { usePasteImage } from '@/lib/usePasteImage';
+import { PasteHint } from '@/components/ui/PasteHint';
 
 interface Client { id: string; first_name: string; last_name: string; company: string | null; job_address?: string; city?: string; state?: string; contacts?: { name: string; role: string | null }[]; }
 interface Employee { id: string; first_name: string; last_name: string; role: string; }
@@ -1313,6 +1315,15 @@ function NuevoTrabajoContent() {
     ev.target.value = '';
   };
 
+  // Ctrl/Cmd+V stages a copied image alongside the picked ones.
+  usePasteImage(true, files =>
+    void normalizeImageFiles(files).then(norm =>
+      setPendingPhotos(prev =>
+        [...prev, ...norm.map(file => ({ file, url: URL.createObjectURL(file) }))].slice(0, MAX_PHOTOS_PER_JOB),
+      ),
+    ),
+  );
+
   const removePendingPhoto = (url: string) => {
     URL.revokeObjectURL(url);
     setPendingPhotos(prev => prev.filter(p => p.url !== url));
@@ -2150,8 +2161,9 @@ function NuevoTrabajoContent() {
                 </button>
               )}
             </div>
+            <PasteHint className="mt-2" />
             {pendingPhotos.length > 0 && (
-              <p className="text-xs text-faint mt-2">{full.dashboard.jobs.detail.photos.pendingHint}</p>
+              <p className="text-xs text-faint mt-1">{full.dashboard.jobs.detail.photos.pendingHint}</p>
             )}
             <input
               ref={pendingPhotoInputRef}

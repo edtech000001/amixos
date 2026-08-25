@@ -18,6 +18,8 @@ import {
 } from '@amixos/shared/lib/jobPhotos';
 import { useSignedUrls } from '@amixos/shared/lib/storageUrls';
 import { normalizeImageFiles } from '@/lib/imageFile';
+import { usePasteImage } from '@/lib/usePasteImage';
+import { PasteHint } from '@/components/ui/PasteHint';
 
 interface Props {
   jobId: string;
@@ -84,10 +86,14 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
 
   const onFilesChosen = async (ev: React.ChangeEvent<HTMLInputElement>) => {
     const files = ev.target.files ? await normalizeImageFiles(Array.from(ev.target.files)) : null;
+    await uploadFiles(files);
+    ev.target.value = '';
+  };
+
+  const uploadFiles = async (files: File[] | null) => {
     if (!files || files.length === 0) return;
     if (photos.length + files.length > MAX_PHOTOS_PER_JOB) {
       setError(t.limitHit.replace('{{max}}', String(MAX_PHOTOS_PER_JOB)));
-      ev.target.value = '';
       return;
     }
     setUploading(true);
@@ -115,8 +121,11 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
       setError(t.uploadError);
     }
     setUploading(false);
-    ev.target.value = '';
   };
+
+  // Ctrl/Cmd+V uploads a copied image. `photos` is a dep because uploadFiles
+  // closes over it for the count guard + sort order.
+  usePasteImage(canWrite, files => void normalizeImageFiles(files).then(uploadFiles), [photos]);
 
   const removePhoto = async (photo: JobPhoto) => {
     if (!(await confirm({ message: t.deleteConfirm, destructive: true }))) return;
@@ -268,6 +277,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
           ) : null}
         </div>
       )}
+      {canWrite && !atLimit ? <PasteHint className="mt-2" /> : null}
 
       <input
         ref={fileInputRef}

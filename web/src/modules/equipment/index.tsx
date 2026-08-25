@@ -62,6 +62,8 @@ import { formatDateLong, formatDateTimeLong, formatPhoneInput } from '@amixos/sh
 import { nextRotation } from '@amixos/shared/lib/jobPhotos';
 import { can } from '@amixos/shared/lib/permissions';
 import { normalizeImageFiles } from '@/lib/imageFile';
+import { usePasteImage } from '@/lib/usePasteImage';
+import { PasteHint } from '@/components/ui/PasteHint';
 import { Tooltip } from '@amixos/shared/ui/Tooltip';
 import {
   groupEquipment,
@@ -616,20 +618,33 @@ export default function EquipmentModule() {
   };
 
   const onFileChosen = async (ev: React.ChangeEvent<HTMLInputElement>) => {
-    const files = ev.target.files;
-    if (!files || files.length === 0 || !business) return;
-    const picked = await normalizeImageFiles(Array.from(files));
+    const files = Array.from(ev.target.files ?? []);
+    ev.target.value = '';
+    await addPhotoFiles(files);
+  };
+
+  // Ctrl/Cmd+V adds a copied image — only while the add/edit sheet is open, so
+  // a paste on the list view does nothing.
+  usePasteImage(
+    modal === 'add' || (modal === 'edit' && !!selected),
+    files => void addPhotoFiles(files),
+    [modal, selected, photos, pendingPhotos],
+  );
+
+  /** Queue (add mode) or upload (edit mode) images. Shared by the file input
+   *  and the paste path. */
+  const addPhotoFiles = async (files: File[]) => {
+    if (files.length === 0 || !business) return;
+    const picked = await normalizeImageFiles(files);
     // Cap counts the live photos (edit) or the queued ones (add).
     const existing = selected ? photos.length : pendingPhotos.length;
     if (existing + picked.length > MAX_PHOTOS_PER_EQUIPMENT) {
       setError(t.photoLimitHit.replace('{{n}}', String(MAX_PHOTOS_PER_EQUIPMENT)));
-      ev.target.value = '';
       return;
     }
     // Add mode: no equipment row yet — queue locally, upload on save.
     if (!selected) {
       setPendingPhotos((prev) => [...prev, ...picked]);
-      ev.target.value = '';
       return;
     }
     setUploadingPhoto(true); setError('');
@@ -643,7 +658,6 @@ export default function EquipmentModule() {
       setError(t.photoUploadError);
     }
     setUploadingPhoto(false);
-    ev.target.value = '';
   };
 
   const removePending = (idx: number) =>
@@ -1072,6 +1086,7 @@ export default function EquipmentModule() {
                   <Upload size={20} className="text-faint" />
                   <span className="text-sm text-muted">{t.photoEmpty}</span>
                   <span className="text-xs font-semibold text-primary">{t.photoAddBtn}</span>
+                  <PasteHint />
                 </button>
               ) : (
                 <>
