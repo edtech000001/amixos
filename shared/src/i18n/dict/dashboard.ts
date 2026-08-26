@@ -861,6 +861,7 @@ export type DashboardDict = {
       autopricePickTitle: string;
       autopricePickSubtitle: string;
       autopricePickApply: string;
+      autopricePickSkip: string;
       measuredNote: string;
       tax: string;
       discount: string;
@@ -3916,6 +3917,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         autopricePickTitle: 'Elige un precio',
         autopricePickSubtitle: 'Estas líneas coinciden con más de un precio. Elige el correcto para cada una.',
         autopricePickApply: 'Aplicar precios',
+        autopricePickSkip: 'Dejar sin precio',
         measuredNote: 'medido {{qty}}',
         tax: 'Impuesto ({{rate}}%)',
         discount: 'Descuento',
@@ -6967,6 +6969,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         autopricePickTitle: 'Choose a price',
         autopricePickSubtitle: 'These lines match more than one price. Pick the right one for each.',
         autopricePickApply: 'Apply prices',
+        autopricePickSkip: 'Leave unpriced',
         measuredNote: 'measured {{qty}}',
         tax: 'Tax ({{rate}}%)',
         discount: 'Discount',

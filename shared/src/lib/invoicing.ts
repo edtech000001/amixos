@@ -347,11 +347,104 @@ export async function createInvoicesFromJobs(
   return { ok: true, invoices: created };
 }
 
+/** Identity of a line for de-dup / re-match purposes. */
+const lineKey = (l: InvoiceLineItem) => `${l.description}|${l.qty}|${l.rate}`;
+
+/**
+ * Reorder `next` (the freshly derived set of lines) to follow the order the
+ * invoice's lines are ALREADY stored in.
+ *
+ * The rebuild computes the right *set* of lines but assembles them in a
+ * canonical order (manual first, then jobs by created_at). Storing that order
+ * clobbers any order the user chose — "sort by date" reverted on every reload.
+ * So: walk the existing lines, emit each job's lines as a unit the first time
+ * that job appears, match manual lines by content, and append anything new
+ * (a newly attached job) at the end.
+ */
+function preserveLineOrder(next: InvoiceLineItem[], existing: InvoiceLineItem[]): InvoiceLineItem[] {
+  const remaining = [...next];
+  const out: InvoiceLineItem[] = [];
+  const takeJob = (jobId: string) => {
+    for (let i = 0; i < remaining.length; ) {
+      if (remaining[i].job_id === jobId) out.push(remaining.splice(i, 1)[0]);
+      else i++;
+    }
+  };
+  const takeManual = (li: InvoiceLineItem) => {
+    const i = remaining.findIndex(r => !r.job_id && lineKey(r) === lineKey(li));
+    if (i >= 0) out.push(remaining.splice(i, 1)[0]);
+  };
+  const seenJobs = new Set<string>();
+  for (const li of existing) {
+    if (li.job_id) {
+      if (seenJobs.has(li.job_id)) continue; // its lines already moved as a unit
+      seenJobs.add(li.job_id);
+      takeJob(li.job_id);
+    } else {
+      takeManual(li);
+    }
+  }
+  out.push(...remaining); // newly attached jobs / lines with no prior position
+  return out;
+}
+
+/** Sentinel date for lines with no date — sorts to one end. */
+const UNDATED = '9999-12-31';
+
+/** Group lines the way the date sort treats them: a job's main line + its
+ *  add-ons move as ONE unit dated by the job's scheduled_date; a manual line
+ *  is its own group dated by its service_date. */
+function groupLinesByDate(
+  items: InvoiceLineItem[],
+  jobDates: Map<string, string>,
+): { date: string; items: InvoiceLineItem[] }[] {
+  const groups: { date: string; items: InvoiceLineItem[] }[] = [];
+  const byJob = new Map<string, { date: string; items: InvoiceLineItem[] }>();
+  for (const li of items) {
+    if (li.job_id) {
+      let g = byJob.get(li.job_id);
+      if (!g) {
+        g = { date: jobDates.get(li.job_id) ?? UNDATED, items: [] };
+        byJob.set(li.job_id, g);
+        groups.push(g);
+      }
+      g.items.push(li);
+    } else {
+      groups.push({ date: li.service_date ?? UNDATED, items: [li] });
+    }
+  }
+  return groups;
+}
+
+/**
+ * Which way the STORED lines are currently sorted, or null when the order is
+ * custom / too short to tell. Lets the "Sort by date" button show the right
+ * arrow after a reload and flip direction correctly, without persisting a
+ * separate preference — the stored order IS the state.
+ */
+export function detectLineSortDirection(
+  items: InvoiceLineItem[],
+  jobDates: Map<string, string>,
+): 'asc' | 'desc' | null {
+  const dates = groupLinesByDate(items, jobDates).map(g => g.date);
+  if (dates.length < 2) return null;
+  let asc = true;
+  let desc = true;
+  for (let i = 1; i < dates.length; i++) {
+    const cmp = dates[i - 1].localeCompare(dates[i]);
+    if (cmp > 0) asc = false;
+    if (cmp < 0) desc = false;
+  }
+  // Both true = every date identical (ambiguous); both false = custom order.
+  if (asc === desc) return null;
+  return asc ? 'asc' : 'desc';
+}
+
 /** Re-derive a DRAFT invoice's line items from its currently-attached jobs'
  *  job_items, so items added/edited on a job AFTER it was invoiced flow through.
  *  Manual (non job-tagged) line items are preserved; job lines are rebuilt.
- *  No-ops for sent/paid invoices (frozen) and writes only when something
- *  actually changed. */
+ *  The stored ORDER is preserved (see preserveLineOrder). No-ops for sent/paid
+ *  invoices (frozen) and writes only when something actually changed. */
 export async function rebuildInvoiceLineItems(
   supabase: Supa,
   // `force` re-derives EVERY job line fresh (ignoring hand-edits/auto-prices) —
@@ -414,10 +507,13 @@ export async function rebuildInvoiceLineItems(
     return li;
   });
   const finalJobLines = [...overriddenLines, ...keptJobLines];
-  const lineKey = (l: InvoiceLineItem) => `${l.description}|${l.qty}|${l.rate}`;
   const jobLineKeys = new Set(finalJobLines.map(lineKey));
   const manual = existing.filter(li => !li.job_id && !jobLineKeys.has(lineKey(li)));
-  const next: InvoiceLineItem[] = [...manual, ...finalJobLines];
+  // Keep the invoice's CURRENT line order. The rebuild syncs CONTENT (prices,
+  // descriptions, added/removed job items) — it must never re-shuffle, or a
+  // "sort by date" is silently undone on the next page load, and a manual
+  // travel charge added at the bottom jumps to the top.
+  const next = preserveLineOrder([...manual, ...finalJobLines], existing);
   if (JSON.stringify(next) === JSON.stringify(existing)) return { changed: false };
 
   const { subtotal, tax, total } = computeTotals(next, inv.tax_rate ?? 0, inv.discount ?? 0);
@@ -484,22 +580,7 @@ export async function sortInvoiceLinesByDate(
   }
 
   // Group: a job's main line + its add-on lines move as one unit.
-  type Group = { date: string; items: InvoiceLineItem[] };
-  const groups: Group[] = [];
-  const groupByJob = new Map<string, Group>();
-  for (const li of items) {
-    if (li.job_id) {
-      let g = groupByJob.get(li.job_id);
-      if (!g) {
-        g = { date: dates.get(li.job_id) ?? '9999-12-31', items: [] };
-        groupByJob.set(li.job_id, g);
-        groups.push(g);
-      }
-      g.items.push(li);
-    } else {
-      groups.push({ date: li.service_date ?? '9999-12-31', items: [li] });
-    }
-  }
+  const groups = groupLinesByDate(items, dates);
   const dir = opts.direction === 'asc' ? 1 : -1; // default: newest first
   const sorted = groups
     .map((g, i) => ({ g, i }))
@@ -756,6 +837,11 @@ export interface AutopriceAmbiguous {
   /** The tied price items — the user picks one. */
   options: { id: string; name: string }[];
 }
+
+/** Sentinel `picks` value meaning "leave this line unpriced and price the rest".
+ *  Without it a single undecidable tie blocked the whole run: the only way out
+ *  of the picker was Cancel, which threw away every other line's price too. */
+export const AUTOPRICE_SKIP = '__skip__';
 export async function autopriceInvoice(
   supabase: Supa,
   opts: {
@@ -764,17 +850,18 @@ export async function autopriceInvoice(
     clientId?: string | null;
     qtyField?: string | null;
     /** Resolve an ambiguous line (line index → chosen price-item id) — from the
-     *  tie picker. Lines with a pick are priced with that item. */
+     *  tie picker. Lines with a pick are priced with that item; the value
+     *  AUTOPRICE_SKIP leaves that line unpriced WITHOUT blocking the rest. */
     picks?: Record<number, string>;
   },
-): Promise<{ matched: number; alreadyPriced: number; unmatched: string[]; ambiguous: AutopriceAmbiguous[] }> {
-  if (!opts.items.length) return { matched: 0, alreadyPriced: 0, unmatched: [], ambiguous: [] };
+): Promise<{ matched: number; alreadyPriced: number; skipped: number; unmatched: string[]; ambiguous: AutopriceAmbiguous[] }> {
+  if (!opts.items.length) return { matched: 0, alreadyPriced: 0, skipped: 0, unmatched: [], ambiguous: [] };
   const { data: inv } = await supabase
     .from('invoices')
     .select('id, line_items, tax_rate, discount, client_id')
     .eq('id', opts.invoiceId)
     .single();
-  if (!inv) return { matched: 0, alreadyPriced: 0, unmatched: [], ambiguous: [] };
+  if (!inv) return { matched: 0, alreadyPriced: 0, skipped: 0, unmatched: [], ambiguous: [] };
   const lines = (inv.line_items ?? []) as InvoiceLineItem[];
 
   // Client's state is the fallback for per-state pricing when a job has no
@@ -809,6 +896,9 @@ export async function autopriceInvoice(
 
   let matched = 0;
   let alreadyPriced = 0;
+  // Ties the user chose to leave unpriced — counted so the caller can stay
+  // quiet instead of claiming "nothing matched" after a deliberate skip.
+  let skipped = 0;
   // Text we searched for lines that didn't match — surfaced in the "no match"
   // message so the user can see exactly what to add a match term for.
   const unmatched: string[] = [];
@@ -874,6 +964,10 @@ export async function autopriceInvoice(
     if (sug.pick) { matched++; next.push(...priceWith(li, sug.pick.item, jctx, matchText)); return; }
     // Ambiguous tie → use the user's pick if we have one, else offer the options.
     if (sug.tied.length > 1) {
+      // Explicitly skipped in the picker: leave it unpriced and, crucially, do
+      // NOT report it as ambiguous — that's what lets the rest of the invoice
+      // get priced instead of the whole run being blocked.
+      if (picks[index] === AUTOPRICE_SKIP) { skipped++; next.push(li); return; }
       const chosen = picks[index] ? sug.tied.find(t => t.id === picks[index]) : undefined;
       if (chosen) { matched++; next.push(...priceWith(li, chosen, jctx, matchText)); return; }
       ambiguous.push({
@@ -898,15 +992,15 @@ export async function autopriceInvoice(
   // shifts array indices, which would invalidate the picks the caller sends
   // back keyed by line index. Return the ties for the picker — the re-run with
   // picks (no ambiguity left) is what actually writes.
-  if (ambiguous.length) return { matched: 0, alreadyPriced, unmatched, ambiguous };
-  if (!matched) return { matched: 0, alreadyPriced, unmatched, ambiguous: [] };
+  if (ambiguous.length) return { matched: 0, alreadyPriced, skipped, unmatched, ambiguous };
+  if (!matched) return { matched: 0, alreadyPriced, skipped, unmatched, ambiguous: [] };
 
   const { subtotal, tax, total } = computeTotals(next, inv.tax_rate ?? 0, inv.discount ?? 0);
   await supabase
     .from('invoices')
     .update({ line_items: next, subtotal_amount: subtotal, tax_amount: tax, total_amount: total })
     .eq('id', opts.invoiceId);
-  return { matched, alreadyPriced, unmatched, ambiguous: [] };
+  return { matched, alreadyPriced, skipped, unmatched, ambiguous: [] };
 }
 
 /** Increment the trailing digit run of an invoice number, preserving padding:

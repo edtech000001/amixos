@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useCallback, useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -27,7 +27,7 @@ import { resolveConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceT
 import { signedUrl } from '@amixos/shared/lib/storageUrls';
 import { INVOICE_PAYMENT_BUCKET, paymentPhotoPath } from '@amixos/shared/lib/invoicePayments';
 import { autonameEnabled, autonameJobTitle, detectAutonameType } from '@amixos/shared/lib/autoname';
-import { sortInvoiceLinesByDate, setLineItemExcluded, removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
+import { sortInvoiceLinesByDate, detectLineSortDirection, setLineItemExcluded, removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, AUTOPRICE_SKIP, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
 import { applicableRate, rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { formatDateLong, formatNumberGrouped, formatMoneyInput } from '@amixos/shared/lib/format';
@@ -311,13 +311,23 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
 
   // Reorder stored lines by date — the printed document follows. First press
   // sorts newest-first; pressing again flips the direction.
-  const [sortLinesDir, setSortLinesDir] = useState<'asc' | 'desc' | null>(null);
+  //
+  // The direction is READ BACK from the stored order rather than kept in local
+  // state, so it survives a reload (local state reset to null, and the button
+  // went back to sorting newest-first no matter what order was on screen).
+  const jobDates = useMemo(
+    () => new Map(attachedJobs.filter(j => j.scheduled_date).map(j => [j.id, j.scheduled_date as string])),
+    [attachedJobs],
+  );
+  const sortLinesDir = useMemo(
+    () => (invoice ? detectLineSortDirection(invoice.lineItems, jobDates) : null),
+    [invoice, jobDates],
+  );
   const sortLines = async () => {
     const dir = sortLinesDir === 'desc' ? 'asc' : 'desc';
     setJobBusy(true);
     await sortInvoiceLinesByDate(supabase, { invoiceId: id, direction: dir });
     await reloadInvoice();
-    setSortLinesDir(dir);
     setJobBusy(false);
   };
 
@@ -362,6 +372,8 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     if (res.ambiguous.length) { setAmbiguous(res.ambiguous); setLinePicks({}); return; }
     setAmbiguous(null);
     if (res.matched) return;
+    // Everything ambiguous was deliberately skipped — nothing to report.
+    if (res.skipped > 0) return;
     if (res.alreadyPriced > 0) void alertMessage({ message: tj.detail.autopriceAlreadyPriced });
     // Show the exact text we searched so the user can see which word to add a
     // match term for (and it reveals whether the job's description reached us).
@@ -1121,6 +1133,17 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                       {o.name}
                     </button>
                   ))}
+                  {/* "Leave unpriced" is just another choice — so one line you
+                      can't decide on doesn't block pricing the whole invoice. */}
+                  <button
+                    type="button"
+                    onClick={() => setLinePicks(p => ({ ...p, [a.index]: AUTOPRICE_SKIP }))}
+                    className={`text-left px-3 py-2.5 rounded-xl text-sm border border-dashed transition-colors ${
+                      linePicks[a.index] === AUTOPRICE_SKIP ? 'bg-surface border-muted text-ink font-semibold' : 'border-border text-muted hover:bg-surface'
+                    }`}
+                  >
+                    {tj.detail.autopricePickSkip}
+                  </button>
                 </div>
               </div>
             ))}

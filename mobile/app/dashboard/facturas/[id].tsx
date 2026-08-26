@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { Alert, Share, View, Text, Pressable, ScrollView, Modal as RNModal, Linking, TextInput, KeyboardAvoidingView, Keyboard, Platform, Image, Dimensions } from 'react-native';
 import { X, Camera, ImagePlus, ClipboardPaste, RotateCw } from 'lucide-react-native';
 import { hasClipboardImage, readClipboardImageToFile } from '@/lib/clipboardPhoto';
@@ -32,7 +32,7 @@ import { DatePicker } from '@amixos/shared/ui';
 import type { InvoiceLang } from '@amixos/shared';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
-import { sortInvoiceLinesByDate, setLineItemExcluded, removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
+import { sortInvoiceLinesByDate, detectLineSortDirection, setLineItemExcluded, removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, AUTOPRICE_SKIP, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
 import { applicableRate, rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { formatDateLong, formatMoneyInput, formatNumberGrouped } from '@amixos/shared/lib/format';
@@ -319,13 +319,23 @@ export default function FacturaDetailRoute() {
 
   // Reorder stored lines by date — the printed document follows. First press
   // sorts newest-first; pressing again flips the direction.
-  const [sortLinesDir, setSortLinesDir] = useState<'asc' | 'desc' | null>(null);
+  //
+  // The direction is READ BACK from the stored order rather than kept in local
+  // state, so it survives a reload (local state reset to null, and the button
+  // went back to sorting newest-first no matter what order was on screen).
+  const jobDateMap = useMemo(
+    () => new Map(attachedJobs.filter(j => j.scheduled_date).map(j => [j.id, j.scheduled_date as string])),
+    [attachedJobs],
+  );
+  const sortLinesDir = useMemo(
+    () => (invoice ? detectLineSortDirection(invoice.lineItems, jobDateMap) : null),
+    [invoice, jobDateMap],
+  );
   const sortLines = async () => {
     const dir = sortLinesDir === 'desc' ? 'asc' : 'desc';
     setJobBusy(true);
     await sortInvoiceLinesByDate(supabase, { invoiceId: id, direction: dir });
     await reloadInvoice();
-    setSortLinesDir(dir);
     setJobBusy(false);
   };
 
@@ -361,6 +371,12 @@ export default function FacturaDetailRoute() {
       `${head.description}\n\n${full.dashboard.jobs.detail.autopricePickSubtitle}`,
       [
         ...head.options.map(o => ({ text: o.name, onPress: () => promptAmbiguous(rest, { ...collected, [head.index]: o.id }) })),
+        // "Leave unpriced" — so one line you can't decide on doesn't block
+        // pricing the whole invoice (Cancel throws the entire run away).
+        {
+          text: full.dashboard.jobs.detail.autopricePickSkip,
+          onPress: () => promptAmbiguous(rest, { ...collected, [head.index]: AUTOPRICE_SKIP }),
+        },
         { text: full.common.buttons.cancel, style: 'cancel' as const },
       ],
     );
@@ -385,6 +401,8 @@ export default function FacturaDetailRoute() {
     if (res.matched) { setShowInvVerify(true); await reloadInvoice(); }
     if (res.ambiguous.length) { promptAmbiguous(res.ambiguous, picks ?? {}); return; }
     if (res.matched) return;
+    // Everything ambiguous was deliberately skipped — nothing to report.
+    if (res.skipped > 0) return;
     if (res.alreadyPriced > 0) Alert.alert('', full.dashboard.jobs.detail.autopriceAlreadyPriced);
     // Show the exact text we searched so the user sees which word to add a term for.
     else Alert.alert('', `${full.dashboard.jobs.detail.autopriceNoMatch}\n\n(${priceItems.length} price items loaded)${res.unmatched.length ? `\n${res.unmatched.map(u => `• ${u}`).join('\n')}` : ''}`);
