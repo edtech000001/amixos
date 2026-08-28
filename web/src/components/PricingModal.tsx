@@ -1,16 +1,18 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
-import { Check, Sparkles, ChevronLeft } from 'lucide-react';
+import { Check, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
   PLANS,
+  TRIAL_DAYS,
   planMonthlyEquivalent,
   planAnnualSavings,
   formatPlanPrice,
   type BillingPeriod,
   type PlanKey,
 } from '@amixos/shared/lib/plans';
+import { isInTrial, trialDaysLeft } from '@amixos/shared/lib/subscription';
 import { useLang } from '@/i18n/LangProvider';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
@@ -35,11 +37,51 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
   const [subscribingKey, setSubscribingKey] = useState<PlanKey | null>(null);
   const [subscribeError, setSubscribeError] = useState<string | null>(null);
 
+  // The trial footnote is only true while a trial is actually running. This
+  // modal is mostly reached the other way round — from the paywall, AFTER the
+  // trial expired — where promising "no credit card" one click before asking
+  // for a card reads as a bait and switch.
+  const sub = business
+    ? {
+        plan: business.plan,
+        subscription_status: business.subscription_status,
+        trial_ends_at: business.trial_ends_at,
+        current_period_end: business.current_period_end,
+      }
+    : null;
+  const daysLeft = sub && isInTrial(sub) ? trialDaysLeft(sub) : null;
+
+  // ── Plan carousel ────────────────────────────────────────────────────────
+  // Five plans across one row read as a wall and dilute the entry tiers, which
+  // are the ones most people should be choosing. Show a page at a time —
+  // Básico / Profesional / Negocio first, Corporativo + Empresa behind the
+  // next arrow.
+  const [page, setPage] = useState(0);
+  // Cards keep a constant width, so the page size follows the viewport rather
+  // than squeezing. Tailwind's md = 768, xl = 1280.
+  const [perPage, setPerPage] = useState(3);
+  useEffect(() => {
+    const read = () => {
+      const w = window.innerWidth;
+      setPerPage(w >= 1280 ? 3 : w >= 768 ? 2 : 1);
+    };
+    read();
+    window.addEventListener('resize', read);
+    return () => window.removeEventListener('resize', read);
+  }, []);
+
+  const pages: (typeof PLANS)[] = [];
+  for (let i = 0; i < PLANS.length; i += perPage) pages.push(PLANS.slice(i, i + perPage));
+  const pageCount = pages.length;
+  // A resize can shrink the page count out from under the current index.
+  const safePage = Math.min(page, pageCount - 1);
+
   // Reset to the plans view every time the modal re-opens.
   useEffect(() => {
     if (open) {
       setView('plans');
       setSubscribeError(null);
+      setPage(0);
     }
   }, [open]);
 
@@ -122,11 +164,32 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
             </span>
           </div>
 
-          {/* Plan cards */}
-          {/* Five plans in a 1152px modal is ~210px a card — go to the 5-up
-              row only at xl, and stay 2-up below it rather than cramming. */}
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
-            {PLANS.map((plan) => {
+          {/* Plan cards — one page at a time, the rest behind the arrows. */}
+          <div className="relative mt-6">
+            {/* overflow-hidden clips the off-screen pages; pt-4 leaves room for
+                the "Most popular" pill, which sits above the card's top edge
+                and would otherwise be clipped too. */}
+            <div className="overflow-hidden -mx-1 px-1 pt-4">
+              <div
+                className="flex transition-transform duration-300 ease-out motion-reduce:transition-none"
+                style={{ transform: `translateX(-${safePage * 100}%)` }}
+              >
+                {pages.map((pagePlans, pageIndex) => (
+                  <div
+                    key={pageIndex}
+                    className="w-full shrink-0 flex gap-3 justify-center"
+                    // `inert` on the off-screen pages takes their Subscribe
+                    // buttons out of the tab order and the a11y tree together.
+                    // Set via ref because React 18 doesn't accept it as a prop —
+                    // aria-hidden alone would leave them focusable, which is
+                    // worse than not hiding them at all.
+                    ref={(el) => {
+                      if (!el) return;
+                      if (pageIndex === safePage) el.removeAttribute('inert');
+                      else el.setAttribute('inert', '');
+                    }}
+                  >
+                    {pagePlans.map((plan) => {
               const copy = plan.copy[locale];
               // NOT rounded to whole dollars — prices are $49.99 etc., and
               // showing "$50" while Stripe charges $49.99 is the mismatch this
@@ -139,6 +202,9 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
               return (
                 <div
                   key={plan.key}
+                  // Fixed share of the row (gap-3 = 0.75rem between cards), so
+                  // a 2-card page renders the same width as a 3-card one.
+                  style={{ flex: `0 0 calc((100% - ${(perPage - 1) * 0.75}rem) / ${perPage})` }}
                   className={clsx(
                     'relative flex flex-col rounded-2xl border p-4 shadow-sm bg-card',
                     highlighted ? 'border-primary ring-2 ring-primary/30' : 'border-border-soft'
@@ -220,18 +286,74 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
                   )}
                 </div>
               );
-            })}
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Pager — only when there's actually more than one page. Arrows sit
+                outside the card row so they never cover a Subscribe button. */}
+            {pageCount > 1 && (
+              <div className="mt-4 flex items-center justify-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={safePage === 0}
+                  aria-label={es ? 'Planes anteriores' : 'Previous plans'}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-muted transition hover:bg-surface hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+
+                <div className="flex items-center gap-1.5">
+                  {pages.map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setPage(i)}
+                      aria-label={
+                        es ? `Ir a la página ${i + 1} de ${pageCount}` : `Go to page ${i + 1} of ${pageCount}`
+                      }
+                      aria-current={i === safePage}
+                      className={clsx(
+                        'h-2 rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                        i === safePage ? 'w-5 bg-primary' : 'w-2 bg-border hover:bg-muted'
+                      )}
+                    />
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                  disabled={safePage === pageCount - 1}
+                  aria-label={es ? 'Más planes' : 'More plans'}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-muted transition hover:bg-surface hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            )}
           </div>
 
           {subscribeError && (
             <p className="mt-4 text-center text-sm text-red-500">{subscribeError}</p>
           )}
 
-          <p className="mt-6 text-center text-xs text-muted">
-            {es
-              ? '14 días gratis · sin tarjeta de crédito'
-              : '14-day free trial · no credit card'}
-          </p>
+          {daysLeft !== null ? (
+            <p className="mt-6 text-center text-xs text-muted">
+              {es
+                ? `Te ${daysLeft === 1 ? 'queda' : 'quedan'} ${daysLeft} día${daysLeft === 1 ? '' : 's'} de prueba · sin tarjeta de crédito`
+                : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left in your free trial · no credit card`}
+            </p>
+          ) : !business ? (
+            <p className="mt-6 text-center text-xs text-muted">
+              {es
+                ? `${TRIAL_DAYS} días gratis · sin tarjeta de crédito`
+                : `${TRIAL_DAYS}-day free trial · no credit card`}
+            </p>
+          ) : null}
         </>
       )}
     </Modal>

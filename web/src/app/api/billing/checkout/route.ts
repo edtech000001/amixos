@@ -36,8 +36,20 @@ export async function POST(req: Request) {
       : await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
+    // Every read below goes through the service role. The cookie-bound client
+    // can authenticate the caller but cannot query AS them: getUser(token)
+    // validates the bearer token as a one-off and does not rebind the client's
+    // PostgREST auth, which still resolves from cookies — and those are stale
+    // by design here, because the middleware refreshed the session on this same
+    // request and the rotated cookies live only on ITS response. Reading
+    // business_members through that client runs with auth.uid() null, so RLS
+    // (migrations 021/022) matches nothing and every owner/admin gets a 403.
+    const admin = createSupabaseAdminClient();
+
     // Only owner/admin of THIS business may subscribe.
-    const { data: member } = await supabase
+    // Safe under service role: `user` came from a verified token and the
+    // filter pins the lookup to that user's own membership row.
+    const { data: member } = await admin
       .from('business_members')
       .select('role')
       .eq('business_id', businessId)
@@ -47,7 +59,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Not allowed' }, { status: 403 });
     }
 
-    const admin = createSupabaseAdminClient();
     const { data: biz } = await admin
       .from('businesses')
       .select('id, name, stripe_customer_id, subscription_status, trial_ends_at')
