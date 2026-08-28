@@ -1975,6 +1975,7 @@ export type DashboardDict = {
       confirmRevoke: string;
       errorInviteSelf: string;
       errorAlreadyMember: string;
+      errorSeatLimit: string;
       errorAlreadyInvited: string;
     };
     activity: {
@@ -5023,6 +5024,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         confirmRevoke: '¿Revocar la invitación para {{email}}?',
         errorInviteSelf: 'No puedes invitarte a ti mismo.',
         errorAlreadyMember: 'Esta persona ya es miembro.',
+        errorSeatLimit: 'Tu plan permite {{limit}} miembros y ya los tienes. Mejora tu plan para agregar a alguien más.',
         errorAlreadyInvited: 'Ya hay una invitación pendiente para este correo.',
       },
       activity: {
@@ -8075,6 +8077,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         confirmRevoke: 'Revoke the invite for {{email}}?',
         errorInviteSelf: "You can't invite yourself.",
         errorAlreadyMember: 'This person is already a member.',
+        errorSeatLimit: 'Your plan allows {{limit}} members and you already have them. Upgrade to add someone else.',
         errorAlreadyInvited: 'There is already a pending invite for this email.',
       },
       activity: {

@@ -4,7 +4,7 @@
 //
 // Annual billing = "2 months free": annualTotal = monthly × 10.
 
-export type PlanKey = 'basico' | 'profesional' | 'negocio' | 'empresa';
+export type PlanKey = 'basico' | 'profesional' | 'negocio' | 'corporativo' | 'empresa';
 export type BillingPeriod = 'monthly' | 'annual';
 
 export interface PlanCopy {
@@ -27,6 +27,11 @@ export interface Plan {
    *  Storage is cheap (~$0.02/GB/mo) so these are generous abuse guardrails +
    *  an upgrade nudge, not a cost-recovery lever. Enforcement/usage meter TBD. */
   storageGb: number | null;
+  /** People who can log in (business_members rows), ALL roles included — field
+   *  crew and viewers count the same as office staff. null = custom/unlimited.
+   *  This is the real price lever: enforced on invite, never by removing
+   *  anyone who is already a member. See ./planLimits.ts. */
+  maxMembers: number | null;
   copy: { es: PlanCopy; en: PlanCopy };
 }
 
@@ -44,6 +49,7 @@ export const PLANS: Plan[] = [
     monthly: 49,
     annualTotal: annual(49),
     storageGb: 10,
+    maxMembers: 2,
     copy: {
       es: {
         name: 'Básico',
@@ -53,6 +59,7 @@ export const PLANS: Plan[] = [
           '10 GB de almacenamiento',
           'Clientes, trabajos y facturas',
           'Calendario y agenda',
+          'Sincronización con Google',
           'Reportes',
           'Soporte por correo',
         ],
@@ -65,6 +72,7 @@ export const PLANS: Plan[] = [
           '10 GB storage',
           'Clients, jobs & invoices',
           'Calendar & scheduling',
+          'Google sync',
           'Reports',
           'Email support',
         ],
@@ -77,6 +85,7 @@ export const PLANS: Plan[] = [
     annualTotal: annual(99),
     recommended: true,
     storageGb: 50,
+    maxMembers: 10,
     copy: {
       es: {
         name: 'Profesional',
@@ -86,7 +95,6 @@ export const PLANS: Plan[] = [
           '50 GB de almacenamiento',
           'Todo lo de Básico',
           'Módulos por industria',
-          'Sincronización con Google',
           'Roles del equipo y horas/nómina',
         ],
       },
@@ -98,7 +106,6 @@ export const PLANS: Plan[] = [
           '50 GB storage',
           'Everything in Basic',
           'Industry modules',
-          'Google sync',
           'Team roles & hours/payroll',
         ],
       },
@@ -106,18 +113,20 @@ export const PLANS: Plan[] = [
   },
   {
     key: 'negocio',
-    monthly: 199,
-    annualTotal: annual(199),
-    storageGb: 250,
+    monthly: 150,
+    annualTotal: annual(150),
+    storageGb: 150,
+    maxMembers: 20,
     copy: {
       es: {
         name: 'Negocio',
         tagline: 'Para operaciones con varias cuadrillas',
         features: [
-          'Hasta 50 miembros del equipo',
-          '250 GB de almacenamiento',
+          'Hasta 20 miembros del equipo',
+          '150 GB de almacenamiento',
           'Todo lo de Profesional',
           'Todos los módulos',
+          'Varias sucursales',
           'Soporte prioritario',
         ],
       },
@@ -125,10 +134,44 @@ export const PLANS: Plan[] = [
         name: 'Business',
         tagline: 'For multi-crew operations',
         features: [
-          'Up to 50 team members',
-          '250 GB storage',
+          'Up to 20 team members',
+          '150 GB storage',
           'Everything in Professional',
           'All modules',
+          'Multiple locations',
+          'Priority support',
+        ],
+      },
+    },
+  },
+  {
+    key: 'corporativo',
+    monthly: 200,
+    annualTotal: annual(200),
+    storageGb: 400,
+    maxMembers: 40,
+    copy: {
+      es: {
+        name: 'Corporativo',
+        tagline: 'Para empresas con equipos grandes',
+        features: [
+          'Hasta 40 miembros del equipo',
+          '400 GB de almacenamiento',
+          'Todo lo de Negocio',
+          'Roles personalizados',
+          'Registro de auditoría',
+          'Soporte prioritario',
+        ],
+      },
+      en: {
+        name: 'Corporate',
+        tagline: 'For companies with large teams',
+        features: [
+          'Up to 40 team members',
+          '400 GB storage',
+          'Everything in Business',
+          'Custom roles',
+          'Audit log',
           'Priority support',
         ],
       },
@@ -140,14 +183,15 @@ export const PLANS: Plan[] = [
     annualTotal: 0,
     custom: true,
     storageGb: null,
+    maxMembers: null,
     copy: {
       es: {
         name: 'Empresa',
-        tagline: 'Para equipos de más de 50',
+        tagline: 'Para equipos de más de 40',
         features: [
-          'Más de 50 miembros del equipo',
+          'Más de 40 miembros del equipo',
           'Almacenamiento personalizado',
-          'Todo lo de Negocio',
+          'Todo lo de Corporativo',
           'Precios por volumen',
           'Incorporación dedicada',
           'Gerente de cuenta',
@@ -155,11 +199,11 @@ export const PLANS: Plan[] = [
       },
       en: {
         name: 'Enterprise',
-        tagline: 'For teams over 50',
+        tagline: 'For teams over 40',
         features: [
-          '50+ team members',
+          '40+ team members',
           'Custom storage',
-          'Everything in Business',
+          'Everything in Corporate',
           'Volume pricing',
           'Dedicated onboarding',
           'Account manager',

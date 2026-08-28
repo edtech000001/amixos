@@ -528,6 +528,8 @@ export default function EmpleadoDetailRoute() {
       const codeMap: Record<string, string> = {
         invite_self: teamT.errorInviteSelf,
         already_member: teamT.errorAlreadyMember,
+        // The API returns the plan's cap so the message can name it.
+        seat_limit: teamT.errorSeatLimit.replace('{{limit}}', String(body.limit ?? '')),
         already_invited: teamT.errorAlreadyInvited,
       };
       setAccessError(codeMap[body.code] ?? teamT.inviteFailedToast);

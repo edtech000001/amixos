@@ -122,7 +122,9 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
           </div>
 
           {/* Plan cards */}
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Five plans in a 1152px modal is ~210px a card — go to the 5-up
+              row only at xl, and stay 2-up below it rather than cramming. */}
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
             {PLANS.map((plan) => {
               const copy = plan.copy[locale];
               const perMonth = Math.round(planMonthlyEquivalent(plan, period));
@@ -134,7 +136,7 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
                 <div
                   key={plan.key}
                   className={clsx(
-                    'relative flex flex-col rounded-2xl border p-5 shadow-sm bg-card',
+                    'relative flex flex-col rounded-2xl border p-4 shadow-sm bg-card',
                     highlighted ? 'border-primary ring-2 ring-primary/30' : 'border-border-soft'
                   )}
                 >

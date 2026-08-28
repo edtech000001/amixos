@@ -326,6 +326,8 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
         invite_self: teamT.errorInviteSelf,
         already_member: teamT.errorAlreadyMember,
         already_invited: teamT.errorAlreadyInvited,
+        // The API returns the plan's cap so the message can name it.
+        seat_limit: teamT.errorSeatLimit.replace('{{limit}}', String(body.limit ?? '')),
       };
       setAccessError(codeMap[body.code] ?? teamT.inviteFailedToast);
       setAccessBusy(false);
