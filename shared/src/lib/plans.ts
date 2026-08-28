@@ -5,18 +5,18 @@
 // PRICES HERE MUST MATCH STRIPE EXACTLY. They are what the customer is shown;
 // Stripe is what the card is actually charged, and the two disagreeing is a
 // complaint waiting to happen. Every amount below was read off the Stripe
-// dashboard, so `annualTotal` is a literal rather than a computed monthly × 10
-// — the real annual prices don't land on a clean multiple.
+// dashboard on 2026-08-28:
 //
-// Annual billing vs paying monthly for 12 months:
-//   Básico       $599.88 → $490.99     saves $108.89  = 2.18 months
-//   Profesional  $1,199.88 → $990.99   saves $208.89  = 2.09 months
-//   Negocio      $1,799.88 → $1,499.99 saves $299.89  = 1.9994 months
-//   Corporativo  $2,399.88 → $1,999.99 saves $399.89  = 1.9995 months
+//   Básico       $49.99/mo   $499.90/yr
+//   Profesional  $99.99/mo   $999.90/yr
+//   Negocio     $149.99/mo   $1,499.90/yr
+//   Corporativo $199.99/mo   $1,999.90/yr
 //
-// The "2 months free" badge is exact on the first two and 9¢ short on the last
-// two (2 months would be $1,499.90 / $1,999.90). Immaterial, but don't tighten
-// the wording to a guarantee without changing those Stripe prices first.
+// Annual = monthly × 10, i.e. exactly 2 months free on every tier — hence the
+// annual() helper below. If a Stripe annual price is ever set to something
+// that ISN'T 10× the monthly, replace that plan's annual() call with the
+// literal Stripe amount rather than bending the helper; matching Stripe wins
+// over keeping the formula tidy.
 
 export type PlanKey = 'basico' | 'profesional' | 'negocio' | 'corporativo' | 'empresa';
 export type BillingPeriod = 'monthly' | 'annual';
@@ -32,8 +32,9 @@ export interface Plan {
   /** USD per month on the monthly plan — the exact Stripe amount. 0 for a
    *  `custom` (contact-sales) tier. */
   monthly: number;
-  /** USD per year on the annual plan — the exact Stripe amount, NOT derived
-   *  from `monthly`. */
+  /** USD per year on the annual plan — the exact Stripe amount. Currently
+   *  monthly × 10 on every tier (see annual()), but it is a stored value, not
+   *  a derived one: Stripe is the authority. */
   annualTotal: number;
   /** Highlight as the suggested plan ("Más popular"). */
   recommended?: boolean;
@@ -54,11 +55,19 @@ export interface Plan {
 /** Free-trial length, in days. No credit card required. */
 export const TRIAL_DAYS = 14;
 
+/** Months you pay for on the annual plan — 12 billed, 2 free. */
+const ANNUAL_PAID_MONTHS = 10;
+
+/** Annual total for a monthly price, rounded to cents. The ×10 lands exactly
+ *  on Stripe's annual amounts today ($49.99 → $499.90); the rounding is only
+ *  to stop floating point turning 49.99 × 10 into 499.90000000000003. */
+const annual = (monthly: number) => Math.round(monthly * ANNUAL_PAID_MONTHS * 100) / 100;
+
 export const PLANS: Plan[] = [
   {
     key: 'basico',
     monthly: 49.99,
-    annualTotal: 490.99,
+    annualTotal: annual(49.99),
     storageGb: 10,
     maxMembers: 2,
     copy: {
@@ -93,7 +102,7 @@ export const PLANS: Plan[] = [
   {
     key: 'profesional',
     monthly: 99.99,
-    annualTotal: 990.99,
+    annualTotal: annual(99.99),
     recommended: true,
     storageGb: 50,
     maxMembers: 10,
@@ -125,7 +134,7 @@ export const PLANS: Plan[] = [
   {
     key: 'negocio',
     monthly: 149.99,
-    annualTotal: 1499.99,
+    annualTotal: annual(149.99),
     storageGb: 150,
     maxMembers: 20,
     copy: {
@@ -158,7 +167,7 @@ export const PLANS: Plan[] = [
   {
     key: 'corporativo',
     monthly: 199.99,
-    annualTotal: 1999.99,
+    annualTotal: annual(199.99),
     storageGb: 400,
     maxMembers: 40,
     copy: {
@@ -225,7 +234,7 @@ export const PLANS: Plan[] = [
 ];
 
 /** The price to show on a card for the chosen billing period (per-month). On
- *  annual this is a derived EQUIVALENT ($490.99/12), not an amount anyone is
+ *  annual this is a derived EQUIVALENT ($499.90/12), not an amount anyone is
  *  charged — the annual total is shown beside it. Format with
  *  formatPlanPrice(), which does the rounding. */
 export function planMonthlyEquivalent(plan: Plan, period: BillingPeriod): number {
