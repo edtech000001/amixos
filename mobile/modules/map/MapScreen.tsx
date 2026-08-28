@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SkeletonRow } from '@amixos/shared/ui/Skeleton';
-import { View, Text, Pressable, Alert, ActivityIndicator, Modal as RNModal, Linking, TextInput, ScrollView } from 'react-native';
+import { View, Text, Pressable, Alert, ActivityIndicator, Modal as RNModal, Linking, TextInput, ScrollView, Keyboard } from 'react-native';
 import MapView, { Marker, type Region } from 'react-native-maps';
 import ClusteredMapView from 'react-native-map-clustering';
 import { useRouter } from 'expo-router';
@@ -217,6 +217,15 @@ const LAYER_COLORS: Record<Layer, string> = {
   employees: '#F59E0B', // amber
 };
 
+/** A place resolved by GET /api/v1/map/geocode — used when a search matches
+ *  no pins, so we can still show the user where they searched. */
+interface GeocodedPlace {
+  lat: number;
+  lng: number;
+  label: string;
+  bounds: { north: number; south: number; east: number; west: number } | null;
+}
+
 // Substring search across every text field on a pin (standard cols +
 // custom_fields values). Case-insensitive. Caller pre-lowercases the
 // query; we just check inclusion.
@@ -351,6 +360,13 @@ export default function MapScreen() {
   // Free-text search across the pin's identifying fields. Filters
   // `visiblePins` and auto-fits the map to the matching subset.
   const [search, setSearch] = useState('');
+  // Drives the "Done" button in the search bar — the only always-available
+  // way out of the keyboard, since the map behind it isn't a tappable blur
+  // target on its own and the bar sits above a fullscreen map.
+  const [searchFocused, setSearchFocused] = useState(false);
+  // Where a searched place resolved to, when the search matched no pins.
+  const [placeHit, setPlaceHit] = useState<GeocodedPlace | null>(null);
+  const [placeSearching, setPlaceSearching] = useState(false);
   const mapRef = useRef<MapView | null>(null);
 
   const apiBaseUrl = getApiBaseUrl();
@@ -558,6 +574,68 @@ export default function MapScreen() {
     }
   }, [search, visiblePins]);
 
+  // Geocode fallback — searching a city you have no customers in used to do
+  // nothing at all (no pins matched, so the fit effect above bailed and the
+  // map stayed parked). Now we resolve the place and fly there, so you at
+  // least see WHERE it is relative to your coverage.
+  //
+  // Deliberately only fires when the text search matched ZERO pins: a real
+  // pin is always the better answer, and every lookup is a billable Google
+  // call. Debounced so typing "Wichita" costs one request, not seven.
+  useEffect(() => {
+    const q = search.trim();
+    if (q.length < 3 || visiblePins.length > 0) {
+      setPlaceHit(null);
+      setPlaceSearching(false);
+      return;
+    }
+    let cancelled = false;
+    setPlaceSearching(true);
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const r = await fetch(
+            `${apiBaseUrl}/api/v1/map/geocode?q=${encodeURIComponent(q)}`,
+            { headers: { Authorization: `Bearer ${await getJwt()}` } },
+          );
+          if (cancelled) return;
+          if (!r.ok) { setPlaceHit(null); return; }
+          const body = (await r.json()) as { place?: GeocodedPlace };
+          const place = body.place;
+          if (cancelled || !place) { setPlaceHit(null); return; }
+          setPlaceHit(place);
+          // Google's viewport frames a state as a state and a street as a
+          // street; only guess a delta when it didn't give us one.
+          if (place.bounds) {
+            mapRef.current?.fitToCoordinates(
+              [
+                { latitude: place.bounds.north, longitude: place.bounds.east },
+                { latitude: place.bounds.south, longitude: place.bounds.west },
+              ],
+              { edgePadding: { top: 80, right: 60, bottom: 120, left: 60 }, animated: true },
+            );
+          } else {
+            mapRef.current?.animateToRegion(
+              { latitude: place.lat, longitude: place.lng, latitudeDelta: 0.2, longitudeDelta: 0.2 },
+              400,
+            );
+          }
+        } catch {
+          if (!cancelled) setPlaceHit(null);
+        } finally {
+          if (!cancelled) setPlaceSearching(false);
+        }
+      })();
+    }, 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // visiblePins.length, not the array — the identity changes on every
+    // layer toggle and would re-fire the lookup for the same query.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, visiblePins.length, apiBaseUrl]);
+
   // Reset to the default view — re-frame every visible pin (the corner
   // button on the map). Falls back to the continental US default when
   // there's nothing to frame.
@@ -581,6 +659,28 @@ export default function MapScreen() {
       });
     }
   }, [visiblePins]);
+
+  // Frame the map for whichever business is active. This used to happen by
+  // accident — every load unmounted the map, and the remount re-read
+  // `initialRegion`. Now that the map survives refetches, a tenant switch has
+  // to re-frame deliberately, or you'd be left looking at the previous
+  // business's corner of the country. Guarded by id so a plain refresh (e.g.
+  // after logging a call) never moves the camera.
+  const framedBusinessRef = useRef<string | null>(null);
+  useEffect(() => {
+    const id = business?.id ?? null;
+    if (!id || !pins) return;
+    if (framedBusinessRef.current === null) {
+      // First business is `initialRegion`'s job — the map only mounts once
+      // pins exist, so it's already framed. Just record it; animating here
+      // would be a redundant jump to the same place.
+      framedBusinessRef.current = id;
+      return;
+    }
+    if (framedBusinessRef.current === id) return;
+    framedBusinessRef.current = id;
+    resetView();
+  }, [business?.id, pins, resetView]);
 
   const onGeocode = async () => {
     if (!business || !apiBaseUrl) return;
@@ -700,6 +800,9 @@ export default function MapScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          // Without this the first chip tap while the keyboard is up is
+          // swallowed dismissing it, so the toggle needs two taps.
+          keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
         >
           <LayerPill
@@ -758,6 +861,14 @@ export default function MapScreen() {
             className="flex-1 text-sm text-ink"
             autoCorrect={false}
             autoCapitalize="none"
+            // The map fills the rest of the screen, so there was nothing to
+            // tap to blur — the keyboard could only be dismissed by
+            // submitting. "search" labels the return key, and the Done
+            // button below gives a visible way out. Tapping the map also
+            // dismisses now (see ClusteredMapView onPress).
+            returnKeyType="search"
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
           />
           {search ? (
             <>
@@ -769,7 +880,25 @@ export default function MapScreen() {
               </Pressable>
             </>
           ) : null}
+          {searchFocused ? (
+            <Pressable onPress={() => Keyboard.dismiss()} hitSlop={8} className="pl-1 active:opacity-60">
+              <Text className="text-xs font-semibold text-primary">{full.common.buttons.done}</Text>
+            </Pressable>
+          ) : null}
         </View>
+        {/* Searched a place with no pins in it — say so, and name what the
+           map flew to, so a wrong geocode match is obvious. */}
+        {placeSearching || placeHit ? (
+          <View className="flex-row items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
+            <MapPinIconLucide size={12} color={c.primary} />
+            <Text className="text-[11px] font-semibold text-primary flex-1" numberOfLines={2}>
+              {placeHit
+                ? t.placeNoPins.replace('{{place}}', placeHit.label)
+                : t.placeSearching}
+            </Text>
+          </View>
+        ) : null}
+
         {/* Weather date-range filter now lives in a bottom sheet (DateRangeSheet
            at the screen root) for one-hand reach. */}
         {/* Storm-focus active banner — sits right under the search bar so
@@ -859,7 +988,12 @@ export default function MapScreen() {
       </View>
 
       <View className="flex-1">
-        {loading ? (
+        {/* Spinner ONLY on the very first load. Swapping the map out on every
+            refetch unmounted it, and the remount re-read `initialRegion` —
+            which frames every pin — so logging a call (which refetches to
+            update "último contacto") threw away the user's pan and zoom.
+            Once there's data, refreshes happen underneath a mounted map. */}
+        {loading && !pins ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator color={c.primary} />
           </View>
@@ -877,6 +1011,10 @@ export default function MapScreen() {
             // fitToCoordinates() when search narrows the result set.
             mapRef={(ref) => { mapRef.current = ref as unknown as MapView; }}
             mapType={deviceSettings.mapType}
+            // Tapping the map is the natural "get me out of the search box"
+            // gesture — without this the keyboard stayed up until you
+            // submitted, because a MapView isn't a blur target.
+            onPress={() => Keyboard.dismiss()}
             clusteringEnabled={deviceSettings.clustering}
             clusterColor={c.primary}
             clusterTextColor="#FFFFFF"

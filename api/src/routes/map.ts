@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { supabase } from '../config/supabase';
-import { geocodeMissingClients, geocodeMissingEmployees, geocodeMissingJobs } from '../lib/geocoding';
+import { geocodeMissingClients, geocodeMissingEmployees, geocodeMissingJobs, geocodePlace } from '../lib/geocoding';
 
 export const mapRouter = Router();
 mapRouter.use(authenticate);
@@ -302,6 +302,34 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
       },
     },
   });
+});
+
+/**
+ * GET /api/v1/map/geocode?q=<place>
+ *
+ * Look up a freeform place typed into the map's search box, so searching a
+ * city you have no customers in still shows you WHERE that is instead of
+ * leaving the map parked. Returns a point, Google's viewport (for zoom) and
+ * a formatted label.
+ *
+ * No business_id: this reads no business data, it just resolves a string.
+ * Login is the gate. Results are memoized in-process — see geocodePlace().
+ */
+mapRouter.get('/geocode', async (req: AuthRequest, res) => {
+  if (!req.user?.id) return res.status(401).json({ success: false, message: 'Unauthenticated' });
+
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  if (!q) return res.status(400).json({ success: false, message: 'q required' });
+  // Long strings are never real place queries; cap before spending a call.
+  if (q.length > 120) return res.status(400).json({ success: false, message: 'q too long' });
+
+  const out = await geocodePlace(q);
+  if (!out.ok) {
+    // not_found is an ordinary answer ("asdfgh"), not a server fault.
+    const status = out.reason === 'not_found' ? 404 : out.reason === 'no_key' ? 501 : 502;
+    return res.status(status).json({ success: false, reason: out.reason });
+  }
+  return res.json({ success: true, place: out.place });
 });
 
 /**

@@ -192,6 +192,15 @@ const LAYER_COLORS: Record<Layer, string> = {
 // pins once data loads.
 const DEFAULT_CENTER = { lat: 39.5, lng: -98.35 };
 
+/** A place resolved by GET /api/v1/map/geocode — used when a search matches
+ *  no pins, so we can still show the user where they searched. */
+interface GeocodedPlace {
+  lat: number;
+  lng: number;
+  label: string;
+  bounds: { north: number; south: number; east: number; west: number } | null;
+}
+
 // Substring search across every text field on a pin (standard cols +
 // custom_fields values). Case-insensitive. Caller pre-lowercases.
 function pinMatchesQuery(p: AnyPin, q: string): boolean {
@@ -288,6 +297,9 @@ export default function MapModule() {
   const [selected, setSelected] = useState<AnyPin | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [search, setSearch] = useState('');
+  // Where a searched place resolved to, when the search matched no pins.
+  const [placeHit, setPlaceHit] = useState<GeocodedPlace | null>(null);
+  const [placeSearching, setPlaceSearching] = useState(false);
   // Map view prefs come from the business row (synced across devices via
   // businesses.map_view_settings). Defaults apply until the user saves.
   // mapType is normalized: mobile persists 'standard', web wants 'roadmap'.
@@ -493,6 +505,64 @@ export default function MapModule() {
     }
   }, [search, visiblePins]);
 
+  // Geocode fallback — searching a city you have no customers in used to do
+  // nothing (no pins matched, so the fit effect above bailed and the map
+  // stayed put). Resolve the place and fly there instead, so you can see
+  // where it sits relative to your coverage.
+  //
+  // Only when the text search matched ZERO pins: a real pin is the better
+  // answer, and each lookup is a billable Google call. Debounced so typing
+  // "Wichita" costs one request rather than seven.
+  useEffect(() => {
+    const q = search.trim();
+    if (q.length < 3 || visiblePins.length > 0) {
+      setPlaceHit(null);
+      setPlaceSearching(false);
+      return;
+    }
+    let cancelled = false;
+    setPlaceSearching(true);
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const jwt = await getJwt();
+          const r = await fetch(
+            `${apiBaseUrl}/api/v1/map/geocode?q=${encodeURIComponent(q)}`,
+            { headers: { Authorization: `Bearer ${jwt}` } },
+          );
+          if (cancelled) return;
+          if (!r.ok) { setPlaceHit(null); return; }
+          const body = (await r.json()) as { place?: GeocodedPlace };
+          const place = body.place;
+          if (cancelled || !place || !mapRef.current) { setPlaceHit(null); return; }
+          setPlaceHit(place);
+          // Google's viewport frames a state as a state and a street as a
+          // street; only fall back to a fixed zoom when it gave us none.
+          if (place.bounds) {
+            const b = new google.maps.LatLngBounds();
+            b.extend({ lat: place.bounds.north, lng: place.bounds.east });
+            b.extend({ lat: place.bounds.south, lng: place.bounds.west });
+            mapRef.current.fitBounds(b, 48);
+          } else {
+            mapRef.current.setCenter({ lat: place.lat, lng: place.lng });
+            mapRef.current.setZoom(11);
+          }
+        } catch {
+          if (!cancelled) setPlaceHit(null);
+        } finally {
+          if (!cancelled) setPlaceSearching(false);
+        }
+      })();
+    }, 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // visiblePins.length, not the array — its identity changes on every
+    // layer toggle and would re-fire the lookup for the same query.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, visiblePins.length, apiBaseUrl]);
+
   // Initial fit — frame every pin on first load, mirroring mobile's
   // initialRegion. Runs once (ref guard) so later layer toggles don't
   // yank the view away from where the user panned.
@@ -538,6 +608,27 @@ export default function MapModule() {
       if (mapRef.current && (mapRef.current.getZoom() ?? 0) > 14) mapRef.current.setZoom(14);
     });
   }, [visiblePins]);
+
+  // Re-frame when the active business changes. The map used to be torn down
+  // and rebuilt on every load, which reset the view as a side effect; now
+  // that it survives refetches, a tenant switch has to re-frame explicitly
+  // (didInitialFitRef would otherwise hold the previous business's view).
+  // Guarded by id, so a plain refresh never moves the camera. Declared after
+  // resetView so the dependency isn't referenced before initialization.
+  const framedBusinessRef = useRef<string | null>(null);
+  useEffect(() => {
+    const id = business?.id ?? null;
+    if (!id || !pins || !mapReady) return;
+    if (framedBusinessRef.current === null) {
+      // First business is the initial-fit effect's job — just record it.
+      framedBusinessRef.current = id;
+      return;
+    }
+    if (framedBusinessRef.current === id) return;
+    framedBusinessRef.current = id;
+    didInitialFitRef.current = false; // let the initial fit run for the new tenant
+    resetView();
+  }, [business?.id, pins, mapReady, resetView]);
 
   // Imperative marker + clusterer wiring. Rebuilds when pins, clustering
   // toggle, or pin size changes. We intentionally rebuild rather than
@@ -801,6 +892,19 @@ export default function MapModule() {
             </>
           )}
         </div>
+        {/* Searched a place with no pins in it — say so, and name what the
+           map flew to, so a wrong geocode match is obvious. */}
+        {(placeSearching || placeHit) && (
+          <div className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
+            <MapPinIcon size={12} className="text-primary shrink-0" />
+            <span className="text-[11px] font-semibold text-primary">
+              {placeHit
+                ? t.placeNoPins.replace('{{place}}', placeHit.label)
+                : t.placeSearching}
+            </span>
+          </div>
+        )}
+
         {/* Weather date-range filter — a proper modal (per user preference)
            instead of an inline panel expanding from the top of the map. */}
         <Modal
@@ -897,7 +1001,13 @@ export default function MapModule() {
 
       {/* The map itself — fills the rest of the viewport. */}
       <div className="relative flex-1 mx-4 mb-4 rounded-2xl overflow-hidden border border-border-soft">
-        {!isLoaded || loading ? (
+        {/* Spinner only until there's something to show. Gating on `loading`
+            alone tore the GoogleMap down on every refetch, and the fresh
+            instance came back at the hardcoded zoom={4} — while
+            didInitialFitRef (already true) blocked any refit. So logging a
+            call, which refetches to update "último contacto", left you
+            zoomed out over the whole country. */}
+        {!isLoaded || (loading && !pins) ? (
           <div className="absolute inset-0 flex items-center justify-center bg-surface">
             <div className="flex gap-1">
               {[0, 1, 2].map(i => (

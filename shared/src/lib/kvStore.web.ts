@@ -25,6 +25,18 @@ export async function kvRemove(key: string): Promise<void> {
   }
 }
 
+/** Delete many keys. localStorage has no batch API, but it's synchronous —
+ *  there's no bridge and nothing to queue, so a loop is already optimal.
+ *  Mirrors the native signature (see kvStore.ts for why that one batches). */
+export async function kvRemoveMany(keys: string[]): Promise<void> {
+  try {
+    if (typeof window === 'undefined') return;
+    for (const k of keys) window.localStorage.removeItem(k);
+  } catch {
+    /* ignore */
+  }
+}
+
 /** All stored keys starting with `prefix` (for cache purges). */
 export async function kvKeys(prefix: string): Promise<string[]> {
   try {

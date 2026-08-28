@@ -29,6 +29,23 @@ export async function kvRemove(key: string): Promise<void> {
   }
 }
 
+/**
+ * Delete many keys in ONE native call.
+ *
+ * Firing N parallel kvRemove()s instead puts N callbacks on the RN bridge at
+ * once; a sign-out purge of ~170 cache entries is ~510 of them (payload +
+ * __ts + __fp each) and trips React Native's "Excessive number of pending
+ * callbacks: 501" warning. multiRemove is a single round trip.
+ */
+export async function kvRemoveMany(keys: string[]): Promise<void> {
+  if (keys.length === 0) return;
+  try {
+    await AsyncStorage.multiRemove(keys);
+  } catch {
+    /* ignore */
+  }
+}
+
 /** All stored keys starting with `prefix` (for cache purges). */
 export async function kvKeys(prefix: string): Promise<string[]> {
   try {

@@ -39,7 +39,7 @@
 //   teammates — not just mutations this client made.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { kvGet, kvSet, kvRemove, kvKeys } from './kvStore';
+import { kvGet, kvSet, kvRemove, kvRemoveMany, kvKeys } from './kvStore';
 
 const PREFIX = 'amixos_cache_';
 const TS_SUFFIX = '__ts';
@@ -106,7 +106,11 @@ export async function swrWrite(key: string, data: unknown): Promise<void> {
  *  on this device can never hydrate another tenant's data. */
 export async function purgeSwrCache(): Promise<void> {
   const keys = await kvKeys(PREFIX);
-  await Promise.all(keys.map((k) => kvRemove(k)));
+  // One batched delete, not one call per key. Each cache entry is three keys
+  // (payload + __ts + __fp), so Promise.all over them used to fire 500+
+  // simultaneous AsyncStorage callbacks on sign-out and trip RN's
+  // "Excessive number of pending callbacks" warning.
+  await kvRemoveMany(keys);
 }
 
 /** Persist a payload together with the stamp the fetch STARTED from.

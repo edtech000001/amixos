@@ -66,6 +66,114 @@ export async function geocodeAddress(addressLine: string): Promise<GeocodeOutcom
   return { ok: true, lat: loc.lat, lng: loc.lng };
 }
 
+export interface GeocodePlace {
+  lat: number;
+  lng: number;
+  /** Google's own formatted name ("Wichita, KS, USA") — shown back to the
+   *  user so they can tell a wrong match from a right one. */
+  label: string;
+  /** Google's suggested viewport. Lets the client frame a whole state or a
+   *  single street correctly instead of guessing a zoom delta. */
+  bounds: { north: number; south: number; east: number; west: number } | null;
+}
+
+/**
+ * Geocode a freeform place query typed into the map's search box ("Wichita
+ * KS", "78701", "Texas"). Separate from geocodeAddress() because the map
+ * needs the viewport for zoom and a label to display, not just a point.
+ *
+ * Results are memoized for the process lifetime: place searches repeat
+ * constantly ("Wichita" as someone types and retypes) and every miss is a
+ * billable Google call.
+ */
+const placeCache = new Map<string, GeocodePlace | null>();
+const PLACE_CACHE_MAX = 500;
+
+export async function geocodePlace(
+  query: string,
+): Promise<{ ok: true; place: GeocodePlace } | GeocodeFailure> {
+  const key = process.env.GOOGLE_MAPS_API_KEY;
+  if (!key) return { ok: false, reason: 'no_key' };
+  const q = query.trim();
+  if (!q) return { ok: false, reason: 'no_address' };
+
+  const cacheKey = q.toLowerCase();
+  if (placeCache.has(cacheKey)) {
+    const hit = placeCache.get(cacheKey) ?? null;
+    return hit ? { ok: true, place: hit } : { ok: false, reason: 'not_found' };
+  }
+
+  const url = new URL(GEOCODE_BASE);
+  url.searchParams.set('address', q);
+  url.searchParams.set('key', key);
+
+  let res: Response;
+  try {
+    res = await fetch(url.toString());
+  } catch (e) {
+    return { ok: false, reason: 'http_error', details: String(e) };
+  }
+  if (!res.ok) return { ok: false, reason: 'http_error', details: `HTTP ${res.status}` };
+
+  const json = (await res.json()) as {
+    status?: string;
+    results?: Array<{
+      formatted_address?: string;
+      geometry?: {
+        location?: { lat?: number; lng?: number };
+        viewport?: {
+          northeast?: { lat?: number; lng?: number };
+          southwest?: { lat?: number; lng?: number };
+        };
+      };
+    }>;
+    error_message?: string;
+  };
+
+  // ZERO_RESULTS is a legitimate answer, not an error — cache it so a typo
+  // typed repeatedly doesn't bill on every keystroke.
+  if (json.status === 'ZERO_RESULTS') {
+    rememberPlace(cacheKey, null);
+    return { ok: false, reason: 'not_found' };
+  }
+  if (json.status !== 'OK' || !json.results?.length) {
+    return { ok: false, reason: 'not_found', details: json.error_message ?? json.status ?? 'unknown' };
+  }
+
+  const top = json.results[0];
+  const loc = top.geometry?.location;
+  if (typeof loc?.lat !== 'number' || typeof loc?.lng !== 'number') {
+    return { ok: false, reason: 'parse_error' };
+  }
+
+  const ne = top.geometry?.viewport?.northeast;
+  const sw = top.geometry?.viewport?.southwest;
+  const bounds =
+    typeof ne?.lat === 'number' && typeof ne?.lng === 'number' &&
+    typeof sw?.lat === 'number' && typeof sw?.lng === 'number'
+      ? { north: ne.lat, east: ne.lng, south: sw.lat, west: sw.lng }
+      : null;
+
+  const place: GeocodePlace = {
+    lat: loc.lat,
+    lng: loc.lng,
+    label: top.formatted_address ?? q,
+    bounds,
+  };
+  rememberPlace(cacheKey, place);
+  return { ok: true, place };
+}
+
+function rememberPlace(key: string, value: GeocodePlace | null): void {
+  // Crude cap — drop the oldest insertion once full. Map preserves insertion
+  // order, so the first key is the oldest.
+  if (placeCache.size >= PLACE_CACHE_MAX) {
+    const oldest = placeCache.keys().next().value;
+    if (oldest !== undefined) placeCache.delete(oldest);
+  }
+  placeCache.set(key, value);
+}
+
 interface AddressFields {
   id: string;
   address: string | null;

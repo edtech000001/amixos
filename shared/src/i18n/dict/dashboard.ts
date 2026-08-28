@@ -2092,6 +2092,8 @@ export type DashboardDict = {
       searchPlaceholder: string;
       searchNoResults: string;
       searchResultsCount: string;
+      placeNoPins: string;
+      placeSearching: string;
       layerToggleHint: string;
       resetView: string;
       // Status footer / empty states
@@ -5134,6 +5136,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         searchPlaceholder: 'Buscar por nombre, ciudad, estado...',
         searchNoResults: 'Sin resultados.',
         searchResultsCount: '{{count}} resultados',
+        placeNoPins: 'Mostrando {{place}} — aquí no tienes pines',
+        placeSearching: 'Buscando el lugar…',
         layerToggleHint: 'Toca para mostrar / ocultar',
         resetView: 'Ver todos los pines',
         noPinsYet: 'Aún no hay pines para mostrar.',
@@ -8187,6 +8191,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         searchPlaceholder: 'Search by name, city, state...',
         searchNoResults: 'No results.',
         searchResultsCount: '{{count}} results',
+        placeNoPins: 'Showing {{place}} — you have no pins here',
+        placeSearching: 'Finding that place…',
         layerToggleHint: 'Tap to show / hide',
         resetView: 'View all pins',
         noPinsYet: 'No pins to show yet.',
