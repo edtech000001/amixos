@@ -1,8 +1,22 @@
 // Subscription plan catalog — the single source of truth for the pricing modal
-// on web + mobile. Pure data (no billing yet); Stripe wiring comes later. Each
-// plan is per-business: a business carries its own plan + trial.
+// on web + mobile. Each plan is per-business: a business carries its own plan
+// + trial.
 //
-// Annual billing = "2 months free": annualTotal = monthly × 10.
+// PRICES HERE MUST MATCH STRIPE EXACTLY. They are what the customer is shown;
+// Stripe is what the card is actually charged, and the two disagreeing is a
+// complaint waiting to happen. Every amount below was read off the Stripe
+// dashboard, so `annualTotal` is a literal rather than a computed monthly × 10
+// — the real annual prices don't land on a clean multiple.
+//
+// Annual billing vs paying monthly for 12 months:
+//   Básico       $599.88 → $490.99     saves $108.89  = 2.18 months
+//   Profesional  $1,199.88 → $990.99   saves $208.89  = 2.09 months
+//   Negocio      $1,799.88 → $1,499.99 saves $299.89  = 1.9994 months
+//   Corporativo  $2,399.88 → $1,999.99 saves $399.89  = 1.9995 months
+//
+// The "2 months free" badge is exact on the first two and 9¢ short on the last
+// two (2 months would be $1,499.90 / $1,999.90). Immaterial, but don't tighten
+// the wording to a guarantee without changing those Stripe prices first.
 
 export type PlanKey = 'basico' | 'profesional' | 'negocio' | 'corporativo' | 'empresa';
 export type BillingPeriod = 'monthly' | 'annual';
@@ -15,9 +29,11 @@ export interface PlanCopy {
 
 export interface Plan {
   key: PlanKey;
-  /** USD per month on the monthly plan. 0 for a `custom` (contact-sales) tier. */
+  /** USD per month on the monthly plan — the exact Stripe amount. 0 for a
+   *  `custom` (contact-sales) tier. */
   monthly: number;
-  /** USD per year on the annual plan (= monthly × 10, i.e. 2 months free). */
+  /** USD per year on the annual plan — the exact Stripe amount, NOT derived
+   *  from `monthly`. */
   annualTotal: number;
   /** Highlight as the suggested plan ("Más popular"). */
   recommended?: boolean;
@@ -38,16 +54,11 @@ export interface Plan {
 /** Free-trial length, in days. No credit card required. */
 export const TRIAL_DAYS = 14;
 
-/** Months you effectively pay for on the annual plan (12 − 2 free). */
-const ANNUAL_PAID_MONTHS = 10;
-
-const annual = (monthly: number) => monthly * ANNUAL_PAID_MONTHS;
-
 export const PLANS: Plan[] = [
   {
     key: 'basico',
-    monthly: 49,
-    annualTotal: annual(49),
+    monthly: 49.99,
+    annualTotal: 490.99,
     storageGb: 10,
     maxMembers: 2,
     copy: {
@@ -81,8 +92,8 @@ export const PLANS: Plan[] = [
   },
   {
     key: 'profesional',
-    monthly: 99,
-    annualTotal: annual(99),
+    monthly: 99.99,
+    annualTotal: 990.99,
     recommended: true,
     storageGb: 50,
     maxMembers: 10,
@@ -113,8 +124,8 @@ export const PLANS: Plan[] = [
   },
   {
     key: 'negocio',
-    monthly: 150,
-    annualTotal: annual(150),
+    monthly: 149.99,
+    annualTotal: 1499.99,
     storageGb: 150,
     maxMembers: 20,
     copy: {
@@ -146,8 +157,8 @@ export const PLANS: Plan[] = [
   },
   {
     key: 'corporativo',
-    monthly: 200,
-    annualTotal: annual(200),
+    monthly: 199.99,
+    annualTotal: 1999.99,
     storageGb: 400,
     maxMembers: 40,
     copy: {
@@ -213,12 +224,31 @@ export const PLANS: Plan[] = [
   },
 ];
 
-/** The price to show on a card for the chosen billing period (per-month). */
+/** The price to show on a card for the chosen billing period (per-month). On
+ *  annual this is a derived EQUIVALENT ($490.99/12), not an amount anyone is
+ *  charged — the annual total is shown beside it. Format with
+ *  formatPlanPrice(), which does the rounding. */
 export function planMonthlyEquivalent(plan: Plan, period: BillingPeriod): number {
   return period === 'annual' ? plan.annualTotal / 12 : plan.monthly;
 }
 
-/** Dollars saved per year by paying annually vs 12× monthly. */
+/** Dollars saved per year by paying annually vs 12× monthly. Rounded to cents:
+ *  49.99 × 12 evaluates to 599.8800000000001 in floating point, and the raw
+ *  subtraction renders as "$108.89000000000004" on the card. */
 export function planAnnualSavings(plan: Plan): number {
-  return plan.monthly * 12 - plan.annualTotal;
+  return Math.round((plan.monthly * 12 - plan.annualTotal) * 100) / 100;
+}
+
+/**
+ * Render a plan amount for display, WITHOUT a currency symbol (callers supply
+ * the "$"). Thousands-grouped, and cents shown only when there are any —
+ * "49.99", "1,499.99", "40.92", "50". Rounds to the nearest cent, so a derived
+ * value like 490.99/12 lands on 40.92 instead of 40.915833333333335.
+ */
+export function formatPlanPrice(amount: number): string {
+  const cents = Math.round(amount * 100) / 100;
+  return cents.toLocaleString('en-US', {
+    minimumFractionDigits: Number.isInteger(cents) ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
 }

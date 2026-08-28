@@ -7,6 +7,7 @@ import {
   PLANS,
   planMonthlyEquivalent,
   planAnnualSavings,
+  formatPlanPrice,
   type BillingPeriod,
   type PlanKey,
 } from '@amixos/shared/lib/plans';
@@ -127,8 +128,11 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
             {PLANS.map((plan) => {
               const copy = plan.copy[locale];
-              const perMonth = Math.round(planMonthlyEquivalent(plan, period));
-              const savings = planAnnualSavings(plan);
+              // NOT rounded to whole dollars — prices are $49.99 etc., and
+              // showing "$50" while Stripe charges $49.99 is the mismatch this
+              // is meant to avoid.
+              const perMonth = formatPlanPrice(planMonthlyEquivalent(plan, period));
+              const savings = formatPlanPrice(planAnnualSavings(plan));
               const highlighted = plan.recommended;
               const isCustom = plan.custom;
 
@@ -167,8 +171,8 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
                           <div className="mt-1 space-y-0.5">
                             <p className="text-xs text-muted">
                               {es
-                                ? `facturado anualmente · $${plan.annualTotal}/año`
-                                : `billed annually · $${plan.annualTotal}/yr`}
+                                ? `facturado anualmente · $${formatPlanPrice(plan.annualTotal)}/año`
+                                : `billed annually · $${formatPlanPrice(plan.annualTotal)}/yr`}
                             </p>
                             <p className="text-xs font-semibold text-green-600">
                               {es ? `Ahorra $${savings}/año` : `Save $${savings}/yr`}

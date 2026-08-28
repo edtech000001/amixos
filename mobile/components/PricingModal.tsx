@@ -23,6 +23,7 @@ import {
   PLANS,
   planMonthlyEquivalent,
   planAnnualSavings,
+  formatPlanPrice,
   type BillingPeriod,
   type PlanKey,
 } from '@amixos/shared/lib/plans';
@@ -222,7 +223,10 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                     const copy = plan.copy[locale];
                     const recommended = !!plan.recommended;
                     const custom = !!plan.custom;
-                    const perMonth = Math.round(planMonthlyEquivalent(plan, period));
+                    // NOT rounded to whole dollars — prices are $49.99 etc., and
+                    // showing "$50" while Stripe charges $49.99 is the mismatch
+                    // this is meant to avoid.
+                    const perMonth = formatPlanPrice(planMonthlyEquivalent(plan, period));
                     return (
                       <View
                         key={plan.key}
@@ -262,13 +266,13 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                               <View className="mt-1">
                                 <Text className="text-xs text-muted">
                                   {en
-                                    ? `billed annually · $${plan.annualTotal}/yr`
-                                    : `facturado anualmente · $${plan.annualTotal}/año`}
+                                    ? `billed annually · $${formatPlanPrice(plan.annualTotal)}/yr`
+                                    : `facturado anualmente · $${formatPlanPrice(plan.annualTotal)}/año`}
                                 </Text>
                                 <Text className="text-xs font-semibold text-green-700 mt-0.5">
                                   {en
-                                    ? `Save $${planAnnualSavings(plan)}/yr`
-                                    : `Ahorra $${planAnnualSavings(plan)}/año`}
+                                    ? `Save $${formatPlanPrice(planAnnualSavings(plan))}/yr`
+                                    : `Ahorra $${formatPlanPrice(planAnnualSavings(plan))}/año`}
                                 </Text>
                               </View>
                             ) : null}
