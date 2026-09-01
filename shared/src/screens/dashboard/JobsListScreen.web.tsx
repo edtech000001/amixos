@@ -7,6 +7,8 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { SkeletonRow } from '../../ui/Skeleton';
+import { JobsSummarySheet } from './JobsSummarySheet';
+import type { JobsSummaryTotals } from '../../lib/jobsSummary';
 import {
   Plus,
   Search,
@@ -38,6 +40,7 @@ import {
   History,
   ArrowDownAZ,
   CalendarClock,
+  BarChart3,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { formatDateLong, formatTime12h } from '../../lib/format';
@@ -149,6 +152,10 @@ const GROUP_ICON: Record<JobGroupKey, typeof List> = {
 };
 
 export interface JobsListScreenProps {
+  /** Opens the filtered-set summary. Resolves null when the tab selection
+   *  can't be aggregated server-side (see jobSummaryFilterParams). Omit to
+   *  hide the Summary button entirely. */
+  onRequestSummary?: () => Promise<JobsSummaryTotals | null>;
   loading: boolean;
   jobs: JobListItem[];
   initialTab?: TabKey;
@@ -284,6 +291,7 @@ export function JobsListScreen({
   refreshing = false,
   stale = false,
   cachedAt = null,
+  onRequestSummary,
 }: JobsListScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.jobs;
@@ -351,6 +359,25 @@ export function JobsListScreen({
 
   const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy, dateFrom, dateTo });
   const dateActive = !!dateFrom || !!dateTo;
+
+  // Filtered-set summary. Fetched on open (not with the list) so the extra
+  // aggregate query only runs when someone asks for it.
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryTotals, setSummaryTotals] = useState<JobsSummaryTotals | null>(null);
+  const openSummary = async () => {
+    if (!onRequestSummary) return;
+    setSummaryOpen(true);
+    setSummaryLoading(true);
+    setSummaryTotals(null);
+    try {
+      setSummaryTotals(await onRequestSummary());
+    } catch {
+      setSummaryTotals(null); // renders the "unavailable" copy
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
   // Quick date-range chips — same set as payroll history, including the
   // "This/Last pay period" chips when the caller passes payPeriod.
   const dateRangePresets = buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets, payPeriod);
@@ -824,6 +851,15 @@ export function JobsListScreen({
               <XCircle size={16} />
             </button>
           </Tooltip>
+        ) : null}
+        {onRequestSummary ? (
+          <button
+            onClick={openSummary}
+            title={t.summary.title}
+            className="shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border border-primary bg-primary/10 text-sm font-semibold text-primary shadow-sm hover:bg-primary/20 transition-colors"
+          >
+            <BarChart3 size={16} /> {t.summary.button}
+          </button>
         ) : null}
         {onCreateInvoice || canDelete ? (
           <button
@@ -1315,6 +1351,16 @@ export function JobsListScreen({
           </div>
         </div>
       ) : null}
+
+      <JobsSummarySheet
+        open={summaryOpen}
+        onClose={() => setSummaryOpen(false)}
+        loading={summaryLoading}
+        totals={summaryTotals}
+        filtered={filtersActive}
+        statusLabels={t.statuses as unknown as Record<string, string>}
+        formatMoney={fmt}
+      />
     </div>
   );
 }

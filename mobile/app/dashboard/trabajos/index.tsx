@@ -14,6 +14,8 @@ import {
   type JobListItem,
 } from '@amixos/shared/screens/dashboard/JobsListScreen';
 import { fetchJobsPage, fetchJobsPageSorted, fetchJobTabCounts, fetchJobGroupIndex, fetchAllJobsInGroup, resolveSearchIds, LAZY_GROUP_DIMS, type JobsCursor, type JobsQueryParams, type JobGroup, type SearchIds } from '@amixos/shared/lib/jobsQuery';
+import { fetchJobsSummary } from '@amixos/shared/lib/jobsQuery';
+import { computeJobsSummaryTotals, payrollJcfKeys } from '@amixos/shared/lib/jobsSummary';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { can } from '@amixos/shared/lib/permissions';
 import { normalizeJobAlertThresholds } from '@amixos/shared/lib/jobAlerts';
@@ -439,6 +441,22 @@ export default function TrabajosTab() {
     <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       <LocationSwitcher />
       <JobsListScreen
+        onRequestSummary={async () => {
+          // paramsRef holds the filters the list is CURRENTLY showing, so the
+          // summary always describes what's on screen. The RPC aggregates every
+          // match server-side — summing the loaded page would under-count.
+          const p = paramsRef.current;
+          if (!business || !p) return null;
+          const summary = await fetchJobsSummary(
+            supabase,
+            { businessId: p.businessId, locationId: p.locationId, tabs: p.tabs, search: p.search, dateFrom: p.dateFrom, dateTo: p.dateTo },
+            { jcfKeys: payrollJcfKeys(business.payroll_config) },
+          );
+          if (!summary) return null; // tab combo the RPC can't express
+          // Pay data is hidden (not zeroed) for roles without the permission —
+          // RLS would empty the employee rows anyway, but $0 would read as fact.
+          return computeJobsSummaryTotals(summary, business.payroll_config, can.seeEmployees(currentRole));
+        }}
         loading={(loading || swr.loading) && jobs.length === 0}
         refreshing={swr.refreshing || (loading && jobs.length > 0)}
         stale={swr.stale}

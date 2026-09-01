@@ -18,6 +18,7 @@
 // tiny lookups, then OR them with the job's own ilike fields in one query.
 
 import { fullNameOrArms } from './nameSearch';
+import type { PayrollAggregate } from './payroll';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -171,6 +172,12 @@ async function searchOrClause(
   const ors = [
     `title.ilike.${like}`, `external_ref.ilike.${like}`, `estimate_number.ilike.${like}`,
     `job_city.ilike.${like}`, `job_state.ilike.${like}`,
+    // User-defined custom fields (Tipo de Proyecto, etc.) via the generated
+    // custom_fields_text column — migration 209. Matched directly rather than
+    // pre-resolved into crewJobIds so it isn't subject to the ID_CAP above: a
+    // common project type matches far more than 150 jobs, and capping it would
+    // silently drop results.
+    `custom_fields_text.ilike.${like}`,
   ];
   if (clientIds.length) ors.push(`client_id.in.(${clientIds.join(',')})`);
   if (crewJobIds.length) ors.push(`id.in.(${crewJobIds.join(',')})`);
@@ -403,4 +410,137 @@ export async function fetchJobsPageSorted<T extends { id: string }>(
     .slice()
     .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
   return { jobs, hasMore: pageIds.length === pageSize };
+}
+
+// ─── Jobs summary (jobs_summary RPC, migration 210) ──────────────────────────
+
+/** Per-employee hours for the filtered set, in the same row shape as
+ *  payroll_period_inputs — so it maps straight onto PayrollAggregate and the
+ *  pay math stays in payroll.ts. */
+export interface JobsSummaryEmployee {
+  employee_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  pay_rate: number | string | null;
+  pay_type: string | null;
+  overtime_eligible: boolean | null;
+  overtime_threshold: number | string | null;
+  overtime_multiplier: number | string | null;
+  custom_fields: Record<string, unknown> | null;
+  worked_hours: number | string;
+  driven_hours: number | string;
+  jobs_driven: number | string;
+  jcf_raw: Record<string, unknown[]> | null;
+}
+
+export interface JobsSummary {
+  jobCount: number;
+  totalAmount: number;
+  totalHours: number;
+  totalDriverHours: number;
+  /** status → count, for the jobs matching the filters. */
+  byStatus: Record<string, number>;
+  employees: JobsSummaryEmployee[];
+}
+
+/**
+ * Tab selection → jobs_summary status args.
+ *
+ * Looser than jobTabFilterParams: that one bails on ANY multi-tab selection
+ * because the group index needs a single dimension, but p_status_include is an
+ * array, so a union of plain status tabs is expressible here.
+ *
+ * Returns null only where the RPC genuinely can't represent the filter:
+ *  - 'delegated' — needs a delegated_to_business_id filter the RPC lacks.
+ *  - 'archived' mixed with others — archived is a flag, not a status, so
+ *    "archived OR scheduled" can't be expressed by one p_archived value.
+ */
+export function jobSummaryFilterParams(
+  tabs: string[],
+  searching: boolean,
+): { statusInclude: string[] | null; excludeClosed: boolean; archived: 'exclude' | 'only' | 'any' } | null {
+  if (!tabs.length) {
+    return { statusInclude: null, excludeClosed: false, archived: searching ? 'any' : 'exclude' };
+  }
+  if (tabs.includes('delegated')) return null;
+  if (tabs.includes('archived')) {
+    if (tabs.length > 1) return null;
+    return { statusInclude: null, excludeClosed: false, archived: 'only' };
+  }
+  const statuses = tabs.flatMap((t) => (t === 'propuestas' ? PROPOSAL_STATUSES : [t]));
+  return { statusInclude: Array.from(new Set(statuses)), excludeClosed: false, archived: 'exclude' };
+}
+
+/**
+ * Totals for EVERY job matching the current filters — not just the loaded page.
+ * Returns null when the tab selection can't be pushed to the RPC (see
+ * jobSummaryFilterParams); callers should present that as "unavailable for this
+ * filter" rather than showing a number computed from a different set.
+ *
+ * `jcfKeys` are the job custom-field keys the business's pay formula reads —
+ * pass them so formula-based pay resolves; omit when there's no formula.
+ */
+export async function fetchJobsSummary(
+  supabase: AnySupabase,
+  params: Pick<JobsQueryParams, 'businessId' | 'locationId' | 'tabs' | 'search' | 'dateFrom' | 'dateTo'>,
+  opts?: { jcfKeys?: string[] | null },
+  searchIds?: SearchIds | null,
+): Promise<JobsSummary | null> {
+  const term = params.search?.trim() ?? '';
+  const fp = jobSummaryFilterParams(params.tabs ?? [], !!term);
+  if (!fp) return null;
+  const ids = term
+    ? (searchIds ?? (await resolveSearchIds(supabase, params.businessId, term)))
+    : null;
+  const { data, error } = await supabase.rpc('jobs_summary', {
+    p_business_id: params.businessId,
+    p_status_include: fp.statusInclude,
+    p_exclude_closed: fp.excludeClosed,
+    p_archived: fp.archived,
+    p_search_term: term || null,
+    p_client_ids: ids?.clientIds ?? null,
+    p_crew_job_ids: ids?.crewJobIds ?? null,
+    p_location_id: params.locationId ?? null,
+    p_date_from: params.dateFrom ?? null,
+    p_date_to: params.dateTo ?? null,
+    p_jcf_keys: opts?.jcfKeys?.length ? opts.jcfKeys : null,
+  });
+  if (error) throw new Error(error.message);
+  const d = (data ?? {}) as Partial<JobsSummary>;
+  return {
+    jobCount: Number(d.jobCount ?? 0) || 0,
+    totalAmount: Number(d.totalAmount ?? 0) || 0,
+    totalHours: Number(d.totalHours ?? 0) || 0,
+    totalDriverHours: Number(d.totalDriverHours ?? 0) || 0,
+    byStatus: (d.byStatus ?? {}) as Record<string, number>,
+    employees: (d.employees ?? []) as JobsSummaryEmployee[],
+  };
+}
+
+/**
+ * Map a summary's per-employee hours onto PayrollAggregate rows.
+ *
+ * Kept here (not in the UI) so every caller converts identically. The result
+ * goes to computePayrollRowsFromAggregates() in payroll.ts — the SAME function
+ * Reports and the Payroll page use — so a jobs-list estimate can never disagree
+ * with them about rates, overtime, driver mode or custom formulas.
+ */
+export function jobsSummaryAggregates(summary: JobsSummary): PayrollAggregate[] {
+  return summary.employees.map((r) => ({
+    employee: {
+      id: r.employee_id,
+      first_name: r.first_name ?? '',
+      last_name: r.last_name ?? '',
+      pay_rate: Number(r.pay_rate) || 0,
+      pay_type: r.pay_type ?? 'hourly',
+      overtime_eligible: r.overtime_eligible,
+      overtime_threshold: r.overtime_threshold == null ? null : Number(r.overtime_threshold),
+      overtime_multiplier: r.overtime_multiplier == null ? null : Number(r.overtime_multiplier),
+      custom_fields: r.custom_fields,
+    },
+    worked: Number(r.worked_hours) || 0,
+    driven: Number(r.driven_hours) || 0,
+    jobsDriven: Number(r.jobs_driven) || 0,
+    jcfRaw: r.jcf_raw,
+  }));
 }

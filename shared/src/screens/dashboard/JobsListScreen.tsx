@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, Pressable, ScrollView, SectionList, Modal as RNModal, Alert, type ViewToken } from 'react-native';
+import { JobsSummarySheet } from './JobsSummarySheet';
+import type { JobsSummaryTotals } from '../../lib/jobsSummary';
 import {
   Search,
   ClipboardList,
@@ -30,6 +32,7 @@ import {
   History,
   ArrowDownAZ,
   CalendarClock,
+  BarChart3,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
@@ -131,6 +134,10 @@ const TAB_ICON: Record<StatusTabKey, typeof List> = {
 };
 
 export interface JobsListScreenProps {
+  /** Opens the filtered-set summary. Resolves null when the tab selection
+   *  can't be aggregated server-side (see jobSummaryFilterParams). Omit to
+   *  hide the Summary button entirely. */
+  onRequestSummary?: () => Promise<JobsSummaryTotals | null>;
   loading: boolean;
   jobs: JobListItem[];
   initialTab?: TabKey;
@@ -280,6 +287,7 @@ export function JobsListScreen({
   refreshing = false,
   stale = false,
   cachedAt = null,
+  onRequestSummary,
 }: JobsListScreenProps) {
   const { t: full, locale } = useLang();
   const c = useThemeColors();
@@ -370,6 +378,25 @@ export function JobsListScreen({
 
   const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy, dateFrom, dateTo });
   const dateActive = !!dateFrom || !!dateTo;
+
+  // Filtered-set summary. Fetched on open (not with the list) so the extra
+  // aggregate query only runs when someone asks for it.
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryTotals, setSummaryTotals] = useState<JobsSummaryTotals | null>(null);
+  const openSummary = async () => {
+    if (!onRequestSummary) return;
+    setSummaryOpen(true);
+    setSummaryLoading(true);
+    setSummaryTotals(null);
+    try {
+      setSummaryTotals(await onRequestSummary());
+    } catch {
+      setSummaryTotals(null); // renders the "unavailable" copy
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
   const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setGroupBy('none'); setDateFrom(null); setDateTo(null); };
 
   const tw = full.dashboard.workspaces;
@@ -964,6 +991,15 @@ export function JobsListScreen({
               <XCircle size={16} color={c.danger} />
             </Pressable>
           ) : null}
+          {onRequestSummary ? (
+            <Pressable
+              onPress={() => { void openSummary(); }}
+              accessibilityLabel={t.summary.button}
+              className="w-11 h-11 rounded-xl border border-primary bg-primary/10 items-center justify-center active:opacity-80"
+            >
+              <BarChart3 size={17} color={c.primary} />
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={() => setDateMenuOpen(o => !o)}
             accessibilityLabel={t.dateFilter.button}
@@ -1400,6 +1436,15 @@ export function JobsListScreen({
       clearLabel={t.dateFilter.clear}
       applyLabel={t.dateFilter.apply}
       presets={buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets, payPeriod)}
+    />
+    <JobsSummarySheet
+      open={summaryOpen}
+      onClose={() => setSummaryOpen(false)}
+      loading={summaryLoading}
+      totals={summaryTotals}
+      filtered={filtersActive}
+      statusLabels={t.statuses as unknown as Record<string, string>}
+      formatMoney={fmt}
     />
     </View>
   );

@@ -638,6 +638,25 @@ export type DashboardDict = {
     };
     searchPlaceholder: string;
     clearFilters: string;
+    summary: {
+      button: string;
+      title: string;
+      subtitleFiltered: string;
+      subtitleAll: string;
+      jobs: string;
+      totalValue: string;
+      avgPerJob: string;
+      crewHours: string;
+      driverHours: string;
+      estPayroll: string;
+      workers: string;
+      byStatus: string;
+      unavailable: string;
+      moneyNote: string;
+      payrollNote: string;
+      salariedNote: string;
+      empty: string;
+    };
     selectButton: string;
     bulkDelete: string;
     bulkArchive: string;
@@ -3707,6 +3726,25 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       searchPlaceholder: 'Buscar por nombre, cliente, número, ciudad...',
       clearFilters: 'Limpiar filtros',
+      summary: {
+        button: 'Resumen',
+        title: 'Resumen de trabajos',
+        subtitleFiltered: 'Totales de los trabajos que coinciden con tus filtros.',
+        subtitleAll: 'Totales de todos tus trabajos.',
+        jobs: 'Trabajos',
+        totalValue: 'Valor total',
+        avgPerJob: 'Promedio por trabajo',
+        crewHours: 'Horas de cuadrilla',
+        driverHours: 'Horas de manejo',
+        estPayroll: 'Nómina estimada',
+        workers: 'Trabajadores',
+        byStatus: 'Por estado',
+        unavailable: 'El resumen no está disponible con esta combinación de pestañas. Selecciona una sola pestaña.',
+        moneyNote: 'Solo cuenta los montos guardados en el trabajo. Si cobras desde la factura, este total se verá bajo.',
+        payrollNote: 'Estimado. No incluye horas registradas fuera de estos trabajos ni tiempo extra.',
+        salariedNote: '{{count}} de tu equipo son asalariados — su costo no se reparte por trabajo.',
+        empty: 'Ningún trabajo coincide con estos filtros.',
+      },
       selectButton: 'Seleccionar',
       bulkDelete: 'Eliminar',
       bulkArchive: 'Archivar',
@@ -6762,6 +6800,25 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       searchPlaceholder: 'Search by name, client, number, city...',
       clearFilters: 'Clear filters',
+      summary: {
+        button: 'Summary',
+        title: 'Jobs summary',
+        subtitleFiltered: 'Totals for the jobs matching your filters.',
+        subtitleAll: 'Totals across all your jobs.',
+        jobs: 'Jobs',
+        totalValue: 'Total value',
+        avgPerJob: 'Average per job',
+        crewHours: 'Crew hours',
+        driverHours: 'Driving hours',
+        estPayroll: 'Estimated payroll',
+        workers: 'Workers',
+        byStatus: 'By status',
+        unavailable: 'A summary is not available for this combination of tabs. Pick a single tab.',
+        moneyNote: 'Counts only amounts saved on the job. If you price on the invoice, this total reads low.',
+        payrollNote: 'An estimate. Excludes hours logged outside these jobs, and overtime.',
+        salariedNote: '{{count}} of your team are salaried — their cost is not split per job.',
+        empty: 'No jobs match these filters.',
+      },
       selectButton: 'Select',
       bulkDelete: 'Delete',
       bulkArchive: 'Archive',
