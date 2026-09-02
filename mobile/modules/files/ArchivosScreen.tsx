@@ -4,13 +4,13 @@
 // Navigate one level at a time; files can override their own visibility.
 // One-hand conventions: FAB + bottom-sheet forms (fade), save at the bottom.
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { loadCachedThenFresh, writeCacheAndStamp } from '@amixos/shared/lib/swrCache';
 import { useDataFingerprint } from '@amixos/shared/lib/dataFingerprint';
 import { SkeletonList } from '@amixos/shared/ui/Skeleton';
 import {
   View, Text, Pressable, ScrollView, ActivityIndicator, Alert, Linking,
-  Modal as RNModal,
+  Modal as RNModal, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -18,9 +18,10 @@ import * as DocumentPicker from 'expo-document-picker';
 import {
   ChevronLeft, ChevronRight, CornerUpLeft, FileText, Folder, FolderOpen, FolderPlus,
   FilePlus2, Link2, Trash2, Pencil, ExternalLink, Upload, Lock,
-  Users as UsersIcon, Check, X, FolderInput, Plus,
+  Users as UsersIcon, Check, X, FolderInput, Plus, LayoutGrid, List as ListIcon,
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
+import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useApp } from '@/lib/AppContext';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -29,10 +30,32 @@ import { can } from '@amixos/shared/lib/permissions';
 import {
   fetchFilesTree, fileStoragePath, fileUid, fileMeta, fileIsCrewVisible,
   type FilesTree,
-  FILES_BUCKET, FILE_MAX_BYTES,
+  FILES_BUCKET, FILE_MAX_BYTES, requestThumbnail,
   type FileCategory, type FileFolder, type FileEntry, type FileEntryKind,
 } from '@amixos/shared/lib/files';
 import { signedUrl } from '@amixos/shared/lib/storageUrls';
+import { kvGet, kvSet } from '@amixos/shared/lib/kvStore';
+
+/**
+ * Fire-and-forget thumbnail request. Swallows every failure on purpose: the
+ * API may be unreachable (offline, or not yet deployed) and that must never
+ * surface as an upload error.
+ */
+async function queueThumbnail(entryId: string): Promise<void> {
+  try {
+    const base = getApiBaseUrl();
+    if (!base) return;
+    const jwt = await getJwt();
+    if (!jwt) return;
+    await requestThumbnail(base, jwt, entryId);
+  } catch {
+    /* thumbnails are best-effort */
+  }
+}
+
+/** Device-level display preference. Same key as web, so the two stay
+ *  independent per device but consistent in naming. */
+const FILES_VIEW_KEY = 'amixos_files_view_mode';
 import { storageLimitBytes, storagePercent, formatBytes, wouldExceedStorage } from '@amixos/shared/lib/storageLimits';
 
 interface Crumb { categoryId: string | null; folderId: string | null; label: string }
@@ -47,6 +70,20 @@ type Sheet =
 export default function ArchivosScreen() {
   const router = useRouter();
   const supabase = createSupabaseClient();
+  // List vs grid, remembered per device. Starts as 'list' and swaps in the
+  // stored value once read, so the first paint is never the wrong layout for
+  // long.
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  useEffect(() => {
+    void kvGet(FILES_VIEW_KEY).then(v => { if (v === 'grid' || v === 'list') setViewMode(v); });
+  }, []);
+  const toggleViewMode = () => {
+    setViewMode(prev => {
+      const next = prev === 'grid' ? 'list' : 'grid';
+      void kvSet(FILES_VIEW_KEY, next);
+      return next;
+    });
+  };
   const { business, user, currentRole } = useApp();
   const { t: full, locale } = useLang();
   const t = full.dashboard.files;
@@ -250,6 +287,17 @@ export default function ArchivosScreen() {
         <Text className="ml-1 text-lg font-semibold text-ink flex-1" numberOfLines={1}>
           {atHome ? t.title : here.label}
         </Text>
+        {/* Outside any canManage gate: read-only members browse these folders
+            too and want thumbnails just as much. */}
+        <Pressable
+          onPress={toggleViewMode}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={viewMode === 'grid' ? t.listView : t.gridView}
+          className="p-2 rounded-lg active:bg-border-soft"
+        >
+          {viewMode === 'grid' ? <ListIcon size={19} color={c.muted} /> : <LayoutGrid size={19} color={c.muted} />}
+        </Pressable>
       </View>
 
       {/* Breadcrumb (depth > 1). A plain flex-row View — NOT a horizontal
@@ -362,8 +410,44 @@ export default function ArchivosScreen() {
               />
             ))}
 
-            {/* Files */}
-            {childEntries.map(e => {
+            {/* Files. Folders stay as full-width rows in both modes — only
+                files become cards, so navigation doesn't move when you flip
+                the toggle. */}
+            {viewMode === 'grid' ? (
+              <View className="flex-row flex-wrap -mx-1">
+                {childEntries.map(e => {
+                  const officeOnly = !!category && !fileIsCrewVisible(e, category.crew_visible);
+                  const picked = selectedEntries.has(e.id);
+                  return (
+                    <View key={e.id} className="w-1/2 px-1 pb-2">
+                      <Pressable
+                        onPress={() => (canManage && selectionMode ? toggleEntry(e.id) : openEntry(e))}
+                        onLongPress={canManage ? () => toggleEntry(e.id) : undefined}
+                        delayLongPress={250}
+                        className={`rounded-xl border overflow-hidden ${picked ? 'border-primary bg-primary/5' : 'border-border-soft bg-card'}`}
+                      >
+                        <View className="w-full border-b border-border-soft overflow-hidden">
+                          <FileThumb entry={e} size={150} />
+                        </View>
+                        <View className="px-2.5 py-2">
+                          <View className="flex-row items-center gap-1.5">
+                            <Text className="text-xs font-medium text-ink flex-shrink" numberOfLines={1}>{e.title}</Text>
+                            {officeOnly ? <Lock size={10} color={c.warning} /> : null}
+                          </View>
+                          <Text className="text-[11px] text-faint" numberOfLines={1}>{fileMeta(e, t.linkBadge)}</Text>
+                        </View>
+                        {canManage && selectionMode ? (
+                          <View className={`absolute top-2 left-2 w-5 h-5 rounded border items-center justify-center ${picked ? 'bg-primary border-primary' : 'bg-card border-border'}`}>
+                            {picked ? <Check size={12} color="#FFFFFF" /> : null}
+                          </View>
+                        ) : null}
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
+            {viewMode === 'grid' ? null : childEntries.map(e => {
               const officeOnly = !!category && !fileIsCrewVisible(e, category.crew_visible);
               return (
                 <View key={e.id} className={`flex-row items-center gap-3 px-3 py-2.5 rounded-xl border ${selectedEntries.has(e.id) ? 'border-primary bg-primary/5' : 'border-border-soft'}`}>
@@ -614,11 +698,14 @@ function FileSheets({
         const arrayBuffer = await new Response(blob).arrayBuffer();
         const { error: upErr } = await supabase.storage.from(FILES_BUCKET).upload(path, arrayBuffer, { contentType: picked.mimeType ?? undefined, upsert: false });
         if (upErr) throw new Error(upErr.message);
-        await supabase.from('file_entries').insert({
+        const { data: created } = await supabase.from('file_entries').insert({
           business_id: businessId, category_id: categoryId, folder_id: folderId, title: title.trim() || picked.name,
           kind: 'file', storage_path: path, file_name: picked.name, file_size: picked.size, mime_type: picked.mimeType,
           crew_visible: crewVisibleValue, created_by: userId,
-        });
+        }).select('id').single();
+        // Kick off the first-page render without making the upload wait on it
+        // or fail with it — the file is already saved; a thumbnail is a bonus.
+        if (created?.id) void queueThumbnail(created.id);
       } else {
         await supabase.from('file_entries').insert({
           business_id: businessId, category_id: categoryId, folder_id: folderId, title: title.trim() || url.trim(),
@@ -665,8 +752,21 @@ function FileSheets({
 
   return (
     <RNModal visible transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable onPress={onClose} className="flex-1 justify-end bg-black/40">
-        <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
+      {/* KeyboardAvoidingView so the folder-name field isn't buried under the
+          keyboard — the sheet sits at the bottom, which is exactly where the
+          keyboard opens. Backdrop is an absolute FIRST child and the card a
+          plain sibling, per the sheet contract in CLAUDE.md; nesting the card
+          inside the backdrop Pressable (with a no-op onPress to swallow taps)
+          is what breaks ScrollView dragging in these sheets. */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        className="flex-1 justify-end"
+      >
+        <Pressable
+          onPress={onClose}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+        />
+        <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
           <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
 
           {/* Actions chooser */}
@@ -798,8 +898,45 @@ function FileSheets({
               </Button>
             </View>
           ) : null}
-        </Pressable>
-      </Pressable>
+        </View>
+      </KeyboardAvoidingView>
     </RNModal>
+  );
+}
+
+
+/**
+ * Cached first-page preview. `thumbnail_path` is produced once by the API
+ * (migration 212) and stored in the private bucket, so this only resolves a
+ * signed URL — no PDF is ever rendered on the phone.
+ *
+ * Falls back to the type icon when there is no preview: a link, a format that
+ * cannot be rasterized, or a render that has not run yet.
+ */
+function FileThumb({ entry, size }: { entry: FileEntry; size: number }) {
+  const supabase = createSupabaseClient();
+  const c = useThemeColors();
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSrc(null);
+    if (!entry.thumbnail_path) return;
+    void signedUrl(supabase, entry.thumbnail_path).then(u => { if (!cancelled) setSrc(u); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry.thumbnail_path]);
+
+  if (src) {
+    return (
+      // resizeMode cover + top alignment: the useful part of a cover page is
+      // its masthead, so crop from the bottom.
+      <Image source={{ uri: src }} style={{ width: '100%', height: size }} resizeMode="cover" />
+    );
+  }
+  return (
+    <View style={{ height: size }} className="w-full items-center justify-center bg-surface">
+      {entry.kind === 'link' ? <Link2 size={24} color={c.faint} /> : <FileText size={24} color={c.faint} />}
+    </View>
   );
 }

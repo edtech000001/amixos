@@ -12,6 +12,7 @@ import { useDataFingerprint } from '@amixos/shared/lib/dataFingerprint';
 import { SkeletonList } from '@amixos/shared/ui/Skeleton';
 import {
   FolderOpen, FolderPlus, FilePlus2, Folder, ChevronRight, ChevronLeft, FileText, Link2,
+  LayoutGrid, List as ListIcon,
   Trash2, Pencil, ExternalLink, Upload, Lock, Users, Check, FolderInput, X, Home,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -26,10 +27,33 @@ import { confirm } from '@amixos/shared/ui/confirmBus';
 import {
   fetchFilesTree, fileStoragePath, fileUid, fileMeta, fileIsCrewVisible,
   type FilesTree,
-  FILES_BUCKET, FILE_MAX_BYTES,
+  FILES_BUCKET, FILE_MAX_BYTES, requestThumbnail,
   type FileCategory, type FileFolder, type FileEntry, type FileEntryKind,
 } from '@amixos/shared/lib/files';
 import { signedUrl } from '@amixos/shared/lib/storageUrls';
+import { kvGet, kvSet } from '@amixos/shared/lib/kvStore';
+
+/**
+ * Fire-and-forget thumbnail request. Resolves the caller's JWT and the API base
+ * URL, then asks the service to render page 1. Deliberately swallows every
+ * failure: the API may not be reachable (offline, not deployed) and that must
+ * not surface as an upload error.
+ */
+async function queueThumbnail(supabase: ReturnType<typeof createSupabaseClient>, entryId: string): Promise<void> {
+  try {
+    const base = process.env.NEXT_PUBLIC_API_URL;
+    if (!base) return;
+    const { data } = await supabase.auth.getSession();
+    const jwt = data.session?.access_token;
+    if (!jwt) return;
+    await requestThumbnail(base, jwt, entryId);
+  } catch {
+    /* thumbnails are best-effort */
+  }
+}
+
+/** Device-level display preference, shared by web and mobile. */
+const FILES_VIEW_KEY = 'amixos_files_view_mode';
 import {
   storageLimitBytes, wouldExceedStorage, storagePercent, formatBytes,
 } from '@amixos/shared/lib/storageLimits';
@@ -42,6 +66,19 @@ interface Crumb { categoryId: string | null; folderId: string | null; label: str
 
 export default function FilesModule() {
   const supabase = createSupabaseClient();
+  // List vs grid, remembered per device (a display preference, not data).
+  // Starts as 'list' and swaps in the stored value once read.
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  useEffect(() => {
+    void kvGet(FILES_VIEW_KEY).then(v => { if (v === 'grid' || v === 'list') setViewMode(v); });
+  }, []);
+  const toggleViewMode = () => {
+    setViewMode(prev => {
+      const next = prev === 'grid' ? 'list' : 'grid';
+      void kvSet(FILES_VIEW_KEY, next);
+      return next;
+    });
+  };
   const { business, user, currentRole } = useApp();
   const { t: full, locale } = useLang();
   const t = full.dashboard.files;
@@ -299,6 +336,18 @@ export default function FilesModule() {
             <p className="text-sm text-muted">{t.subtitle}</p>
           </div>
         </div>
+        {/* View toggle sits outside the canManage block: read-only members
+            browse these folders too and want thumbnails just as much. */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={toggleViewMode}
+            aria-label={viewMode === 'grid' ? t.listView : t.gridView}
+            title={viewMode === 'grid' ? t.listView : t.gridView}
+            className="p-2.5 rounded-xl border border-border bg-card text-muted hover:text-primary hover:border-primary/40"
+          >
+            {viewMode === 'grid' ? <ListIcon size={16} /> : <LayoutGrid size={16} />}
+          </button>
+        </div>
         {canManage && (
           <div className="flex items-center gap-2 shrink-0">
             {/* Enter selection mode (checkboxes appear). Shown only where
@@ -395,8 +444,28 @@ export default function FilesModule() {
             />
           ))}
 
-          {/* Files at this level */}
-          {childEntries.map(e => (
+          {/* Files at this level. Folders stay as full-width rows in both
+              modes — only the files become cards, which is what Drive does and
+              keeps navigation in the same place when you flip the toggle. */}
+          {viewMode === 'grid' ? (
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {childEntries.map(e => (
+                <FileCard
+                  key={e.id}
+                  entry={e}
+                  officeOnly={!!category && !fileIsCrewVisible(e, category.crew_visible)}
+                  metaLabel={fileMeta(e, t.linkBadge)}
+                  canManage={canManage}
+                  selected={selectedEntries.has(e.id)}
+                  selectionMode={selectionMode}
+                  onToggleSelect={() => toggleEntry(e.id)}
+                  onOpen={() => openFile(e)}
+                  onEdit={() => setFileModal({ editing: e })}
+                  onDelete={() => deleteEntry(e)}
+                />
+              ))}
+            </div>
+          ) : childEntries.map(e => (
             <FileRow
               key={e.id}
               entry={e}
@@ -556,6 +625,101 @@ function FileRow({ entry, officeOnly, metaLabel, canManage, selected, selectionM
   );
 }
 
+/**
+ * Cached first-page preview. `thumbnail_path` is produced once by the API
+ * (migration 212) and stored in the private bucket, so this only ever resolves
+ * a signed URL — it never renders a PDF in the browser.
+ *
+ * Falls back to the type icon whenever there is no preview: a link, a format
+ * poppler cannot rasterize, or a render that has not happened yet.
+ */
+function FileThumb({ entry }: { entry: FileEntry }) {
+  const supabase = createSupabaseClient();
+  const [src, setSrc] = useState<string | null>(null);
+  const [broken, setBroken] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSrc(null);
+    setBroken(false);
+    if (!entry.thumbnail_path) return;
+    // Default bucket is the private one, same as FILES_BUCKET.
+    void signedUrl(supabase, entry.thumbnail_path).then(u => {
+      if (!cancelled) setSrc(u);
+    });
+    return () => { cancelled = true; };
+  }, [entry.thumbnail_path]);
+
+  if (src && !broken) {
+    return (
+      // object-top, not object-cover-centred: the useful part of a cover page
+      // is its masthead, so crop from the bottom.
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        onError={() => setBroken(true)}
+        className="w-full h-full object-cover object-top"
+      />
+    );
+  }
+  return (
+    <div className="w-full h-full flex items-center justify-center bg-surface">
+      {entry.kind === 'link'
+        ? <Link2 size={26} className="text-faint" />
+        : <FileText size={26} className="text-faint" />}
+    </div>
+  );
+}
+
+function FileCard({ entry, officeOnly, metaLabel, canManage, selected, selectionMode, onToggleSelect, onOpen, onEdit, onDelete }: {
+  entry: FileEntry; officeOnly: boolean; metaLabel: string;
+  canManage: boolean; selected: boolean; selectionMode: boolean;
+  onToggleSelect: () => void; onOpen: () => void; onEdit: () => void; onDelete: () => void;
+}) {
+  const inSelect = canManage && selectionMode;
+  return (
+    <div className={`group relative rounded-xl border overflow-hidden bg-card ${selected ? 'border-primary ring-1 ring-primary/30' : 'border-border-soft hover:border-border'}`}>
+      <button
+        onClick={() => (inSelect ? onToggleSelect() : onOpen())}
+        className="block w-full text-left"
+      >
+        <div className="aspect-[3/4] w-full overflow-hidden border-b border-border-soft bg-surface">
+          <FileThumb entry={entry} />
+        </div>
+        <div className="px-2.5 py-2">
+          <div className="flex items-center gap-1.5">
+            <p className="text-xs font-medium text-ink truncate">{entry.title}</p>
+            {officeOnly && <Lock size={10} className="text-amber-500 shrink-0" />}
+          </div>
+          <p className="text-[11px] text-faint truncate">{metaLabel}</p>
+        </div>
+      </button>
+
+      {inSelect ? (
+        <button
+          onClick={onToggleSelect}
+          className={`absolute top-2 left-2 w-5 h-5 rounded border flex items-center justify-center ${selected ? 'bg-primary border-primary' : 'bg-card/90 border-border'}`}
+        >
+          {selected && <Check size={12} className="text-white" />}
+        </button>
+      ) : (
+        // Hover-only so the artwork stays clean; still reachable by keyboard
+        // via focus-within.
+        <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+          <button onClick={onOpen} className="p-1.5 rounded-lg bg-card/90 border border-border-soft text-faint hover:text-primary"><ExternalLink size={13} /></button>
+          {canManage && (
+            <>
+              <button onClick={onEdit} className="p-1.5 rounded-lg bg-card/90 border border-border-soft text-muted hover:text-primary"><Pencil size={12} /></button>
+              <button onClick={onDelete} className="p-1.5 rounded-lg bg-card/90 border border-border-soft text-red-500"><Trash2 size={12} /></button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FolderModal({ editing, atHome, categoryId, parentFolderId, businessId, userId, onClose, onSaved }: {
   editing: FileCategory | FileFolder | null; atHome: boolean;
   categoryId: string | null; parentFolderId: string | null;
@@ -667,11 +831,14 @@ function FileModal({ editing, categoryId, folderId, businessId, userId, limitByt
         const path = fileStoragePath(businessId, fileUid(), file.name);
         const { error: upErr } = await supabase.storage.from(FILES_BUCKET).upload(path, file, { contentType: file.type || undefined, upsert: false });
         if (upErr) throw new Error(upErr.message);
-        await supabase.from('file_entries').insert({
+        const { data: created } = await supabase.from('file_entries').insert({
           business_id: businessId, category_id: categoryId, folder_id: folderId, title: title.trim() || file.name,
           kind: 'file', storage_path: path, file_name: file.name, file_size: file.size, mime_type: file.type || null,
           crew_visible: crewVisibleValue, created_by: userId,
-        });
+        }).select('id').single();
+        // Kick off the first-page render, but never make the upload wait on it
+        // or fail with it — the file is already saved, a thumbnail is a bonus.
+        if (created?.id) void queueThumbnail(supabase, created.id);
       } else {
         await supabase.from('file_entries').insert({
           business_id: businessId, category_id: categoryId, folder_id: folderId, title: title.trim() || url.trim(),

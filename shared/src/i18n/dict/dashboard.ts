@@ -3084,6 +3084,7 @@ export type DashboardDict = {
     kindFile: string; kindLink: string;
     uploadBtn: string; uploading: string; chooseFile: string;
     linkUrlLabel: string; linkUrlPlaceholder: string; linkBadge: string;
+    listView: string; gridView: string;
     openBtn: string;
     noSections: string; noEntries: string;
     deleteCategoryConfirm: string; deleteSectionConfirm: string; deleteEntryConfirm: string;
@@ -6145,6 +6146,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       linkUrlLabel: 'Enlace',
       linkUrlPlaceholder: 'https://… (Drive, Dropbox, YouTube)',
       linkBadge: 'Enlace',
+      listView: 'Ver como lista',
+      gridView: 'Ver como cuadrícula',
       openBtn: 'Abrir',
       noSections: 'Sin secciones todavía',
       noEntries: 'Sin archivos todavía',
@@ -9219,6 +9222,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       linkUrlLabel: 'Link',
       linkUrlPlaceholder: 'https://… (Drive, Dropbox, YouTube)',
       linkBadge: 'Link',
+      listView: 'View as list',
+      gridView: 'View as grid',
       openBtn: 'Open',
       noSections: 'No sections yet',
       noEntries: 'No files yet',

@@ -57,6 +57,11 @@ export interface FileEntry {
   file_size: number | null;
   mime_type: string | null;
   url: string | null;
+  // First-page preview (migration 212). Rendered once by api/ and cached — see
+  // requestThumbnail(). null path + status tells the grid whether to wait or
+  // fall back to a type icon.
+  thumbnail_path: string | null;
+  thumbnail_status: 'pending' | 'ready' | 'failed' | 'unsupported' | null;
   // null = inherit the category default; true = Team; false = Office.
   crew_visible: boolean | null;
   sort_order: number;
@@ -125,4 +130,65 @@ export async function fetchFilesTree(
         .eq('business_id', businessId).order('sort_order').order('created_at').range(from, to)),
   ]);
   return { categories, folders, entries };
+}
+
+
+/** Formats a thumbnail can exist for. Mirrors the api's isRenderable(), so the
+ *  grid does not show a pending spinner for a .zip that will never render. */
+export function canHaveThumbnail(entry: FileEntry): boolean {
+  if (entry.kind !== 'file' || !entry.storage_path) return false;
+  if (entry.mime_type === 'application/pdf') return true;
+  return !!entry.file_name && entry.file_name.toLowerCase().endsWith('.pdf');
+}
+
+/**
+ * Ask the API to render this file's first page. Fire-and-forget: the caller
+ * does not await a thumbnail before showing the file, and a failure here must
+ * never block an upload that already succeeded.
+ *
+ * Safe to call more than once — the endpoint returns the cached path if the
+ * thumbnail already exists rather than re-rendering.
+ */
+export async function requestThumbnail(
+  apiBaseUrl: string,
+  jwt: string,
+  entryId: string,
+): Promise<{ status: string; path: string | null } | null> {
+  try {
+    const r = await fetch(`${apiBaseUrl}/api/v1/files/${entryId}/thumbnail`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${jwt}` },
+    });
+    if (!r.ok) return null;
+    const body = await r.json() as { status?: string; path?: string | null };
+    return { status: body.status ?? 'failed', path: body.path ?? null };
+  } catch {
+    return null; // offline / API not reachable — the file itself is fine
+  }
+}
+
+/** Drain one batch of files that predate thumbnails. Returns how many are
+ *  still queued so the caller can loop until it reaches zero. */
+export async function backfillThumbnails(
+  apiBaseUrl: string,
+  jwt: string,
+  businessId: string,
+  limit = 10,
+  /** Revisit rows a previous run marked `failed` (a transient download error,
+   *  or a file that exceeded a size cap since raised). Off by default so one
+   *  permanently broken file cannot stall the queue. */
+  retryFailed = false,
+): Promise<{ ready: number; remaining: number } | null> {
+  try {
+    const r = await fetch(`${apiBaseUrl}/api/v1/files/thumbnails/backfill`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ business_id: businessId, limit, retry_failed: retryFailed }),
+    });
+    if (!r.ok) return null;
+    const body = await r.json() as { ready?: number; remaining?: number };
+    return { ready: body.ready ?? 0, remaining: body.remaining ?? 0 };
+  } catch {
+    return null;
+  }
 }

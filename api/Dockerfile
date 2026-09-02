@@ -30,6 +30,15 @@ FROM node:22-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
+# poppler-utils gives us `pdftoppm`, used to rasterize page 1 of a PDF for the
+# files-module thumbnails. Chosen over a JS renderer (pdfjs + node canvas)
+# because it is a fraction of the memory on large documents and does not pull a
+# native canvas build into the image. ~30 MB installed; the apt lists are
+# removed in the same layer so they do not ship.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends poppler-utils \
+ && rm -rf /var/lib/apt/lists/*
+
 # Production deps only.
 COPY package.json ./
 RUN npm install --omit=dev
