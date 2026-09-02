@@ -62,6 +62,9 @@ export interface FileEntry {
   // fall back to a type icon.
   thumbnail_path: string | null;
   thumbnail_status: 'pending' | 'ready' | 'failed' | 'unsupported' | null;
+  // True when a person uploaded the cover instead of it being rendered from
+  // the file (migration 213). Links can only ever have a manual cover.
+  thumbnail_manual: boolean | null;
   // null = inherit the category default; true = Team; false = Office.
   crew_visible: boolean | null;
   sort_order: number;
@@ -190,5 +193,43 @@ export async function backfillThumbnails(
     return { ready: body.ready ?? 0, remaining: body.remaining ?? 0 };
   } catch {
     return null;
+  }
+}
+
+
+/** Where a hand-picked cover lives. Beside the entry's own folder so the
+ *  storage policies guarding the folder guard the cover too. Includes the
+ *  entry id, so replacing a cover never collides with the previous one. */
+export function coverStoragePath(businessId: string, entryId: string, ext: string): string {
+  return `files/${businessId}/covers/${entryId}-${fileUid()}.${ext.replace(/^\./, '')}`;
+}
+
+/**
+ * Downscale an image to a thumbnail-sized JPEG before upload (web only —
+ * needs canvas). Manual covers are read on every grid view, so a 4 MB phone
+ * photo would cost egress forever; this brings it in line with the ~480px
+ * JPEGs the renderer produces.
+ *
+ * Returns the original blob unchanged if the browser cannot decode it, so a
+ * failure here degrades to "bigger file" rather than "no cover".
+ */
+export async function downscaleImage(file: Blob, maxPx = 480, quality = 0.85): Promise<Blob> {
+  try {
+    if (typeof document === 'undefined' || typeof createImageBitmap !== 'function') return file;
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, maxPx / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    ctx.drawImage(bmp, 0, 0, w, h);
+    bmp.close?.();
+    const out = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', quality));
+    return out ?? file;
+  } catch {
+    return file;
   }
 }

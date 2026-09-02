@@ -3085,6 +3085,9 @@ export type DashboardDict = {
     uploadBtn: string; uploading: string; chooseFile: string;
     linkUrlLabel: string; linkUrlPlaceholder: string; linkBadge: string;
     listView: string; gridView: string;
+    coverLabel: string; coverAdd: string; coverChange: string; coverRemove: string;
+    coverLinkNote: string; coverFileNote: string; coverUploading: string;
+    coverPaste: string;
     openBtn: string;
     noSections: string; noEntries: string;
     deleteCategoryConfirm: string; deleteSectionConfirm: string; deleteEntryConfirm: string;
@@ -6148,6 +6151,14 @@ export const dashboard: Record<Locale, DashboardDict> = {
       linkBadge: 'Enlace',
       listView: 'Ver como lista',
       gridView: 'Ver como cuadrícula',
+      coverLabel: 'Portada',
+      coverAdd: 'Agregar portada',
+      coverChange: 'Cambiar',
+      coverRemove: 'Quitar',
+      coverLinkNote: 'Los enlaces no generan portada automáticamente. Sube una imagen para verla en la cuadrícula.',
+      coverFileNote: 'Se genera sola desde la primera página del PDF. Sube una imagen solo si prefieres otra.',
+      coverUploading: 'Subiendo portada...',
+      coverPaste: 'Pegar foto copiada',
       openBtn: 'Abrir',
       noSections: 'Sin secciones todavía',
       noEntries: 'Sin archivos todavía',
@@ -9224,6 +9235,14 @@ export const dashboard: Record<Locale, DashboardDict> = {
       linkBadge: 'Link',
       listView: 'View as list',
       gridView: 'View as grid',
+      coverLabel: 'Cover',
+      coverAdd: 'Add cover',
+      coverChange: 'Change',
+      coverRemove: 'Remove',
+      coverLinkNote: 'Links do not get an automatic cover. Upload an image to see one in the grid.',
+      coverFileNote: 'Generated from the PDF\'s first page. Upload an image only if you want a different one.',
+      coverUploading: 'Uploading cover...',
+      coverPaste: 'Paste copied photo',
       openBtn: 'Open',
       noSections: 'No sections yet',
       noEntries: 'No files yet',

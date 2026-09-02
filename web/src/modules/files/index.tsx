@@ -12,7 +12,7 @@ import { useDataFingerprint } from '@amixos/shared/lib/dataFingerprint';
 import { SkeletonList } from '@amixos/shared/ui/Skeleton';
 import {
   FolderOpen, FolderPlus, FilePlus2, Folder, ChevronRight, ChevronLeft, FileText, Link2,
-  LayoutGrid, List as ListIcon,
+  LayoutGrid, List as ListIcon, Image as ImageIcon,
   Trash2, Pencil, ExternalLink, Upload, Lock, Users, Check, FolderInput, X, Home,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -28,10 +28,13 @@ import {
   fetchFilesTree, fileStoragePath, fileUid, fileMeta, fileIsCrewVisible,
   type FilesTree,
   FILES_BUCKET, FILE_MAX_BYTES, requestThumbnail, backfillThumbnails,
+  coverStoragePath, downscaleImage,
   type FileCategory, type FileFolder, type FileEntry, type FileEntryKind,
 } from '@amixos/shared/lib/files';
 import { signedUrl } from '@amixos/shared/lib/storageUrls';
 import { kvGet, kvSet } from '@amixos/shared/lib/kvStore';
+import { usePasteImage } from '@/lib/usePasteImage';
+import { PasteHint } from '@/components/ui/PasteHint';
 
 /**
  * Fire-and-forget thumbnail request. Resolves the caller's JWT and the API base
@@ -453,13 +456,17 @@ export default function FilesModule() {
             <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {atHome && categories.map(c => (
                 <FolderTile key={c.id} name={c.name} count={folderItemCount(c.id, null)}
-                  onOpen={() => enterCategory(c)} canManage={canManage} />
+                  onOpen={() => enterCategory(c)} canManage={canManage}
+                  onEdit={() => setFolderModal({ editing: c })}
+                  onDelete={() => deleteCategoryRow(c)} />
               ))}
               {childFolders.map(f => (
                 <FolderTile key={f.id} name={f.name} count={folderItemCount(f.category_id, f.id)}
                   onOpen={() => enterFolder(f)} canManage={canManage}
                   selected={selectedFolders.has(f.id)} selectionMode={selectionMode}
-                  onToggleSelect={() => toggleFolder(f.id)} />
+                  onToggleSelect={() => toggleFolder(f.id)}
+                  onEdit={() => setFolderModal({ editing: f })}
+                  onDelete={() => deleteFolderRow(f)} />
               ))}
             </div>
           )}
@@ -676,16 +683,17 @@ function FileRow({ entry, officeOnly, metaLabel, canManage, selected, selectionM
 /** Folder as a grid tile. Same footprint as a file card so the two line up in
  *  one grid — a folder-only view has to visibly change when you flip the
  *  toggle, or the control reads as broken. */
-function FolderTile({ name, count, onOpen, canManage, selected, selectionMode, onToggleSelect }: {
+function FolderTile({ name, count, onOpen, canManage, selected, selectionMode, onToggleSelect, onEdit, onDelete }: {
   name: string; count: number; onOpen: () => void; canManage: boolean;
   selected?: boolean; selectionMode?: boolean; onToggleSelect?: () => void;
+  onEdit: () => void; onDelete: () => void;
 }) {
   const { t: full } = useLang();
   const t = full.dashboard.files;
   const countLabel = count === 0 ? t.itemsEmpty : count === 1 ? t.itemsOne : t.itemsMany.replace('{{count}}', String(count));
   const inSelect = canManage && !!selectionMode && !!onToggleSelect;
   return (
-    <div className={`relative rounded-xl border overflow-hidden bg-card ${selected ? 'border-primary ring-1 ring-primary/30' : 'border-border-soft hover:border-border'}`}>
+    <div className={`group relative rounded-xl border overflow-hidden bg-card ${selected ? 'border-primary ring-1 ring-primary/30' : 'border-border-soft hover:border-border'}`}>
       <button onClick={() => (inSelect && onToggleSelect ? onToggleSelect() : onOpen())} className="block w-full text-left">
         <div className="aspect-[3/4] w-full flex items-center justify-center bg-primary/5 border-b border-border-soft">
           <Folder size={44} className="text-primary" />
@@ -695,13 +703,18 @@ function FolderTile({ name, count, onOpen, canManage, selected, selectionMode, o
           <p className="text-[11px] text-faint truncate">{countLabel}</p>
         </div>
       </button>
-      {inSelect && (
+      {inSelect ? (
         <button
           onClick={onToggleSelect}
           className={`absolute top-2 left-2 w-5 h-5 rounded border flex items-center justify-center ${selected ? 'bg-primary border-primary' : 'bg-card/90 border-border'}`}
         >
           {selected && <Check size={12} className="text-white" />}
         </button>
+      ) : canManage && (
+        <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+          <button onClick={onEdit} className="p-1.5 rounded-lg bg-card/90 border border-border-soft text-muted hover:text-primary"><Pencil size={12} /></button>
+          <button onClick={onDelete} className="p-1.5 rounded-lg bg-card/90 border border-border-soft text-red-500"><Trash2 size={12} /></button>
+        </div>
       )}
     </div>
   );
@@ -874,6 +887,48 @@ function FileModal({ editing, categoryId, folderId, businessId, userId, limitByt
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
+  // Hand-picked cover (migration 213). Links never get one automatically —
+  // rendering the page a URL points at would mean the server fetching
+  // arbitrary user-supplied addresses — so the user supplies the image.
+  // Held as a blob and uploaded only after the row exists, so a cancelled
+  // save leaves no orphan in the bucket.
+  const [cover, setCover] = useState<Blob | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [coverRemoved, setCoverRemoved] = useState(false);
+  const coverInput = useRef<HTMLInputElement>(null);
+  const existingCover = editing?.thumbnail_path ?? null;
+
+  const onPickCover = (f: File | null) => {
+    if (!f || !f.type.startsWith('image/')) return;
+    setCover(f);
+    setCoverRemoved(false);
+    setCoverPreview(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(f); });
+  };
+  // Ctrl/Cmd+V drops a screenshot straight in — same affordance as the other
+  // photo fields. Disabled while saving so a stray paste can't race the upload.
+  usePasteImage(!saving, files => { if (files[0]) onPickCover(files[0]); }, [saving]);
+  useEffect(() => () => { if (coverPreview) URL.revokeObjectURL(coverPreview); }, [coverPreview]);
+
+  /** Upload the picked image and point the row at it. Best-effort: a cover
+   *  failure must not fail a save whose file/link already went through. */
+  const applyCover = async (entryId: string) => {
+    if (coverRemoved && !cover) {
+      // Null the status too, so a PDF becomes eligible for auto-generation again.
+      await supabase.from('file_entries')
+        .update({ thumbnail_path: null, thumbnail_status: null, thumbnail_manual: false })
+        .eq('id', entryId);
+      return;
+    }
+    if (!cover) return;
+    const shrunk = await downscaleImage(cover);
+    const path = coverStoragePath(businessId, entryId, 'jpg');
+    const { error: upErr } = await supabase.storage.from(FILES_BUCKET)
+      .upload(path, shrunk, { contentType: 'image/jpeg', upsert: true });
+    if (upErr) return;
+    await supabase.from('file_entries')
+      .update({ thumbnail_path: path, thumbnail_status: 'ready', thumbnail_manual: true })
+      .eq('id', entryId);
+  };
 
   const crewVisibleValue = vis === 'inherit' ? null : vis === 'team';
 
@@ -895,6 +950,7 @@ function FileModal({ editing, categoryId, folderId, businessId, userId, limitByt
           url: editing.kind === 'link' ? (url.trim() || editing.url) : editing.url,
           crew_visible: crewVisibleValue,
         }).eq('id', editing.id);
+        await applyCover(editing.id);
         onSaved();
         return;
       }
@@ -920,12 +976,18 @@ function FileModal({ editing, categoryId, folderId, businessId, userId, limitByt
         }).select('id').single();
         // Kick off the first-page render, but never make the upload wait on it
         // or fail with it — the file is already saved, a thumbnail is a bonus.
-        if (created?.id) void queueThumbnail(supabase, created.id);
+        if (created?.id) {
+          await applyCover(created.id);
+          // Skip the render when the user supplied their own cover — it would
+          // be discarded anyway (generateFor returns early on a set path).
+          if (!cover) void queueThumbnail(supabase, created.id);
+        }
       } else {
-        await supabase.from('file_entries').insert({
+        const { data: createdLink } = await supabase.from('file_entries').insert({
           business_id: businessId, category_id: categoryId, folder_id: folderId, title: title.trim() || url.trim(),
           kind: 'link', url: url.trim(), crew_visible: crewVisibleValue, created_by: userId,
-        });
+        }).select('id').single();
+        if (createdLink?.id) await applyCover(createdLink.id);
       }
       onSaved();
     } catch (e) {
@@ -964,6 +1026,56 @@ function FileModal({ editing, categoryId, folderId, businessId, userId, limitByt
         ) : (editing?.kind === 'link' || (!editing && kind === 'link')) ? (
           <Input label={t.linkUrlLabel} placeholder={t.linkUrlPlaceholder} value={url} onChange={e => setUrl(e.target.value)} />
         ) : null}
+
+        {/* Cover image. Offered for links AND files: a link never gets one
+            automatically, and a file's generated page 1 is sometimes not the
+            page worth showing. */}
+        <div>
+          <label className="text-sm font-medium text-ink">{t.coverLabel}</label>
+          <div className="flex items-start gap-3 mt-1.5">
+            <div className="w-20 h-[6.7rem] shrink-0 rounded-lg border border-border-soft overflow-hidden bg-surface flex items-center justify-center">
+              {coverPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={coverPreview} alt="" className="w-full h-full object-cover object-top" />
+              ) : existingCover && !coverRemoved ? (
+                <FileThumb entry={editing as FileEntry} />
+              ) : (
+                <ImageIcon size={22} className="text-faint" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="secondary" size="sm" onClick={() => coverInput.current?.click()}>
+                  {coverPreview || (existingCover && !coverRemoved) ? t.coverChange : t.coverAdd}
+                </Button>
+                {(coverPreview || (existingCover && !coverRemoved)) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCover(null);
+                      setCoverPreview(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
+                      setCoverRemoved(true);
+                    }}
+                    className="text-xs font-semibold text-red-500 px-1"
+                  >
+                    {t.coverRemove}
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-faint mt-1.5">
+                {(editing?.kind ?? kind) === 'link' ? t.coverLinkNote : t.coverFileNote}
+              </p>
+              <PasteHint className="mt-1" />
+            </div>
+          </div>
+          <input
+            ref={coverInput}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={e => onPickCover(e.target.files?.[0] ?? null)}
+          />
+        </div>
 
         {/* Per-file visibility override */}
         <div>

@@ -12,6 +12,8 @@ import {
   View, Text, Pressable, ScrollView, ActivityIndicator, Alert, Linking,
   Modal as RNModal, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { readClipboardImageToFile } from '@/lib/clipboardPhoto';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
@@ -19,6 +21,7 @@ import {
   ChevronLeft, ChevronRight, CornerUpLeft, FileText, Folder, FolderOpen, FolderPlus,
   FilePlus2, Link2, Trash2, Pencil, ExternalLink, Upload, Lock,
   Users as UsersIcon, Check, X, FolderInput, Plus, LayoutGrid, List as ListIcon,
+  Image as ImageIcon,
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
@@ -30,7 +33,7 @@ import { can } from '@amixos/shared/lib/permissions';
 import {
   fetchFilesTree, fileStoragePath, fileUid, fileMeta, fileIsCrewVisible,
   type FilesTree,
-  FILES_BUCKET, FILE_MAX_BYTES, requestThumbnail, backfillThumbnails,
+  FILES_BUCKET, FILE_MAX_BYTES, requestThumbnail, backfillThumbnails, coverStoragePath,
   type FileCategory, type FileFolder, type FileEntry, type FileEntryKind,
 } from '@amixos/shared/lib/files';
 import { signedUrl } from '@amixos/shared/lib/storageUrls';
@@ -432,6 +435,8 @@ export default function ArchivosScreen() {
                       count={folderItemCount(cat.id, null)}
                       onOpen={() => enterCategory(cat)}
                       canManage={canManage}
+                      onEdit={() => setSheet({ type: 'folder', editing: cat })}
+                      onDelete={() => confirmDelete(t.deleteFolderConfirm, async () => { await supabase.from('file_categories').delete().eq('id', cat.id); })}
                     />
                   </View>
                 ))}
@@ -445,6 +450,8 @@ export default function ArchivosScreen() {
                       selected={selectedFolders.has(f.id)}
                       selectionMode={selectionMode}
                       onToggleSelect={() => toggleFolder(f.id)}
+                      onEdit={() => setSheet({ type: 'folder', editing: f })}
+                      onDelete={() => confirmDelete(t.deleteFolderConfirm, async () => { await supabase.from('file_folders').delete().eq('id', f.id); })}
                     />
                   </View>
                 ))}
@@ -499,6 +506,18 @@ export default function ArchivosScreen() {
                         {canManage && selectionMode ? (
                           <View className={`absolute top-2 left-2 w-5 h-5 rounded border items-center justify-center ${picked ? 'bg-primary border-primary' : 'bg-card border-border'}`}>
                             {picked ? <Check size={12} color="#FFFFFF" /> : null}
+                          </View>
+                        ) : null}
+                        {/* Always visible: no hover on a phone, so the grid
+                            would otherwise have no edit/delete at all. */}
+                        {canManage && !selectionMode ? (
+                          <View className="absolute top-1.5 right-1.5 flex-row items-center gap-1">
+                            <Pressable onPress={() => setSheet({ type: 'file', editing: e })} hitSlop={6} className="p-1.5 rounded-lg bg-card/90 border border-border-soft">
+                              <Pencil size={13} color={c.muted} />
+                            </Pressable>
+                            <Pressable onPress={() => confirmDelete(t.deleteEntryConfirm, async () => { await supabase.from('file_entries').delete().eq('id', e.id); })} hitSlop={6} className="p-1.5 rounded-lg bg-card/90 border border-border-soft">
+                              <Trash2 size={13} color={c.danger} />
+                            </Pressable>
                           </View>
                         ) : null}
                       </Pressable>
@@ -675,6 +694,69 @@ function FileSheets({
     fileEditing == null || fileEditing.crew_visible == null ? 'inherit' : fileEditing.crew_visible ? 'team' : 'office',
   );
   const [picked, setPicked] = useState<{ uri: string; name: string; size: number; mimeType: string | null } | null>(null);
+  // Hand-picked cover (migration 213). Links never get one automatically —
+  // rendering the page a URL points at would mean the server fetching
+  // arbitrary user-supplied addresses — so the user supplies the image. Held
+  // as a uri and uploaded only once the row exists, so a cancelled save
+  // leaves no orphan in the bucket.
+  const [coverUri, setCoverUri] = useState<string | null>(null);
+  const [coverRemoved, setCoverRemoved] = useState(false);
+  const [coverSignedUrl, setCoverSignedUrl] = useState<string | null>(null);
+  const existingCover = fileEditing?.thumbnail_path ?? null;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!existingCover) { setCoverSignedUrl(null); return; }
+    void signedUrl(supabase, existingCover).then(u => { if (!cancelled) setCoverSignedUrl(u); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingCover]);
+
+  const pickCover = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      // Downscaled at pick time rather than after upload: there is no canvas
+      // here, and a full-resolution phone photo would be re-fetched on every
+      // grid view forever.
+      quality: 0.7,
+    });
+    if (res.canceled || !res.assets?.[0]?.uri) return;
+    setCoverUri(res.assets[0].uri);
+    setCoverRemoved(false);
+  };
+
+  const pasteCover = async () => {
+    const uri = await readClipboardImageToFile();
+    if (!uri) return;
+    setCoverUri(uri);
+    setCoverRemoved(false);
+  };
+
+  /** Upload the picked image and point the row at it. Best-effort: a cover
+   *  failure must not fail a save whose file/link already went through. */
+  const applyCover = async (entryId: string) => {
+    if (coverRemoved && !coverUri) {
+      // Null the status too, so a PDF becomes eligible for auto-generation again.
+      await supabase.from('file_entries')
+        .update({ thumbnail_path: null, thumbnail_status: null, thumbnail_manual: false })
+        .eq('id', entryId);
+      return;
+    }
+    if (!coverUri) return;
+    try {
+      const resp = await fetch(coverUri);
+      const bytes = await resp.arrayBuffer();
+      const path = coverStoragePath(businessId, entryId, 'jpg');
+      const { error: upErr } = await supabase.storage.from(FILES_BUCKET)
+        .upload(path, bytes, { contentType: 'image/jpeg', upsert: true });
+      if (upErr) return;
+      await supabase.from('file_entries')
+        .update({ thumbnail_path: path, thumbnail_status: 'ready', thumbnail_manual: true })
+        .eq('id', entryId);
+    } catch {
+      /* cover is best-effort */
+    }
+  };
 
   // Move picker state
   // Open the move picker AT the current location (so the sibling folders —
@@ -742,6 +824,7 @@ function FileSheets({
           url: fileEditing.kind === 'link' ? (url.trim() || fileEditing.url) : fileEditing.url,
           crew_visible: crewVisibleValue,
         }).eq('id', fileEditing.id);
+        await applyCover(fileEditing.id);
         onSaved();
         return;
       }
@@ -765,12 +848,18 @@ function FileSheets({
         }).select('id').single();
         // Kick off the first-page render without making the upload wait on it
         // or fail with it — the file is already saved; a thumbnail is a bonus.
-        if (created?.id) void queueThumbnail(created.id);
+        if (created?.id) {
+          await applyCover(created.id);
+          // Skip the render when the user supplied their own cover — it would
+          // be discarded anyway (generateFor returns early on a set path).
+          if (!coverUri) void queueThumbnail(created.id);
+        }
       } else {
-        await supabase.from('file_entries').insert({
+        const { data: createdLink } = await supabase.from('file_entries').insert({
           business_id: businessId, category_id: categoryId, folder_id: folderId, title: title.trim() || url.trim(),
           kind: 'link', url: url.trim(), crew_visible: crewVisibleValue, created_by: userId,
-        });
+        }).select('id').single();
+        if (createdLink?.id) await applyCover(createdLink.id);
       }
       onSaved();
     } catch (e) {
@@ -878,6 +967,48 @@ function FileSheets({
                 </View>
               ) : null}
               <Input label={t.entryTitleLabel} placeholder={t.entryTitlePlaceholder} value={title} onChangeText={setTitle} />
+
+              {/* Cover image. Offered for links AND files: a link never gets
+                  one automatically, and a file's generated page 1 is sometimes
+                  not the page worth showing. */}
+              <View>
+                <Text className="text-sm font-medium text-ink mb-1.5">{t.coverLabel}</Text>
+                <View className="flex-row items-start gap-3">
+                  <View className="w-20 h-[107px] rounded-lg border border-border-soft overflow-hidden bg-surface items-center justify-center">
+                    {coverUri ? (
+                      <Image source={{ uri: coverUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                    ) : coverSignedUrl && !coverRemoved ? (
+                      <Image source={{ uri: coverSignedUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                    ) : (
+                      <ImageIcon size={20} color={c.faint} />
+                    )}
+                  </View>
+                  <View className="flex-1">
+                    <View className="flex-row flex-wrap items-center gap-2">
+                      <Pressable onPress={pickCover} className="px-3 py-2 rounded-xl border border-border bg-card active:opacity-80">
+                        <Text className="text-xs font-semibold text-ink">
+                          {coverUri || (coverSignedUrl && !coverRemoved) ? t.coverChange : t.coverAdd}
+                        </Text>
+                      </Pressable>
+                      <Pressable onPress={pasteCover} className="px-3 py-2 rounded-xl border border-border bg-card active:opacity-80">
+                        <Text className="text-xs font-semibold text-ink">{t.coverPaste}</Text>
+                      </Pressable>
+                      {coverUri || (coverSignedUrl && !coverRemoved) ? (
+                        <Pressable
+                          onPress={() => { setCoverUri(null); setCoverRemoved(true); }}
+                          hitSlop={6}
+                          className="px-1 py-2"
+                        >
+                          <Text className="text-xs font-semibold text-red-500">{t.coverRemove}</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                    <Text className="text-xs text-faint mt-1.5">
+                      {(fileEditing?.kind ?? kind) === 'link' ? t.coverLinkNote : t.coverFileNote}
+                    </Text>
+                  </View>
+                </View>
+              </View>
               {!fileEditing && kind === 'file' ? (
                 <Pressable onPress={pickFile} className="flex-row items-center gap-3 px-4 py-3.5 rounded-2xl border border-dashed border-border">
                   <Upload size={18} color={c.faint} />
@@ -968,9 +1099,10 @@ function FileSheets({
 /** Folder as a grid tile. Same footprint as a file card so the two line up in
  *  one grid — a folder-only view has to visibly change when you flip the
  *  toggle, or the control reads as broken. */
-function FolderTile({ name, count, onOpen, selected, selectionMode, onToggleSelect, canManage }: {
+function FolderTile({ name, count, onOpen, selected, selectionMode, onToggleSelect, canManage, onEdit, onDelete }: {
   name: string; count: number; onOpen: () => void;
   selected?: boolean; selectionMode?: boolean; onToggleSelect?: () => void; canManage: boolean;
+  onEdit: () => void; onDelete: () => void;
 }) {
   const { t: full } = useLang();
   const t = full.dashboard.files;
@@ -993,6 +1125,18 @@ function FolderTile({ name, count, onOpen, selected, selectionMode, onToggleSele
       {canManage && selectionMode ? (
         <View className={`absolute top-2 left-2 w-5 h-5 rounded border items-center justify-center ${selected ? 'bg-primary border-primary' : 'bg-card border-border'}`}>
           {selected ? <Check size={12} color="#FFFFFF" /> : null}
+        </View>
+      ) : null}
+      {/* Always visible, not hover-revealed like web — there is no hover on a
+          phone, and without these the grid silently loses edit/delete. */}
+      {canManage && !selectionMode ? (
+        <View className="absolute top-1.5 right-1.5 flex-row items-center gap-1">
+          <Pressable onPress={onEdit} hitSlop={6} className="p-1.5 rounded-lg bg-card/90 border border-border-soft">
+            <Pencil size={13} color={c.muted} />
+          </Pressable>
+          <Pressable onPress={onDelete} hitSlop={6} className="p-1.5 rounded-lg bg-card/90 border border-border-soft">
+            <Trash2 size={13} color={c.danger} />
+          </Pressable>
         </View>
       ) : null}
     </Pressable>
