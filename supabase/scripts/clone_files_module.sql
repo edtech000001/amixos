@@ -2,9 +2,15 @@
 --
 -- NOT a migration — an admin tool, run by hand in the SQL Editor.
 --
--- Clones categories → nested folders → file entries (structure + metadata).
--- 'link' entries work immediately; uploaded 'file' entries also need the
--- storage copy step (separate Node script — SQL cannot move file bytes).
+-- Clones categories → nested folders → file entries (structure + metadata),
+-- remapping every storage path from the source's prefix to the target's.
+--
+-- 'link' entries work immediately. Anything with BYTES behind it also needs the
+-- storage copy step (separate Node script — SQL cannot move file bytes):
+--   files/<source>/<folder>/<file>          uploaded files
+--   files/<source>/covers/<...>.jpg         hand-picked folder + file covers
+-- A script that copies the whole 'files/<source>/' prefix already covers both.
+-- Rendered .thumb.jpg files do NOT need copying — see the entries loop.
 --
 -- THIS IS A MIRROR, NOT A MERGE. The target's files module is DELETED and
 -- rebuilt from the source every time, so the two always match and the script is
@@ -18,6 +24,23 @@
 -- would survive as a second overload and calls could bind to either. Drop the
 -- 3-arg shape explicitly; harmless if it was never created.
 drop function if exists public.clone_files_module(uuid, uuid, boolean);
+
+-- Every storage path in this module — the file itself, a folder cover, a
+-- hand-picked file cover, a rendered thumbnail — lives under
+-- 'files/<business_id>/', so one prefix swap remaps all of them. Copying a path
+-- unchanged would point the target's row at the SOURCE's object, which the
+-- target's members cannot read: the image silently fails and falls back to an
+-- icon.
+create or replace function public.remap_files_path(p_path text, p_source uuid, p_target uuid)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when p_path is null then null
+    else replace(p_path, 'files/' || p_source::text || '/', 'files/' || p_target::text || '/')
+  end;
+$$;
 
 create or replace function public.clone_files_module(p_source uuid, p_target uuid)
 returns text
@@ -59,7 +82,7 @@ begin
     declare nid uuid := gen_random_uuid();
     begin
       insert into public.file_categories (id, business_id, name, icon, color, crew_visible, cover_path, sort_order, created_at, updated_at)
-      values (nid, p_target, r.name, r.icon, r.color, r.crew_visible, r.cover_path, r.sort_order, now(), now());
+      values (nid, p_target, r.name, r.icon, r.color, r.crew_visible, public.remap_files_path(r.cover_path, p_source, p_target), r.sort_order, now(), now());
       cat_map := cat_map || jsonb_build_object(r.id::text, nid::text);
       n_cat := n_cat + 1;
     end;
@@ -78,7 +101,7 @@ begin
       p_target,
       (cat_map ->> r.category_id::text)::uuid,
       case when r.parent_folder_id is null then null else (fold_map ->> r.parent_folder_id::text)::uuid end,
-      r.name, r.cover_path, r.sort_order, now()
+      r.name, public.remap_files_path(r.cover_path, p_source, p_target), r.sort_order, now()
     );
     n_fold := n_fold + 1;
   end loop;
@@ -86,18 +109,26 @@ begin
   -- ── 3) Entries (remap category/folder; rewrite storage_path prefix) ───────
   for r in select * from public.file_entries where business_id = p_source loop
     insert into public.file_entries (id, business_id, category_id, folder_id, title, kind,
-      storage_path, file_name, file_size, mime_type, url, crew_visible, sort_order, created_at)
+      storage_path, file_name, file_size, mime_type, url, crew_visible, sort_order, created_at,
+      thumbnail_path, thumbnail_manual, thumbnail_status)
     values (
       gen_random_uuid(), p_target,
       case when r.category_id is null then null else (cat_map ->> r.category_id::text)::uuid end,
       case when r.folder_id   is null then null else (fold_map ->> r.folder_id::text)::uuid end,
       r.title, r.kind,
-      case when r.storage_path is null then null
-           else replace(r.storage_path, 'files/'||p_source::text||'/', 'files/'||p_target::text||'/') end,
-      r.file_name, r.file_size, r.mime_type, r.url, r.crew_visible, r.sort_order, now()
+      public.remap_files_path(r.storage_path, p_source, p_target),
+      r.file_name, r.file_size, r.mime_type, r.url, r.crew_visible, r.sort_order, now(),
+      -- HAND-PICKED covers are carried across (remapped), because nothing can
+      -- recreate them — a link has no page to render, so losing the cover here
+      -- would lose it for good.
+      -- GENERATED thumbnails are dropped instead: the target re-renders its own
+      -- from the copied PDF, which keeps this independent of whether the storage
+      -- script copies .thumb.jpg files. Leaving a path that may not exist would
+      -- strand the row, since the backfill skips anything that already has one.
+      case when r.thumbnail_manual then public.remap_files_path(r.thumbnail_path, p_source, p_target) else null end,
+      coalesce(r.thumbnail_manual, false),
+      case when r.thumbnail_manual then 'ready' else null end
     );
-    -- thumbnail_path is deliberately NOT copied: it points at the source's
-    -- rendered image. The target re-renders its own once the bytes are copied.
     n_entry := n_entry + 1;
   end loop;
 
