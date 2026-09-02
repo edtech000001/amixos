@@ -446,13 +446,14 @@ export default function MapModule() {
     });
   }, [weatherPins, weatherDateFrom, weatherDateTo]);
 
+  // Deliberately NOT search-filtered — the "no pins here, show everything"
+  // fallback needs a complete set of every layer, and filtering here would
+  // drop weather from it while clients/jobs/employees came through whole.
+  // The query is applied in `visiblePins` instead, where it belongs.
   const weatherGroups = useMemo(() => {
     if (!weatherEnabled || !weatherLayerOn) return [];
-    const groups = groupWeatherAlertsBySameCode(dateFilteredWeatherPins);
-    const q = search.trim().toLowerCase();
-    if (!q) return groups;
-    return groups.filter(g => g.all.some(a => pinMatchesQuery(a, q)));
-  }, [weatherEnabled, weatherLayerOn, dateFilteredWeatherPins, search]);
+    return groupWeatherAlertsBySameCode(dateFilteredWeatherPins);
+  }, [weatherEnabled, weatherLayerOn, dateFilteredWeatherPins]);
 
   const siblingsByWeatherId = useMemo(() => {
     const map = new Map<string, WeatherPin[]>();
@@ -464,7 +465,7 @@ export default function MapModule() {
     return map;
   }, [weatherGroups]);
 
-  const visiblePins: AnyPin[] = useMemo(() => {
+  const allPins: AnyPin[] = useMemo(() => {
     if (!pins) return [];
     let nonWeather: AnyPin[] = [
       ...(layers.clients ? pins.clients : []),
@@ -484,10 +485,35 @@ export default function MapModule() {
       );
     }
 
+    return [...nonWeather, ...weatherPrimaries];
+  }, [pins, layers, weatherGroups, stormFocus, weatherEnabled, dateFilteredWeatherPins, business?.weather_config]);
+
+  // The search-matched set. Drives the result count and the auto-fit, and
+  // gates the geocode lookup below — so it has to stay strictly the matches.
+  // A weather group matches when ANY alert in it does, so match on the group
+  // and keep its primary, which is the pin that actually renders.
+  const visiblePins: AnyPin[] = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return [...nonWeather, ...weatherPrimaries];
-    return [...nonWeather.filter(p => pinMatchesQuery(p, q)), ...weatherPrimaries];
-  }, [pins, layers, search, weatherGroups, stormFocus, weatherEnabled, dateFilteredWeatherPins, business?.weather_config]);
+    if (!q) return allPins;
+    const matchedWeather = new Set(
+      weatherGroups.filter(g => g.all.some(a => pinMatchesQuery(a, q))).map(g => g.primary.id),
+    );
+    return allPins.filter(p =>
+      p.type === 'weather' ? matchedWeather.has(p.id) : pinMatchesQuery(p, q),
+    );
+  }, [allPins, weatherGroups, search]);
+
+  // What actually gets drawn. When a search matches nothing but resolves to a
+  // real place we fly there, and an empty map at that point answers "where is
+  // this?" without answering "what do I have near it?" — which is the reason
+  // you searched a place you have no customers in. So keep every pin on the
+  // map and let the camera do the narrowing.
+  // Memoized: resetView closes over this, and effects depend on resetView —
+  // a fresh array each render would re-frame the map on every render.
+  const renderedPins: AnyPin[] = useMemo(
+    () => (placeHit ? allPins : visiblePins),
+    [placeHit, allPins, visiblePins],
+  );
 
   // Auto-fit the map to search results so the user lands on them.
   useEffect(() => {
@@ -596,18 +622,18 @@ export default function MapModule() {
   const resetView = useCallback(() => {
     const map = mapRef.current;
     if (!map) return;
-    if (visiblePins.length === 0) {
+    if (renderedPins.length === 0) {
       map.setCenter(DEFAULT_CENTER);
       map.setZoom(4);
       return;
     }
     const bounds = new google.maps.LatLngBounds();
-    visiblePins.forEach(p => bounds.extend({ lat: p.lat, lng: p.lng }));
+    renderedPins.forEach(p => bounds.extend({ lat: p.lat, lng: p.lng }));
     map.fitBounds(bounds, 48);
     google.maps.event.addListenerOnce(map, 'idle', () => {
       if (mapRef.current && (mapRef.current.getZoom() ?? 0) > 14) mapRef.current.setZoom(14);
     });
-  }, [visiblePins]);
+  }, [renderedPins]);
 
   // Re-frame when the active business changes. The map used to be torn down
   // and rebuilt on every load, which reset the view as a side effect; now
@@ -648,7 +674,7 @@ export default function MapModule() {
     const px = PIN_PX_BY_SIZE[deviceSettings.pinSize];
     // Resolve styles per pin; null means a hide rule matched → skip it.
     const newMarkers: google.maps.Marker[] = [];
-    for (const p of visiblePins) {
+    for (const p of renderedPins) {
       // Weather pins run through the same resolver so per-event rules
       // (e.g. event = 'Tornado Warning' → red tornado icon) apply.
       const layerKey =
@@ -722,7 +748,7 @@ export default function MapModule() {
     // Include map_pin_config so saving new rules in the settings panel
     // triggers a marker rebuild with the new colors/icons.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, visiblePins, deviceSettings.clustering, deviceSettings.pinSize, deviceSettings.outreachDays, JSON.stringify(business?.map_pin_config), siblingsByWeatherId, outreach]);
+  }, [isLoaded, renderedPins, deviceSettings.clustering, deviceSettings.pinSize, deviceSettings.outreachDays, JSON.stringify(business?.map_pin_config), siblingsByWeatherId, outreach]);
 
   const onGeocode = async () => {
     if (!business || !apiBaseUrl) return;
@@ -1539,15 +1565,23 @@ function LayerPill({ Icon, label, color, active, count, onClick }: LayerPillProp
     <button
       onClick={onClick}
       className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-opacity whitespace-nowrap ${
-        active ? '' : 'opacity-50'
+        active ? '' : 'bg-surface text-muted opacity-50'
       }`}
-      style={{ backgroundColor: active ? `${color}20` : '#F3F4F6', color: active ? color : '#6B7280' }}
+      // Inline styles only when active — they'd otherwise beat the themed
+      // classes, and the old hardcoded #F3F4F6/#6B7280 were light-mode-only.
+      style={active ? { backgroundColor: `${color}20`, color } : undefined}
     >
       <Icon size={14} />
       {label}
+      {/* Tinted with the layer color instead of a flat white overlay. The
+          overlay read as a light-grey blob on the dark pill in dark mode; an
+          alpha of the accent sits correctly on either ground, which an inline
+          style can't do with a theme lookup. */}
       <span
-        className="bg-white/70 rounded-full px-1.5 py-0.5 min-w-[20px] text-center text-[10px] font-bold"
-        style={{ color: active ? color : '#6B7280' }}
+        className={`rounded-full px-1.5 py-0.5 min-w-[20px] text-center text-[10px] font-bold ${
+          active ? '' : 'bg-card text-muted'
+        }`}
+        style={active ? { backgroundColor: `${color}40`, color } : undefined}
       >
         {count}
       </span>

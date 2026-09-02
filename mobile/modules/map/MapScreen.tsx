@@ -497,15 +497,14 @@ export default function MapScreen() {
     });
   }, [weatherPins, weatherDateFrom, weatherDateTo]);
 
+  // Deliberately NOT search-filtered — the "no pins here, show everything"
+  // fallback needs a complete set of every layer, and filtering here would
+  // drop weather from it while clients/jobs/employees came through whole.
+  // The query is applied in `visiblePins` instead, where it belongs.
   const weatherGroups = useMemo(() => {
     if (!weatherEnabled || !weatherLayerOn) return [];
-    const groups = groupWeatherAlertsBySameCode(dateFilteredWeatherPins);
-    const q = search.trim().toLowerCase();
-    if (!q) return groups;
-    // Keep the group when ANY of its alerts matches the search, so
-    // siblings are still discoverable via search.
-    return groups.filter(g => g.all.some(a => pinMatchesQuery(a, q)));
-  }, [weatherEnabled, weatherLayerOn, dateFilteredWeatherPins, search]);
+    return groupWeatherAlertsBySameCode(dateFilteredWeatherPins);
+  }, [weatherEnabled, weatherLayerOn, dateFilteredWeatherPins]);
 
   // O(1) lookup from a weather pin's id → its sibling list. Used when the
   // user taps a weather marker to pass siblings to the card.
@@ -519,7 +518,7 @@ export default function MapScreen() {
     return map;
   }, [weatherGroups]);
 
-  const visiblePins: AnyPin[] = useMemo(() => {
+  const allPins: AnyPin[] = useMemo(() => {
     if (!pins) return [];
     let nonWeather: AnyPin[] = [
       ...(layers.clients ? pins.clients : []),
@@ -545,13 +544,34 @@ export default function MapScreen() {
       );
     }
 
-    const all = [...nonWeather, ...weatherPrimaries];
+    return [...nonWeather, ...weatherPrimaries];
+  }, [pins, layers, weatherGroups, stormFocus, weatherEnabled, dateFilteredWeatherPins, business?.weather_config]);
+
+  // The search-matched set. Drives the result count and the auto-fit, and
+  // gates the geocode lookup below — so it has to stay strictly the matches.
+  const visiblePins: AnyPin[] = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return all;
-    // Non-weather still gets the per-pin filter; weather already filtered
-    // at the group level above.
-    return [...nonWeather.filter(p => pinMatchesQuery(p, q)), ...weatherPrimaries];
-  }, [pins, layers, search, weatherGroups, stormFocus, weatherEnabled, dateFilteredWeatherPins, business?.weather_config]);
+    if (!q) return allPins;
+    // A weather group matches when ANY alert in it does — so siblings stay
+    // discoverable via search. Match on the group, keep its primary, which
+    // is the pin that actually renders.
+    const matchedWeather = new Set(
+      weatherGroups.filter(g => g.all.some(a => pinMatchesQuery(a, q))).map(g => g.primary.id),
+    );
+    return allPins.filter(p =>
+      p.type === 'weather' ? matchedWeather.has(p.id) : pinMatchesQuery(p, q),
+    );
+  }, [allPins, weatherGroups, search]);
+
+  // What actually gets drawn. When a search matches nothing but resolves to a
+  // real place we fly there, and an empty map at that point answers "where is
+  // this?" without answering "what do I have near it?" — which is the reason
+  // you searched a place you have no customers in. So keep every pin on the
+  // map and let the camera do the narrowing.
+  const renderedPins: AnyPin[] = useMemo(
+    () => (placeHit ? allPins : visiblePins),
+    [placeHit, allPins, visiblePins],
+  );
 
   // When a search narrows the result set, fit the map to those pins so
   // the user lands on them without panning. Skip when no search (so the
@@ -640,11 +660,11 @@ export default function MapScreen() {
   // button on the map). Falls back to the continental US default when
   // there's nothing to frame.
   const resetView = useCallback(() => {
-    if (visiblePins.length === 0) {
+    if (renderedPins.length === 0) {
       mapRef.current?.animateToRegion(DEFAULT_REGION, 400);
       return;
     }
-    const coords = visiblePins.map(p => ({ latitude: p.lat, longitude: p.lng }));
+    const coords = renderedPins.map(p => ({ latitude: p.lat, longitude: p.lng }));
     if (coords.length === 1) {
       mapRef.current?.animateToRegion({
         latitude: coords[0].latitude,
@@ -658,7 +678,7 @@ export default function MapScreen() {
         animated: true,
       });
     }
-  }, [visiblePins]);
+  }, [renderedPins]);
 
   // Frame the map for whichever business is active. This used to happen by
   // accident — every load unmounted the map, and the remount re-read
@@ -1022,7 +1042,7 @@ export default function MapScreen() {
             // when used with a lot of markers — leave it off for now.
             animationEnabled={false}
           >
-            {visiblePins.map(p => {
+            {renderedPins.map(p => {
               // Resolve color + icon LOCALLY using the business's pin
               // config. Returns null when a hide rule matched — skip
               // those pins entirely so they don't render at all. Weather
@@ -1213,7 +1233,12 @@ function LayerPill({ icon: Icon, label, color, active, count, onPress }: LayerPi
       >
         {label}
       </Text>
-      <View className="bg-white/70 rounded-full px-1.5 py-0.5 min-w-[20px] items-center">
+      {/* Tinted with the layer color instead of a flat white overlay, which
+          read as a light-grey blob on the dark pill in dark mode. */}
+      <View
+        className="rounded-full px-1.5 py-0.5 min-w-[20px] items-center"
+        style={{ backgroundColor: active ? `${color}40` : c.surface }}
+      >
         <Text
           className="text-[10px] font-bold"
           style={{ color: active ? color : c.muted }}
