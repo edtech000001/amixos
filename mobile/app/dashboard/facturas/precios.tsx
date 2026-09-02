@@ -10,7 +10,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, Modal as RNModal, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronDown, ChevronLeft, ChevronUp, Printer, Sliders, X } from 'lucide-react-native';
+import { ChevronDown, ChevronLeft, ChevronUp, Printer, Sliders, X, GripVertical, Eye, EyeOff } from 'lucide-react-native';
+import Sortable from 'react-native-sortables';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -74,6 +75,11 @@ export default function FacturasPreciosPage() {
   const [draftDesign, setDraftDesign] = useState<PriceSheetDesign>('classic');
   const [draftAccent, setDraftAccent] = useState('#4F46E5');
   const [draftOrder, setDraftOrder] = useState<string[]>([]);
+  // Exclusions, not inclusions: a category or price added later prints by
+  // default. An inclusion list would silently drop everything new.
+  const [draftHiddenCats, setDraftHiddenCats] = useState<string[]>([]);
+  const [draftHiddenItems, setDraftHiddenItems] = useState<string[]>([]);
+  const [expandedCat, setExpandedCat] = useState<string | null>(null);
   const [savingTpl, setSavingTpl] = useState(false);
 
   useEffect(() => {
@@ -140,8 +146,27 @@ export default function FacturasPreciosPage() {
     setDraftDesign(tpl.design);
     setDraftAccent(tpl.accentColor);
     setDraftOrder(sectionKeys);
+    setDraftHiddenCats(tpl.hiddenCategories);
+    setDraftHiddenItems(tpl.hiddenItemIds);
+    setExpandedCat(null);
     setCustomizeOpen(true);
   };
+  /** Prices per section — the customize sheet needs them to offer per-price
+   *  exclusion when a section is expanded. */
+  const sectionItems = useMemo(() => {
+    const by = new Map<string, typeof items>();
+    items.forEach(i => {
+      const key = i.isAddon ? ADDONS : ((i.category ?? '').trim() || UNCAT);
+      (by.get(key) ?? by.set(key, []).get(key)!).push(i);
+    });
+    return by;
+  }, [items]);
+
+  const toggleCatHidden = (cat: string) =>
+    setDraftHiddenCats(prev => (prev.includes(cat) ? prev.filter(x => x !== cat) : [...prev, cat]));
+  const toggleItemHidden = (id: string) =>
+    setDraftHiddenItems(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+
   const moveCat = (i: number, dir: -1 | 1) => {
     setDraftOrder(prev => {
       const j = i + dir;
@@ -154,15 +179,12 @@ export default function FacturasPreciosPage() {
   const saveCustomize = async () => {
     if (!business) return;
     setSavingTpl(true);
-    // Carry the exclusions through untouched: mobile has no UI for them yet,
-    // and rebuilding the config without them would silently clear choices made
-    // on web the next time someone saves a colour here.
     const cfg: PriceSheetTemplateConfig = {
       design: draftDesign,
       accentColor: draftAccent,
       categoryOrder: draftOrder,
-      hiddenCategories: template.hiddenCategories,
-      hiddenItemIds: template.hiddenItemIds,
+      hiddenCategories: draftHiddenCats,
+      hiddenItemIds: draftHiddenItems,
     };
     const { error } = await supabase.from('businesses').update({ price_sheet_template: cfg }).eq('id', business.id);
     if (!error) {
@@ -247,7 +269,14 @@ export default function FacturasPreciosPage() {
       <RNModal visible={genOpen} transparent animationType="fade" onRequestClose={() => setGenOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
           <View className="flex-1 justify-end">
-            <Pressable onPress={() => setGenOpen(false)} className="absolute inset-0 bg-black/50" />
+            {/* Inline style, not `absolute inset-0 bg-black/50`: the class-based
+                form was not producing a dim at all, leaving the sheet floating
+                over a fully-lit screen. Every other sheet in the app uses this
+                inline shape for the same reason. */}
+            <Pressable
+              onPress={() => setGenOpen(false)}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' }}
+            />
             <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10" style={{ maxHeight: '88%' }}>
               <View className="flex-row items-center justify-between mb-4">
                 <Text className="text-lg font-bold text-ink">{t.generateTitle}</Text>
@@ -320,17 +349,69 @@ export default function FacturasPreciosPage() {
                       <Text className="text-sm font-semibold text-ink mb-1">{t.sectionOrderLabel}</Text>
                       <Text className="text-xs text-faint mb-2">{t.sectionOrderHint}</Text>
                       <View className="rounded-xl border border-border-soft overflow-hidden">
-                        {draftOrder.map((cat, i) => (
-                          <View key={cat} className={`flex-row items-center justify-between gap-2 px-3 py-2 ${i < draftOrder.length - 1 ? 'border-b border-border-soft' : ''}`}>
-                            <Text className="text-sm text-ink flex-1" numberOfLines={1}>{cat === ADDONS ? t.additionalCharges : cat}</Text>
-                            <Pressable onPress={() => moveCat(i, -1)} disabled={i === 0} hitSlop={6} className={i === 0 ? 'opacity-30' : 'active:opacity-60'}>
-                              <ChevronUp size={18} color={c.muted} />
-                            </Pressable>
-                            <Pressable onPress={() => moveCat(i, 1)} disabled={i === draftOrder.length - 1} hitSlop={6} className={i === draftOrder.length - 1 ? 'opacity-30' : 'active:opacity-60'}>
-                              <ChevronDown size={18} color={c.muted} />
-                            </Pressable>
-                          </View>
-                        ))}
+                        <Sortable.Grid
+                          data={draftOrder}
+                          columns={1}
+                          rowGap={0}
+                          keyExtractor={(cat: string) => cat}
+                          dragActivationDelay={180}
+                          onDragEnd={({ data }: { data: string[] }) => setDraftOrder(data)}
+                          renderItem={({ item: cat }: { item: string }) => {
+                            const hidden = draftHiddenCats.includes(cat);
+                            const rows = sectionItems.get(cat) ?? [];
+                            const open = expandedCat === cat;
+                            return (
+                              <View className="border-b border-border-soft bg-card">
+                                <View className={`flex-row items-center gap-2 px-3 py-2.5 ${hidden ? 'opacity-45' : ''}`}>
+                                  <GripVertical size={15} color={c.faint} />
+                                  {/* Expanding is what reveals per-price control,
+                                      so the row is the toggle, not a lone caret. */}
+                                  <Pressable
+                                    onPress={() => setExpandedCat(open ? null : cat)}
+                                    className="flex-row items-center gap-1.5 flex-1"
+                                  >
+                                    <ChevronDown size={14} color={c.faint} style={{ transform: [{ rotate: open ? '0deg' : '-90deg' }] }} />
+                                    <Text className={`text-sm flex-1 ${hidden ? 'text-muted line-through' : 'text-ink'}`} numberOfLines={1}>
+                                      {cat === ADDONS ? t.additionalCharges : cat}
+                                    </Text>
+                                    <Text className="text-[11px] text-faint">{rows.length}</Text>
+                                  </Pressable>
+                                  <Pressable
+                                    onPress={() => toggleCatHidden(cat)}
+                                    hitSlop={8}
+                                    accessibilityLabel={hidden ? t.includeSection : t.excludeSection}
+                                    className="p-1 active:opacity-60"
+                                  >
+                                    {hidden ? <EyeOff size={16} color={c.faint} /> : <Eye size={16} color={c.muted} />}
+                                  </Pressable>
+                                </View>
+                                {open ? (
+                                  <View className="pl-9 pr-3 pb-2">
+                                    {rows.map(it => {
+                                      // A hidden section takes its prices with
+                                      // it, so the per-price control reads as off
+                                      // and does nothing until the section is on.
+                                      const itemHidden = hidden || draftHiddenItems.includes(it.id);
+                                      return (
+                                        <View key={it.id} className={`flex-row items-center gap-2 py-1 ${itemHidden ? 'opacity-45' : ''}`}>
+                                          <Text className={`text-xs flex-1 ${itemHidden ? 'text-muted line-through' : 'text-ink'}`} numberOfLines={1}>{it.name}</Text>
+                                          <Pressable
+                                            onPress={() => { if (!hidden) toggleItemHidden(it.id); }}
+                                            hitSlop={8}
+                                            className={`p-1 ${hidden ? 'opacity-40' : 'active:opacity-60'}`}
+                                          >
+                                            {itemHidden ? <EyeOff size={14} color={c.faint} /> : <Eye size={14} color={c.muted} />}
+                                          </Pressable>
+                                        </View>
+                                      );
+                                    })}
+                                    {rows.length === 0 ? <Text className="text-xs text-faint py-1">{t.sectionEmpty}</Text> : null}
+                                  </View>
+                                ) : null}
+                              </View>
+                            );
+                          }}
+                        />
                       </View>
                     </View>
                   ) : null}

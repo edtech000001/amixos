@@ -46,12 +46,18 @@ export function buildPriceSheetHtml(opts: {
     return item.unitLabel ? `${m} / ${item.unitLabel}` : m;
   };
 
+  // Exclusions are applied HERE rather than in each caller, so web preview,
+  // web PDF and mobile PDF cannot disagree about what prints.
   const by = new Map<string, PriceSheetItem[]>();
   opts.items.forEach(i => {
     const key = i.isAddon ? ADDONS : ((i.category ?? '').trim() || UNCAT);
+    if (tpl.hiddenCategories.includes(key)) return;
+    if (tpl.hiddenItemIds.includes(i.id)) return;
     const arr = by.get(key);
     if (arr) arr.push(i); else by.set(key, [i]);
   });
+  // A section whose every price was excluded never enters the map, so it
+  // cannot print as a bare heading.
   const keys = orderCategories(Array.from(by.keys()), tpl.categoryOrder, UNCAT);
   const sectionLabel = (k: string) =>
     k === ADDONS ? opts.labels.additionalCharges : k === UNCAT ? opts.labels.uncategorized : k;
