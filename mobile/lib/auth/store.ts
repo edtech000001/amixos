@@ -9,6 +9,7 @@ import {
   mergeRolePermissions,
   permissionsForRole,
   can,
+  orderBusinessesForUser,
   type Role,
   type RolePermissions,
 } from '@amixos/shared/lib/permissions';
@@ -202,6 +203,9 @@ export type LoginResult =
 
 interface AuthStore {
   user: AppUser | null;
+  /** Apply a new switcher order locally (migration 217). The rows are written
+   *  separately; this keeps the list from snapping back under the finger. */
+  reorderBusinesses: (orderedIds: string[]) => void;
   // All businesses the user is a member of. Loaded on every SIGNED_IN.
   businesses: Business[];
   // Which business is the "active workspace" — used to scope every dashboard
@@ -316,6 +320,14 @@ export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
       user: null,
+      reorderBusinesses: (orderedIds: string[]) => {
+        const rank = new Map(orderedIds.map((id, i) => [id, i]));
+        set((st) => ({
+          businesses: [...st.businesses].sort(
+            (a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+          ),
+        }));
+      },
       businesses: [],
       activeBusinessId: null,
       business: null,
@@ -386,7 +398,7 @@ export const useAuthStore = create<AuthStore>()(
               .order('created_at', { ascending: true }),
             supabase
               .from('business_members')
-              .select('business_id, role')
+              .select('business_id, role, sort_order')
               .eq('user_id', u.id),
           ]);
           // A failed query (e.g. a column from a not-yet-run migration) is NOT
@@ -406,11 +418,15 @@ export const useAuthStore = create<AuthStore>()(
           }
           const { data: bizRows } = bizRes;
           const { data: memberRows } = memberRes;
-          const list = ((bizRows as Business[] | null) ?? []);
           const roleMap: Record<string, Role> = {};
-          for (const m of (memberRows ?? []) as Array<{ business_id: string; role: string }>) {
+          const orderMap: Record<string, number | null> = {};
+          for (const m of (memberRows ?? []) as Array<{ business_id: string; role: string; sort_order: number | null }>) {
             roleMap[m.business_id] = m.role as Role;
+            orderMap[m.business_id] = m.sort_order;
           }
+          // The query orders by created_at; this applies the user's own order
+          // on top (migration 217), leaving created_at as the tiebreak.
+          const list = orderBusinessesForUser((bizRows as Business[] | null) ?? [], orderMap);
           // Active business: prefer the persisted id if it's still in the
           // list; otherwise default to the first one.
           const stored = get().activeBusinessId;

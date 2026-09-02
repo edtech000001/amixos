@@ -468,3 +468,30 @@ export function isReadOnly(role: Role | null | undefined): boolean {
 // is exactly one owner per business (the creator), and ownership transfer is
 // a separate flow we don't support yet.
 export const INVITABLE_ROLES: Role[] = ['admin', 'manager', 'office', 'field', 'viewer'];
+
+
+/**
+ * Order a user's businesses for the switcher (migration 217).
+ *
+ * `sort_order` lives on business_members, so it is PER USER — one person's
+ * preference must not reorder anyone else's switcher.
+ *
+ * Unordered memberships (NULL) sort AFTER everything explicitly placed, keeping
+ * their existing relative order, which is created_at from the query. So a
+ * business added after the order was saved lands predictably at the end instead
+ * of jumping to the front, and nothing has to be backfilled.
+ */
+export function orderBusinessesForUser<T extends { id: string }>(
+  businesses: T[],
+  sortOrderByBusinessId: Record<string, number | null | undefined>,
+): T[] {
+  return businesses
+    .map((b, i) => ({ b, i, o: sortOrderByBusinessId[b.id] }))
+    .sort((x, y) => {
+      const xo = typeof x.o === 'number' ? x.o : Number.MAX_SAFE_INTEGER;
+      const yo = typeof y.o === 'number' ? y.o : Number.MAX_SAFE_INTEGER;
+      if (xo !== yo) return xo - yo;
+      return x.i - y.i; // stable: preserves the query's created_at order
+    })
+    .map(x => x.b);
+}

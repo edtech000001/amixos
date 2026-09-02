@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type HTMLAttributes } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Check, Building2, Plus } from 'lucide-react';
+import { ChevronDown, Check, Building2, Plus, GripVertical } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
+import { createSupabaseClient } from '@/lib/supabase';
+import { SortableList } from '@/components/dashboard/SortableList';
 
 /**
  * Click the active business name to drop down a list of every business the
@@ -19,7 +21,26 @@ import { useLang } from '@/i18n/LangProvider';
  * that entirely so the menu is always on top.
  */
 export function BusinessSwitcher() {
-  const { businesses, business, activeBusinessId, setActiveBusiness } = useApp();
+  const { businesses, business, activeBusinessId, setActiveBusiness, user, reorderBusinesses } = useApp();
+  const supabase = createSupabaseClient();
+
+  /**
+   * Drag a row by its grip to reorder. The order is per user (business_members
+   * .sort_order, migration 217), so this only ever moves the switcher for the
+   * person doing it. The local list is updated first so the row does not snap
+   * back while the writes land.
+   */
+  const persistOrder = async (next: typeof businesses) => {
+    reorderBusinesses(next.map(b => b.id));
+    if (!user?.id) return;
+    for (let i = 0; i < next.length; i++) {
+      await supabase
+        .from('business_members')
+        .update({ sort_order: i })
+        .eq('user_id', user.id)
+        .eq('business_id', next[i].id);
+    }
+  };
   const { t: full } = useLang();
   const tw = full.dashboard.workspaces;
   const router = useRouter();
@@ -54,35 +75,26 @@ export function BusinessSwitcher() {
 
   if (!business) return null;
 
-  return (
-    <div className="relative">
-      <button
-        ref={btnRef}
-        onClick={() => setOpen((v) => !v)}
-        className="max-w-full flex items-center gap-2 border border-border bg-elevated rounded-full pl-2 pr-3 py-1.5 shadow-sm hover:bg-surface transition-colors"
-        aria-label={tw.switcherLabel}
-      >
-        <span className="w-5 h-5 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
-          <Building2 size={12} className="text-primary" />
-        </span>
-        <span className="text-sm font-semibold text-ink truncate min-w-0">
-          {business.name}
-        </span>
-        <ChevronDown size={14} className="text-primary shrink-0" />
-      </button>
+  /** One switcher row. Shared by the sortable and plain lists so the two can
+   *  never drift apart visually. */
+  const renderRow = (
+    b: (typeof businesses)[number],
+    i: number,
+    handle?: { attributes?: HTMLAttributes<HTMLElement>; listeners?: HTMLAttributes<HTMLElement> },
+  ) => {
+    const isActive = b.id === activeBusinessId;
+    return (
+      <div key={b.id} className="relative flex items-center">
+        {handle ? (
+          <span
+            {...(handle.attributes ?? {})}
+            {...(handle.listeners ?? {})}
+            className="pl-2 cursor-grab active:cursor-grabbing text-faint hover:text-muted"
+          >
+            <GripVertical size={14} />
+          </span>
+        ) : null}
 
-      {open && pos
-        ? createPortal(
-        <div
-          ref={menuRef}
-          style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
-          className="w-72 bg-elevated rounded-2xl border border-border-soft shadow-xl overflow-hidden"
-        >
-          <div className="px-4 py-2 text-[10px] font-semibold text-faint uppercase tracking-wider">
-            {tw.switcherLabel}
-          </div>
-          {businesses.map((b, i) => {
-            const isActive = b.id === activeBusinessId;
             return (
               <button
                 key={b.id}
@@ -113,8 +125,47 @@ export function BusinessSwitcher() {
                 </div>
                 {isActive ? <Check size={16} className="text-primary shrink-0" /> : null}
               </button>
-            );
-          })}
+      </div>
+    );
+  };
+
+  return (
+    <div className="relative">
+      <button
+        ref={btnRef}
+        onClick={() => setOpen((v) => !v)}
+        className="max-w-full flex items-center gap-2 border border-border bg-elevated rounded-full pl-2 pr-3 py-1.5 shadow-sm hover:bg-surface transition-colors"
+        aria-label={tw.switcherLabel}
+      >
+        <span className="w-5 h-5 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+          <Building2 size={12} className="text-primary" />
+        </span>
+        <span className="text-sm font-semibold text-ink truncate min-w-0">
+          {business.name}
+        </span>
+        <ChevronDown size={14} className="text-primary shrink-0" />
+      </button>
+
+      {open && pos
+        ? createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
+          className="w-72 bg-elevated rounded-2xl border border-border-soft shadow-xl overflow-hidden"
+        >
+          <div className="px-4 py-2 text-[10px] font-semibold text-faint uppercase tracking-wider">
+            {tw.switcherLabel}
+          </div>
+          {businesses.length > 1 ? (
+            <p className="px-4 pb-1 text-[10px] text-faint">{tw.reorderHint}</p>
+          ) : null}
+          {businesses.length > 1 ? (
+            <SortableList
+              items={businesses}
+              onReorder={next => { void persistOrder(next); }}
+              renderItem={(b, i, handle) => renderRow(b, i, handle)}
+            />
+          ) : businesses.map((b, i) => renderRow(b, i))}
           <button
             onClick={() => {
               setOpen(false);

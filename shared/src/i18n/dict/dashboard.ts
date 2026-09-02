@@ -1381,6 +1381,7 @@ export type DashboardDict = {
   };
   workspaces: {
     switcherLabel: string;
+    reorderHint: string;
     createBusiness: string;
     switchedToast: string;
     delegateBtn: string;
@@ -4454,6 +4455,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
     },
     workspaces: {
       switcherLabel: 'Cambiar negocio',
+      reorderHint: 'Mantén presionado para cambiar el orden.',
       createBusiness: 'Crear negocio',
       switchedToast: 'Cambiado a {{name}}',
       delegateBtn: 'Delegar a…',
@@ -7547,6 +7549,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
     },
     workspaces: {
       switcherLabel: 'Switch business',
+      reorderHint: 'Press and hold to change the order.',
       createBusiness: 'Create business',
       switchedToast: 'Switched to {{name}}',
       delegateBtn: 'Delegate to…',

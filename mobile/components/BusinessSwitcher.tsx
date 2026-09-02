@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { View, Text, Pressable, Modal as RNModal } from 'react-native';
+import Sortable from 'react-native-sortables';
 import { ChevronDown, Check, Building2, CloudOff, Plus } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/lib/auth/store';
+import { createSupabaseClient } from '@/lib/supabase';
 import { useNetworkStore } from '@/lib/offline/network';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
@@ -25,6 +27,8 @@ export function BusinessSwitcher() {
   // a connection — so switching offline would silently apply the looser
   // built-in defaults, granting access the owner may have restricted.
   const isOnline = useNetworkStore((s) => s.isOnline);
+  const user = useAuthStore((s) => s.user);
+  const reorderBusinesses = useAuthStore((s) => s.reorderBusinesses);
   const { t: full } = useLang();
   const c = useThemeColors();
   const tw = full.dashboard.workspaces;
@@ -32,6 +36,73 @@ export function BusinessSwitcher() {
 
   const [open, setOpen] = useState(false);
   const active = businesses.find((b) => b.id === activeId);
+
+  /**
+   * Long-press a row to drag it. The order is per user (business_members
+   * .sort_order, migration 217), so this only ever moves the switcher for the
+   * person doing it.
+   *
+   * Reordering needs a round trip, so it is blocked offline for the same reason
+   * switching is — and the local list is updated first so the row does not snap
+   * back under the finger while the writes land.
+   */
+  const persistOrder = async (next: typeof businesses) => {
+    reorderBusinesses(next.map((b) => b.id));
+    const uid = user?.id;
+    if (!uid) return;
+    const supabase = createSupabaseClient();
+    for (let i = 0; i < next.length; i++) {
+      await supabase
+        .from('business_members')
+        .update({ sort_order: i })
+        .eq('user_id', uid)
+        .eq('business_id', next[i].id);
+    }
+  };
+
+
+  /** One switcher row. Shared by the sortable and plain lists so the two can
+   *  never drift apart visually. */
+  const renderRow = (b: (typeof businesses)[number], i: number) => {
+                const isActive = b.id === activeId;
+                // Offline: only the current business stays selectable (no switch).
+                const locked = !isOnline && !isActive;
+                return (
+                  <Pressable
+                    key={b.id}
+                    disabled={locked}
+                    onPress={() => {
+                      if (locked) return;
+                      const switching = b.id !== activeId;
+                      setActiveBusiness(b.id);
+                      setOpen(false);
+                      // Land on the dashboard so nothing scoped to the previous
+                      // business (a detail screen, an open sheet) is left showing
+                      // stale/out-of-context data. Only on a real switch.
+                      if (switching) router.replace('/dashboard');
+                    }}
+                    className={`flex-row items-center gap-3 px-4 py-3.5 ${
+                      i < businesses.length - 1 ? 'border-b border-border-soft' : ''
+                    } ${locked ? 'opacity-40' : 'active:bg-border-soft'}`}
+                  >
+                    <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
+                      <Building2 size={16} color={c.primary} />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-sm font-semibold text-ink">
+                        {b.name}
+                      </Text>
+                      {b.city ? (
+                        <Text className="text-xs text-muted">
+                          {b.city}
+                          {b.state ? `, ${b.state}` : ''}
+                        </Text>
+                      ) : null}
+                    </View>
+                    {isActive ? <Check size={18} color={c.primary} /> : null}
+                  </Pressable>
+                );
+  };
 
   if (!active) return null;
 
@@ -93,47 +164,21 @@ export function BusinessSwitcher() {
                 </Text>
               </View>
             ) : null}
+            {isOnline && businesses.length > 1 ? (
+              <Text className="text-[11px] text-faint mb-1.5 px-1">{tw.reorderHint}</Text>
+            ) : null}
             <View className="bg-surface rounded-2xl overflow-hidden">
-              {businesses.map((b, i) => {
-                const isActive = b.id === activeId;
-                // Offline: only the current business stays selectable (no switch).
-                const locked = !isOnline && !isActive;
-                return (
-                  <Pressable
-                    key={b.id}
-                    disabled={locked}
-                    onPress={() => {
-                      if (locked) return;
-                      const switching = b.id !== activeId;
-                      setActiveBusiness(b.id);
-                      setOpen(false);
-                      // Land on the dashboard so nothing scoped to the previous
-                      // business (a detail screen, an open sheet) is left showing
-                      // stale/out-of-context data. Only on a real switch.
-                      if (switching) router.replace('/dashboard');
-                    }}
-                    className={`flex-row items-center gap-3 px-4 py-3.5 ${
-                      i < businesses.length - 1 ? 'border-b border-border-soft' : ''
-                    } ${locked ? 'opacity-40' : 'active:bg-border-soft'}`}
-                  >
-                    <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
-                      <Building2 size={16} color={c.primary} />
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-sm font-semibold text-ink">
-                        {b.name}
-                      </Text>
-                      {b.city ? (
-                        <Text className="text-xs text-muted">
-                          {b.city}
-                          {b.state ? `, ${b.state}` : ''}
-                        </Text>
-                      ) : null}
-                    </View>
-                    {isActive ? <Check size={18} color={c.primary} /> : null}
-                  </Pressable>
-                );
-              })}
+              {isOnline && businesses.length > 1 ? (
+                <Sortable.Grid
+                  data={businesses}
+                  columns={1}
+                  rowGap={0}
+                  keyExtractor={(b: (typeof businesses)[number]) => b.id}
+                  dragActivationDelay={220}
+                  onDragEnd={({ data }: { data: typeof businesses }) => { void persistOrder(data); }}
+                  renderItem={({ item: b, index: i }: { item: (typeof businesses)[number]; index: number }) => renderRow(b, i)}
+                />
+              ) : businesses.map((b, i) => renderRow(b, i))}
             </View>
 
             {/* Create another business — reuses the existing onboarding flow.

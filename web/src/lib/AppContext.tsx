@@ -9,6 +9,7 @@ import {
   mergeRolePermissions,
   permissionsForRole,
   can,
+  orderBusinessesForUser,
   type Role,
   type RolePermissions,
 } from '@amixos/shared/lib/permissions';
@@ -165,6 +166,8 @@ export interface AppUser {
 
 interface AppContextValue {
   user: AppUser | null;
+  /** Apply a new switcher order locally (migration 217). */
+  reorderBusinesses: (orderedIds: string[]) => void;
   businesses: Business[];
   business: Business | null;
   activeBusinessId: string | null;
@@ -206,6 +209,7 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue>({
   user: null,
+  reorderBusinesses: () => {},
   businesses: [],
   business: null,
   activeBusinessId: null,
@@ -269,6 +273,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // impersonated member instead (see impersonation override).
   const [realUser, setRealUser] = useState<AppUser | null>(null);
   const [businesses, setBusinesses] = useState<Business[]>([]);
+  /** Apply a new switcher order locally (migration 217). The membership rows
+   *  are written separately; this stops the list snapping back mid-drag. */
+  const reorderBusinesses = (orderedIds: string[]) => {
+    const rank = new Map(orderedIds.map((id, i) => [id, i]));
+    setBusinesses(prev => [...prev].sort(
+      (a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+    ));
+  };
   const [activeBusinessId, setActiveBusinessIdState] = useState<string | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
   const [activeLocationId, setActiveLocationIdState] = useState<string | null>(null);
@@ -399,14 +411,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .order('created_at', { ascending: true }),
       supabase
         .from('business_members')
-        .select('business_id, role')
+        .select('business_id, role, sort_order')
         .eq('user_id', currentUserId),
     ]);
-    const list = (bizRows as Business[] | null) ?? [];
     const roleMap: Record<string, Role> = {};
-    for (const m of ((memberRows ?? []) as Array<{ business_id: string; role: string }>)) {
+    const orderMap: Record<string, number | null> = {};
+    for (const m of ((memberRows ?? []) as Array<{ business_id: string; role: string; sort_order: number | null }>)) {
       roleMap[m.business_id] = m.role as Role;
+      orderMap[m.business_id] = m.sort_order;
     }
+    // The query orders by created_at; this applies the user's own order on top
+    // (migration 217), leaving created_at as the tiebreak.
+    const list = orderBusinessesForUser((bizRows as Business[] | null) ?? [], orderMap);
     setBusinesses(list);
     setRoles(roleMap);
 
@@ -512,6 +528,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider
       value={{
         user,
+        reorderBusinesses,
         businesses,
         business,
         activeBusinessId,
