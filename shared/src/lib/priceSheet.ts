@@ -407,3 +407,57 @@ export function extractQuantity(text: string): number | null {
   const max = nums.sort((a, b) => b - a)[0];
   return max ?? null;
 }
+
+
+/** Key a price item groups under. Blank/absent category = the ungrouped bucket. */
+export function priceSectionKey(item: { category: string | null }): string {
+  return (item.category ?? '').trim();
+}
+
+/**
+ * Group price items into sections in the business's chosen order.
+ *
+ * Section order lives in businesses.price_section_order (migration 215) because
+ * `category` is free text with no table of its own. Both the price sheet and
+ * the invoice "view prices" sheet read through here, so the order a user drags
+ * into is the order that shows up when billing — previously one sorted
+ * alphabetically and the other used whatever order the query happened to
+ * return, so they disagreed.
+ *
+ * Sections absent from the saved order sort AFTER the listed ones,
+ * alphabetically: a section created since the order was saved then appears
+ * predictably at the end rather than vanishing or jumping to the front.
+ *
+ * Items keep the order they arrive in — callers should query by sort_order.
+ */
+export function groupPriceItemsByCategory<T extends { category: string | null }>(
+  items: T[],
+  sectionOrder: unknown,
+): Array<{ category: string; items: T[] }> {
+  const groups = new Map<string, T[]>();
+  for (const it of items) {
+    const key = priceSectionKey(it);
+    const arr = groups.get(key);
+    if (arr) arr.push(it);
+    else groups.set(key, [it]);
+  }
+
+  const order = Array.isArray(sectionOrder)
+    ? (sectionOrder as unknown[]).filter((v): v is string => typeof v === 'string').map(v => v.trim())
+    : [];
+  const rank = new Map<string, number>();
+  order.forEach((name, i) => { if (!rank.has(name)) rank.set(name, i); });
+
+  return Array.from(groups.entries())
+    .sort((a, b) => {
+      // The ungrouped bucket always sinks to the bottom: a heading-less block
+      // in the middle reads as a rendering bug.
+      if (a[0] === '' && b[0] !== '') return 1;
+      if (b[0] === '' && a[0] !== '') return -1;
+      const ra = rank.has(a[0]) ? rank.get(a[0])! : Number.MAX_SAFE_INTEGER;
+      const rb = rank.has(b[0]) ? rank.get(b[0])! : Number.MAX_SAFE_INTEGER;
+      if (ra !== rb) return ra - rb;
+      return a[0].localeCompare(b[0]);
+    })
+    .map(([category, list]) => ({ category, items: list }));
+}

@@ -10,7 +10,10 @@ import { loadCachedThenFresh, writeCacheAndStamp } from '../../lib/swrCache';
 import { useDataFingerprint } from '../../lib/dataFingerprint';
 import { SkeletonList } from '../../ui/Skeleton';
 import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Modal as RNModal, KeyboardAvoidingView, Platform } from 'react-native';
-import { Plus, X, Trash2, Pencil, Copy, DollarSign, Search, ChevronDown, Check } from 'lucide-react-native';
+import { Plus, X, Trash2, Pencil, Copy, DollarSign, Search, ChevronDown, Check, ArrowUpDown, GripVertical } from 'lucide-react-native';
+// Native-only screen (PriceSheetScreen.web.tsx is the web variant), so a
+// React-Native-only package is safe to import here.
+import Sortable from 'react-native-sortables';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
@@ -22,6 +25,7 @@ import {
   type PriceSheetRow,
   type PricingMode,
   rowToPriceSheetItem,
+  groupPriceItemsByCategory,
   priceItemLabel,
 } from '../../lib/priceSheet';
 
@@ -34,6 +38,12 @@ export interface PriceSheetScreenProps {
   canManage: boolean;
   /** Web-only "Generate sheet" action; ignored on mobile for now. */
   onGenerate?: () => void;
+  /** businesses.price_section_order (migration 215) — the user's section order.
+   *  Passed in rather than read here so the route's AppContext copy stays the
+   *  single source, and the invoice sheet sees the same value. */
+  sectionOrder?: string[] | null;
+  /** Persist a new section order. Undefined = reordering unavailable. */
+  onSectionOrderChange?: (next: string[]) => Promise<void> | void;
 }
 
 const US_STATES = [
@@ -62,7 +72,7 @@ const emptyDraft = (): Draft => ({
   id: null, name: '', category: '', pricingMode: 'per_unit', unitLabel: '', rate: '', stateRates: [], clientRates: [], matchTerms: '', isAddon: false, addonInline: false,
 });
 
-export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheetScreenProps) {
+export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder, onSectionOrderChange }: PriceSheetScreenProps) {
   const { t: full, locale } = useLang();
   const c = useThemeColors();
   const t = full.dashboard.settings.priceSheet;
@@ -149,14 +159,61 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
       i.matchTerms.some(m => m.includes(q)));
   }, [items, search]);
 
-  const groups = useMemo(() => {
-    const by = new Map<string, PriceSheetItem[]>();
-    visibleItems.forEach(i => {
-      const key = (i.category ?? '').trim() || '￿';
-      (by.get(key) ?? by.set(key, []).get(key)!).push(i);
+  // Section order comes from the business (migration 215) through the shared
+  // helper, so the price sheet and the invoice "view prices" sheet can never
+  // disagree — they used to, one sorting alphabetically and the other using
+  // whatever order the query returned.
+  const groups = useMemo(
+    () => groupPriceItemsByCategory(visibleItems, sectionOrder).map(g => [g.category || '￿', g.items] as const),
+    [visibleItems, sectionOrder],
+  );
+
+  // Dragging is only coherent against the FULL list — while a search is
+  // filtering, the positions on screen are not the positions being written.
+  const canReorder = canManage && !search.trim();
+  const [sectionSheetOpen, setSectionSheetOpen] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
+
+  /**
+   * Renumber sort_order across every item so the stored order matches what is
+   * on screen. Items are ordered globally, not per section, so a change inside
+   * one section still has to be written against the whole flattened list —
+   * otherwise two sections end up sharing sort_order values and the order goes
+   * unstable.
+   *
+   * Only rows whose number actually moved are written.
+   */
+  const persistItemOrder = async (nextGroups: ReadonlyArray<readonly [string, PriceSheetItem[]]>) => {
+    const flat = nextGroups.flatMap(([, list]) => list);
+    const changed = flat
+      .map((it, idx) => ({ id: it.id, sort_order: idx, was: it.sortOrder }))
+      .filter(u => u.was !== u.sort_order);
+    if (!changed.length) return;
+    // Optimistic: the list re-renders from `items`, so update it before the
+    // round-trip or the row snaps back under the finger.
+    setItems(prev => {
+      const rank = new Map(flat.map((it, idx) => [it.id, idx]));
+      return [...prev]
+        .map(it => (rank.has(it.id) ? { ...it, sortOrder: rank.get(it.id)! } : it))
+        .sort((a, b) => a.sortOrder - b.sortOrder);
     });
-    return Array.from(by.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [visibleItems]);
+    setSavingOrder(true);
+    for (const u of changed) {
+      await supabase.from('price_sheet_items').update({ sort_order: u.sort_order }).eq('id', u.id);
+    }
+    setSavingOrder(false);
+  };
+
+  /** Named sections in display order — the ungrouped bucket has no name to
+   *  drag, so it is excluded and always sinks last. */
+  const sectionNames = useMemo(
+    () => groups.map(([k]) => k).filter(k => k !== '￿'),
+    [groups],
+  );
+
+  /** Reorder one section's items, leaving every other section untouched. */
+  const reorderWithin = (key: string, nextList: PriceSheetItem[]) =>
+    persistItemOrder(groups.map(([k, list]) => [k, k === key ? nextList : list] as const));
 
   // Keep the per-state rows alphabetical by state name; blank rows sink last.
   const sortStateRates = (rows: DraftState[]): DraftState[] =>
@@ -259,6 +316,33 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
     return US_STATES.filter(s => s.toLowerCase().includes(q) || usStateName(s, locale).toLowerCase().includes(q));
   }, [stateQuery, locale]);
 
+  /** One price row. Shared by the static list and the sortable one so the two
+   *  can never drift apart visually. */
+  const renderPriceRow = (i: PriceSheetItem, idx: number, total: number) => (
+    <View key={i.id} className={`px-4 py-4 flex-row items-center gap-3 bg-card ${idx < total - 1 ? 'border-b border-border-soft' : ''} ${!i.active ? 'opacity-50' : ''}`}>
+      <View className="flex-1 min-w-0">
+        <View className="flex-row items-center gap-2">
+          <Text className="text-sm font-semibold text-ink flex-shrink" numberOfLines={1}>{i.name}</Text>
+          {i.isAddon ? <View className="px-1.5 py-0.5 rounded-full bg-amber-100"><Text className="text-[10px] font-semibold text-amber-700">{t.addonBadge}</Text></View> : null}
+        </View>
+        <Text className="text-xs text-muted mt-1">
+          {i.isAddon ? '+' : ''}{priceItemLabel(i, t.flatWord)}
+          {i.stateRates ? ` · ${Object.entries(i.stateRates).map(([st, r]) => `${usStateName(st, locale)} $${r}`).join(' · ')}` : ''}
+        </Text>
+      </View>
+      {canManage ? (
+        <View className="flex-row items-center gap-1">
+          <Pressable onPress={() => toggleActive(i)} className="px-2 py-1 rounded-lg active:bg-border-soft">
+            <Text className="text-xs font-semibold text-muted">{i.active ? t.deactivate : t.activate}</Text>
+          </Pressable>
+          <Pressable onPress={() => openEdit(i)} className="p-1.5 rounded-lg active:bg-primary/5"><Pencil size={14} color={c.faint} /></Pressable>
+          <Pressable onPress={() => duplicate(i)} className="p-1.5 rounded-lg active:bg-primary/5"><Copy size={14} color={c.faint} /></Pressable>
+          <Pressable onPress={() => remove(i)} className="p-1.5 rounded-lg active:bg-red-500/10"><Trash2 size={14} color={c.danger} /></Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
+
   return (
     <View className="flex-1">
       <View className="flex-row items-start justify-between gap-3 mb-4">
@@ -266,6 +350,15 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
           <Text className="text-base font-semibold text-ink">{t.title}</Text>
           <Text className="text-xs text-faint mt-0.5">{t.subtitle}</Text>
         </View>
+        {canReorder && onSectionOrderChange && groups.length > 1 ? (
+          <Pressable
+            onPress={() => setSectionSheetOpen(true)}
+            accessibilityLabel={t.reorderSections}
+            className="p-2 rounded-xl border border-border bg-card active:opacity-80"
+          >
+            <ArrowUpDown size={15} color={c.muted} />
+          </Pressable>
+        ) : null}
         {canManage ? (
           <Pressable onPress={() => setDraft(emptyDraft())} className="flex-row items-center gap-1.5 bg-primary px-3.5 py-2 rounded-xl active:opacity-90">
             <Plus size={15} color="#fff" />
@@ -282,6 +375,12 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
         {search ? <Pressable onPress={() => setSearch('')} hitSlop={8}><X size={16} color={c.faint} /></Pressable> : null}
       </View>
 
+
+      {canReorder && groups.length > 0 ? (
+        <Text className="text-[11px] text-faint mb-3 px-1">
+          {savingOrder ? t.savingOrder : t.reorderHint}
+        </Text>
+      ) : null}
 
       {loading ? (
         <SkeletonList rows={6} />
@@ -300,35 +399,61 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
                 {key === '￿' ? t.uncategorized : key}
               </Text>
               <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
-                {list.map((i, idx) => (
-                  <View key={i.id} className={`px-4 py-4 flex-row items-center gap-3 ${idx < list.length - 1 ? 'border-b border-border-soft' : ''} ${!i.active ? 'opacity-50' : ''}`}>
-                    <View className="flex-1 min-w-0">
-                      <View className="flex-row items-center gap-2">
-                        <Text className="text-sm font-semibold text-ink flex-shrink" numberOfLines={1}>{i.name}</Text>
-                        {i.isAddon ? <View className="px-1.5 py-0.5 rounded-full bg-amber-100"><Text className="text-[10px] font-semibold text-amber-700">{t.addonBadge}</Text></View> : null}
-                      </View>
-                      <Text className="text-xs text-muted mt-1">
-                        {i.isAddon ? '+' : ''}{priceItemLabel(i, t.flatWord)}
-                        {i.stateRates ? ` · ${Object.entries(i.stateRates).map(([st, r]) => `${usStateName(st, locale)} $${r}`).join(' · ')}` : ''}
-                      </Text>
-                    </View>
-                    {canManage ? (
-                      <View className="flex-row items-center gap-1">
-                        <Pressable onPress={() => toggleActive(i)} className="px-2 py-1 rounded-lg active:bg-border-soft">
-                          <Text className="text-xs font-semibold text-muted">{i.active ? t.deactivate : t.activate}</Text>
-                        </Pressable>
-                        <Pressable onPress={() => openEdit(i)} className="p-1.5 rounded-lg active:bg-primary/5"><Pencil size={14} color={c.faint} /></Pressable>
-                        <Pressable onPress={() => duplicate(i)} className="p-1.5 rounded-lg active:bg-primary/5"><Copy size={14} color={c.faint} /></Pressable>
-                        <Pressable onPress={() => remove(i)} className="p-1.5 rounded-lg active:bg-red-500/10"><Trash2 size={14} color={c.danger} /></Pressable>
-                      </View>
-                    ) : null}
-                  </View>
-                ))}
+                {/* Long-press to drag. Only when the full list is showing: while
+                    a search filters the rows, on-screen positions are not the
+                    positions being written. */}
+                {canReorder ? (
+                  <Sortable.Grid
+                    data={list}
+                    columns={1}
+                    rowGap={0}
+                    keyExtractor={(it: PriceSheetItem) => it.id}
+                    dragActivationDelay={220}
+                    onDragEnd={({ data }: { data: PriceSheetItem[] }) => { void reorderWithin(key, data); }}
+                    renderItem={({ item: i, index: idx }: { item: PriceSheetItem; index: number }) =>
+                      renderPriceRow(i, idx, list.length)}
+                  />
+                ) : list.map((i, idx) => renderPriceRow(i, idx, list.length))}
               </View>
             </View>
           ))}
         </View>
       )}
+      {/* Section order. A separate sheet rather than dragging headers inline:
+          nesting one sortable list inside another is unreliable, and a flat
+          list of names is easier to reason about than dragging a whole block
+          of prices. */}
+      <RNModal visible={sectionSheetOpen} transparent animationType="fade" onRequestClose={() => setSectionSheetOpen(false)}>
+        <View className="flex-1 justify-end">
+          <Pressable
+            onPress={() => setSectionSheetOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+          />
+          <View className="bg-card rounded-t-3xl px-5 pt-4 pb-10 max-h-[80%]">
+            <View className="flex-row items-center justify-between mb-1">
+              <Text className="text-lg font-bold text-ink">{t.reorderSections}</Text>
+              <Pressable onPress={() => setSectionSheetOpen(false)} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft">
+                <X size={20} color={c.faint} />
+              </Pressable>
+            </View>
+            <Text className="text-xs text-faint mb-3">{t.sectionOrderHint}</Text>
+            <Sortable.Grid
+              data={sectionNames}
+              columns={1}
+              rowGap={8}
+              keyExtractor={(name: string) => name}
+              dragActivationDelay={180}
+              onDragEnd={({ data }: { data: string[] }) => { void onSectionOrderChange?.(data); }}
+              renderItem={({ item: name }: { item: string }) => (
+                <View className="flex-row items-center gap-3 px-4 py-3.5 rounded-xl border border-border bg-card">
+                  <GripVertical size={16} color={c.faint} />
+                  <Text className="text-sm font-medium text-ink flex-1" numberOfLines={1}>{name}</Text>
+                </View>
+              )}
+            />
+          </View>
+        </View>
+      </RNModal>
 
       {/* Add/edit sheet — absolute backdrop BEHIND a plain-View card (scrolls). */}
       <RNModal visible={!!draft} transparent animationType="fade" onRequestClose={() => setDraft(null)}>

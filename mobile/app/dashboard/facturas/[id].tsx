@@ -33,7 +33,7 @@ import type { InvoiceLang } from '@amixos/shared';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { sortInvoiceLinesByDate, detectLineSortDirection, setLineItemExcluded, removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, AUTOPRICE_SKIP, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
-import { applicableRate, rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
+import { applicableRate, rowToPriceSheetItem, groupPriceItemsByCategory, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { formatDateLong, formatMoneyInput, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { can } from '@amixos/shared/lib/permissions';
@@ -1646,14 +1646,13 @@ export default function FacturaDetailRoute() {
             <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 16 }}>
               {(() => {
                 const items = priceItems.filter(p => p.active);
-                const groups = new Map<string, PriceSheetItem[]>();
-                for (const it of items) {
-                  const k = it.category?.trim() || '';
-                  const arr = groups.get(k);
-                  if (arr) arr.push(it); else groups.set(k, [it]);
-                }
+                // Same helper the price sheet uses, so the order here is the
+                // order the user dragged into (migration 215). These two used
+                // to disagree: one sorted alphabetically, this one used
+                // whatever order the query happened to return.
+                const ordered = groupPriceItemsByCategory(items, business?.price_section_order);
                 let anyTier = false;
-                const blocks = Array.from(groups.entries()).map(([cat, arr]) => (
+                const blocks = ordered.map(({ category: cat, items: arr }) => (
                   <View key={cat || '__none'} className="mb-4">
                     {cat ? (
                       <Text className="text-[11px] font-bold text-faint uppercase tracking-wide mb-1.5">{cat}</Text>

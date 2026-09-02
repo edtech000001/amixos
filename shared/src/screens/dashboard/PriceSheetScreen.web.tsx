@@ -10,7 +10,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { loadCachedThenFresh, writeCacheAndStamp } from '../../lib/swrCache';
 import { useDataFingerprint } from '../../lib/dataFingerprint';
 import { SkeletonList } from '../../ui/Skeleton';
-import { Plus, X, Trash2, Pencil, Copy, DollarSign, FileText, Search } from 'lucide-react';
+import { Plus, X, Trash2, Pencil, Copy, DollarSign, FileText, Search, ArrowUpDown, GripVertical } from 'lucide-react';
+import { SortableList } from '../../ui/SortableList';
 import { useLang } from '../../i18n';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { fetchAllById } from '../../lib/supabaseFetch';
@@ -22,6 +23,7 @@ import {
   type PricingMode,
   rowToPriceSheetItem,
   priceItemLabel,
+  groupPriceItemsByCategory,
 } from '../../lib/priceSheet';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,6 +36,10 @@ export interface PriceSheetScreenProps {
   /** When provided, shows a "Generate sheet" header button (client-facing
    *  price-sheet PDF). Web-only for now. */
   onGenerate?: () => void;
+  /** businesses.price_section_order (migration 215) — the user's section order. */
+  sectionOrder?: string[] | null;
+  /** Persist a new section order. Undefined = reordering unavailable. */
+  onSectionOrderChange?: (next: string[]) => Promise<void> | void;
 }
 
 // 50 states + DC, USPS order — full names come from usStateName(abbr).
@@ -63,7 +69,7 @@ const emptyDraft = (): Draft => ({
   id: null, name: '', category: '', pricingMode: 'per_unit', unitLabel: '', rate: '', stateRates: [], clientRates: [], matchTerms: '', isAddon: false, addonInline: false,
 });
 
-export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }: PriceSheetScreenProps) {
+export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate, sectionOrder, onSectionOrderChange }: PriceSheetScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.settings.priceSheet;
 
@@ -145,15 +151,52 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
       i.matchTerms.some(m => m.includes(q)));
   }, [items, search]);
 
-  // Group by category, "uncategorized" last.
-  const groups = useMemo(() => {
-    const by = new Map<string, PriceSheetItem[]>();
-    visibleItems.forEach(i => {
-      const key = (i.category ?? '').trim() || '￿';
-      (by.get(key) ?? by.set(key, []).get(key)!).push(i);
+  // Section order comes from the business (migration 215) through the shared
+  // helper, so this and the invoice "view prices" sheet can never disagree —
+  // they used to, one sorting alphabetically and the other using whatever order
+  // the query returned. Uncategorized always sinks last.
+  const groups = useMemo(
+    () => groupPriceItemsByCategory(visibleItems, sectionOrder).map(g => [g.category || '￿', g.items] as const),
+    [visibleItems, sectionOrder],
+  );
+
+  // Dragging is only coherent against the FULL list — while a search filters
+  // the rows, on-screen positions are not the positions being written.
+  const canReorder = canManage && !search.trim();
+  const [sectionSheetOpen, setSectionSheetOpen] = useState(false);
+
+  /**
+   * Renumber sort_order across every item so the stored order matches the
+   * screen. Items are ordered globally, not per section, so a change inside one
+   * section still has to be written against the whole flattened list —
+   * otherwise sections end up sharing sort_order values and the order goes
+   * unstable. Only rows whose number moved are written.
+   */
+  const persistItemOrder = async (nextGroups: ReadonlyArray<readonly [string, PriceSheetItem[]]>) => {
+    const flat = nextGroups.flatMap(([, list]) => list);
+    const changed = flat
+      .map((it, idx) => ({ id: it.id, sort_order: idx, was: it.sortOrder }))
+      .filter(u => u.was !== u.sort_order);
+    if (!changed.length) return;
+    // Optimistic: the list renders from `items`, so update before the
+    // round-trip or the row snaps back after the drop.
+    setItems(prev => {
+      const rank = new Map(flat.map((it, idx) => [it.id, idx]));
+      return [...prev]
+        .map(it => (rank.has(it.id) ? { ...it, sortOrder: rank.get(it.id)! } : it))
+        .sort((a, b) => a.sortOrder - b.sortOrder);
     });
-    return Array.from(by.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [visibleItems]);
+    for (const u of changed) {
+      await supabase.from('price_sheet_items').update({ sort_order: u.sort_order }).eq('id', u.id);
+    }
+  };
+
+  const reorderWithin = (key: string, nextList: PriceSheetItem[]) =>
+    persistItemOrder(groups.map(([k, list]) => [k, k === key ? nextList : list] as const));
+
+  /** Named sections in display order — the ungrouped bucket has no name to
+   *  drag, so it is excluded and always sinks last. */
+  const sectionNames = useMemo(() => groups.map(([k]) => k).filter(k => k !== '￿'), [groups]);
 
   // Keep the per-state rows alphabetical by state name; blank (unchosen) rows
   // sink to the bottom so a freshly-added row stays put until you pick a state.
@@ -243,6 +286,51 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
     setDraft({ ...draft, stateRates: sortStateRates([...draft.stateRates, ...additions]) });
   };
 
+  /** One price row. Shared by the static list and the sortable one so the two
+   *  cannot drift apart visually. `handle` carries dnd-kit's drag props when
+   *  reordering is on. */
+  const renderPriceRow = (
+    i: PriceSheetItem,
+    idx: number,
+    total: number,
+    handle?: { attributes?: Record<string, unknown>; listeners?: Record<string, unknown> },
+  ) => (
+    <div key={i.id} className={`px-4 py-4 flex items-center gap-3 bg-card ${idx < total - 1 ? 'border-b border-border-soft' : ''} ${!i.active ? 'opacity-50' : ''}`}>
+      {handle ? (
+        <span
+          {...(handle.attributes ?? {})}
+          {...(handle.listeners ?? {})}
+          className="shrink-0 cursor-grab active:cursor-grabbing text-faint hover:text-muted"
+          aria-label={t.reorderSections}
+        >
+          <GripVertical size={15} />
+        </span>
+      ) : null}
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-ink truncate">{i.name}</p>
+          {i.isAddon ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">{t.addonBadge}</span> : null}
+          {!i.active ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-border-soft text-faint">{t.inactiveBadge}</span> : null}
+        </div>
+        <p className="text-xs text-muted mt-1">
+          {i.isAddon ? '+' : ''}{priceItemLabel(i, t.flatWord)}
+          {i.stateRates ? ` · ${Object.entries(i.stateRates).map(([st, r]) => `${usStateName(st, locale)} $${r}`).join(' · ')}` : ''}
+        </p>
+      </div>
+      {canManage ? (
+        <div className="flex items-center gap-1 shrink-0">
+          <button type="button" onClick={() => toggleActive(i)} className="px-2 py-1 rounded-lg text-xs font-semibold text-muted hover:bg-border-soft">
+            {i.active ? t.deactivate : t.activate}
+          </button>
+          <button type="button" onClick={() => openEdit(i)} className="p-1.5 rounded-lg text-faint hover:text-primary hover:bg-primary/5"><Pencil size={14} /></button>
+          <button type="button" onClick={() => duplicate(i)} title={t.duplicate} className="p-1.5 rounded-lg text-faint hover:text-primary hover:bg-primary/5"><Copy size={14} /></button>
+          <button type="button" onClick={() => remove(i)} className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-500/10"><Trash2 size={14} /></button>
+        </div>
+      ) : null}
+    </div>
+  );
+
   return (
     <div className="p-6 lg:p-8 flex flex-col gap-5">
       <div className="flex items-start justify-between gap-3">
@@ -251,6 +339,16 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
           <p className="text-sm text-muted mt-0.5">{t.subtitle}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {canReorder && onSectionOrderChange && sectionNames.length > 1 ? (
+            <button
+              type="button"
+              onClick={() => setSectionSheetOpen(true)}
+              title={t.reorderSections}
+              className="flex items-center gap-1.5 bg-card border border-border px-3 py-2.5 rounded-xl text-sm font-semibold text-muted hover:bg-surface"
+            >
+              <ArrowUpDown size={15} />
+            </button>
+          ) : null}
           {onGenerate ? (
             <button type="button" onClick={onGenerate}
               className="flex items-center gap-1.5 bg-card border border-border px-4 py-2.5 rounded-xl text-sm font-semibold text-ink hover:bg-surface">
@@ -297,36 +395,53 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate }
                 {key === '￿' ? t.uncategorized : key}
               </p>
               <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
-                {list.map((i, idx) => (
-                  <div key={i.id} className={`px-4 py-4 flex items-center gap-3 ${idx < list.length - 1 ? 'border-b border-border-soft' : ''} ${!i.active ? 'opacity-50' : ''}`}>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-ink truncate">{i.name}</p>
-                        {i.isAddon ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">{t.addonBadge}</span> : null}
-                        {!i.active ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-border-soft text-faint">{t.inactiveBadge}</span> : null}
-                      </div>
-                      <p className="text-xs text-muted mt-1">
-                        {i.isAddon ? '+' : ''}{priceItemLabel(i, t.flatWord)}
-                        {i.stateRates ? ` · ${Object.entries(i.stateRates).map(([st, r]) => `${usStateName(st, locale)} $${r}`).join(' · ')}` : ''}
-                      </p>
-                    </div>
-                    {canManage ? (
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button type="button" onClick={() => toggleActive(i)} className="px-2 py-1 rounded-lg text-xs font-semibold text-muted hover:bg-border-soft">
-                          {i.active ? t.deactivate : t.activate}
-                        </button>
-                        <button type="button" onClick={() => openEdit(i)} className="p-1.5 rounded-lg text-faint hover:text-primary hover:bg-primary/5"><Pencil size={14} /></button>
-                        <button type="button" onClick={() => duplicate(i)} title={t.duplicate} className="p-1.5 rounded-lg text-faint hover:text-primary hover:bg-primary/5"><Copy size={14} /></button>
-                        <button type="button" onClick={() => remove(i)} className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-500/10"><Trash2 size={14} /></button>
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
+                {canReorder ? (
+                  <SortableList
+                    items={list}
+                    onReorder={next => { void reorderWithin(key, next); }}
+                    renderItem={(i, idx, handle) => renderPriceRow(i, idx, list.length, handle)}
+                  />
+                ) : list.map((i, idx) => renderPriceRow(i, idx, list.length))}
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Section order. A separate modal rather than dragging headers inline:
+          nesting one sortable list inside another is unreliable, and a flat
+          list of names is easier to reason about than dragging a whole block
+          of prices. */}
+      {sectionSheetOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setSectionSheetOpen(false)} />
+          <div className="relative bg-card rounded-2xl w-full max-w-sm p-5 max-h-[80vh] overflow-y-auto shadow-xl">
+            <div className="flex items-start justify-between mb-1">
+              <h2 className="text-base font-bold text-ink">{t.reorderSections}</h2>
+              <button type="button" onClick={() => setSectionSheetOpen(false)} className="p-1 -mr-1 text-muted hover:text-ink">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-xs text-faint mb-3">{t.sectionOrderHint}</p>
+            <SortableList
+              items={sectionNames.map(name => ({ id: name }))}
+              onReorder={next => { void onSectionOrderChange?.(next.map(x => x.id)); }}
+              renderItem={(row, _idx, handle) => (
+                <div key={row.id} className="flex items-center gap-3 px-3 py-2.5 mb-2 rounded-xl border border-border bg-card">
+                  <span
+                    {...(handle.attributes ?? {})}
+                    {...(handle.listeners ?? {})}
+                    className="cursor-grab active:cursor-grabbing text-faint hover:text-muted"
+                  >
+                    <GripVertical size={15} />
+                  </span>
+                  <span className="text-sm font-medium text-ink truncate">{row.id}</span>
+                </div>
+              )}
+            />
+          </div>
+        </div>
+      ) : null}
 
       {/* Add/edit modal. Backdrop click deliberately does NOT close — a
           mis-click mustn't discard an in-progress price edit. Close via the

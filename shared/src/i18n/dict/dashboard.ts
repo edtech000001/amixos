@@ -1541,6 +1541,7 @@ export type DashboardDict = {
       designMinimal: string;
       sectionOrderLabel: string;
       sectionOrderHint: string;
+      reorderSections: string; reorderHint: string; savingOrder: string;
     };
     navigation: {
       subtitle: string;
@@ -4612,6 +4613,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         designMinimal: 'Minimalista',
         sectionOrderLabel: 'Orden de secciones',
         sectionOrderHint: 'Arrastra con las flechas para reordenar las categorías.',
+        reorderSections: 'Ordenar secciones',
+        reorderHint: 'Mantén presionado un precio para moverlo. Este orden también se ve en las facturas.',
+        savingOrder: 'Guardando orden...',
       },
       navigation: {
         subtitle: 'Elige qué apps aparecen en la barra inferior.',
@@ -7698,6 +7702,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         designMinimal: 'Minimal',
         sectionOrderLabel: 'Section order',
         sectionOrderHint: 'Use the arrows to reorder the categories.',
+        reorderSections: 'Reorder sections',
+        reorderHint: 'Press and hold a price to move it. This order also shows on invoices.',
+        savingOrder: 'Saving order...',
       },
       navigation: {
         subtitle: 'Choose which apps appear in the bottom bar.',
