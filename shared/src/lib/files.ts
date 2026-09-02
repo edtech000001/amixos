@@ -27,6 +27,8 @@ export interface FileCategory {
   // Hand-picked cover (migration 214). Folders have nothing to render from,
   // so this is always a picture the user chose. Null = folder icon.
   cover_path: string | null;
+  /** How that picture is framed in its box (migration 216). Null = default. */
+  cover_transform: unknown;
   sort_order: number;
   created_by: string | null;
   created_at: string;
@@ -43,6 +45,8 @@ export interface FileFolder {
   name: string;
   /** Hand-picked cover (migration 214). Null = folder icon. */
   cover_path: string | null;
+  /** How that picture is framed in its box (migration 216). Null = default. */
+  cover_transform: unknown;
   sort_order: number;
   created_by: string | null;
   created_at: string;
@@ -70,6 +74,8 @@ export interface FileEntry {
   // True when a person uploaded the cover instead of it being rendered from
   // the file (migration 213). Links can only ever have a manual cover.
   thumbnail_manual: boolean | null;
+  /** How a hand-picked cover is framed in its box (migration 216). */
+  cover_transform: unknown;
   // null = inherit the category default; true = Team; false = Office.
   crew_visible: boolean | null;
   sort_order: number;
@@ -237,4 +243,70 @@ export async function downscaleImage(file: Blob, maxPx = 480, quality = 0.85): P
   } catch {
     return file;
   }
+}
+
+
+/** How a cover image is framed inside its fixed box (migration 216). */
+export interface CoverTransform {
+  /** Focal point, 0..1. Which part of the image stays centred when cropped. */
+  x: number;
+  y: number;
+  /** Rotation in degrees; only right angles, so the box stays axis-aligned. */
+  rot: 0 | 90 | 180 | 270;
+}
+
+/**
+ * Read a stored transform, falling back to a sensible default per surface.
+ * A document cover is framed from the TOP — the masthead is the useful part —
+ * while a folder photo is framed from the middle.
+ */
+export function coverTransform(raw: unknown, kind: 'document' | 'photo' = 'photo'): CoverTransform {
+  const d: CoverTransform = kind === 'document' ? { x: 0.5, y: 0, rot: 0 } : { x: 0.5, y: 0.5, rot: 0 };
+  if (!raw || typeof raw !== 'object') return d;
+  const r = raw as Record<string, unknown>;
+  const num = (v: unknown, fb: number) =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : fb;
+  const rot = r.rot === 90 || r.rot === 180 || r.rot === 270 ? r.rot : 0;
+  return { x: num(r.x, d.x), y: num(r.y, d.y), rot };
+}
+
+/** Next right angle, for a "rotate" button. */
+export function rotateCover(t: CoverTransform): CoverTransform {
+  const order: CoverTransform['rot'][] = [0, 90, 180, 270];
+  return { ...t, rot: order[(order.indexOf(t.rot) + 1) % 4] };
+}
+
+/** True when the transform is just the default — lets a caller store NULL
+ *  rather than a row of no-op numbers. */
+export function isDefaultCoverTransform(t: CoverTransform, kind: 'document' | 'photo' = 'photo'): boolean {
+  const d = coverTransform(null, kind);
+  return t.x === d.x && t.y === d.y && t.rot === d.rot;
+}
+
+/**
+ * Style for a cover image that fills a fixed box, framed by `t`.
+ *
+ * objectFit 'cover' already fills the box at 0°. Rotating 90/270 turns the
+ * image's W×H footprint into H×W, which no longer covers a box of a different
+ * aspect — so it is scaled by max(a, 1/a), the exact factor that restores
+ * coverage for a box of aspect `boxAspect` (width / height).
+ *
+ * @param boxAspect width / height of the box, e.g. 1 for a square folder tile,
+ *   0.75 for a 3:4 document cover.
+ */
+export function coverImageStyle(t: CoverTransform, boxAspect: number): {
+  objectPosition: string;
+  transform: string;
+  scale: number;
+  rotate: number;
+} {
+  const swap = t.rot === 90 || t.rot === 270;
+  const a = boxAspect > 0 ? boxAspect : 1;
+  const scale = swap ? Math.max(a, 1 / a) : 1;
+  return {
+    objectPosition: `${t.x * 100}% ${t.y * 100}%`,
+    transform: `rotate(${t.rot}deg) scale(${scale})`,
+    scale,
+    rotate: t.rot,
+  };
 }

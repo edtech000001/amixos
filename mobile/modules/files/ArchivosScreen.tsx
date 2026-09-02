@@ -10,7 +10,7 @@ import { useDataFingerprint } from '@amixos/shared/lib/dataFingerprint';
 import { SkeletonList } from '@amixos/shared/ui/Skeleton';
 import {
   View, Text, Pressable, ScrollView, ActivityIndicator, Alert, Linking,
-  Modal as RNModal, KeyboardAvoidingView, Platform, Image,
+  Modal as RNModal, KeyboardAvoidingView, Platform, Image, Dimensions,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { hasClipboardImage, readClipboardImageToFile } from '@/lib/clipboardPhoto';
@@ -20,7 +20,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import {
   ChevronLeft, ChevronRight, CornerUpLeft, FileText, Folder, FolderOpen, FolderPlus,
   FilePlus2, Link2, Trash2, Pencil, ExternalLink, Upload, Lock,
-  Users as UsersIcon, Check, X, FolderInput, Plus, LayoutGrid, List as ListIcon,
+  Users as UsersIcon, Check, X, FolderInput, Plus, LayoutGrid, List as ListIcon, RotateCw,
   ImagePlus, Camera, ClipboardPaste,
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -34,6 +34,7 @@ import {
   fetchFilesTree, fileStoragePath, fileUid, fileMeta, fileIsCrewVisible,
   type FilesTree,
   FILES_BUCKET, FILE_MAX_BYTES, requestThumbnail, backfillThumbnails, coverStoragePath,
+  coverTransform, rotateCover, isDefaultCoverTransform, type CoverTransform,
   type FileCategory, type FileFolder, type FileEntry, type FileEntryKind,
 } from '@amixos/shared/lib/files';
 import { signedUrl } from '@amixos/shared/lib/storageUrls';
@@ -77,6 +78,10 @@ export default function ArchivosScreen() {
   // stored value once read, so the first paint is never the wrong layout for
   // long.
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  // Grid cards are half the content width. FramedCover needs a real pixel width
+  // to compute the cover scale, so it is derived once rather than guessed:
+  // screen minus the list's px-6 padding, minus the px-1 gutter on each card.
+  const cardWidth = Math.floor((Dimensions.get('window').width - 48) / 2) - 8;
   useEffect(() => {
     void kvGet(FILES_VIEW_KEY).then(v => { if (v === 'grid' || v === 'list') setViewMode(v); });
   }, []);
@@ -495,7 +500,7 @@ export default function ArchivosScreen() {
                       count={folderItemCount(cat.id, null)}
                       onOpen={() => enterCategory(cat)}
                       canManage={canManage}
-                      coverPath={cat.cover_path}
+                      coverPath={cat.cover_path} coverTf={cat.cover_transform}
                       selected={selectedCategories.has(cat.id)}
                       selectionMode={selectionMode}
                       onToggleSelect={() => toggleCategory(cat.id)}
@@ -512,7 +517,7 @@ export default function ArchivosScreen() {
                       selected={selectedFolders.has(f.id)}
                       selectionMode={selectionMode}
                       onToggleSelect={() => toggleFolder(f.id)}
-                      coverPath={f.cover_path}
+                      coverPath={f.cover_path} coverTf={f.cover_transform}
                     />
                   </View>
                 ))}
@@ -523,7 +528,7 @@ export default function ArchivosScreen() {
             {viewMode !== 'grid' && atHome ? categories.map(c => (
               <FolderRow key={c.id} name={c.name} count={folderItemCount(c.id, null)}
                 badge={c.crew_visible ? { label: t.crewBadge, team: true } : { label: t.officeOnlyBadge, team: false }}
-                onOpen={() => enterCategory(c)} canManage={canManage} coverPath={c.cover_path}
+                onOpen={() => enterCategory(c)} canManage={canManage} coverPath={c.cover_path} coverTf={c.cover_transform}
                 selected={selectedCategories.has(c.id)} selectionMode={selectionMode}
                 onToggleSelect={() => toggleCategory(c.id)}
               />
@@ -534,7 +539,7 @@ export default function ArchivosScreen() {
               <FolderRow key={f.id} name={f.name} count={folderItemCount(f.category_id, f.id)}
                 onOpen={() => enterFolder(f)} canManage={canManage}
                 selected={selectedFolders.has(f.id)} selectionMode={selectionMode}
-                onToggleSelect={() => toggleFolder(f.id)} coverPath={f.cover_path}
+                onToggleSelect={() => toggleFolder(f.id)} coverPath={f.cover_path} coverTf={f.cover_transform}
               />
             ))}
 
@@ -553,7 +558,7 @@ export default function ArchivosScreen() {
                         className={`rounded-xl border overflow-hidden ${picked ? 'border-primary bg-primary/5' : 'border-border-soft bg-card'}`}
                       >
                         <View className="w-full border-b border-border-soft overflow-hidden">
-                          <FileThumb entry={e} size={150} />
+                          <FileThumb entry={e} size={150} width={cardWidth} />
                         </View>
                         <View className="px-2.5 py-2">
                           <View className="flex-row items-center gap-1.5">
@@ -638,7 +643,7 @@ export default function ArchivosScreen() {
   );
 }
 
-function FolderRow({ name, count, badge, onOpen, canManage, selected, selectionMode, onToggleSelect, coverPath }: {
+function FolderRow({ name, count, badge, onOpen, canManage, selected, selectionMode, onToggleSelect, coverPath, coverTf }: {
   name: string; count?: number; badge?: { label: string; team: boolean }; onOpen: () => void;
   canManage: boolean;
   // Everything selectable now, top-level folders included: edit and delete
@@ -647,6 +652,8 @@ function FolderRow({ name, count, badge, onOpen, canManage, selected, selectionM
   selected?: boolean; selectionMode?: boolean; onToggleSelect?: () => void;
   /** Hand-picked folder picture (migration 214); null falls back to the icon. */
   coverPath?: string | null;
+  /** Its framing (migration 216). */
+  coverTf?: unknown;
 }) {
   const { t: full } = useLang();
   const t = full.dashboard.files;
@@ -671,7 +678,7 @@ function FolderRow({ name, count, badge, onOpen, canManage, selected, selectionM
         className="flex-row items-center gap-3 flex-1"
       >
         <View className="w-9 h-9 rounded-lg bg-primary/10 items-center justify-center overflow-hidden">
-          {coverPath ? <CoverImage path={coverPath} /> : <Folder size={17} color={c.primary} />}
+          {coverPath ? <CoverImage path={coverPath} transform={coverTf} size={36} /> : <Folder size={17} color={c.primary} />}
         </View>
         <View className="flex-1">
           <View className="flex-row items-center gap-2">
@@ -734,6 +741,7 @@ function FileSheets({
   const [fCoverRemoved, setFCoverRemoved] = useState(false);
   const [fCoverSigned, setFCoverSigned] = useState<string | null>(null);
   const existingFolderCover = folderEditing?.cover_path ?? null;
+  const [fCoverTf, setFCoverTf] = useState<CoverTransform>(() => coverTransform(folderEditing?.cover_transform, 'photo'));
 
   useEffect(() => {
     let cancelled = false;
@@ -748,11 +756,17 @@ function FileSheets({
   /** Resolve the cover column for a row that now definitely exists. Uploading
    *  after the insert means a cancelled save leaves no orphan in the bucket. */
   const applyFolderCover = async (table: 'file_categories' | 'file_folders', id: string) => {
+    // Null rather than a row of no-op numbers, so "unadjusted" is one value.
+    const tf = isDefaultCoverTransform(fCoverTf, 'photo') ? null : fCoverTf;
     if (fCoverRemoved && !fCoverUri) {
-      await supabase.from(table).update({ cover_path: null }).eq('id', id);
+      await supabase.from(table).update({ cover_path: null, cover_transform: null }).eq('id', id);
       return;
     }
-    if (!fCoverUri) return;
+    if (!fCoverUri) {
+      // Re-framing an existing picture writes only the transform — no upload.
+      if (existingFolderCover) await supabase.from(table).update({ cover_transform: tf }).eq('id', id);
+      return;
+    }
     try {
       const resp = await fetch(fCoverUri);
       const bytes = await resp.arrayBuffer();
@@ -760,7 +774,7 @@ function FileSheets({
       const { error } = await supabase.storage.from(FILES_BUCKET)
         .upload(path, bytes, { contentType: 'image/jpeg', upsert: true });
       if (error) return; // best-effort: never fail a save over a picture
-      await supabase.from(table).update({ cover_path: path }).eq('id', id);
+      await supabase.from(table).update({ cover_path: path, cover_transform: tf }).eq('id', id);
     } catch {
       /* cover is best-effort */
     }
@@ -784,6 +798,7 @@ function FileSheets({
   const [coverRemoved, setCoverRemoved] = useState(false);
   const [coverSignedUrl, setCoverSignedUrl] = useState<string | null>(null);
   const existingCover = fileEditing?.thumbnail_path ?? null;
+  const [coverTf, setCoverTf] = useState<CoverTransform>(() => coverTransform(fileEditing?.cover_transform, 'document'));
 
   useEffect(() => {
     let cancelled = false;
@@ -833,14 +848,20 @@ function FileSheets({
   /** Upload the picked image and point the row at it. Best-effort: a cover
    *  failure must not fail a save whose file/link already went through. */
   const applyCover = async (entryId: string) => {
+    const tf = isDefaultCoverTransform(coverTf, 'document') ? null : coverTf;
     if (coverRemoved && !coverUri) {
       // Null the status too, so a PDF becomes eligible for auto-generation again.
       await supabase.from('file_entries')
-        .update({ thumbnail_path: null, thumbnail_status: null, thumbnail_manual: false })
+        .update({ thumbnail_path: null, thumbnail_status: null, thumbnail_manual: false, cover_transform: null })
         .eq('id', entryId);
       return;
     }
-    if (!coverUri) return;
+    if (!coverUri) {
+      // Re-framing an existing cover (or a generated thumbnail) writes only the
+      // transform — no upload, and a generated one stays generated.
+      if (existingCover) await supabase.from('file_entries').update({ cover_transform: tf }).eq('id', entryId);
+      return;
+    }
     try {
       const resp = await fetch(coverUri);
       const bytes = await resp.arrayBuffer();
@@ -849,7 +870,7 @@ function FileSheets({
         .upload(path, bytes, { contentType: 'image/jpeg', upsert: true });
       if (upErr) return;
       await supabase.from('file_entries')
-        .update({ thumbnail_path: path, thumbnail_status: 'ready', thumbnail_manual: true })
+        .update({ thumbnail_path: path, thumbnail_status: 'ready', thumbnail_manual: true, cover_transform: tf })
         .eq('id', entryId);
     } catch {
       /* cover is best-effort */
@@ -1059,18 +1080,23 @@ function FileSheets({
                     add target. Tapping opens the camera/library/paste chooser,
                     same as job photos. */}
                 {fCoverUri || (fCoverSigned && !fCoverRemoved) ? (
-                  <View className="w-24 h-24 rounded-xl overflow-hidden bg-border-soft">
-                    <Pressable onPress={() => openCoverPicker('folder')} className="w-full h-full active:opacity-80">
-                      <Image source={{ uri: (fCoverUri ?? fCoverSigned) as string }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                    </Pressable>
+                  <View className="flex-row items-start gap-3">
+                    <CoverEditor
+                      uri={(fCoverUri ?? fCoverSigned) as string}
+                      transform={fCoverTf}
+                      onChange={setFCoverTf}
+                      width={104}
+                      height={104}
+                      kind="photo"
+                      rotateLabel="90°"
+                      removeLabel={t.coverRemove}
+                      onRemove={() => { setFCoverUri(null); setFCoverRemoved(true); }}
+                    />
                     <Pressable
-                      onPress={() => { setFCoverUri(null); setFCoverRemoved(true); }}
-                      hitSlop={8}
-                      accessibilityLabel={t.coverRemove}
-                      className="absolute top-1 right-1 w-6 h-6 rounded-full items-center justify-center"
-                      style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+                      onPress={() => openCoverPicker('folder')}
+                      className="px-3 py-2 rounded-xl border border-border bg-card active:opacity-80"
                     >
-                      <X size={13} color="#FFFFFF" />
+                      <Text className="text-xs font-semibold text-ink">{t.coverChange}</Text>
                     </Pressable>
                   </View>
                 ) : (
@@ -1122,18 +1148,23 @@ function FileSheets({
                 {/* 3:4 tile — a document cover is portrait. Tapping opens the
                     camera/library/paste chooser, same as job photos. */}
                 {coverUri || (coverSignedUrl && !coverRemoved) ? (
-                  <View className="w-24 rounded-xl overflow-hidden bg-border-soft" style={{ height: 128 }}>
-                    <Pressable onPress={() => openCoverPicker('entry')} className="w-full h-full active:opacity-80">
-                      <Image source={{ uri: (coverUri ?? coverSignedUrl) as string }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                    </Pressable>
+                  <View className="flex-row items-start gap-3">
+                    <CoverEditor
+                      uri={(coverUri ?? coverSignedUrl) as string}
+                      transform={coverTf}
+                      onChange={setCoverTf}
+                      width={104}
+                      height={139}
+                      kind="document"
+                      rotateLabel="90°"
+                      removeLabel={t.coverRemove}
+                      onRemove={() => { setCoverUri(null); setCoverRemoved(true); }}
+                    />
                     <Pressable
-                      onPress={() => { setCoverUri(null); setCoverRemoved(true); }}
-                      hitSlop={8}
-                      accessibilityLabel={t.coverRemove}
-                      className="absolute top-1 right-1 w-6 h-6 rounded-full items-center justify-center"
-                      style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+                      onPress={() => openCoverPicker('entry')}
+                      className="px-3 py-2 rounded-xl border border-border bg-card active:opacity-80"
                     >
-                      <X size={13} color="#FFFFFF" />
+                      <Text className="text-xs font-semibold text-ink">{t.coverChange}</Text>
                     </Pressable>
                   </View>
                 ) : (
@@ -1285,9 +1316,139 @@ function FileSheets({
 }
 
 
+/**
+ * Cover preview you can drag to re-frame and rotate. The image is never
+ * modified — the framing is stored beside it (migration 216) and applied at
+ * render, so it stays adjustable and the original is kept.
+ *
+ * Dragging moves the FOCAL POINT, inverted, so the gesture reads the right way
+ * round: drag downward and what was below comes into view.
+ */
+function CoverEditor({ uri, transform, onChange, width, height, kind, onRemove, rotateLabel, removeLabel }: {
+  uri: string;
+  transform: CoverTransform;
+  onChange: (t: CoverTransform) => void;
+  width: number;
+  height: number;
+  kind: 'document' | 'photo';
+  onRemove: () => void;
+  rotateLabel: string;
+  removeLabel: string;
+}) {
+  const c = useThemeColors();
+  const move = (lx: number, ly: number) => {
+    const x = 1 - Math.min(1, Math.max(0, lx / width));
+    const y = 1 - Math.min(1, Math.max(0, ly / height));
+    onChange({ ...transform, x, y });
+  };
+  return (
+    <View>
+      <View
+        style={{ width, height, borderRadius: 12, overflow: 'hidden' }}
+        // Responder rather than Pressable: we want the continuous drag, and a
+        // Pressable would only report the final tap.
+        onStartShouldSetResponder={() => true}
+        onMoveShouldSetResponder={() => true}
+        onResponderGrant={(e) => move(e.nativeEvent.locationX, e.nativeEvent.locationY)}
+        onResponderMove={(e) => move(e.nativeEvent.locationX, e.nativeEvent.locationY)}
+      >
+        <FramedCover uri={uri} transform={transform} width={width} height={height} kind={kind} />
+        <Pressable
+          onPress={onRemove}
+          hitSlop={8}
+          accessibilityLabel={removeLabel}
+          className="absolute top-1 right-1 w-6 h-6 rounded-full items-center justify-center"
+          style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+        >
+          <X size={13} color="#FFFFFF" />
+        </Pressable>
+      </View>
+      <Pressable
+        onPress={() => onChange(rotateCover(transform))}
+        className="flex-row items-center gap-1.5 mt-1.5 px-2.5 py-1.5 rounded-lg border border-border self-start active:opacity-70"
+      >
+        <RotateCw size={13} color={c.muted} />
+        <Text className="text-xs font-semibold text-muted">{rotateLabel}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/**
+ * A cover image framed inside a fixed box (migration 216).
+ *
+ * React Native has no object-position, so the maths is explicit: measure the
+ * image, scale it to cover the box, then offset by the focal point. Rotation is
+ * applied to an inner Image whose dimensions are the unrotated ones — rotating
+ * about the centre then lands it exactly on the outer box.
+ *
+ * Until the size resolves it falls back to plain `cover`, so the picture always
+ * appears immediately and only nudges into its framing a moment later.
+ */
+function FramedCover({ uri, transform, width, height, kind }: {
+  uri: string;
+  transform: unknown;
+  width: number;
+  height: number;
+  kind: 'document' | 'photo';
+}) {
+  const [dim, setDim] = useState<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setDim(null);
+    Image.getSize(uri, (w, h) => { if (!cancelled) setDim({ w, h }); }, () => {});
+    return () => { cancelled = true; };
+  }, [uri]);
+
+  const t = coverTransform(transform, kind);
+  if (!dim || dim.w <= 0 || dim.h <= 0) {
+    return <Image source={{ uri }} style={{ width, height }} resizeMode="cover" />;
+  }
+
+  const swap = t.rot === 90 || t.rot === 270;
+  // Footprint the rotated image occupies, before scaling.
+  const sw = swap ? dim.h : dim.w;
+  const sh = swap ? dim.w : dim.h;
+  const scale = Math.max(width / sw, height / sh);   // cover, never letterbox
+  const dw = sw * scale;
+  const dh = sh * scale;
+
+  return (
+    <View style={{ width, height, overflow: 'hidden' }}>
+      <View
+        style={{
+          position: 'absolute',
+          left: -(dw - width) * t.x,
+          top: -(dh - height) * t.y,
+          width: dw,
+          height: dh,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Image
+          source={{ uri }}
+          style={{
+            width: dim.w * scale,
+            height: dim.h * scale,
+            transform: [{ rotate: `${t.rot}deg` }],
+          }}
+          resizeMode="stretch"
+        />
+      </View>
+    </View>
+  );
+}
+
 /** A stored image resolved to a signed URL. Used for folder covers, which are
  *  always hand-picked — a folder has no contents to render a preview from. */
-function CoverImage({ path }: { path: string }) {
+function CoverImage({ path, transform, size = 44 }: {
+  path: string;
+  /** Raw cover_transform from the row (migration 216). */
+  transform?: unknown;
+  /** Box edge in px — FramedCover needs real numbers to do the cover maths. */
+  size?: number;
+}) {
   const supabase = createSupabaseClient();
   const c = useThemeColors();
   const [src, setSrc] = useState<string | null>(null);
@@ -1298,18 +1459,20 @@ function CoverImage({ path }: { path: string }) {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path]);
-  if (!src) return <Folder size={44} color={c.primary} />;
-  return <Image source={{ uri: src }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />;
+  if (!src) return <Folder size={Math.min(44, size)} color={c.primary} />;
+  return <FramedCover uri={src} transform={transform} width={size} height={size} kind="photo" />;
 }
 
 /** Folder as a grid tile. Same footprint as a file card so the two line up in
  *  one grid — a folder-only view has to visibly change when you flip the
  *  toggle, or the control reads as broken. */
-function FolderTile({ name, count, onOpen, selected, selectionMode, onToggleSelect, canManage, coverPath }: {
+function FolderTile({ name, count, onOpen, selected, selectionMode, onToggleSelect, canManage, coverPath, coverTf }: {
   name: string; count: number; onOpen: () => void;
   selected?: boolean; selectionMode?: boolean; onToggleSelect?: () => void; canManage: boolean;
   /** Hand-picked folder picture (migration 214); null falls back to the icon. */
   coverPath?: string | null;
+  /** Its framing (migration 216). */
+  coverTf?: unknown;
 }) {
   const { t: full } = useLang();
   const t = full.dashboard.files;
@@ -1323,7 +1486,7 @@ function FolderTile({ name, count, onOpen, selected, selectionMode, onToggleSele
       className={`rounded-xl border overflow-hidden ${selected ? 'border-primary bg-primary/5' : 'border-border-soft bg-card'}`}
     >
       <View style={{ height: 150 }} className="w-full items-center justify-center overflow-hidden bg-primary/5 border-b border-border-soft">
-        {coverPath ? <CoverImage path={coverPath} /> : <Folder size={44} color={c.primary} />}
+        {coverPath ? <CoverImage path={coverPath} transform={coverTf} size={150} /> : <Folder size={44} color={c.primary} />}
       </View>
       <View className="px-2.5 py-2">
         <Text className="text-xs font-medium text-ink" numberOfLines={1}>{name}</Text>
@@ -1346,7 +1509,7 @@ function FolderTile({ name, count, onOpen, selected, selectionMode, onToggleSele
  * Falls back to the type icon when there is no preview: a link, a format that
  * cannot be rasterized, or a render that has not run yet.
  */
-function FileThumb({ entry, size }: { entry: FileEntry; size: number }) {
+function FileThumb({ entry, size, width }: { entry: FileEntry; size: number; width: number }) {
   const supabase = createSupabaseClient();
   const c = useThemeColors();
   const [src, setSrc] = useState<string | null>(null);
@@ -1361,11 +1524,9 @@ function FileThumb({ entry, size }: { entry: FileEntry; size: number }) {
   }, [entry.thumbnail_path]);
 
   if (src) {
-    return (
-      // resizeMode cover + top alignment: the useful part of a cover page is
-      // its masthead, so crop from the bottom.
-      <Image source={{ uri: src }} style={{ width: '100%', height: size }} resizeMode="cover" />
-    );
+    // Framing comes from the row (migration 216); a document defaults to the
+    // top edge, since a cover page's masthead is the useful part.
+    return <FramedCover uri={src} transform={entry.cover_transform} width={width} height={size} kind="document" />;
   }
   return (
     <View style={{ height: size }} className="w-full items-center justify-center bg-surface">

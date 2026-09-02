@@ -85,8 +85,8 @@ begin
   for r in select * from public.file_categories where business_id = p_source order by sort_order loop
     declare nid uuid := gen_random_uuid();
     begin
-      insert into public.file_categories (id, business_id, name, icon, color, crew_visible, cover_path, sort_order, created_at, updated_at)
-      values (nid, p_target, r.name, r.icon, r.color, r.crew_visible, public.remap_files_path(r.cover_path, p_source, p_target), r.sort_order, now(), now());
+      insert into public.file_categories (id, business_id, name, icon, color, crew_visible, cover_path, cover_transform, sort_order, created_at, updated_at)
+      values (nid, p_target, r.name, r.icon, r.color, r.crew_visible, public.remap_files_path(r.cover_path, p_source, p_target), r.cover_transform, r.sort_order, now(), now());
       cat_map := cat_map || jsonb_build_object(r.id::text, nid::text);
       n_cat := n_cat + 1;
     end;
@@ -99,13 +99,13 @@ begin
 
   -- ── 2b) Insert folders (remap category_id + parent_folder_id) ─────────────
   for r in select * from public.file_folders where business_id = p_source order by sort_order loop
-    insert into public.file_folders (id, business_id, category_id, parent_folder_id, name, cover_path, sort_order, created_at)
+    insert into public.file_folders (id, business_id, category_id, parent_folder_id, name, cover_path, cover_transform, sort_order, created_at)
     values (
       (fold_map ->> r.id::text)::uuid,
       p_target,
       (cat_map ->> r.category_id::text)::uuid,
       case when r.parent_folder_id is null then null else (fold_map ->> r.parent_folder_id::text)::uuid end,
-      r.name, public.remap_files_path(r.cover_path, p_source, p_target), r.sort_order, now()
+      r.name, public.remap_files_path(r.cover_path, p_source, p_target), r.cover_transform, r.sort_order, now()
     );
     n_fold := n_fold + 1;
   end loop;
@@ -114,7 +114,7 @@ begin
   for r in select * from public.file_entries where business_id = p_source loop
     insert into public.file_entries (id, business_id, category_id, folder_id, title, kind,
       storage_path, file_name, file_size, mime_type, url, crew_visible, sort_order, created_at,
-      thumbnail_path, thumbnail_manual, thumbnail_status)
+      thumbnail_path, thumbnail_manual, thumbnail_status, cover_transform)
     values (
       gen_random_uuid(), p_target,
       case when r.category_id is null then null else (cat_map ->> r.category_id::text)::uuid end,
@@ -131,7 +131,10 @@ begin
       -- strand the row, since the backfill skips anything that already has one.
       case when r.thumbnail_manual then public.remap_files_path(r.thumbnail_path, p_source, p_target) else null end,
       coalesce(r.thumbnail_manual, false),
-      case when r.thumbnail_manual then 'ready' else null end
+      case when r.thumbnail_manual then 'ready' else null end,
+      -- Framing (migration 216) travels with a hand-picked cover; a generated
+      -- thumbnail is re-rendered by the target, so its framing resets too.
+      case when r.thumbnail_manual then r.cover_transform else null end
     );
     n_entry := n_entry + 1;
   end loop;

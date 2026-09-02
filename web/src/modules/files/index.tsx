@@ -12,7 +12,7 @@ import { useDataFingerprint } from '@amixos/shared/lib/dataFingerprint';
 import { SkeletonList } from '@amixos/shared/ui/Skeleton';
 import {
   FolderOpen, FolderPlus, FilePlus2, Folder, ChevronRight, ChevronLeft, FileText, Link2,
-  LayoutGrid, List as ListIcon, ImagePlus, ListChecks,
+  LayoutGrid, List as ListIcon, ImagePlus, ListChecks, RotateCw,
   Trash2, Pencil, ExternalLink, Upload, Lock, Users, Check, FolderInput, X, Home,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -29,6 +29,8 @@ import {
   type FilesTree,
   FILES_BUCKET, FILE_MAX_BYTES, requestThumbnail, backfillThumbnails,
   coverStoragePath, downscaleImage,
+  coverTransform, rotateCover, coverImageStyle, isDefaultCoverTransform,
+  type CoverTransform,
   type FileCategory, type FileFolder, type FileEntry, type FileEntryKind,
 } from '@amixos/shared/lib/files';
 import { signedUrl } from '@amixos/shared/lib/storageUrls';
@@ -530,7 +532,7 @@ export default function FilesModule() {
             <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {atHome && categories.map(c => (
                 <FolderTile key={c.id} name={c.name} count={folderItemCount(c.id, null)}
-                  onOpen={() => enterCategory(c)} canManage={canManage} coverPath={c.cover_path}
+                  onOpen={() => enterCategory(c)} canManage={canManage} coverPath={c.cover_path} coverTf={c.cover_transform}
                   selected={selectedCategories.has(c.id)} selectionMode={selectionMode}
                   onToggleSelect={() => toggleCategory(c.id)} />
               ))}
@@ -538,7 +540,7 @@ export default function FilesModule() {
                 <FolderTile key={f.id} name={f.name} count={folderItemCount(f.category_id, f.id)}
                   onOpen={() => enterFolder(f)} canManage={canManage}
                   selected={selectedFolders.has(f.id)} selectionMode={selectionMode}
-                  onToggleSelect={() => toggleFolder(f.id)} coverPath={f.cover_path} />
+                  onToggleSelect={() => toggleFolder(f.id)} coverPath={f.cover_path} coverTf={f.cover_transform} />
               ))}
             </div>
           )}
@@ -552,7 +554,7 @@ export default function FilesModule() {
               badge={c.crew_visible ? { label: t.crewBadge, team: true } : { label: t.officeOnlyBadge, team: false }}
               onOpen={() => enterCategory(c)}
               canManage={canManage}
-              coverPath={c.cover_path}
+              coverPath={c.cover_path} coverTf={c.cover_transform}
               selected={selectedCategories.has(c.id)}
               selectionMode={selectionMode}
               onToggleSelect={() => toggleCategory(c.id)}
@@ -570,7 +572,7 @@ export default function FilesModule() {
               selected={selectedFolders.has(f.id)}
               selectionMode={selectionMode}
               onToggleSelect={() => toggleFolder(f.id)}
-              coverPath={f.cover_path}
+              coverPath={f.cover_path} coverTf={f.cover_transform}
             />
           ))}
 
@@ -653,12 +655,14 @@ export default function FilesModule() {
   );
 }
 
-function FolderCard({ name, count, badge, onOpen, canManage, selected, selectionMode, onToggleSelect, coverPath }: {
+function FolderCard({ name, count, badge, onOpen, canManage, selected, selectionMode, onToggleSelect, coverPath, coverTf }: {
   name: string; count?: number; badge?: { label: string; team: boolean }; onOpen: () => void;
   canManage: boolean;
   selected?: boolean; selectionMode?: boolean; onToggleSelect?: () => void;
   /** Hand-picked folder picture (migration 214); null falls back to the icon. */
   coverPath?: string | null;
+  /** Its framing (migration 216). */
+  coverTf?: unknown;
 }) {
   const { t: full } = useLang();
   const t = full.dashboard.files;
@@ -679,7 +683,7 @@ function FolderCard({ name, count, badge, onOpen, canManage, selected, selection
       >
         <div className="w-9 h-9 rounded-lg bg-primary/10 overflow-hidden flex items-center justify-center shrink-0">
           {coverPath
-            ? <CoverImage path={coverPath} className="w-full h-full object-cover" />
+            ? <CoverImage path={coverPath} transform={coverTf} aspect={1} />
             : <Folder size={17} className="text-primary" />}
         </div>
         <div className="min-w-0">
@@ -741,11 +745,13 @@ function FileRow({ entry, officeOnly, metaLabel, canManage, selected, selectionM
 /** Folder as a grid tile. Same footprint as a file card so the two line up in
  *  one grid — a folder-only view has to visibly change when you flip the
  *  toggle, or the control reads as broken. */
-function FolderTile({ name, count, onOpen, canManage, selected, selectionMode, onToggleSelect, coverPath }: {
+function FolderTile({ name, count, onOpen, canManage, selected, selectionMode, onToggleSelect, coverPath, coverTf }: {
   name: string; count: number; onOpen: () => void; canManage: boolean;
   selected?: boolean; selectionMode?: boolean; onToggleSelect?: () => void;
   /** Hand-picked folder picture (migration 214); null falls back to the icon. */
   coverPath?: string | null;
+  /** Its framing (migration 216). */
+  coverTf?: unknown;
 }) {
   const { t: full } = useLang();
   const t = full.dashboard.files;
@@ -756,7 +762,7 @@ function FolderTile({ name, count, onOpen, canManage, selected, selectionMode, o
       <button onClick={() => (inSelect && onToggleSelect ? onToggleSelect() : onOpen())} className="block w-full text-left">
         <div className="aspect-[3/4] w-full overflow-hidden flex items-center justify-center bg-primary/5 border-b border-border-soft">
           {coverPath
-            ? <CoverImage path={coverPath} />
+            ? <CoverImage path={coverPath} transform={coverTf} aspect={1} />
             : <Folder size={44} className="text-primary" />}
         </div>
         <div className="px-2.5 py-2">
@@ -776,9 +782,97 @@ function FolderTile({ name, count, onOpen, canManage, selected, selectionMode, o
   );
 }
 
+/**
+ * A cover preview you can drag to re-frame and rotate. The image is never
+ * modified — the framing is stored alongside it (migration 216) and applied at
+ * render, so it stays adjustable and the original is preserved.
+ *
+ * Dragging moves the FOCAL POINT, not the image, so the gesture reads the right
+ * way round: drag down and the part you drag toward comes into view.
+ */
+function CoverEditor({ src, transform, onChange, aspect, onRemove, onReplace, changeLabel, removeLabel }: {
+  src: string;
+  transform: CoverTransform;
+  onChange: (t: CoverTransform) => void;
+  /** width / height of the frame. */
+  aspect: number;
+  onRemove: () => void;
+  onReplace: () => void;
+  changeLabel: string;
+  removeLabel: string;
+}) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+  const st = coverImageStyle(transform, aspect);
+
+  const moveTo = (e: React.PointerEvent) => {
+    const box = boxRef.current?.getBoundingClientRect();
+    if (!box) return;
+    // Invert: dragging toward the bottom should reveal what is below, which
+    // means moving the focal point up.
+    const x = 1 - Math.min(1, Math.max(0, (e.clientX - box.left) / box.width));
+    const y = 1 - Math.min(1, Math.max(0, (e.clientY - box.top) / box.height));
+    onChange({ ...transform, x, y });
+  };
+
+  return (
+    <div>
+      <div
+        ref={boxRef}
+        onPointerDown={e => { dragging.current = true; (e.target as HTMLElement).setPointerCapture(e.pointerId); moveTo(e); }}
+        onPointerMove={e => { if (dragging.current) moveTo(e); }}
+        onPointerUp={() => { dragging.current = false; }}
+        onPointerCancel={() => { dragging.current = false; }}
+        className="relative rounded-xl overflow-hidden bg-border-soft cursor-move touch-none select-none"
+        style={{ aspectRatio: String(aspect) }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt=""
+          draggable={false}
+          className="w-full h-full pointer-events-none"
+          style={{ objectFit: 'cover', objectPosition: st.objectPosition, transform: st.transform }}
+        />
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={removeLabel}
+          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/55 text-white flex items-center justify-center hover:bg-red-500 transition-colors"
+        >
+          <X size={13} />
+        </button>
+      </div>
+      <div className="flex items-center gap-2 mt-1.5">
+        <button
+          type="button"
+          onClick={() => onChange(rotateCover(transform))}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs font-semibold text-muted hover:text-primary hover:border-primary/40"
+        >
+          <RotateCw size={13} /> 90°
+        </button>
+        <button
+          type="button"
+          onClick={onReplace}
+          className="px-2.5 py-1.5 rounded-lg border border-border text-xs font-semibold text-muted hover:text-primary hover:border-primary/40"
+        >
+          {changeLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** A stored image resolved to a signed URL. Used for folder covers, which are
  *  always hand-picked (there is nothing to render a folder from). */
-function CoverImage({ path, className = 'w-full h-full object-cover object-top' }: { path: string; className?: string }) {
+function CoverImage({ path, className = 'w-full h-full', transform, aspect = 1 }: {
+  path: string;
+  className?: string;
+  /** Raw cover_transform from the row; null renders the default framing. */
+  transform?: unknown;
+  /** width / height of the box, so a rotated image is scaled to still cover. */
+  aspect?: number;
+}) {
   const supabase = createSupabaseClient();
   const [src, setSrc] = useState<string | null>(null);
   const [broken, setBroken] = useState(false);
@@ -791,8 +885,18 @@ function CoverImage({ path, className = 'w-full h-full object-cover object-top' 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path]);
   if (!src || broken) return <Folder size={44} className="text-primary" />;
+  const st = coverImageStyle(coverTransform(transform, 'photo'), aspect);
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={src} alt="" loading="lazy" onError={() => setBroken(true)} className={className} />;
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      onError={() => setBroken(true)}
+      className={className}
+      style={{ objectFit: 'cover', objectPosition: st.objectPosition, transform: st.transform }}
+    />
+  );
 }
 
 /**
@@ -803,7 +907,7 @@ function CoverImage({ path, className = 'w-full h-full object-cover object-top' 
  * Falls back to the type icon whenever there is no preview: a link, a format
  * poppler cannot rasterize, or a render that has not happened yet.
  */
-function FileThumb({ entry }: { entry: FileEntry }) {
+function FileThumb({ entry, aspect = 3 / 4 }: { entry: FileEntry; aspect?: number }) {
   const supabase = createSupabaseClient();
   const [src, setSrc] = useState<string | null>(null);
   const [broken, setBroken] = useState(false);
@@ -821,15 +925,17 @@ function FileThumb({ entry }: { entry: FileEntry }) {
   }, [entry.thumbnail_path]);
 
   if (src && !broken) {
+    // Framing comes from the row (migration 216); the default for a document is
+    // the top edge, since a cover page's masthead is the useful part.
+    const st = coverImageStyle(coverTransform(entry.cover_transform, 'document'), aspect);
     return (
-      // object-top, not object-cover-centred: the useful part of a cover page
-      // is its masthead, so crop from the bottom.
       <img
         src={src}
         alt=""
         loading="lazy"
         onError={() => setBroken(true)}
-        className="w-full h-full object-cover object-top"
+        className="w-full h-full"
+        style={{ objectFit: 'cover', objectPosition: st.objectPosition, transform: st.transform }}
       />
     );
   }
@@ -908,6 +1014,18 @@ function FolderModal({ editing, atHome, categoryId, parentFolderId, businessId, 
   const [coverRemoved, setCoverRemoved] = useState(false);
   const coverInput = useRef<HTMLInputElement>(null);
   const existingCover = editing?.cover_path ?? null;
+  // Framing (migration 216) — how the picture sits inside the square.
+  const [coverTf, setCoverTf] = useState<CoverTransform>(() => coverTransform(editing?.cover_transform, 'photo'));
+  // The editor needs a usable src, so an existing cover is resolved to a
+  // signed URL here rather than inside a render-only component.
+  const [existingCoverUrl, setExistingCoverUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!existingCover) { setExistingCoverUrl(null); return; }
+    void signedUrl(supabase, existingCover).then(u => { if (!cancelled) setExistingCoverUrl(u); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingCover]);
 
   const onPickCover = (f: File | null) => {
     if (!f || !f.type.startsWith('image/')) return;
@@ -921,17 +1039,25 @@ function FolderModal({ editing, atHome, categoryId, parentFolderId, businessId, 
   /** Resolve the cover column for a row that now definitely exists. Uploading
    *  after the insert means a cancelled save leaves no orphan in the bucket. */
   const applyCover = async (table: 'file_categories' | 'file_folders', id: string) => {
+    // Null rather than a row of no-op numbers, so "unadjusted" is one value.
+    const tf = isDefaultCoverTransform(coverTf, 'photo') ? null : coverTf;
     if (coverRemoved && !cover) {
-      await supabase.from(table).update({ cover_path: null }).eq('id', id);
+      await supabase.from(table).update({ cover_path: null, cover_transform: null }).eq('id', id);
       return;
     }
-    if (!cover) return;
-    const shrunk = await downscaleImage(cover);
+    if (!cover) {
+      // Re-framing an existing picture writes only the transform — no upload.
+      if (existingCover) await supabase.from(table).update({ cover_transform: tf }).eq('id', id);
+      return;
+    }
+    // Downscale keeps the ORIGINAL framing: the crop is applied at render, so
+    // shrinking must not bake anything in.
+    const shrunk = await downscaleImage(cover, 900);
     const path = coverStoragePath(businessId, id, 'jpg');
     const { error } = await supabase.storage.from(FILES_BUCKET)
       .upload(path, shrunk, { contentType: 'image/jpeg', upsert: true });
     if (error) return; // best-effort: never fail a save over a picture
-    await supabase.from(table).update({ cover_path: path }).eq('id', id);
+    await supabase.from(table).update({ cover_path: path, cover_transform: tf }).eq('id', id);
   };
 
   const save = async () => {
@@ -981,34 +1107,22 @@ function FolderModal({ editing, atHome, categoryId, parentFolderId, businessId, 
           {/* Same shape as the job-photos picker: one tile that is either the
               image (with a corner remove) or a dashed drop target. */}
           <div className="mt-1.5">
-            <div className="w-28">
-              {coverPreview || (existingCover && !coverRemoved) ? (
-                <div className="relative aspect-square rounded-xl overflow-hidden bg-border-soft">
-                  {coverPreview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={coverPreview} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <CoverImage path={existingCover!} className="w-full h-full object-cover" />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => coverInput.current?.click()}
-                    className="absolute inset-0"
-                    aria-label={t.coverChange}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCover(null);
-                      setCoverPreview(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
-                      setCoverRemoved(true);
-                    }}
-                    aria-label={t.coverRemove}
-                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/55 text-white flex items-center justify-center hover:bg-red-500 transition-colors"
-                  >
-                    <X size={13} />
-                  </button>
-                </div>
+            <div className="w-32">
+              {(coverPreview ?? (existingCover && !coverRemoved ? existingCoverUrl : null)) ? (
+                <CoverEditor
+                  src={(coverPreview ?? existingCoverUrl)!}
+                  transform={coverTf}
+                  onChange={setCoverTf}
+                  aspect={1}
+                  onReplace={() => coverInput.current?.click()}
+                  changeLabel={t.coverChange}
+                  removeLabel={t.coverRemove}
+                  onRemove={() => {
+                    setCover(null);
+                    setCoverPreview(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
+                    setCoverRemoved(true);
+                  }}
+                />
               ) : (
                 <button
                   type="button"
@@ -1066,6 +1180,17 @@ function FileModal({ editing, categoryId, folderId, businessId, userId, limitByt
   const [coverRemoved, setCoverRemoved] = useState(false);
   const coverInput = useRef<HTMLInputElement>(null);
   const existingCover = editing?.thumbnail_path ?? null;
+  // Framing (migration 216). Documents default to the top edge — the masthead
+  // is the useful part — so a generated page-1 thumbnail frames correctly.
+  const [coverTf, setCoverTf] = useState<CoverTransform>(() => coverTransform(editing?.cover_transform, 'document'));
+  const [existingCoverUrl, setExistingCoverUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!existingCover) { setExistingCoverUrl(null); return; }
+    void signedUrl(supabase, existingCover).then(u => { if (!cancelled) setExistingCoverUrl(u); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingCover]);
 
   const onPickCover = (f: File | null) => {
     if (!f || !f.type.startsWith('image/')) return;
@@ -1081,21 +1206,29 @@ function FileModal({ editing, categoryId, folderId, businessId, userId, limitByt
   /** Upload the picked image and point the row at it. Best-effort: a cover
    *  failure must not fail a save whose file/link already went through. */
   const applyCover = async (entryId: string) => {
+    const tf = isDefaultCoverTransform(coverTf, 'document') ? null : coverTf;
     if (coverRemoved && !cover) {
       // Null the status too, so a PDF becomes eligible for auto-generation again.
       await supabase.from('file_entries')
-        .update({ thumbnail_path: null, thumbnail_status: null, thumbnail_manual: false })
+        .update({ thumbnail_path: null, thumbnail_status: null, thumbnail_manual: false, cover_transform: null })
         .eq('id', entryId);
       return;
     }
-    if (!cover) return;
-    const shrunk = await downscaleImage(cover);
+    if (!cover) {
+      // Re-framing an existing cover (or a generated thumbnail) writes only the
+      // transform — no upload, and a generated one stays generated.
+      if (existingCover) await supabase.from('file_entries').update({ cover_transform: tf }).eq('id', entryId);
+      return;
+    }
+    // Downscale keeps the ORIGINAL framing: the crop is applied at render, so
+    // shrinking must not bake anything in.
+    const shrunk = await downscaleImage(cover, 900);
     const path = coverStoragePath(businessId, entryId, 'jpg');
     const { error: upErr } = await supabase.storage.from(FILES_BUCKET)
       .upload(path, shrunk, { contentType: 'image/jpeg', upsert: true });
     if (upErr) return;
     await supabase.from('file_entries')
-      .update({ thumbnail_path: path, thumbnail_status: 'ready', thumbnail_manual: true })
+      .update({ thumbnail_path: path, thumbnail_status: 'ready', thumbnail_manual: true, cover_transform: tf })
       .eq('id', entryId);
   };
 
@@ -1205,34 +1338,22 @@ function FileModal({ editing, categoryId, folderId, businessId, userId, limitByt
               image (with a corner remove) or a dashed drop target. 3:4, since a
               document cover is portrait. */}
           <div className="mt-1.5">
-            <div className="w-24">
-              {coverPreview || (existingCover && !coverRemoved) ? (
-                <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-border-soft">
-                  {coverPreview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={coverPreview} alt="" className="w-full h-full object-cover object-top" />
-                  ) : (
-                    <FileThumb entry={editing as FileEntry} />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => coverInput.current?.click()}
-                    className="absolute inset-0"
-                    aria-label={t.coverChange}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCover(null);
-                      setCoverPreview(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
-                      setCoverRemoved(true);
-                    }}
-                    aria-label={t.coverRemove}
-                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/55 text-white flex items-center justify-center hover:bg-red-500 transition-colors"
-                  >
-                    <X size={13} />
-                  </button>
-                </div>
+            <div className="w-28">
+              {(coverPreview ?? (existingCover && !coverRemoved ? existingCoverUrl : null)) ? (
+                <CoverEditor
+                  src={(coverPreview ?? existingCoverUrl)!}
+                  transform={coverTf}
+                  onChange={setCoverTf}
+                  aspect={3 / 4}
+                  onReplace={() => coverInput.current?.click()}
+                  changeLabel={t.coverChange}
+                  removeLabel={t.coverRemove}
+                  onRemove={() => {
+                    setCover(null);
+                    setCoverPreview(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
+                    setCoverRemoved(true);
+                  }}
+                />
               ) : (
                 <button
                   type="button"
