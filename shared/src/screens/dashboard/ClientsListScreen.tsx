@@ -567,8 +567,15 @@ export function ClientsListScreen({
         animationType="fade"
         onRequestClose={() => setGroupMenuOpen(false)}
       >
-        <Pressable onPress={() => setGroupMenuOpen(false)} className="flex-1 bg-black/40 justify-end">
-          <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-6 pt-3 pb-10">
+        {/* Backdrop is an absolute FIRST child and the card a plain sibling,
+            per the sheet contract in CLAUDE.md: nesting the card inside the
+            backdrop Pressable stops its ScrollView receiving drags. */}
+        <View className="flex-1 justify-end">
+          <Pressable
+            onPress={() => setGroupMenuOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+          />
+          <View className="bg-card rounded-t-3xl px-6 pt-3 pb-10">
             <View className="self-center w-10 h-1 rounded-full bg-border mb-4" />
             <View className="flex-row items-center justify-between mb-4">
               <Text className="text-base font-bold text-ink">{t.group.title}</Text>
@@ -597,8 +604,8 @@ export function ClientsListScreen({
                 })}
               </View>
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </RNModal>
     </View>
   );

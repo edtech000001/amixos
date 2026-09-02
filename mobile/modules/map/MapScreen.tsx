@@ -1320,12 +1320,15 @@ function SelectedPinCard({
 
   return (
     <RNModal visible transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable
-        onPress={onClose}
-        className="flex-1 bg-black/40 items-center justify-center px-6"
-      >
+      {/* Backdrop is an absolute FIRST child and the card a plain sibling,
+          per the sheet contract in CLAUDE.md: nesting the card inside the
+          backdrop Pressable stops its ScrollView receiving drags. */}
+      <View className="flex-1 items-center justify-center px-6">
         <Pressable
-          onPress={(e) => e.stopPropagation()}
+          onPress={onClose}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+        />
+        <View
           className="bg-card rounded-3xl w-full max-w-sm p-5"
           style={{
             shadowColor: '#000',
@@ -1443,8 +1446,8 @@ function SelectedPinCard({
             <Text className="text-sm font-semibold text-white">{openRecordLabel}</Text>
             <ArrowRight size={14} color="#FFFFFF" />
           </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </RNModal>
   );
 }

@@ -1075,8 +1075,15 @@ export default function JobDetailRoute() {
     return (
       <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
         <RNModal visible transparent animationType="fade" onRequestClose={goBack}>
-          <Pressable onPress={goBack} className="flex-1 bg-black/40 justify-end">
-            <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-5 pt-6 pb-10">
+          {/* Backdrop is an absolute FIRST child and the card a plain sibling,
+              per the sheet contract in CLAUDE.md: nesting the card inside the
+              backdrop Pressable stops its ScrollView receiving drags. */}
+          <View className="flex-1 justify-end">
+            <Pressable
+              onPress={goBack}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+            />
+            <View className="bg-card rounded-t-3xl px-5 pt-6 pb-10">
               <View className="flex-row items-center justify-between mb-4">
                 <Text className="text-xl font-bold text-ink">{t.notFound}</Text>
                 <Pressable onPress={goBack} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
@@ -1089,8 +1096,8 @@ export default function JobDetailRoute() {
               >
                 <Text className="text-base font-semibold text-white">OK</Text>
               </Pressable>
-            </Pressable>
-          </Pressable>
+            </View>
+          </View>
         </RNModal>
       </SafeAreaView>
     );
@@ -1988,12 +1995,15 @@ export default function JobDetailRoute() {
         animationType="fade"
         onRequestClose={() => setDelegateOpen(false)}
       >
-        <Pressable
-          onPress={() => setDelegateOpen(false)}
-          className="flex-1 justify-end bg-black/40"
-        >
-          {/* No-op press swallows taps on the sheet so they don't close it. */}
-          <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
+        {/* Backdrop is an absolute FIRST child and the card a plain sibling,
+            per the sheet contract in CLAUDE.md: nesting the card inside the
+            backdrop Pressable stops its ScrollView receiving drags. */}
+        <View className="flex-1 justify-end">
+          <Pressable
+            onPress={() => setDelegateOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+          />
+          <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>
@@ -2050,8 +2060,8 @@ export default function JobDetailRoute() {
                 {full.common.buttons.cancel}
               </Text>
             </Pressable>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </RNModal>
 
       {/* Location details modal */}
@@ -2061,12 +2071,15 @@ export default function JobDetailRoute() {
         animationType="fade"
         onRequestClose={() => setLocationModalOpen(false)}
       >
-        <Pressable
-          onPress={() => setLocationModalOpen(false)}
-          className="flex-1 justify-end bg-black/40"
-        >
+        {/* Backdrop is an absolute FIRST child and the card a plain sibling,
+            per the sheet contract in CLAUDE.md: nesting the card inside the
+            backdrop Pressable stops its ScrollView receiving drags. */}
+        <View className="flex-1 justify-end">
           <Pressable
-            onPress={() => {}}
+            onPress={() => setLocationModalOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+          />
+          <View
             className="bg-card rounded-t-3xl pt-3"
             style={{ maxHeight: '85%' }}
           >
@@ -2122,8 +2135,8 @@ export default function JobDetailRoute() {
                 <Text className="text-ink font-semibold text-sm">{td.shareLocation}</Text>
               </Pressable>
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </RNModal>
 
       {/* Sign on site — hand the device to the client; same proof record as

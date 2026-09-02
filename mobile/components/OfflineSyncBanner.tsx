@@ -159,13 +159,15 @@ function DetailSheet({
   // bar sliding up from the bottom — matches the rest of the app.
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable
-        onPress={onClose}
-        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}
-      >
+      {/* Backdrop is an absolute FIRST child and the card a plain sibling,
+          per the sheet contract in CLAUDE.md: nesting the card inside the
+          backdrop Pressable stops its ScrollView receiving drags. */}
+      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
         <Pressable
-          // Swallow taps so pressing the sheet body doesn't close it.
-          onPress={() => {}}
+          onPress={onClose}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+        />
+        <View
           style={{
             backgroundColor: '#fff',
             borderTopLeftRadius: 20,
@@ -244,8 +246,8 @@ function DetailSheet({
               </Pressable>
             </View>
           )}
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }

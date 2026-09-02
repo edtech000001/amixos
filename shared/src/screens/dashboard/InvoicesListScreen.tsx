@@ -572,8 +572,15 @@ export function InvoicesListScreen({
       animationType="fade"
       onRequestClose={() => setGroupMenuOpen(false)}
     >
-      <Pressable onPress={() => setGroupMenuOpen(false)} className="flex-1 justify-end bg-black/40">
-        <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-4 pt-3 pb-10">
+      {/* Backdrop is an absolute FIRST child and the card a plain sibling,
+          per the sheet contract in CLAUDE.md: nesting the card inside the
+          backdrop Pressable stops its ScrollView receiving drags. */}
+      <View className="flex-1 justify-end">
+        <Pressable
+          onPress={() => setGroupMenuOpen(false)}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+        />
+        <View className="bg-card rounded-t-3xl px-4 pt-3 pb-10">
           <View className="items-center mb-3">
             <View className="w-10 h-1 bg-border rounded-full" />
           </View>
@@ -603,8 +610,8 @@ export function InvoicesListScreen({
               );
             })}
           </View>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </RNModal>
 
     {/* New invoice — floating action, bottom-right thumb reach. Hidden when the

@@ -1292,12 +1292,15 @@ export function JobsListScreen({
         animationType="fade"
         onRequestClose={() => setNewMenuOpen(false)}
       >
-        <Pressable
-          onPress={() => setNewMenuOpen(false)}
-          className="flex-1 justify-end bg-black/40"
-        >
-          {/* No-op press swallows taps on the sheet so they don't close it. */}
-          <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
+        {/* Backdrop is an absolute FIRST child and the card a plain sibling,
+            per the sheet contract in CLAUDE.md: nesting the card inside the
+            backdrop Pressable stops its ScrollView receiving drags. */}
+        <View className="flex-1 justify-end">
+          <Pressable
+            onPress={() => setNewMenuOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+          />
+          <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>
@@ -1335,8 +1338,8 @@ export function JobsListScreen({
                 {full.common.buttons.cancel}
               </Text>
             </Pressable>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </RNModal>
 
     {/* New job/proposal — floating action, bottom-right thumb reach.

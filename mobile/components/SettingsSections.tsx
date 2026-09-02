@@ -3762,8 +3762,15 @@ export function AccountSection() {
 
       {/* Sign-out confirmation — bottom sheet (one-handed) */}
       <RNModal visible={logoutOpen} transparent animationType="fade" onRequestClose={() => setLogoutOpen(false)}>
-        <Pressable onPress={() => setLogoutOpen(false)} className="flex-1 bg-black/40 justify-end">
-          <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-5 pb-10 pt-4">
+        {/* Backdrop is an absolute FIRST child and the card a plain sibling,
+            per the sheet contract in CLAUDE.md: nesting the card inside the
+            backdrop Pressable stops its ScrollView receiving drags. */}
+        <View className="flex-1 justify-end">
+          <Pressable
+            onPress={() => setLogoutOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+          />
+          <View className="bg-card rounded-t-3xl px-5 pb-10 pt-4">
             <View className="items-center mb-4">
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>
@@ -3789,8 +3796,8 @@ export function AccountSection() {
                 <Text className="text-base font-semibold text-ink">{full.common.buttons.cancel}</Text>
               </Pressable>
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </RNModal>
     </View>
   );

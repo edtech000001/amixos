@@ -111,8 +111,15 @@ export function useUnsavedGuard(opts: {
 
   const unsavedSheet = (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
-      <Pressable onPress={() => setVisible(false)} className="flex-1 bg-black/40 justify-end">
-        <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-5 pt-6 pb-10">
+      {/* Backdrop is an absolute FIRST child and the card a plain sibling,
+          per the sheet contract in CLAUDE.md: nesting the card inside the
+          backdrop Pressable stops its ScrollView receiving drags. */}
+      <View className="flex-1 justify-end">
+        <Pressable
+          onPress={() => setVisible(false)}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+        />
+        <View className="bg-white rounded-t-3xl px-5 pt-6 pb-10">
           <Text className="text-xl font-bold text-gray-900">{s.title}</Text>
           <Text className="text-sm text-gray-500 mt-1.5 mb-5">{s.body}</Text>
           <Pressable onPress={discard} className="py-3.5 rounded-2xl bg-red-50 items-center active:opacity-80">
@@ -122,8 +129,8 @@ export function useUnsavedGuard(opts: {
             <Text className="text-base font-semibold text-gray-700">{s.stay}</Text>
           </Pressable>
           <View className="h-1" />
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 

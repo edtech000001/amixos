@@ -374,8 +374,15 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
 
       {/* Camera / library chooser */}
       <RNModal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
-        <Pressable onPress={() => setPickerOpen(false)} className="flex-1 justify-end bg-black/40">
-          <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
+        {/* Backdrop is an absolute FIRST child and the card a plain sibling,
+            per the sheet contract in CLAUDE.md: nesting the card inside the
+            backdrop Pressable stops its ScrollView receiving drags. */}
+        <View className="flex-1 justify-end">
+          <Pressable
+            onPress={() => setPickerOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+          />
+          <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>
@@ -410,8 +417,8 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
             >
               <Text className="text-lg font-semibold text-ink">{tc.buttons.cancel}</Text>
             </Pressable>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </RNModal>
 
       {/* Fullscreen viewer */}

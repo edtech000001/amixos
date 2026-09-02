@@ -197,8 +197,15 @@ function FontDropdown({ value, onChange, t }: { value: InvoiceFont; onChange: (f
         <ChevronDown size={18} color={c.faint} />
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable onPress={() => setOpen(false)} className="flex-1 bg-black/40 justify-center px-8">
-          <Pressable onPress={() => {}} className="bg-card rounded-2xl overflow-hidden" style={{ maxHeight: '75%' }}>
+        {/* Backdrop is an absolute FIRST child and the card a plain sibling,
+            per the sheet contract in CLAUDE.md: nesting the card inside the
+            backdrop Pressable stops its ScrollView receiving drags. */}
+        <View className="flex-1 justify-center px-8">
+          <Pressable
+            onPress={() => setOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+          />
+          <View className="bg-card rounded-2xl overflow-hidden" style={{ maxHeight: '75%' }}>
             <ScrollView showsVerticalScrollIndicator={false}>
               {ALL_FONTS.map(f => (
                 <Pressable key={f} onPress={() => { onChange(f); setOpen(false); }} className={`px-4 py-3 border-b border-border-soft ${value === f ? 'bg-primary/10' : ''}`}>
@@ -206,8 +213,8 @@ function FontDropdown({ value, onChange, t }: { value: InvoiceFont; onChange: (f
                 </Pressable>
               ))}
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </>
   );

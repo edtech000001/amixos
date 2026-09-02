@@ -157,8 +157,15 @@ export function ImportEquipmentPhotosModal({ open, businessId, onClose }: Props)
 
   return (
     <RNModal visible={open} transparent animationType="fade" onRequestClose={phase === 'uploading' ? () => {} : onClose}>
-      <Pressable onPress={phase === 'uploading' ? undefined : onClose} className="flex-1 bg-black/40 justify-end">
-        <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]" onPress={() => {}}>
+      {/* Backdrop is an absolute FIRST child and the card a plain sibling,
+          per the sheet contract in CLAUDE.md: nesting the card inside the
+          backdrop Pressable stops its ScrollView receiving drags. */}
+      <View className="flex-1 justify-end">
+        <Pressable
+          onPress={phase === 'uploading' ? undefined : onClose}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+        />
+        <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]">
           <Text className="text-lg font-bold text-ink mb-2">{tr('Importar fotos de equipo', 'Import equipment photos')}</Text>
           {phase === 'uploading' ? (
             <View className="flex-row items-center gap-3 mb-3">
@@ -246,8 +253,8 @@ export function ImportEquipmentPhotosModal({ open, businessId, onClose }: Props)
               </View>
             ) : null}
           </ScrollView>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </RNModal>
   );
 }

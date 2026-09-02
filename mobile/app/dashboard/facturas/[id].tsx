@@ -1245,8 +1245,15 @@ export default function FacturaDetailRoute() {
 
       {/* Move-to-another-invoice picker */}
       <RNModal visible={moveJobId !== null} transparent animationType="fade" onRequestClose={() => setMoveJobId(null)}>
-        <Pressable onPress={() => setMoveJobId(null)} className="flex-1 bg-black/40 justify-end">
-          <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-10" onPress={() => {}}>
+        {/* Backdrop is an absolute FIRST child and the card a plain sibling,
+            per the sheet contract in CLAUDE.md: nesting the card inside the
+            backdrop Pressable stops its ScrollView receiving drags. */}
+        <View className="flex-1 justify-end">
+          <Pressable
+            onPress={() => setMoveJobId(null)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+          />
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10">
             <View className="flex-row items-center justify-between mb-3">
               <Text className="text-lg font-bold text-ink">{jobsT.moveTitle}</Text>
               <Pressable onPress={() => setMoveJobId(null)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
@@ -1262,8 +1269,8 @@ export default function FacturaDetailRoute() {
                 </Pressable>
               ))
             )}
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </RNModal>
 
       {/* Add-completed-jobs picker */}

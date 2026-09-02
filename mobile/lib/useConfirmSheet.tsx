@@ -60,8 +60,15 @@ export function useConfirmSheet(): { confirm: (opts: ConfirmOptions) => void; co
 
   const confirmSheet = (
     <Modal visible={!!opts} transparent animationType="fade" onRequestClose={cancel}>
-      <Pressable onPress={cancel} className="flex-1 bg-black/40 justify-end">
-        <Pressable onPress={() => {}} className="bg-white rounded-t-3xl px-5 pt-6 pb-10">
+      {/* Backdrop is an absolute FIRST child and the card a plain sibling,
+          per the sheet contract in CLAUDE.md: nesting the card inside the
+          backdrop Pressable stops its ScrollView receiving drags. */}
+      <View className="flex-1 justify-end">
+        <Pressable
+          onPress={cancel}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+        />
+        <View className="bg-white rounded-t-3xl px-5 pt-6 pb-10">
           <Text className="text-xl font-bold text-gray-900">{opts?.title}</Text>
           {opts?.body ? (
             <Text className="text-sm text-gray-500 mt-1.5">{opts.body}</Text>
@@ -79,8 +86,8 @@ export function useConfirmSheet(): { confirm: (opts: ConfirmOptions) => void; co
               <Text className="text-base font-semibold text-gray-700">{opts?.cancelText ?? t.common.buttons.cancel}</Text>
             </Pressable>
           </View>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 

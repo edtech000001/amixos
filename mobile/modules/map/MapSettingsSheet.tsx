@@ -1205,9 +1205,15 @@ function OperatorPicker({
         </Text>
       </Pressable>
       <RNModal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable onPress={() => setOpen(false)} className="flex-1 bg-black/40 items-center justify-center px-6">
+        {/* Backdrop is an absolute FIRST child and the card a plain sibling,
+            per the sheet contract in CLAUDE.md: nesting the card inside the
+            backdrop Pressable stops its ScrollView receiving drags. */}
+        <View className="flex-1 items-center justify-center px-6">
           <Pressable
-            onPress={(e) => e.stopPropagation()}
+            onPress={() => setOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+          />
+          <View
             className="bg-card rounded-2xl w-full max-w-sm overflow-hidden"
           >
             <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ paddingBottom: 12 }}>
@@ -1232,8 +1238,8 @@ function OperatorPicker({
                 );
               })}
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </RNModal>
     </>
   );
@@ -1273,9 +1279,15 @@ function FieldDropdown({
         <ChevronDown size={12} color={c.muted} />
       </Pressable>
       <RNModal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable onPress={() => setOpen(false)} className="flex-1 bg-black/40 items-center justify-center px-6">
+        {/* Backdrop is an absolute FIRST child and the card a plain sibling,
+            per the sheet contract in CLAUDE.md: nesting the card inside the
+            backdrop Pressable stops its ScrollView receiving drags. */}
+        <View className="flex-1 items-center justify-center px-6">
           <Pressable
-            onPress={(e) => e.stopPropagation()}
+            onPress={() => setOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+          />
+          <View
             className="bg-card rounded-2xl w-full max-w-sm overflow-hidden"
             style={{
               shadowColor: '#000',
@@ -1343,8 +1355,8 @@ function FieldDropdown({
                 </View>
               ) : null}
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </RNModal>
     </>
   );
