@@ -1317,7 +1317,12 @@ export default function ClienteDetailRoute() {
             </Pressable>
           </View>
 
-          <ScrollView contentContainerClassName="px-5 pt-5 pb-12">
+          {/* A full-page scrolling form, so the right fix is to let the scroll
+              view inset itself for the keyboard rather than wrap it in a
+              KeyboardAvoidingView — that keeps every field reachable without
+              the layout jump a padding-based avoider causes on a long form.
+              iOS-only prop; Android already resizes the window. */}
+          <ScrollView contentContainerClassName="px-5 pt-5 pb-12" automaticallyAdjustKeyboardInsets>
             <View className="gap-3">
               <Input
                 label={td.contactModal.nameLabel}

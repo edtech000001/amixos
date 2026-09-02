@@ -1,6 +1,6 @@
 import { todayLocalISO } from '@amixos/shared/lib/format';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, View, Text, Pressable, TextInput, ScrollView, Modal as RNModal } from 'react-native';
+import { Alert, View, Text, Pressable, TextInput, ScrollView, Modal as RNModal, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { clearSectionVisitor } from '@/lib/sectionEntry';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -567,8 +567,20 @@ export default function TrabajosTab() {
 
       {/* Bulk move-to-client picker */}
       <RNModal visible={moveClientIds !== null} transparent animationType="slide" onRequestClose={() => setMoveClientIds(null)}>
-        <Pressable className="flex-1 bg-black/40 justify-end" onPress={() => setMoveClientIds(null)}>
-          <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-8" onPress={() => {}}>
+        {/* KeyboardAvoidingView: the search field sits at the bottom of the
+            screen, exactly where the keyboard opens. Backdrop is an absolute
+            FIRST child and the card a plain sibling — the nested-card +
+            no-op-onPress shape this replaces also stopped the results
+            ScrollView from receiving drags. */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          className="flex-1 justify-end"
+        >
+          <Pressable
+            onPress={() => setMoveClientIds(null)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+          />
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-8">
             <Text className="text-lg font-bold text-ink mb-3">
               {locale === 'es' ? `Mover ${moveClientIds?.length ?? 0} trabajo(s) a…` : `Move ${moveClientIds?.length ?? 0} job(s) to…`}
             </Text>
@@ -589,8 +601,8 @@ export default function TrabajosTab() {
                 </Pressable>
               ))}
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </KeyboardAvoidingView>
       </RNModal>
     </View>
   );

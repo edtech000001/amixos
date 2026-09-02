@@ -6,7 +6,7 @@
 // for both pin styling + weather settings.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Modal as RNModal, View, Text, Pressable, TextInput, ScrollView } from 'react-native';
+import { Modal as RNModal, View, Text, Pressable, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Plus, Trash2, ChevronDown, X, Search, Check } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -305,9 +305,19 @@ function EventPicker({
 
   return (
     <RNModal visible transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable onPress={onClose} className="flex-1 bg-black/40 items-center justify-center px-6">
+      {/* KeyboardAvoidingView so the search field stays visible once the
+          keyboard opens. Backdrop is an absolute FIRST child and the card a
+          plain sibling: nesting the card inside the backdrop Pressable is what
+          stops the ScrollView below from receiving drags. */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        className="flex-1 items-center justify-center px-6"
+      >
         <Pressable
-          onPress={(e) => e.stopPropagation()}
+          onPress={onClose}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+        />
+        <View
           className="bg-card rounded-2xl w-full max-w-sm overflow-hidden"
           style={{ maxHeight: '80%' }}
         >
@@ -373,8 +383,8 @@ function EventPicker({
               )
             )}
           </ScrollView>
-        </Pressable>
-      </Pressable>
+        </View>
+      </KeyboardAvoidingView>
     </RNModal>
   );
 }

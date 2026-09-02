@@ -450,7 +450,12 @@ export function MapSettingsSheet({
             <Text className="ml-1 flex-1 text-lg font-semibold text-ink">{t.settingsTitle}</Text>
           </View>
 
-          <ScrollView className="flex-1 bg-card" contentContainerClassName="px-5 py-5 pb-10 gap-5">
+          {/* automaticallyAdjustKeyboardInsets: full-page scrolling forms, so
+              the scroll view insets itself for the keyboard instead of being
+              wrapped in a KeyboardAvoidingView — every field stays reachable
+              without the layout jump padding-based avoidance causes on a long
+              form. iOS-only; Android resizes the window already. */}
+          <ScrollView className="flex-1 bg-card" contentContainerClassName="px-5 py-5 pb-10 gap-5" automaticallyAdjustKeyboardInsets>
             {/* Map type */}
             <View>
               <Text className="text-xs font-semibold text-faint uppercase mb-2">{t.mapTypeLabel}</Text>
@@ -1036,7 +1041,7 @@ function StylePickerModal({
             </Pressable>
           </View>
 
-          <ScrollView className="flex-1 bg-card" contentContainerClassName="px-5 py-5 pb-10 gap-5">
+          <ScrollView className="flex-1 bg-card" contentContainerClassName="px-5 py-5 pb-10 gap-5" automaticallyAdjustKeyboardInsets>
             {/* Preview */}
             <View className="items-center py-4 bg-surface rounded-2xl">
               <PinBadge iconKey={currentIcon} color={currentColor} iconColor={currentIconColor} size={56} />
