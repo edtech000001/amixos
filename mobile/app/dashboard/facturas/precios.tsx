@@ -154,7 +154,16 @@ export default function FacturasPreciosPage() {
   const saveCustomize = async () => {
     if (!business) return;
     setSavingTpl(true);
-    const cfg: PriceSheetTemplateConfig = { design: draftDesign, accentColor: draftAccent, categoryOrder: draftOrder };
+    // Carry the exclusions through untouched: mobile has no UI for them yet,
+    // and rebuilding the config without them would silently clear choices made
+    // on web the next time someone saves a colour here.
+    const cfg: PriceSheetTemplateConfig = {
+      design: draftDesign,
+      accentColor: draftAccent,
+      categoryOrder: draftOrder,
+      hiddenCategories: template.hiddenCategories,
+      hiddenItemIds: template.hiddenItemIds,
+    };
     const { error } = await supabase.from('businesses').update({ price_sheet_template: cfg }).eq('id', business.id);
     if (!error) {
       setTemplate(cfg);
