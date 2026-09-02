@@ -467,13 +467,13 @@ export function CalendarScreen({
             canEdit ? (
               <button type="button" onClick={() => openNew(agendaDay)}
                 className="w-full flex flex-col items-center justify-center py-10 rounded-2xl border border-dashed border-border bg-surface/50 hover:bg-surface">
-                <CalendarDays size={26} color="#D1D5DB" />
+                <CalendarDays size={26} className="text-faint" />
                 <span className="text-sm text-faint mt-2">{t.agenda.empty}</span>
                 <span className="text-xs text-primary font-semibold mt-1">{t.agenda.emptyAdd}</span>
               </button>
             ) : (
               <div className="w-full flex flex-col items-center justify-center py-10 rounded-2xl border border-dashed border-border bg-surface/50">
-                <CalendarDays size={26} color="#D1D5DB" />
+                <CalendarDays size={26} className="text-faint" />
                 <span className="text-sm text-faint mt-2">{t.agenda.empty}</span>
               </div>
             )
@@ -634,7 +634,7 @@ function AgendaRow({ item, t, jobStatusLabel, onPress }: { item: CalItem; t: Cal
             </div>
           ) : null}
         </div>
-        {item.kind === 'job' ? <Chevron size={16} color="#D1D5DB" className="shrink-0" /> : null}
+        {item.kind === 'job' ? <Chevron size={16} className="shrink-0 text-faint" /> : null}
       </div>
     </button>
   );

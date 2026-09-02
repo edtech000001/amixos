@@ -508,14 +508,14 @@ export function CalendarScreen({
             canEdit ? (
               <Pressable
                 onPress={() => openNew(agendaDay)}
-                className="items-center justify-center py-10 rounded-2xl border border-dashed border-border bg-white/50 active:bg-surface"
+                className="items-center justify-center py-10 rounded-2xl border border-dashed border-border bg-surface/50 active:bg-surface"
               >
                 <CalendarDays size={26} color={c.faint} />
                 <Text className="text-sm text-faint mt-2">{t.agenda.empty}</Text>
                 <Text className="text-xs text-primary font-semibold mt-1">{t.agenda.emptyAdd}</Text>
               </Pressable>
             ) : (
-              <View className="items-center justify-center py-10 rounded-2xl border border-dashed border-border bg-white/50">
+              <View className="items-center justify-center py-10 rounded-2xl border border-dashed border-border bg-surface/50">
                 <CalendarDays size={26} color={c.faint} />
                 <Text className="text-sm text-faint mt-2">{t.agenda.empty}</Text>
               </View>
