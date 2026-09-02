@@ -9,8 +9,12 @@
 -- storage copy step (separate Node script — SQL cannot move file bytes):
 --   files/<source>/<folder>/<file>          uploaded files
 --   files/<source>/covers/<...>.jpg         hand-picked folder + file covers
--- A script that copies the whole 'files/<source>/' prefix already covers both.
 -- Rendered .thumb.jpg files do NOT need copying — see the entries loop.
+--
+-- That script is supabase/scripts/copy_files_storage.mjs. Run it AFTER this,
+-- with the same two ids. It mirrors storage the same way this mirrors the
+-- database — wiping the target's prefix first — so re-running the pair leaves
+-- no orphaned objects behind.
 --
 -- THIS IS A MIRROR, NOT A MERGE. The target's files module is DELETED and
 -- rebuilt from the source every time, so the two always match and the script is
