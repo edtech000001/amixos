@@ -968,6 +968,11 @@ export default function JobDetailRoute() {
         // Leave notes empty — the invoice already links to its job; auto-filling
         // "Jobs: <title>" here just printed clutter the user didn't ask for.
         notes: null,
+        // Inherit the job's branch. Omitting this left location_id NULL, and
+        // the invoices list filters with .eq('location_id', ...), which never
+        // matches NULL — so invoices billed from this screen went missing the
+        // moment any branch was selected.
+        location_id: (job as { location_id?: string | null }).location_id ?? null,
       });
 
     if (!error && invoice) {
