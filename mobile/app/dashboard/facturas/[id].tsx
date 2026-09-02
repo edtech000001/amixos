@@ -596,7 +596,10 @@ export default function FacturaDetailRoute() {
   // Full-screen payment-photo viewer: id + rotation ride along so the rotate
   // button can persist (invoice_payments.photo_rotation, migration 190).
   const [viewPhoto, setViewPhoto] = useState<{ id: string; url: string; rotation: number } | null>(null);
-  const [viewZoom, setViewZoom] = useState(false);
+  // Full-screen viewport for the photo viewer. Leaves room for the action bar
+  // at the bottom so the buttons never sit on top of the image.
+  const { width: photoViewW, height: photoScreenH } = Dimensions.get('window');
+  const photoViewH = photoScreenH - insets.top - insets.bottom - 120;
   const rotateViewPhoto = async () => {
     if (!viewPhoto) return;
     const next = (viewPhoto.rotation + 90) % 360;
@@ -1228,7 +1231,7 @@ export default function FacturaDetailRoute() {
         onRecordPayment={canEdit ? openRecordPayment : undefined}
         onEditPayment={canEdit ? openEditPayment : undefined}
         onDeletePayment={canEdit ? deletePayment : undefined}
-        onViewPaymentPhoto={(p) => { if (p.photoUrl) { setViewZoom(false); setViewPhoto({ id: p.id, url: p.photoUrl, rotation: p.photoRotation ?? 0 }); } }}
+        onViewPaymentPhoto={(p) => { if (p.photoUrl) setViewPhoto({ id: p.id, url: p.photoUrl, rotation: p.photoRotation ?? 0 }); }}
         onUndoPaid={canEdit ? undoPaid : undefined}
         onClientPress={(clientId) => router.push(`/dashboard/clientes/${clientId}?from=invoice&invoice=${id}` as never)}
         jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
@@ -1699,18 +1702,49 @@ export default function FacturaDetailRoute() {
 
       {/* Payment photo viewer */}
       <RNModal visible={!!viewPhoto} transparent animationType="fade" onRequestClose={() => setViewPhoto(null)}>
-        <Pressable onPress={() => setViewPhoto(null)} className="flex-1 bg-black/90 items-center justify-center p-4">
-          {viewPhoto ? (
-            // Tapping the PHOTO toggles zoom — only the backdrop/X close (a
-            // tap on a plain Image would fall through to the close backdrop).
-            <Pressable onPress={() => setViewZoom((z) => !z)} style={{ width: '100%', height: '80%' }}>
-              <Image
-                source={{ uri: viewPhoto.url }}
-                resizeMode="contain"
-                style={{ width: '100%', height: '100%', transform: [{ rotate: `${viewPhoto.rotation}deg` }, { scale: viewZoom ? 2.2 : 1 }] }}
-              />
-            </Pressable>
-          ) : null}
+        <View className="flex-1 items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.95)' }}>
+          {/* Tap-to-close lives on an absolute sibling BEHIND the image rather
+              than wrapping it: wrapping would swallow the pinch and pan the
+              zoomable ScrollView needs. Taps in the margins still close. */}
+          <Pressable
+            onPress={() => setViewPhoto(null)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          />
+          {viewPhoto ? (() => {
+            // A zoomable ScrollView, matching the job-photos viewer: pinch to
+            // zoom AND pan while zoomed, handled natively. The old version
+            // toggled a fixed 2.2x scale with no panning, so a check number in
+            // a corner was unreachable — the whole reason to zoom a photo of a
+            // cheque.
+            //
+            // Rotation-aware sizing: at 90/270 the on-screen footprint is the
+            // box's swapped dimensions, so the box is sized swapped to keep the
+            // rotated image inside the viewport.
+            const r = viewPhoto.rotation % 360;
+            const swap = r === 90 || r === 270;
+            return (
+              <ScrollView
+                style={{ width: photoViewW, height: photoViewH }}
+                contentContainerStyle={{ width: photoViewW, height: photoViewH, alignItems: 'center', justifyContent: 'center' }}
+                maximumZoomScale={5}
+                minimumZoomScale={1}
+                bouncesZoom
+                centerContent
+                showsHorizontalScrollIndicator={false}
+                showsVerticalScrollIndicator={false}
+              >
+                <Image
+                  source={{ uri: viewPhoto.url }}
+                  resizeMode="contain"
+                  style={{
+                    width: swap ? photoViewH : photoViewW,
+                    height: swap ? photoViewW : photoViewH,
+                    transform: [{ rotate: `${r}deg` }],
+                  }}
+                />
+              </ScrollView>
+            );
+          })() : null}
           {/* Action bar — nested Pressables keep taps off the close backdrop. */}
           <View className="absolute bottom-12 left-0 right-0 flex-row justify-center gap-4">
             <Pressable
@@ -1727,7 +1761,7 @@ export default function FacturaDetailRoute() {
               <X size={18} color="#FFFFFF" />
             </Pressable>
           </View>
-        </Pressable>
+        </View>
       </RNModal>
 
       {confirmSheet}
