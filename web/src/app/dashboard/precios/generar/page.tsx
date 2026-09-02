@@ -12,7 +12,8 @@ export const dynamic = 'force-dynamic';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SkeletonCard } from '@amixos/shared/ui/Skeleton';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Printer, ArrowLeft, Sliders, ChevronUp, ChevronDown, Search, Mail, X } from 'lucide-react';
+import { Printer, ArrowLeft, Sliders, ChevronDown, Search, Mail, X, GripVertical, Eye, EyeOff } from 'lucide-react';
+import { SortableList } from '@/components/dashboard/SortableList';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
@@ -157,6 +158,23 @@ export default function GenerarPreciosPage() {
     return by;
   }, [items]);
 
+  // What actually prints, after the template's exclusions. The customize modal
+  // reads `sectionItems` (everything, so you can un-hide) while the sheet reads
+  // this — otherwise the eye toggles would be decorative.
+  const printedSections = useMemo(() => {
+    const by = new Map<string, PriceSheetItem[]>();
+    // Array.from, not a for..of over the Map — this project's TS target does
+    // not allow iterating a Map directly.
+    for (const [key, list] of Array.from(sectionItems.entries())) {
+      if (template.hiddenCategories.includes(key)) continue;
+      const kept = list.filter(i => !template.hiddenItemIds.includes(i.id));
+      // A section whose every price is hidden prints as a bare heading, which
+      // reads as a mistake — drop the heading too.
+      if (kept.length) by.set(key, kept);
+    }
+    return by;
+  }, [sectionItems, template.hiddenCategories, template.hiddenItemIds]);
+
   // Sections the user can reorder (named categories + Additional charges);
   // uncategorized is excluded (it always sinks last).
   const orderableSections = useMemo(
@@ -230,6 +248,11 @@ export default function GenerarPreciosPage() {
   const [draftDesign, setDraftDesign] = useState<PriceSheetDesign>(template.design);
   const [draftAccent, setDraftAccent] = useState(accent);
   const [draftOrder, setDraftOrder] = useState<string[]>([]);
+  // Exclusions, not inclusions: a category or price added later prints by
+  // default. An inclusion list would silently drop everything new.
+  const [draftHiddenCats, setDraftHiddenCats] = useState<string[]>([]);
+  const [draftHiddenItems, setDraftHiddenItems] = useState<string[]>([]);
+  const [expandedCat, setExpandedCat] = useState<string | null>(null);
   const [savingTpl, setSavingTpl] = useState(false);
 
   const openCustomize = () => {
@@ -237,22 +260,28 @@ export default function GenerarPreciosPage() {
     setDraftAccent(template.accentColor);
     // Seed the reorder list from the CURRENT display order (so it matches the
     // sheet), excluding the always-last uncategorized bucket.
+    // Ordered over ALL sections, not just printed ones — a hidden section must
+    // stay listed or there is no way to turn it back on.
     setDraftOrder(orderedSectionKeys.filter(k => k !== UNCAT));
+    setDraftHiddenCats(template.hiddenCategories);
+    setDraftHiddenItems(template.hiddenItemIds);
+    setExpandedCat(null);
     setCustomizeOpen(true);
   };
-  const moveCat = (i: number, dir: -1 | 1) => {
-    setDraftOrder(prev => {
-      const j = i + dir;
-      if (j < 0 || j >= prev.length) return prev;
-      const next = [...prev];
-      [next[i], next[j]] = [next[j], next[i]];
-      return next;
-    });
-  };
+  const toggleCatHidden = (cat: string) =>
+    setDraftHiddenCats(prev => (prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]));
+  const toggleItemHidden = (id: string) =>
+    setDraftHiddenItems(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
   const saveCustomize = async () => {
     if (!business) return;
     setSavingTpl(true);
-    const cfg: PriceSheetTemplateConfig = { design: draftDesign, accentColor: draftAccent, categoryOrder: draftOrder };
+    const cfg: PriceSheetTemplateConfig = {
+      design: draftDesign,
+      accentColor: draftAccent,
+      categoryOrder: draftOrder,
+      hiddenCategories: draftHiddenCats,
+      hiddenItemIds: draftHiddenItems,
+    };
     const { error } = await supabase.from('businesses').update({ price_sheet_template: cfg }).eq('id', business.id);
     if (error) { setSavingTpl(false); await alertMessage({ message: error.message }); return; }
     setTemplate(cfg);
@@ -388,8 +417,8 @@ export default function GenerarPreciosPage() {
           </div>
         ) : (
           <div className={`pt-5 print:pt-3 flex flex-col ${theme.outerGap} print:gap-2`}>
-            {orderedSectionKeys.map(key => {
-              const secItems = sectionItems.get(key) ?? [];
+            {orderedSectionKeys.filter(k => printedSections.has(k)).map(key => {
+              const secItems = printedSections.get(key) ?? [];
               const isAddon = key === ADDONS;
               return (
                 <div key={key} className={groupWrapCls}>
@@ -441,18 +470,76 @@ export default function GenerarPreciosPage() {
             <div>
               <label className="block text-sm font-semibold text-ink mb-1.5">{t.sectionOrderLabel}</label>
               <p className="text-xs text-faint mb-2">{t.sectionOrderHint}</p>
-              <div className="rounded-xl border border-border-soft max-h-56 overflow-y-auto">
-                {draftOrder.map((cat, i) => (
-                  <div key={cat} className={`flex items-center justify-between gap-2 px-3 py-2 ${i < draftOrder.length - 1 ? 'border-b border-border-soft' : ''}`}>
-                    <span className="text-sm text-ink truncate">{cat === ADDONS ? t.additionalCharges : cat}</span>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button type="button" onClick={() => moveCat(i, -1)} disabled={i === 0}
-                        className="p-1 rounded-lg text-faint hover:bg-border-soft disabled:opacity-30"><ChevronUp size={16} /></button>
-                      <button type="button" onClick={() => moveCat(i, 1)} disabled={i === draftOrder.length - 1}
-                        className="p-1 rounded-lg text-faint hover:bg-border-soft disabled:opacity-30"><ChevronDown size={16} /></button>
-                    </div>
-                  </div>
-                ))}
+              <div className="rounded-xl border border-border-soft max-h-72 overflow-y-auto">
+                <SortableList
+                  items={draftOrder.map(cat => ({ id: cat }))}
+                  onReorder={next => setDraftOrder(next.map(x => x.id))}
+                  renderItem={(row, i, handle) => {
+                    const cat = row.id;
+                    const hidden = draftHiddenCats.includes(cat);
+                    const rows = sectionItems.get(cat) ?? [];
+                    const open = expandedCat === cat;
+                    return (
+                      <div key={cat} className={i < draftOrder.length - 1 ? 'border-b border-border-soft' : ''}>
+                        <div className={`flex items-center gap-2 px-3 py-2 ${hidden ? 'opacity-45' : ''}`}>
+                          <span
+                            {...(handle.attributes ?? {})}
+                            {...(handle.listeners ?? {})}
+                            className="cursor-grab active:cursor-grabbing text-faint hover:text-muted shrink-0"
+                          >
+                            <GripVertical size={15} />
+                          </span>
+                          {/* Expanding is what reveals per-price control, so the
+                              row itself is the toggle rather than a lone caret. */}
+                          <button
+                            type="button"
+                            onClick={() => setExpandedCat(open ? null : cat)}
+                            className="flex items-center gap-1.5 flex-1 min-w-0 text-left"
+                          >
+                            <ChevronDown size={14} className={`text-faint shrink-0 transition-transform ${open ? '' : '-rotate-90'}`} />
+                            <span className={`text-sm truncate ${hidden ? 'line-through text-muted' : 'text-ink'}`}>
+                              {cat === ADDONS ? t.additionalCharges : cat}
+                            </span>
+                            <span className="text-[11px] text-faint shrink-0">{rows.length}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleCatHidden(cat)}
+                            title={hidden ? t.includeSection : t.excludeSection}
+                            aria-label={hidden ? t.includeSection : t.excludeSection}
+                            className="p-1 rounded-lg text-faint hover:text-primary hover:bg-primary/5 shrink-0"
+                          >
+                            {hidden ? <EyeOff size={15} /> : <Eye size={15} />}
+                          </button>
+                        </div>
+                        {open ? (
+                          <div className="pl-9 pr-3 pb-2">
+                            {rows.map(it => {
+                              // A hidden section takes its prices with it, so the
+                              // per-price control reads as off and does nothing
+                              // until the section is back on.
+                              const itemHidden = hidden || draftHiddenItems.includes(it.id);
+                              return (
+                                <div key={it.id} className={`flex items-center gap-2 py-1 ${itemHidden ? 'opacity-45' : ''}`}>
+                                  <span className={`text-xs flex-1 truncate ${itemHidden ? 'line-through text-muted' : 'text-ink'}`}>{it.name}</span>
+                                  <button
+                                    type="button"
+                                    disabled={hidden}
+                                    onClick={() => toggleItemHidden(it.id)}
+                                    className="p-1 rounded-lg text-faint hover:text-primary hover:bg-primary/5 disabled:opacity-40 disabled:hover:bg-transparent"
+                                  >
+                                    {itemHidden ? <EyeOff size={13} /> : <Eye size={13} />}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                            {rows.length === 0 ? <p className="text-xs text-faint py-1">{t.sectionEmpty}</p> : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  }}
+                />
               </div>
             </div>
           ) : null}

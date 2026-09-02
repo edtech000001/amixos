@@ -1542,6 +1542,7 @@ export type DashboardDict = {
       sectionOrderLabel: string;
       sectionOrderHint: string;
       reorderSections: string; reorderHint: string; savingOrder: string;
+      excludeSection: string; includeSection: string; sectionEmpty: string;
     };
     navigation: {
       subtitle: string;
@@ -4616,6 +4617,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         reorderSections: 'Ordenar secciones',
         reorderHint: 'Mantén presionado un precio para moverlo. Este orden también se ve en las facturas.',
         savingOrder: 'Guardando orden...',
+        excludeSection: 'No incluir al imprimir',
+        includeSection: 'Incluir al imprimir',
+        sectionEmpty: 'Sin precios en esta sección.',
       },
       navigation: {
         subtitle: 'Elige qué apps aparecen en la barra inferior.',
@@ -7705,6 +7709,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         reorderSections: 'Reorder sections',
         reorderHint: 'Press and hold a price to move it. This order also shows on invoices.',
         savingOrder: 'Saving order...',
+        excludeSection: 'Leave off the printed sheet',
+        includeSection: 'Include on the printed sheet',
+        sectionEmpty: 'No prices in this section.',
       },
       navigation: {
         subtitle: 'Choose which apps appear in the bottom bar.',

@@ -20,12 +20,21 @@ export interface PriceSheetTemplateConfig {
   /** Category names in display order. Categories not listed follow after,
    *  alphabetically. Uncategorized always sinks last. */
   categoryOrder: string[];
+  /** Categories left OFF the printed sheet. Stored as an exclusion list rather
+   *  than an inclusion one so a category added later is printed by default —
+   *  an inclusion list would silently drop every new section. */
+  hiddenCategories: string[];
+  /** Individual price_sheet_items.id values left off the printed sheet. Same
+   *  reasoning: exclusions, so new prices print unless you say otherwise. */
+  hiddenItemIds: string[];
 }
 
 export const DEFAULT_PRICE_SHEET_TEMPLATE: PriceSheetTemplateConfig = {
   design: 'classic',
   accentColor: '#4F46E5',
   categoryOrder: [],
+  hiddenCategories: [],
+  hiddenItemIds: [],
 };
 
 export function normalizePriceSheetTemplate(raw: unknown): PriceSheetTemplateConfig {
@@ -36,7 +45,21 @@ export function normalizePriceSheetTemplate(raw: unknown): PriceSheetTemplateCon
     design: typeof r.design === 'string' && (PRICE_SHEET_DESIGNS as string[]).includes(r.design) ? (r.design as PriceSheetDesign) : 'classic',
     accentColor: typeof r.accentColor === 'string' && r.accentColor.trim() ? r.accentColor.trim() : DEFAULT_PRICE_SHEET_TEMPLATE.accentColor,
     categoryOrder: Array.isArray(r.categoryOrder) ? r.categoryOrder.filter((x): x is string => typeof x === 'string') : [],
+    hiddenCategories: Array.isArray(r.hiddenCategories) ? r.hiddenCategories.filter((x): x is string => typeof x === 'string') : [],
+    hiddenItemIds: Array.isArray(r.hiddenItemIds) ? r.hiddenItemIds.filter((x): x is string => typeof x === 'string') : [],
   };
+}
+
+/** Should this item be printed? A hidden section hides everything inside it,
+ *  so an item is printed only when neither it nor its section is excluded. */
+export function isPrintable(
+  item: { id: string; category: string | null },
+  cfg: Pick<PriceSheetTemplateConfig, 'hiddenCategories' | 'hiddenItemIds'>,
+  uncategorizedKey: string,
+): boolean {
+  if (cfg.hiddenItemIds.includes(item.id)) return false;
+  const key = (item.category ?? '').trim() || uncategorizedKey;
+  return !cfg.hiddenCategories.includes(key);
 }
 
 /**
