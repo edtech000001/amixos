@@ -508,7 +508,23 @@ export async function rebuildInvoiceLineItems(
   });
   const finalJobLines = [...overriddenLines, ...keptJobLines];
   const jobLineKeys = new Set(finalJobLines.map(lineKey));
-  const manual = existing.filter(li => !li.job_id && !jobLineKeys.has(lineKey(li)));
+  // Repair for invoices made by the old mobile job screen, which wrote
+  // {quantity, unit_price, total} instead of {qty, rate} and left the line
+  // untagged. Those lines render "0 × $0.00" (nothing to read qty/rate from)
+  // and, being untagged, survive as "manual" beside the real job line the
+  // rebuild derives — so the job appeared twice. Nothing else has ever written
+  // those keys into line_items (both new-invoice forms and the CSV importer
+  // use qty/rate), and such a line contributes 0 to every total, so dropping
+  // it can't change an invoice's money.
+  const isLegacyUntaggedDupe = (li: InvoiceLineItem) => {
+    if (li.job_id) return false;
+    const raw = li as unknown as Record<string, unknown>;
+    if (!('quantity' in raw) && !('unit_price' in raw)) return false;
+    return !Number.isFinite(Number(raw.qty)) || !Number.isFinite(Number(raw.rate));
+  };
+  const manual = existing.filter(
+    li => !li.job_id && !jobLineKeys.has(lineKey(li)) && !isLegacyUntaggedDupe(li),
+  );
   // Keep the invoice's CURRENT line order. The rebuild syncs CONTENT (prices,
   // descriptions, added/removed job items) — it must never re-shuffle, or a
   // "sort by date" is silently undone on the next page load, and a manual

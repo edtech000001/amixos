@@ -920,12 +920,22 @@ export default function JobDetailRoute() {
     const invoiceLang = invoiceDefaultLanguage(business.invoice_template, locale);
     const invNum = nextInvoiceNumber(invoiceLang, business.invoice_start_number, count ?? 0);
 
-    const lineItems = items.map((i) => ({
-      description: showItemTypes ? `${ITEM_TYPE_LABELS[i.item_type] ?? i.item_type}: ${i.description}` : i.description,
-      quantity: i.quantity,
-      unit_price: i.unit_price,
-      total: i.total,
-    }));
+    // qty/rate + job_id is the canonical invoice line-item shape — mirrors the
+    // web job screen. Writing {quantity, unit_price, total} here instead left
+    // every line reading "0 x $0.00" (no qty/rate to read) and UNTAGGED, so the
+    // invoice's own rebuild treated it as a hand-entered line and kept it
+    // alongside the job line it derives — the job showed up twice.
+    const lineItems = items.map((i) => {
+      const desc = i.description.trim();
+      return {
+        description: desc
+          ? (showItemTypes ? `${ITEM_TYPE_LABELS[i.item_type] ?? i.item_type}: ${desc}` : desc)
+          : job.title,
+        qty: i.quantity,
+        rate: i.unit_price,
+        job_id: job.id, // tag so the job can later be moved/removed from this invoice
+      };
+    });
     // No items — or (M&L off) only bare $0 items — bill as ONE placeholder line;
     // qty from the mapped custom field (invoice_qty_field).
     const allBare = items.length > 0 && items.every(i => !i.description.trim() && !(i.unit_price > 0));
@@ -933,9 +943,9 @@ export default function JobDetailRoute() {
       lineItems.length = 0;
       lineItems.push({
         description: job.title,
-        quantity: placeholderQtyFor({ custom_fields: job.custom_fields }, business.invoice_qty_field) ?? 1,
-        unit_price: 0,
-        total: 0,
+        qty: placeholderQtyFor({ custom_fields: job.custom_fields }, business.invoice_qty_field) ?? 1,
+        rate: 0,
+        job_id: job.id,
       });
     }
 
