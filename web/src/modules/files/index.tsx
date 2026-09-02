@@ -801,6 +801,7 @@ function CoverEditor({ src, transform, onChange, aspect, onRemove, onReplace, ch
   changeLabel: string;
   removeLabel: string;
 }) {
+  const { t: full } = useLang();
   const boxRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const st = coverImageStyle(transform, aspect);
@@ -859,6 +860,9 @@ function CoverEditor({ src, transform, onChange, aspect, onRemove, onReplace, ch
           {changeLabel}
         </button>
       </div>
+      {/* Dragging is not discoverable on its own — nothing about a thumbnail
+          suggests it moves. */}
+      <p className="text-xs text-faint mt-1.5">{full.dashboard.files.coverDragHint}</p>
     </div>
   );
 }

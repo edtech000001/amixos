@@ -3090,7 +3090,7 @@ export type DashboardDict = {
     coverLabel: string; coverAdd: string; coverChange: string; coverRemove: string;
     coverLinkNote: string; coverFileNote: string; coverUploading: string;
     coverPaste: string;
-    selectButton: string; folderCoverNote: string;
+    selectButton: string; folderCoverNote: string; coverDragHint: string;
     openBtn: string;
     noSections: string; noEntries: string;
     deleteCategoryConfirm: string; deleteSectionConfirm: string; deleteEntryConfirm: string;
@@ -6170,6 +6170,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       coverPaste: 'Pegar foto copiada',
       selectButton: 'Seleccionar',
       folderCoverNote: 'Elige una imagen para esta carpeta. Si no, se muestra el ícono.',
+      coverDragHint: 'Arrastra la imagen para elegir qué parte se ve.',
       openBtn: 'Abrir',
       noSections: 'Sin secciones todavía',
       noEntries: 'Sin archivos todavía',
@@ -9262,6 +9263,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       coverPaste: 'Paste copied photo',
       selectButton: 'Select',
       folderCoverNote: 'Pick an image for this folder. Without one, the icon is shown.',
+      coverDragHint: 'Drag the image to choose which part shows.',
       openBtn: 'Open',
       noSections: 'No sections yet',
       noEntries: 'No files yet',

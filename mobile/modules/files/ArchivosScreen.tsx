@@ -1335,6 +1335,7 @@ function CoverEditor({ uri, transform, onChange, width, height, kind, onRemove, 
   rotateLabel: string;
   removeLabel: string;
 }) {
+  const { t: full } = useLang();
   const c = useThemeColors();
   const move = (lx: number, ly: number) => {
     const x = 1 - Math.min(1, Math.max(0, lx / width));
@@ -1370,6 +1371,11 @@ function CoverEditor({ uri, transform, onChange, width, height, kind, onRemove, 
         <RotateCw size={13} color={c.muted} />
         <Text className="text-xs font-semibold text-muted">{rotateLabel}</Text>
       </Pressable>
+      {/* Dragging is not discoverable on its own — nothing about a thumbnail
+          suggests it moves. */}
+      <Text className="text-xs text-faint mt-1.5" style={{ maxWidth: width }}>
+        {full.dashboard.files.coverDragHint}
+      </Text>
     </View>
   );
 }
