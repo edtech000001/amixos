@@ -13,7 +13,7 @@ import {
   Modal as RNModal, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { readClipboardImageToFile } from '@/lib/clipboardPhoto';
+import { hasClipboardImage, readClipboardImageToFile } from '@/lib/clipboardPhoto';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
@@ -21,7 +21,7 @@ import {
   ChevronLeft, ChevronRight, CornerUpLeft, FileText, Folder, FolderOpen, FolderPlus,
   FilePlus2, Link2, Trash2, Pencil, ExternalLink, Upload, Lock,
   Users as UsersIcon, Check, X, FolderInput, Plus, LayoutGrid, List as ListIcon,
-  Image as ImageIcon,
+  ImagePlus, Camera, ClipboardPaste,
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
@@ -716,6 +716,9 @@ function FileSheets({
   const es = locale === 'es';
   const t = full.dashboard.files;
   const tc = full.common;
+  // Reuse the job-photos labels rather than duplicating "Take photo" etc —
+  // the chooser is deliberately the same one users already know.
+  const tPhotos = full.dashboard.jobs.detail.photos;
   const c = useThemeColors();
 
   // Folder form state
@@ -740,21 +743,7 @@ function FileSheets({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingFolderCover]);
 
-  const pickFolderCover = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
-    });
-    if (res.canceled || !res.assets?.[0]?.uri) return;
-    setFCoverUri(res.assets[0].uri);
-    setFCoverRemoved(false);
-  };
-  const pasteFolderCover = async () => {
-    const uri = await readClipboardImageToFile();
-    if (!uri) return;
-    setFCoverUri(uri);
-    setFCoverRemoved(false);
-  };
+
 
   /** Resolve the cover column for a row that now definitely exists. Uploading
    *  after the insert means a cancelled save leaves no orphan in the bucket. */
@@ -804,24 +793,41 @@ function FileSheets({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingCover]);
 
-  const pickCover = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      // Downscaled at pick time rather than after upload: there is no canvas
-      // here, and a full-resolution phone photo would be re-fetched on every
-      // grid view forever.
-      quality: 0.7,
-    });
-    if (res.canceled || !res.assets?.[0]?.uri) return;
-    setCoverUri(res.assets[0].uri);
-    setCoverRemoved(false);
+  // Which cover the picker is choosing for: the file entry or the folder.
+  // One picker serves both so there is a single overlay to render.
+  const [coverPickerFor, setCoverPickerFor] = useState<null | 'entry' | 'folder'>(null);
+  const [canPasteCover, setCanPasteCover] = useState(false);
+
+  /** Open the chooser, checking the clipboard first so the Paste row only
+   *  appears when there is actually an image to paste — same as job photos. */
+  const openCoverPicker = (target: 'entry' | 'folder') => {
+    setCanPasteCover(false);
+    void hasClipboardImage().then(setCanPasteCover);
+    setCoverPickerFor(target);
   };
 
-  const pasteCover = async () => {
-    const uri = await readClipboardImageToFile();
-    if (!uri) return;
-    setCoverUri(uri);
-    setCoverRemoved(false);
+  const applyPickedCover = (uri: string) => {
+    if (coverPickerFor === 'folder') { setFCoverUri(uri); setFCoverRemoved(false); }
+    else { setCoverUri(uri); setCoverRemoved(false); }
+    setCoverPickerFor(null);
+  };
+
+  const pickCoverFrom = async (source: 'camera' | 'library' | 'paste') => {
+    if (source === 'paste') {
+      const uri = await readClipboardImageToFile();
+      if (uri) applyPickedCover(uri);
+      else setCoverPickerFor(null);
+      return;
+    }
+    // Downscaled at pick time rather than after upload: there is no canvas
+    // here, and a full-resolution phone photo would be re-fetched on every
+    // grid view forever.
+    const opts = { mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7 } as const;
+    const res = source === 'camera'
+      ? await ImagePicker.launchCameraAsync(opts)
+      : await ImagePicker.launchImageLibraryAsync(opts);
+    if (res.canceled || !res.assets?.[0]?.uri) { setCoverPickerFor(null); return; }
+    applyPickedCover(res.assets[0].uri);
   };
 
   /** Upload the picked image and point the row at it. Best-effort: a cover
@@ -1049,35 +1055,34 @@ function FileSheets({
                   to render a preview from. */}
               <View>
                 <Text className="text-sm font-medium text-ink mb-1.5">{t.coverLabel}</Text>
-                <View className="flex-row items-start gap-3">
-                  <View className="w-20 h-20 rounded-lg border border-border-soft overflow-hidden bg-surface items-center justify-center">
-                    {fCoverUri ? (
-                      <Image source={{ uri: fCoverUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                    ) : fCoverSigned && !fCoverRemoved ? (
-                      <Image source={{ uri: fCoverSigned }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                    ) : (
-                      <Folder size={20} color={c.faint} />
-                    )}
+                {/* One tile — the image with a corner remove, or a dashed
+                    add target. Tapping opens the camera/library/paste chooser,
+                    same as job photos. */}
+                {fCoverUri || (fCoverSigned && !fCoverRemoved) ? (
+                  <View className="w-24 h-24 rounded-xl overflow-hidden bg-border-soft">
+                    <Pressable onPress={() => openCoverPicker('folder')} className="w-full h-full active:opacity-80">
+                      <Image source={{ uri: (fCoverUri ?? fCoverSigned) as string }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => { setFCoverUri(null); setFCoverRemoved(true); }}
+                      hitSlop={8}
+                      accessibilityLabel={t.coverRemove}
+                      className="absolute top-1 right-1 w-6 h-6 rounded-full items-center justify-center"
+                      style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+                    >
+                      <X size={13} color="#FFFFFF" />
+                    </Pressable>
                   </View>
-                  <View className="flex-1">
-                    <View className="flex-row flex-wrap items-center gap-2">
-                      <Pressable onPress={pickFolderCover} className="px-3 py-2 rounded-xl border border-border bg-card active:opacity-80">
-                        <Text className="text-xs font-semibold text-ink">
-                          {fCoverUri || (fCoverSigned && !fCoverRemoved) ? t.coverChange : t.coverAdd}
-                        </Text>
-                      </Pressable>
-                      <Pressable onPress={pasteFolderCover} className="px-3 py-2 rounded-xl border border-border bg-card active:opacity-80">
-                        <Text className="text-xs font-semibold text-ink">{t.coverPaste}</Text>
-                      </Pressable>
-                      {fCoverUri || (fCoverSigned && !fCoverRemoved) ? (
-                        <Pressable onPress={() => { setFCoverUri(null); setFCoverRemoved(true); }} hitSlop={6} className="px-1 py-2">
-                          <Text className="text-xs font-semibold text-red-500">{t.coverRemove}</Text>
-                        </Pressable>
-                      ) : null}
-                    </View>
-                    <Text className="text-xs text-faint mt-1.5">{t.folderCoverNote}</Text>
-                  </View>
-                </View>
+                ) : (
+                  <Pressable
+                    onPress={() => openCoverPicker('folder')}
+                    className="w-24 h-24 rounded-xl border-2 border-dashed border-border items-center justify-center active:opacity-70"
+                  >
+                    <ImagePlus size={22} color={c.faint} />
+                    <Text className="text-[11px] font-medium text-faint mt-1.5">{t.coverAdd}</Text>
+                  </Pressable>
+                )}
+                <Text className="text-xs text-faint mt-2">{t.folderCoverNote}</Text>
               </View>
 
               {isCategory ? (
@@ -1114,41 +1119,36 @@ function FileSheets({
                   not the page worth showing. */}
               <View>
                 <Text className="text-sm font-medium text-ink mb-1.5">{t.coverLabel}</Text>
-                <View className="flex-row items-start gap-3">
-                  <View className="w-20 h-[107px] rounded-lg border border-border-soft overflow-hidden bg-surface items-center justify-center">
-                    {coverUri ? (
-                      <Image source={{ uri: coverUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                    ) : coverSignedUrl && !coverRemoved ? (
-                      <Image source={{ uri: coverSignedUrl }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                    ) : (
-                      <ImageIcon size={20} color={c.faint} />
-                    )}
+                {/* 3:4 tile — a document cover is portrait. Tapping opens the
+                    camera/library/paste chooser, same as job photos. */}
+                {coverUri || (coverSignedUrl && !coverRemoved) ? (
+                  <View className="w-24 rounded-xl overflow-hidden bg-border-soft" style={{ height: 128 }}>
+                    <Pressable onPress={() => openCoverPicker('entry')} className="w-full h-full active:opacity-80">
+                      <Image source={{ uri: (coverUri ?? coverSignedUrl) as string }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => { setCoverUri(null); setCoverRemoved(true); }}
+                      hitSlop={8}
+                      accessibilityLabel={t.coverRemove}
+                      className="absolute top-1 right-1 w-6 h-6 rounded-full items-center justify-center"
+                      style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+                    >
+                      <X size={13} color="#FFFFFF" />
+                    </Pressable>
                   </View>
-                  <View className="flex-1">
-                    <View className="flex-row flex-wrap items-center gap-2">
-                      <Pressable onPress={pickCover} className="px-3 py-2 rounded-xl border border-border bg-card active:opacity-80">
-                        <Text className="text-xs font-semibold text-ink">
-                          {coverUri || (coverSignedUrl && !coverRemoved) ? t.coverChange : t.coverAdd}
-                        </Text>
-                      </Pressable>
-                      <Pressable onPress={pasteCover} className="px-3 py-2 rounded-xl border border-border bg-card active:opacity-80">
-                        <Text className="text-xs font-semibold text-ink">{t.coverPaste}</Text>
-                      </Pressable>
-                      {coverUri || (coverSignedUrl && !coverRemoved) ? (
-                        <Pressable
-                          onPress={() => { setCoverUri(null); setCoverRemoved(true); }}
-                          hitSlop={6}
-                          className="px-1 py-2"
-                        >
-                          <Text className="text-xs font-semibold text-red-500">{t.coverRemove}</Text>
-                        </Pressable>
-                      ) : null}
-                    </View>
-                    <Text className="text-xs text-faint mt-1.5">
-                      {(fileEditing?.kind ?? kind) === 'link' ? t.coverLinkNote : t.coverFileNote}
-                    </Text>
-                  </View>
-                </View>
+                ) : (
+                  <Pressable
+                    onPress={() => openCoverPicker('entry')}
+                    className="w-24 rounded-xl border-2 border-dashed border-border items-center justify-center active:opacity-70"
+                    style={{ height: 128 }}
+                  >
+                    <ImagePlus size={22} color={c.faint} />
+                    <Text className="text-[11px] font-medium text-faint mt-1.5">{t.coverAdd}</Text>
+                  </Pressable>
+                )}
+                <Text className="text-xs text-faint mt-2">
+                  {(fileEditing?.kind ?? kind) === 'link' ? t.coverLinkNote : t.coverFileNote}
+                </Text>
               </View>
               {!fileEditing && kind === 'file' ? (
                 <Pressable onPress={pickFile} className="flex-row items-center gap-3 px-4 py-3.5 rounded-2xl border border-dashed border-border">
@@ -1231,6 +1231,54 @@ function FileSheets({
             </View>
           ) : null}
         </View>
+
+        {/* Cover source chooser. An in-sheet absolute overlay, NOT a second
+            RNModal — iOS silently refuses to present one while another is
+            visible, so the button would just look dead (see CLAUDE.md).
+            Paste only appears when the clipboard actually holds an image,
+            matching the job-photos picker. */}
+        {coverPickerFor ? (
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end' }}>
+            <Pressable
+              onPress={() => setCoverPickerFor(null)}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)' }}
+            />
+            <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
+              <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
+              <View className="bg-surface rounded-2xl overflow-hidden">
+                <Pressable
+                  onPress={() => { void pickCoverFrom('camera'); }}
+                  className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft border-b border-border-soft"
+                >
+                  <Camera size={24} color={c.primary} />
+                  <Text className="text-lg font-semibold text-ink">{tPhotos.takePhoto}</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => { void pickCoverFrom('library'); }}
+                  className={`flex-row items-center gap-4 px-5 py-5 active:bg-border-soft${canPasteCover ? ' border-b border-border-soft' : ''}`}
+                >
+                  <ImagePlus size={24} color={c.primary} />
+                  <Text className="text-lg font-semibold text-ink">{tPhotos.chooseFromLibrary}</Text>
+                </Pressable>
+                {canPasteCover ? (
+                  <Pressable
+                    onPress={() => { void pickCoverFrom('paste'); }}
+                    className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft"
+                  >
+                    <ClipboardPaste size={24} color={c.primary} />
+                    <Text className="text-lg font-semibold text-ink">{tPhotos.pastePhoto}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              <Pressable
+                onPress={() => setCoverPickerFor(null)}
+                className="mt-3 items-center py-4 rounded-2xl bg-border-soft active:bg-border"
+              >
+                <Text className="text-lg font-semibold text-ink">{tc.buttons.cancel}</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
       </KeyboardAvoidingView>
     </RNModal>
   );

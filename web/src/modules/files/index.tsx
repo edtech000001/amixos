@@ -12,7 +12,7 @@ import { useDataFingerprint } from '@amixos/shared/lib/dataFingerprint';
 import { SkeletonList } from '@amixos/shared/ui/Skeleton';
 import {
   FolderOpen, FolderPlus, FilePlus2, Folder, ChevronRight, ChevronLeft, FileText, Link2,
-  LayoutGrid, List as ListIcon, Image as ImageIcon, ListChecks,
+  LayoutGrid, List as ListIcon, ImagePlus, ListChecks,
   Trash2, Pencil, ExternalLink, Upload, Lock, Users, Check, FolderInput, X, Home,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -978,23 +978,24 @@ function FolderModal({ editing, atHome, categoryId, parentFolderId, businessId, 
             render a preview from. */}
         <div>
           <label className="text-sm font-medium text-ink">{t.coverLabel}</label>
-          <div className="flex items-start gap-3 mt-1.5">
-            <div className="w-20 h-20 shrink-0 rounded-lg border border-border-soft overflow-hidden bg-surface flex items-center justify-center">
-              {coverPreview ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={coverPreview} alt="" className="w-full h-full object-cover" />
-              ) : existingCover && !coverRemoved ? (
-                <CoverImage path={existingCover} className="w-full h-full object-cover" />
-              ) : (
-                <Folder size={22} className="text-faint" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" variant="secondary" size="sm" onClick={() => coverInput.current?.click()}>
-                  {coverPreview || (existingCover && !coverRemoved) ? t.coverChange : t.coverAdd}
-                </Button>
-                {(coverPreview || (existingCover && !coverRemoved)) && (
+          {/* Same shape as the job-photos picker: one tile that is either the
+              image (with a corner remove) or a dashed drop target. */}
+          <div className="mt-1.5">
+            <div className="w-28">
+              {coverPreview || (existingCover && !coverRemoved) ? (
+                <div className="relative aspect-square rounded-xl overflow-hidden bg-border-soft">
+                  {coverPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={coverPreview} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <CoverImage path={existingCover!} className="w-full h-full object-cover" />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => coverInput.current?.click()}
+                    className="absolute inset-0"
+                    aria-label={t.coverChange}
+                  />
                   <button
                     type="button"
                     onClick={() => {
@@ -1002,15 +1003,25 @@ function FolderModal({ editing, atHome, categoryId, parentFolderId, businessId, 
                       setCoverPreview(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
                       setCoverRemoved(true);
                     }}
-                    className="text-xs font-semibold text-red-500 px-1"
+                    aria-label={t.coverRemove}
+                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/55 text-white flex items-center justify-center hover:bg-red-500 transition-colors"
                   >
-                    {t.coverRemove}
+                    <X size={13} />
                   </button>
-                )}
-              </div>
-              <p className="text-xs text-faint mt-1.5">{t.folderCoverNote}</p>
-              <PasteHint className="mt-1" />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => coverInput.current?.click()}
+                  className="w-full aspect-square rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center text-faint hover:border-primary hover:text-primary transition-colors"
+                >
+                  <ImagePlus size={22} />
+                  <span className="text-[11px] mt-1.5 font-medium">{t.coverAdd}</span>
+                </button>
+              )}
             </div>
+            <p className="text-xs text-faint mt-2">{t.folderCoverNote}</p>
+            <PasteHint className="mt-1" />
           </div>
           <input ref={coverInput} type="file" accept="image/*" className="hidden"
             onChange={e => onPickCover(e.target.files?.[0] ?? null)} />
@@ -1190,23 +1201,25 @@ function FileModal({ editing, categoryId, folderId, businessId, userId, limitByt
             page worth showing. */}
         <div>
           <label className="text-sm font-medium text-ink">{t.coverLabel}</label>
-          <div className="flex items-start gap-3 mt-1.5">
-            <div className="w-20 h-[6.7rem] shrink-0 rounded-lg border border-border-soft overflow-hidden bg-surface flex items-center justify-center">
-              {coverPreview ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={coverPreview} alt="" className="w-full h-full object-cover object-top" />
-              ) : existingCover && !coverRemoved ? (
-                <FileThumb entry={editing as FileEntry} />
-              ) : (
-                <ImageIcon size={22} className="text-faint" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" variant="secondary" size="sm" onClick={() => coverInput.current?.click()}>
-                  {coverPreview || (existingCover && !coverRemoved) ? t.coverChange : t.coverAdd}
-                </Button>
-                {(coverPreview || (existingCover && !coverRemoved)) && (
+          {/* Same shape as the job-photos picker: one tile that is either the
+              image (with a corner remove) or a dashed drop target. 3:4, since a
+              document cover is portrait. */}
+          <div className="mt-1.5">
+            <div className="w-24">
+              {coverPreview || (existingCover && !coverRemoved) ? (
+                <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-border-soft">
+                  {coverPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={coverPreview} alt="" className="w-full h-full object-cover object-top" />
+                  ) : (
+                    <FileThumb entry={editing as FileEntry} />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => coverInput.current?.click()}
+                    className="absolute inset-0"
+                    aria-label={t.coverChange}
+                  />
                   <button
                     type="button"
                     onClick={() => {
@@ -1214,17 +1227,27 @@ function FileModal({ editing, categoryId, folderId, businessId, userId, limitByt
                       setCoverPreview(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
                       setCoverRemoved(true);
                     }}
-                    className="text-xs font-semibold text-red-500 px-1"
+                    aria-label={t.coverRemove}
+                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/55 text-white flex items-center justify-center hover:bg-red-500 transition-colors"
                   >
-                    {t.coverRemove}
+                    <X size={13} />
                   </button>
-                )}
-              </div>
-              <p className="text-xs text-faint mt-1.5">
-                {(editing?.kind ?? kind) === 'link' ? t.coverLinkNote : t.coverFileNote}
-              </p>
-              <PasteHint className="mt-1" />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => coverInput.current?.click()}
+                  className="w-full aspect-[3/4] rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center text-faint hover:border-primary hover:text-primary transition-colors"
+                >
+                  <ImagePlus size={22} />
+                  <span className="text-[11px] mt-1.5 font-medium">{t.coverAdd}</span>
+                </button>
+              )}
             </div>
+            <p className="text-xs text-faint mt-2">
+              {(editing?.kind ?? kind) === 'link' ? t.coverLinkNote : t.coverFileNote}
+            </p>
+            <PasteHint className="mt-1" />
           </div>
           <input
             ref={coverInput}
