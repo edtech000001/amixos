@@ -24,6 +24,9 @@ export interface FileCategory {
   icon: string | null;
   color: string | null;
   crew_visible: boolean;
+  // Hand-picked cover (migration 214). Folders have nothing to render from,
+  // so this is always a picture the user chose. Null = folder icon.
+  cover_path: string | null;
   sort_order: number;
   created_by: string | null;
   created_at: string;
@@ -38,6 +41,8 @@ export interface FileFolder {
   category_id: string;
   parent_folder_id: string | null;
   name: string;
+  /** Hand-picked cover (migration 214). Null = folder icon. */
+  cover_path: string | null;
   sort_order: number;
   created_by: string | null;
   created_at: string;

@@ -12,7 +12,7 @@ import { useDataFingerprint } from '@amixos/shared/lib/dataFingerprint';
 import { SkeletonList } from '@amixos/shared/ui/Skeleton';
 import {
   FolderOpen, FolderPlus, FilePlus2, Folder, ChevronRight, ChevronLeft, FileText, Link2,
-  LayoutGrid, List as ListIcon, Image as ImageIcon,
+  LayoutGrid, List as ListIcon, Image as ImageIcon, ListChecks,
   Trash2, Pencil, ExternalLink, Upload, Lock, Users, Check, FolderInput, X, Home,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -118,6 +118,10 @@ export default function FilesModule() {
   // Checkboxes only appear once something is selected (entered via long-press).
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [selectedFolders, setSelectedFolders] = useState<Set<string>>(new Set());
+  // Top-level folders live in a different table, so they need their own set.
+  // They are selectable purely so they remain editable: edit/delete moved into
+  // the selection bar, and without this a category would have no edit path.
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
 
   const [folderModal, setFolderModal] = useState<{ editing: FileCategory | FileFolder | null } | null>(null);
   const [fileModal, setFileModal] = useState<{ editing: FileEntry | null } | null>(null);
@@ -218,9 +222,65 @@ export default function FilesModule() {
   // isn't discoverable with a mouse). It also turns on if something is selected
   // by other means.
   const [selectMode, setSelectMode] = useState(false);
-  const clearSelection = () => { setSelectedEntries(new Set()); setSelectedFolders(new Set()); setSelectMode(false); };
-  const selectionCount = selectedEntries.size + selectedFolders.size;
+  const clearSelection = () => {
+    setSelectedEntries(new Set());
+    setSelectedFolders(new Set());
+    setSelectedCategories(new Set());
+    setSelectMode(false);
+  };
+  const selectionCount = selectedEntries.size + selectedFolders.size + selectedCategories.size;
   const selectionMode = selectMode || selectionCount > 0;
+  const toggleCategory = (id: string) => setSelectedCategories(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  // Move relocates within the folder tree, which a top-level folder has no
+  // place in — so it is offered only when the selection is movable.
+  const canMoveSelection = selectedCategories.size === 0 && !atHome && selectionCount > 0;
+
+  /** Edit the one selected item. Enabled only at a count of exactly 1 — "edit"
+   *  has no meaning for a multi-selection. */
+  const editSelected = () => {
+    if (selectionCount !== 1) return;
+    const catId = Array.from(selectedCategories)[0];
+    if (catId) {
+      const c = categories.find(x => x.id === catId);
+      if (c) setFolderModal({ editing: c });
+    } else {
+      const folderId = Array.from(selectedFolders)[0];
+      if (folderId) {
+        const f = folders.find(x => x.id === folderId);
+        if (f) setFolderModal({ editing: f });
+      } else {
+        const entryId = Array.from(selectedEntries)[0];
+        const e = entries.find(x => x.id === entryId);
+        if (e) setFileModal({ editing: e });
+      }
+    }
+    clearSelection();
+  };
+
+  /** Delete everything selected, whatever the mix. One confirmation for the
+   *  whole set rather than one per item. */
+  const deleteSelected = async () => {
+    if (selectionCount === 0) return;
+    const anyFolder = selectedFolders.size > 0 || selectedCategories.size > 0;
+    // Deleting a folder cascades to its contents, so it warrants the harsher
+    // wording even when files are in the mix.
+    if (!(await confirm({ message: anyFolder ? t.deleteFolderConfirm : t.deleteEntryConfirm, destructive: true }))) return;
+    if (selectedEntries.size) {
+      await supabase.from('file_entries').delete().in('id', Array.from(selectedEntries));
+    }
+    if (selectedFolders.size) {
+      await supabase.from('file_folders').delete().in('id', Array.from(selectedFolders));
+    }
+    if (selectedCategories.size) {
+      await supabase.from('file_categories').delete().in('id', Array.from(selectedCategories));
+    }
+    clearSelection();
+    void load();
+  };
 
   const enterCategory = (c: FileCategory) => setStack(s => [...s, { categoryId: c.id, folderId: null, label: c.name }]);
   const enterFolder = (f: FileFolder) => setStack(s => [...s, { categoryId: f.category_id, folderId: f.id, label: f.name }]);
@@ -388,9 +448,12 @@ export default function FilesModule() {
           <div className="flex items-center gap-2 shrink-0">
             {/* Enter selection mode (checkboxes appear). Shown only where
                 there are selectable items and we're not already selecting. */}
-            {!atHome && !selectionMode && (childFolders.length > 0 || childEntries.length > 0) && (
+            {/* Edit/delete live in the selection bar now, so this has to be
+                reachable at home as well — otherwise a top-level folder has no
+                edit path at all. */}
+            {!selectionMode && (categories.length > 0 || childFolders.length > 0 || childEntries.length > 0) && (
               <Button variant="secondary" onClick={() => setSelectMode(true)}>
-                <FolderInput size={16} className="mr-1.5" /> {t.moveBtn}
+                <ListChecks size={16} className="mr-1.5" /> {t.selectButton}
               </Button>
             )}
             <Button variant="secondary" onClick={() => setFolderModal({ editing: null })}>
@@ -434,8 +497,19 @@ export default function FilesModule() {
             {selectionCount > 0 ? t.selectedCount.replace('{{count}}', String(selectionCount)) : t.selectPrompt}
           </span>
           <div className="flex-1" />
-          <Button size="sm" disabled={selectionCount === 0} onClick={() => setMoveOpen(true)}>
-            <FolderInput size={15} className="mr-1.5" /> {t.moveBtn}
+          {/* Edit only at exactly one — "edit" has no meaning for a set. */}
+          {selectionCount === 1 && (
+            <Button size="sm" variant="secondary" onClick={editSelected}>
+              <Pencil size={14} className="mr-1.5" /> {tc.buttons.edit}
+            </Button>
+          )}
+          {canMoveSelection && (
+            <Button size="sm" variant="secondary" onClick={() => setMoveOpen(true)}>
+              <FolderInput size={15} className="mr-1.5" /> {t.moveBtn}
+            </Button>
+          )}
+          <Button size="sm" disabled={selectionCount === 0} onClick={() => void deleteSelected()} className="!bg-red-500 hover:!bg-red-600">
+            <Trash2 size={14} className="mr-1.5" /> {tc.buttons.delete}
           </Button>
         </div>
       )}
@@ -456,17 +530,15 @@ export default function FilesModule() {
             <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {atHome && categories.map(c => (
                 <FolderTile key={c.id} name={c.name} count={folderItemCount(c.id, null)}
-                  onOpen={() => enterCategory(c)} canManage={canManage}
-                  onEdit={() => setFolderModal({ editing: c })}
-                  onDelete={() => deleteCategoryRow(c)} />
+                  onOpen={() => enterCategory(c)} canManage={canManage} coverPath={c.cover_path}
+                  selected={selectedCategories.has(c.id)} selectionMode={selectionMode}
+                  onToggleSelect={() => toggleCategory(c.id)} />
               ))}
               {childFolders.map(f => (
                 <FolderTile key={f.id} name={f.name} count={folderItemCount(f.category_id, f.id)}
                   onOpen={() => enterFolder(f)} canManage={canManage}
                   selected={selectedFolders.has(f.id)} selectionMode={selectionMode}
-                  onToggleSelect={() => toggleFolder(f.id)}
-                  onEdit={() => setFolderModal({ editing: f })}
-                  onDelete={() => deleteFolderRow(f)} />
+                  onToggleSelect={() => toggleFolder(f.id)} coverPath={f.cover_path} />
               ))}
             </div>
           )}
@@ -480,8 +552,10 @@ export default function FilesModule() {
               badge={c.crew_visible ? { label: t.crewBadge, team: true } : { label: t.officeOnlyBadge, team: false }}
               onOpen={() => enterCategory(c)}
               canManage={canManage}
-              onEdit={() => setFolderModal({ editing: c })}
-              onDelete={() => deleteCategoryRow(c)}
+              coverPath={c.cover_path}
+              selected={selectedCategories.has(c.id)}
+              selectionMode={selectionMode}
+              onToggleSelect={() => toggleCategory(c.id)}
             />
           ))}
 
@@ -496,8 +570,7 @@ export default function FilesModule() {
               selected={selectedFolders.has(f.id)}
               selectionMode={selectionMode}
               onToggleSelect={() => toggleFolder(f.id)}
-              onEdit={() => setFolderModal({ editing: f })}
-              onDelete={() => deleteFolderRow(f)}
+              coverPath={f.cover_path}
             />
           ))}
 
@@ -580,11 +653,12 @@ export default function FilesModule() {
   );
 }
 
-function FolderCard({ name, count, badge, onOpen, canManage, onEdit, onDelete, selected, selectionMode, onToggleSelect }: {
+function FolderCard({ name, count, badge, onOpen, canManage, selected, selectionMode, onToggleSelect, coverPath }: {
   name: string; count?: number; badge?: { label: string; team: boolean }; onOpen: () => void;
-  canManage: boolean; onEdit: () => void; onDelete: () => void;
-  // Subfolders pass these (selectable); top-level categories omit them.
+  canManage: boolean;
   selected?: boolean; selectionMode?: boolean; onToggleSelect?: () => void;
+  /** Hand-picked folder picture (migration 214); null falls back to the icon. */
+  coverPath?: string | null;
 }) {
   const { t: full } = useLang();
   const t = full.dashboard.files;
@@ -603,8 +677,10 @@ function FolderCard({ name, count, badge, onOpen, canManage, onEdit, onDelete, s
         onClick={() => (inSelect ? onToggleSelect?.() : onOpen())}
         className="flex items-center gap-3 flex-1 min-w-0 text-left select-none"
       >
-        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-          <Folder size={17} className="text-primary" />
+        <div className="w-9 h-9 rounded-lg bg-primary/10 overflow-hidden flex items-center justify-center shrink-0">
+          {coverPath
+            ? <CoverImage path={coverPath} className="w-full h-full object-cover" />
+            : <Folder size={17} className="text-primary" />}
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -618,16 +694,8 @@ function FolderCard({ name, count, badge, onOpen, canManage, onEdit, onDelete, s
           {countLabel && <p className="text-xs text-faint mt-0.5">{countLabel}</p>}
         </div>
       </button>
-      {!inSelect && canManage && (
-        <div className="flex items-center gap-1 shrink-0">
-          <Tooltip tip="edit">
-            <button onClick={onEdit} className="p-2 rounded-lg text-muted hover:text-primary hover:bg-primary/5"><Pencil size={14} /></button>
-          </Tooltip>
-          <Tooltip tip="delete">
-            <button onClick={onDelete} className="p-2 rounded-lg text-red-500 hover:bg-red-500/10"><Trash2 size={14} /></button>
-          </Tooltip>
-        </div>
-      )}
+      {/* Edit and delete live in the selection bar now (long-press / Select),
+          so a row carries navigation only. */}
       {!inSelect && <ChevronRight size={16} className="text-faint shrink-0" />}
     </div>
   );
@@ -664,16 +732,6 @@ function FileRow({ entry, officeOnly, metaLabel, canManage, selected, selectionM
           <Tooltip tip="openFile">
             <button onClick={onOpen} className="p-2 rounded-lg text-faint hover:text-primary hover:bg-primary/5 shrink-0"><ExternalLink size={15} /></button>
           </Tooltip>
-          {canManage && (
-            <>
-              <Tooltip tip="edit">
-                <button onClick={onEdit} className="p-2 rounded-lg text-muted hover:text-primary hover:bg-primary/5 shrink-0"><Pencil size={14} /></button>
-              </Tooltip>
-              <Tooltip tip="delete">
-                <button onClick={onDelete} className="p-2 rounded-lg text-red-500 hover:bg-red-500/10 shrink-0"><Trash2 size={14} /></button>
-              </Tooltip>
-            </>
-          )}
         </>
       )}
     </div>
@@ -683,10 +741,11 @@ function FileRow({ entry, officeOnly, metaLabel, canManage, selected, selectionM
 /** Folder as a grid tile. Same footprint as a file card so the two line up in
  *  one grid — a folder-only view has to visibly change when you flip the
  *  toggle, or the control reads as broken. */
-function FolderTile({ name, count, onOpen, canManage, selected, selectionMode, onToggleSelect, onEdit, onDelete }: {
+function FolderTile({ name, count, onOpen, canManage, selected, selectionMode, onToggleSelect, coverPath }: {
   name: string; count: number; onOpen: () => void; canManage: boolean;
   selected?: boolean; selectionMode?: boolean; onToggleSelect?: () => void;
-  onEdit: () => void; onDelete: () => void;
+  /** Hand-picked folder picture (migration 214); null falls back to the icon. */
+  coverPath?: string | null;
 }) {
   const { t: full } = useLang();
   const t = full.dashboard.files;
@@ -695,8 +754,10 @@ function FolderTile({ name, count, onOpen, canManage, selected, selectionMode, o
   return (
     <div className={`group relative rounded-xl border overflow-hidden bg-card ${selected ? 'border-primary ring-1 ring-primary/30' : 'border-border-soft hover:border-border'}`}>
       <button onClick={() => (inSelect && onToggleSelect ? onToggleSelect() : onOpen())} className="block w-full text-left">
-        <div className="aspect-[3/4] w-full flex items-center justify-center bg-primary/5 border-b border-border-soft">
-          <Folder size={44} className="text-primary" />
+        <div className="aspect-[3/4] w-full overflow-hidden flex items-center justify-center bg-primary/5 border-b border-border-soft">
+          {coverPath
+            ? <CoverImage path={coverPath} />
+            : <Folder size={44} className="text-primary" />}
         </div>
         <div className="px-2.5 py-2">
           <p className="text-xs font-medium text-ink truncate">{name}</p>
@@ -710,14 +771,28 @@ function FolderTile({ name, count, onOpen, canManage, selected, selectionMode, o
         >
           {selected && <Check size={12} className="text-white" />}
         </button>
-      ) : canManage && (
-        <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-          <button onClick={onEdit} className="p-1.5 rounded-lg bg-card/90 border border-border-soft text-muted hover:text-primary"><Pencil size={12} /></button>
-          <button onClick={onDelete} className="p-1.5 rounded-lg bg-card/90 border border-border-soft text-red-500"><Trash2 size={12} /></button>
-        </div>
-      )}
+      ) : null}
     </div>
   );
+}
+
+/** A stored image resolved to a signed URL. Used for folder covers, which are
+ *  always hand-picked (there is nothing to render a folder from). */
+function CoverImage({ path, className = 'w-full h-full object-cover object-top' }: { path: string; className?: string }) {
+  const supabase = createSupabaseClient();
+  const [src, setSrc] = useState<string | null>(null);
+  const [broken, setBroken] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setSrc(null);
+    setBroken(false);
+    void signedUrl(supabase, path).then(u => { if (!cancelled) setSrc(u); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path]);
+  if (!src || broken) return <Folder size={44} className="text-primary" />;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt="" loading="lazy" onError={() => setBroken(true)} className={className} />;
 }
 
 /**
@@ -799,16 +874,11 @@ function FileCard({ entry, officeOnly, metaLabel, canManage, selected, selection
           {selected && <Check size={12} className="text-white" />}
         </button>
       ) : (
-        // Hover-only so the artwork stays clean; still reachable by keyboard
-        // via focus-within.
-        <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+        // Only "open" stays inline. Edit and delete moved into the selection
+        // bar (long-press / Select), so the card stays uncluttered and the two
+        // destructive actions sit behind a deliberate gesture.
+        <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
           <button onClick={onOpen} className="p-1.5 rounded-lg bg-card/90 border border-border-soft text-faint hover:text-primary"><ExternalLink size={13} /></button>
-          {canManage && (
-            <>
-              <button onClick={onEdit} className="p-1.5 rounded-lg bg-card/90 border border-border-soft text-muted hover:text-primary"><Pencil size={12} /></button>
-              <button onClick={onDelete} className="p-1.5 rounded-lg bg-card/90 border border-border-soft text-red-500"><Trash2 size={12} /></button>
-            </>
-          )}
         </div>
       )}
     </div>
@@ -831,16 +901,62 @@ function FolderModal({ editing, atHome, categoryId, parentFolderId, businessId, 
     editing && !('category_id' in editing) ? (editing as FileCategory).crew_visible : true,
   );
   const [saving, setSaving] = useState(false);
+  // Folder picture (migration 214). Always hand-picked — a folder has no
+  // contents to render a preview from.
+  const [cover, setCover] = useState<Blob | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [coverRemoved, setCoverRemoved] = useState(false);
+  const coverInput = useRef<HTMLInputElement>(null);
+  const existingCover = editing?.cover_path ?? null;
+
+  const onPickCover = (f: File | null) => {
+    if (!f || !f.type.startsWith('image/')) return;
+    setCover(f);
+    setCoverRemoved(false);
+    setCoverPreview(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(f); });
+  };
+  usePasteImage(!saving, files => { if (files[0]) onPickCover(files[0]); }, [saving]);
+  useEffect(() => () => { if (coverPreview) URL.revokeObjectURL(coverPreview); }, [coverPreview]);
+
+  /** Resolve the cover column for a row that now definitely exists. Uploading
+   *  after the insert means a cancelled save leaves no orphan in the bucket. */
+  const applyCover = async (table: 'file_categories' | 'file_folders', id: string) => {
+    if (coverRemoved && !cover) {
+      await supabase.from(table).update({ cover_path: null }).eq('id', id);
+      return;
+    }
+    if (!cover) return;
+    const shrunk = await downscaleImage(cover);
+    const path = coverStoragePath(businessId, id, 'jpg');
+    const { error } = await supabase.storage.from(FILES_BUCKET)
+      .upload(path, shrunk, { contentType: 'image/jpeg', upsert: true });
+    if (error) return; // best-effort: never fail a save over a picture
+    await supabase.from(table).update({ cover_path: path }).eq('id', id);
+  };
 
   const save = async () => {
     if (!name.trim()) return;
     setSaving(true);
     if (isCategory) {
-      if (editing) await supabase.from('file_categories').update({ name: name.trim(), crew_visible: crewVisible }).eq('id', editing.id);
-      else await supabase.from('file_categories').insert({ business_id: businessId, name: name.trim(), crew_visible: crewVisible, created_by: userId });
+      if (editing) {
+        await supabase.from('file_categories').update({ name: name.trim(), crew_visible: crewVisible }).eq('id', editing.id);
+        await applyCover('file_categories', editing.id);
+      } else {
+        const { data } = await supabase.from('file_categories')
+          .insert({ business_id: businessId, name: name.trim(), crew_visible: crewVisible, created_by: userId })
+          .select('id').single();
+        if (data?.id) await applyCover('file_categories', data.id);
+      }
     } else {
-      if (editing) await supabase.from('file_folders').update({ name: name.trim() }).eq('id', editing.id);
-      else await supabase.from('file_folders').insert({ business_id: businessId, category_id: categoryId, parent_folder_id: parentFolderId, name: name.trim(), created_by: userId });
+      if (editing) {
+        await supabase.from('file_folders').update({ name: name.trim() }).eq('id', editing.id);
+        await applyCover('file_folders', editing.id);
+      } else {
+        const { data } = await supabase.from('file_folders')
+          .insert({ business_id: businessId, category_id: categoryId, parent_folder_id: parentFolderId, name: name.trim(), created_by: userId })
+          .select('id').single();
+        if (data?.id) await applyCover('file_folders', data.id);
+      }
     }
     onSaved();
   };
@@ -858,6 +974,48 @@ function FolderModal({ editing, atHome, categoryId, parentFolderId, businessId, 
             <Toggle checked={crewVisible} onChange={setCrewVisible} />
           </div>
         )}
+        {/* Folder picture. Always hand-picked — there are no contents to
+            render a preview from. */}
+        <div>
+          <label className="text-sm font-medium text-ink">{t.coverLabel}</label>
+          <div className="flex items-start gap-3 mt-1.5">
+            <div className="w-20 h-20 shrink-0 rounded-lg border border-border-soft overflow-hidden bg-surface flex items-center justify-center">
+              {coverPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={coverPreview} alt="" className="w-full h-full object-cover" />
+              ) : existingCover && !coverRemoved ? (
+                <CoverImage path={existingCover} className="w-full h-full object-cover" />
+              ) : (
+                <Folder size={22} className="text-faint" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="secondary" size="sm" onClick={() => coverInput.current?.click()}>
+                  {coverPreview || (existingCover && !coverRemoved) ? t.coverChange : t.coverAdd}
+                </Button>
+                {(coverPreview || (existingCover && !coverRemoved)) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCover(null);
+                      setCoverPreview(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
+                      setCoverRemoved(true);
+                    }}
+                    className="text-xs font-semibold text-red-500 px-1"
+                  >
+                    {t.coverRemove}
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-faint mt-1.5">{t.folderCoverNote}</p>
+              <PasteHint className="mt-1" />
+            </div>
+          </div>
+          <input ref={coverInput} type="file" accept="image/*" className="hidden"
+            onChange={e => onPickCover(e.target.files?.[0] ?? null)} />
+        </div>
+
         <div className="flex gap-3 pt-1">
           <Button variant="secondary" onClick={onClose} fullWidth>{tc.buttons.cancel}</Button>
           <Button onClick={save} loading={saving} fullWidth>{tc.buttons.save}</Button>

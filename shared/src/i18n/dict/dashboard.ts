@@ -3088,6 +3088,7 @@ export type DashboardDict = {
     coverLabel: string; coverAdd: string; coverChange: string; coverRemove: string;
     coverLinkNote: string; coverFileNote: string; coverUploading: string;
     coverPaste: string;
+    selectButton: string; folderCoverNote: string;
     openBtn: string;
     noSections: string; noEntries: string;
     deleteCategoryConfirm: string; deleteSectionConfirm: string; deleteEntryConfirm: string;
@@ -6159,6 +6160,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       coverFileNote: 'Se genera sola desde la primera página del PDF. Sube una imagen solo si prefieres otra.',
       coverUploading: 'Subiendo portada...',
       coverPaste: 'Pegar foto copiada',
+      selectButton: 'Seleccionar',
+      folderCoverNote: 'Elige una imagen para esta carpeta. Si no, se muestra el ícono.',
       openBtn: 'Abrir',
       noSections: 'Sin secciones todavía',
       noEntries: 'Sin archivos todavía',
@@ -9243,6 +9246,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
       coverFileNote: 'Generated from the PDF\'s first page. Upload an image only if you want a different one.',
       coverUploading: 'Uploading cover...',
       coverPaste: 'Paste copied photo',
+      selectButton: 'Select',
+      folderCoverNote: 'Pick an image for this folder. Without one, the icon is shown.',
       openBtn: 'Open',
       noSections: 'No sections yet',
       noEntries: 'No files yet',
