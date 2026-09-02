@@ -2280,7 +2280,12 @@ export default function NuevoTrabajoRoute() {
             the modal host — as the Modal's direct child the NativeWind class
             wasn't expanding to full height, which left the scrim covering only
             the card area instead of the whole screen. */}
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        {/* KeyboardAvoidingView: the sheet is anchored to the bottom, exactly
+            where the keyboard opens, so its fields sat underneath it. */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+        >
           {/* Heavier scrim so the form behind reads as a soft dark wash
               instead of being clearly legible through the picker. Color is an
               inline style (not a NativeWind opacity class) so it always
@@ -2392,7 +2397,7 @@ export default function NuevoTrabajoRoute() {
               ) : null}
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </RNModal>
 
       {/* Quick-add client sheet — create a client without leaving the job
@@ -2485,7 +2490,12 @@ export default function NuevoTrabajoRoute() {
         transparent
         onRequestClose={() => setLeadPickerOpen(false)}
       >
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        {/* KeyboardAvoidingView: the sheet is anchored to the bottom, exactly
+            where the keyboard opens, so its fields sat underneath it. */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+        >
           <Pressable
             onPress={() => setLeadPickerOpen(false)}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
@@ -2560,7 +2570,7 @@ export default function NuevoTrabajoRoute() {
               ) : null}
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </RNModal>
 
       {/* Crew picker modal — multi-select. Tap toggles each row; the sheet
@@ -2571,7 +2581,12 @@ export default function NuevoTrabajoRoute() {
         transparent
         onRequestClose={() => setCrewPickerOpen(false)}
       >
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        {/* KeyboardAvoidingView: the sheet is anchored to the bottom, exactly
+            where the keyboard opens, so its fields sat underneath it. */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+        >
           <Pressable
             onPress={() => setCrewPickerOpen(false)}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
@@ -2650,7 +2665,7 @@ export default function NuevoTrabajoRoute() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </RNModal>
 
       {/* Driver picker modal — multi-select over ALL employees. */}
@@ -2660,7 +2675,12 @@ export default function NuevoTrabajoRoute() {
         transparent
         onRequestClose={() => setDriverPickerOpen(false)}
       >
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        {/* KeyboardAvoidingView: the sheet is anchored to the bottom, exactly
+            where the keyboard opens, so its fields sat underneath it. */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+        >
           <Pressable
             onPress={() => setDriverPickerOpen(false)}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
@@ -2739,7 +2759,7 @@ export default function NuevoTrabajoRoute() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </RNModal>
 
       {business ? (

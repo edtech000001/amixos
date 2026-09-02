@@ -926,7 +926,12 @@ export default function NuevaFacturaRoute() {
         transparent
         onRequestClose={() => setClientPickerOpen(false)}
       >
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        {/* KeyboardAvoidingView: the sheet is anchored to the bottom, exactly
+            where the keyboard opens, so its fields sat underneath it. */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+        >
           {/* Dark scrim — inline color so it renders without waiting on a
               NativeWind regeneration. */}
           <Pressable
@@ -1011,7 +1016,7 @@ export default function NuevaFacturaRoute() {
               ) : null}
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </RNModal>
       {unsavedSheet}
     </SafeAreaView>

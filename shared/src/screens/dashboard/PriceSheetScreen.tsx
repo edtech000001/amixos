@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { loadCachedThenFresh, writeCacheAndStamp } from '../../lib/swrCache';
 import { useDataFingerprint } from '../../lib/dataFingerprint';
 import { SkeletonList } from '../../ui/Skeleton';
-import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Modal as RNModal } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Modal as RNModal, KeyboardAvoidingView, Platform } from 'react-native';
 import { Plus, X, Trash2, Pencil, Copy, DollarSign, Search, ChevronDown, Check } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
@@ -332,7 +332,15 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
 
       {/* Add/edit sheet — absolute backdrop BEHIND a plain-View card (scrolls). */}
       <RNModal visible={!!draft} transparent animationType="fade" onRequestClose={() => setDraft(null)}>
-        <View className="flex-1 justify-end">
+        {/* KeyboardAvoidingView: this sheet is anchored to the bottom, exactly
+            where the keyboard opens, so the lower fields (price, terms) were
+            underneath it. Padding behaviour shrinks the container, and the
+            card's max-h is relative to that — so the whole card lands above
+            the keyboard and scrolls internally rather than being clipped. */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          className="flex-1 justify-end"
+        >
           <Pressable onPress={() => setDraft(null)} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
           <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[90%]">
             <View className="flex-row items-center justify-between mb-4">
@@ -504,7 +512,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage }: PriceSheet
               </View>
             ) : null}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </RNModal>
     </View>
   );

@@ -956,7 +956,12 @@ export function PayrollScreen({
 
       {/* Payroll settings sheet — frequency / anchor / pay components. */}
       <RNModal visible={settingsOpen} transparent animationType="fade" onRequestClose={closeSettings}>
-        <View className="flex-1 justify-end">
+        {/* KeyboardAvoidingView: the sheet is anchored to the bottom, exactly
+            where the keyboard opens, so the lower fields sat underneath it. */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          className="flex-1 justify-end"
+        >
                   <Pressable
                     onPress={closeSettings}
                     style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
@@ -1167,7 +1172,7 @@ export function PayrollScreen({
               </Pressable>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </RNModal>
 
       {/* Mark-paid sheet */}
@@ -1475,7 +1480,12 @@ export function PayrollScreen({
       {/* Loans directory — header entry point; reaches every worker incl.
          ex-workers. Search to find anyone, tap to view/add/delete their loans. */}
       <RNModal visible={loansOpen} transparent animationType="fade" onRequestClose={() => setLoansOpen(false)}>
-        <View className="flex-1 justify-end">
+        {/* KeyboardAvoidingView: the sheet is anchored to the bottom, exactly
+            where the keyboard opens, so the lower fields sat underneath it. */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          className="flex-1 justify-end"
+        >
           <Pressable onPress={() => setLoansOpen(false)}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
           <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 h-[85%]">
@@ -1612,7 +1622,7 @@ export function PayrollScreen({
               </>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </RNModal>
     </View>
   );

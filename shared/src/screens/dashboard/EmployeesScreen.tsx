@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput, FlatList, Modal as RNModal } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, FlatList, Modal as RNModal, KeyboardAvoidingView, Platform } from 'react-native';
 import {
   Clock,
   ClipboardList,
@@ -621,7 +621,12 @@ export function EmployeesScreen({
     {/* Filter bottom sheet — matches the jobs sort/group sheet. fade (not slide)
        so the dim backdrop doesn't read as a gray bar rising. */}
     <RNModal visible={filterOpen} transparent animationType="fade" onRequestClose={() => setFilterOpen(false)}>
-      <View className="flex-1 justify-end">
+      {/* KeyboardAvoidingView: the sheet is anchored to the bottom, exactly
+          where the keyboard opens, so the lower fields sat underneath it. */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        className="flex-1 justify-end"
+      >
         <Pressable
           onPress={() => setFilterOpen(false)}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
@@ -708,7 +713,7 @@ export function EmployeesScreen({
             </View>
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </RNModal>
     </View>
   );

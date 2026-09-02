@@ -10,6 +10,7 @@ import {
   Alert,
   Linking,
   Platform,
+  KeyboardAvoidingView,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -123,7 +124,12 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
 
   return (
     <RNModal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 justify-end">
+      {/* KeyboardAvoidingView: the sheet is anchored to the bottom, exactly
+          where the keyboard opens, so its fields sat underneath it. */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        className="flex-1 justify-end"
+      >
         {/* Backdrop sits BEHIND the sheet as an absolute sibling — wrapping the
            sheet in a Pressable would steal the touch responder and block the
            ScrollView from scrolling anywhere but the buttons. */}
@@ -443,7 +449,7 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
             </ScrollView>
           )}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </RNModal>
   );
 }

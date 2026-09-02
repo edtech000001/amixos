@@ -7,6 +7,8 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Check, X, Search, MapPin } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -119,8 +121,20 @@ export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmi
 
   return (
     <RNModal visible={visible} transparent animationType="slide" onRequestClose={close}>
-      <Pressable onPress={close} className="flex-1 bg-black/40 justify-end">
-        <Pressable onPress={() => {}} className="bg-card rounded-t-3xl px-5 pb-10 pt-4 max-h-[88%]">
+      {/* KeyboardAvoidingView: the sheet is anchored to the bottom, exactly
+          where the keyboard opens. Backdrop is an absolute FIRST child and the
+          card a plain sibling, per the sheet contract in CLAUDE.md — the
+          nested-card + no-op-onPress shape this replaces also stopped the
+          ScrollView inside from receiving drags. */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        className="flex-1 justify-end"
+      >
+        <Pressable
+          onPress={close}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+        />
+        <View className="bg-card rounded-t-3xl px-5 pb-10 pt-4 max-h-[88%]">
           <View className="items-center mb-3">
             <View className="w-10 h-1 bg-border rounded-full" />
           </View>
@@ -229,8 +243,8 @@ export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmi
               <Text className="text-base font-semibold text-ink">{tc.buttons.cancel}</Text>
             </Pressable>
           </View>
-        </Pressable>
-      </Pressable>
+        </View>
+      </KeyboardAvoidingView>
     </RNModal>
   );
 }
