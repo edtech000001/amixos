@@ -389,8 +389,38 @@ export default function ArchivosScreen() {
           </View>
         ) : (
           <View className="gap-2">
+            {/* Grid mode tiles folders too. A folder-only view that looked
+                identical in both modes made the toggle read as broken. */}
+            {viewMode === 'grid' ? (
+              <View className="flex-row flex-wrap -mx-1">
+                {(atHome ? categories : []).map(cat => (
+                  <View key={cat.id} className="w-1/2 px-1 pb-2">
+                    <FolderTile
+                      name={cat.name}
+                      count={folderItemCount(cat.id, null)}
+                      onOpen={() => enterCategory(cat)}
+                      canManage={canManage}
+                    />
+                  </View>
+                ))}
+                {childFolders.map(f => (
+                  <View key={f.id} className="w-1/2 px-1 pb-2">
+                    <FolderTile
+                      name={f.name}
+                      count={folderItemCount(f.category_id, f.id)}
+                      onOpen={() => enterFolder(f)}
+                      canManage={canManage}
+                      selected={selectedFolders.has(f.id)}
+                      selectionMode={selectionMode}
+                      onToggleSelect={() => toggleFolder(f.id)}
+                    />
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
             {/* Top-level folders (home) */}
-            {atHome ? categories.map(c => (
+            {viewMode !== 'grid' && atHome ? categories.map(c => (
               <FolderRow key={c.id} name={c.name} count={folderItemCount(c.id, null)}
                 badge={c.crew_visible ? { label: t.crewBadge, team: true } : { label: t.officeOnlyBadge, team: false }}
                 onOpen={() => enterCategory(c)} canManage={canManage}
@@ -400,7 +430,7 @@ export default function ArchivosScreen() {
             )) : null}
 
             {/* Subfolders — selectable, so they can be moved with files in bulk */}
-            {childFolders.map(f => (
+            {viewMode === 'grid' ? null : childFolders.map(f => (
               <FolderRow key={f.id} name={f.name} count={folderItemCount(f.category_id, f.id)}
                 onOpen={() => enterFolder(f)} canManage={canManage}
                 selected={selectedFolders.has(f.id)} selectionMode={selectionMode}
@@ -410,9 +440,7 @@ export default function ArchivosScreen() {
               />
             ))}
 
-            {/* Files. Folders stay as full-width rows in both modes — only
-                files become cards, so navigation doesn't move when you flip
-                the toggle. */}
+            {/* Files. */}
             {viewMode === 'grid' ? (
               <View className="flex-row flex-wrap -mx-1">
                 {childEntries.map(e => {
@@ -904,6 +932,40 @@ function FileSheets({
   );
 }
 
+
+/** Folder as a grid tile. Same footprint as a file card so the two line up in
+ *  one grid — a folder-only view has to visibly change when you flip the
+ *  toggle, or the control reads as broken. */
+function FolderTile({ name, count, onOpen, selected, selectionMode, onToggleSelect, canManage }: {
+  name: string; count: number; onOpen: () => void;
+  selected?: boolean; selectionMode?: boolean; onToggleSelect?: () => void; canManage: boolean;
+}) {
+  const { t: full } = useLang();
+  const t = full.dashboard.files;
+  const c = useThemeColors();
+  const countLabel = count === 0 ? t.itemsEmpty : count === 1 ? t.itemsOne : t.itemsMany.replace('{{count}}', String(count));
+  return (
+    <Pressable
+      onPress={() => (canManage && selectionMode && onToggleSelect ? onToggleSelect() : onOpen())}
+      onLongPress={canManage && onToggleSelect ? onToggleSelect : undefined}
+      delayLongPress={250}
+      className={`rounded-xl border overflow-hidden ${selected ? 'border-primary bg-primary/5' : 'border-border-soft bg-card'}`}
+    >
+      <View style={{ height: 150 }} className="w-full items-center justify-center bg-primary/5 border-b border-border-soft">
+        <Folder size={44} color={c.primary} />
+      </View>
+      <View className="px-2.5 py-2">
+        <Text className="text-xs font-medium text-ink" numberOfLines={1}>{name}</Text>
+        <Text className="text-[11px] text-faint" numberOfLines={1}>{countLabel}</Text>
+      </View>
+      {canManage && selectionMode ? (
+        <View className={`absolute top-2 left-2 w-5 h-5 rounded border items-center justify-center ${selected ? 'bg-primary border-primary' : 'bg-card border-border'}`}>
+          {selected ? <Check size={12} color="#FFFFFF" /> : null}
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
 
 /**
  * Cached first-page preview. `thumbnail_path` is produced once by the API

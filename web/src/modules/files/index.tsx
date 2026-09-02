@@ -414,8 +414,25 @@ export default function FilesModule() {
         </div>
       ) : (
         <div className="flex flex-col gap-2">
+          {/* Grid mode tiles folders too. A folder-only view that looked
+              identical in both modes made the toggle read as broken. */}
+          {viewMode === 'grid' && (
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {atHome && categories.map(c => (
+                <FolderTile key={c.id} name={c.name} count={folderItemCount(c.id, null)}
+                  onOpen={() => enterCategory(c)} canManage={canManage} />
+              ))}
+              {childFolders.map(f => (
+                <FolderTile key={f.id} name={f.name} count={folderItemCount(f.category_id, f.id)}
+                  onOpen={() => enterFolder(f)} canManage={canManage}
+                  selected={selectedFolders.has(f.id)} selectionMode={selectionMode}
+                  onToggleSelect={() => toggleFolder(f.id)} />
+              ))}
+            </div>
+          )}
+
           {/* Top-level folders (home) — not selectable/movable */}
-          {atHome && categories.map(c => (
+          {viewMode !== 'grid' && atHome && categories.map(c => (
             <FolderCard
               key={c.id}
               name={c.name}
@@ -429,7 +446,7 @@ export default function FilesModule() {
           ))}
 
           {/* Subfolders — selectable (long-press) so they can be bulk-moved */}
-          {childFolders.map(f => (
+          {viewMode !== 'grid' && childFolders.map(f => (
             <FolderCard
               key={f.id}
               name={f.name}
@@ -444,9 +461,7 @@ export default function FilesModule() {
             />
           ))}
 
-          {/* Files at this level. Folders stay as full-width rows in both
-              modes — only the files become cards, which is what Drive does and
-              keeps navigation in the same place when you flip the toggle. */}
+          {/* Files at this level. */}
           {viewMode === 'grid' ? (
             <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {childEntries.map(e => (
@@ -620,6 +635,40 @@ function FileRow({ entry, officeOnly, metaLabel, canManage, selected, selectionM
             </>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+/** Folder as a grid tile. Same footprint as a file card so the two line up in
+ *  one grid — a folder-only view has to visibly change when you flip the
+ *  toggle, or the control reads as broken. */
+function FolderTile({ name, count, onOpen, canManage, selected, selectionMode, onToggleSelect }: {
+  name: string; count: number; onOpen: () => void; canManage: boolean;
+  selected?: boolean; selectionMode?: boolean; onToggleSelect?: () => void;
+}) {
+  const { t: full } = useLang();
+  const t = full.dashboard.files;
+  const countLabel = count === 0 ? t.itemsEmpty : count === 1 ? t.itemsOne : t.itemsMany.replace('{{count}}', String(count));
+  const inSelect = canManage && !!selectionMode && !!onToggleSelect;
+  return (
+    <div className={`relative rounded-xl border overflow-hidden bg-card ${selected ? 'border-primary ring-1 ring-primary/30' : 'border-border-soft hover:border-border'}`}>
+      <button onClick={() => (inSelect && onToggleSelect ? onToggleSelect() : onOpen())} className="block w-full text-left">
+        <div className="aspect-[3/4] w-full flex items-center justify-center bg-primary/5 border-b border-border-soft">
+          <Folder size={44} className="text-primary" />
+        </div>
+        <div className="px-2.5 py-2">
+          <p className="text-xs font-medium text-ink truncate">{name}</p>
+          <p className="text-[11px] text-faint truncate">{countLabel}</p>
+        </div>
+      </button>
+      {inSelect && (
+        <button
+          onClick={onToggleSelect}
+          className={`absolute top-2 left-2 w-5 h-5 rounded border flex items-center justify-center ${selected ? 'bg-primary border-primary' : 'bg-card/90 border-border'}`}
+        >
+          {selected && <Check size={12} className="text-white" />}
+        </button>
       )}
     </div>
   );
