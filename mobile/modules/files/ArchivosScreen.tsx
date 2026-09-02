@@ -4,7 +4,7 @@
 // Navigate one level at a time; files can override their own visibility.
 // One-hand conventions: FAB + bottom-sheet forms (fade), save at the bottom.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadCachedThenFresh, writeCacheAndStamp } from '@amixos/shared/lib/swrCache';
 import { useDataFingerprint } from '@amixos/shared/lib/dataFingerprint';
 import { SkeletonList } from '@amixos/shared/ui/Skeleton';
@@ -30,7 +30,7 @@ import { can } from '@amixos/shared/lib/permissions';
 import {
   fetchFilesTree, fileStoragePath, fileUid, fileMeta, fileIsCrewVisible,
   type FilesTree,
-  FILES_BUCKET, FILE_MAX_BYTES, requestThumbnail,
+  FILES_BUCKET, FILE_MAX_BYTES, requestThumbnail, backfillThumbnails,
   type FileCategory, type FileFolder, type FileEntry, type FileEntryKind,
 } from '@amixos/shared/lib/files';
 import { signedUrl } from '@amixos/shared/lib/storageUrls';
@@ -185,6 +185,38 @@ export default function ArchivosScreen() {
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [business?.id, cacheKey, fingerprint, applyTree, loadUsage]),
   );
+
+  // Drain the thumbnail backlog while the grid is open — exactly when previews
+  // matter and when the user is already looking at the result. Avoids a
+  // "generate previews" button nobody would know to press; files uploaded
+  // before thumbnails existed fill in over a visit or two.
+  //
+  // Bounded per mount so it can never become an open-ended loop: batches of 10,
+  // at most MAX_SWEEPS of them, stopping early once the queue is empty. The API
+  // is idempotent, so two people browsing at once just no-op each other.
+  const sweptRef = useRef(false);
+  useEffect(() => {
+    if (viewMode !== 'grid' || !business || sweptRef.current) return;
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) return;
+    if (!entries.some(e => e.kind === 'file' && !e.thumbnail_path)) return;
+    sweptRef.current = true;
+
+    let cancelled = false;
+    void (async () => {
+      const MAX_SWEEPS = 6;
+      const jwt = await getJwt();
+      if (!jwt) return;
+      for (let i = 0; i < MAX_SWEEPS && !cancelled; i++) {
+        const res = await backfillThumbnails(apiBase, jwt, business.id, 10);
+        if (!res) return;                 // API unreachable — try again next visit
+        if (res.ready > 0) await load();  // show what just landed
+        if (res.remaining === 0) return;
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, business?.id, entries.length]);
 
   const here = stack[stack.length - 1];
   const atHome = here.categoryId === null;
