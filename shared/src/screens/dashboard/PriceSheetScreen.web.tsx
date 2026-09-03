@@ -6,7 +6,7 @@
 // optional unit (blank = flat price), and optional per-state / per-client
 // overrides that autoprice reads via applicableRate().
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type HTMLAttributes } from 'react';
 import { loadCachedThenFresh, writeCacheAndStamp } from '../../lib/swrCache';
 import { useDataFingerprint } from '../../lib/dataFingerprint';
 import { SkeletonList } from '../../ui/Skeleton';
@@ -293,7 +293,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate, 
     i: PriceSheetItem,
     idx: number,
     total: number,
-    handle?: { attributes?: Record<string, unknown>; listeners?: Record<string, unknown> },
+    handle?: { attributes?: HTMLAttributes<HTMLElement>; listeners?: HTMLAttributes<HTMLElement> },
   ) => (
     <div key={i.id} className={`px-4 py-4 flex items-center gap-3 bg-card ${idx < total - 1 ? 'border-b border-border-soft' : ''} ${!i.active ? 'opacity-50' : ''}`}>
       {handle ? (
