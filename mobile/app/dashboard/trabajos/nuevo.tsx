@@ -277,6 +277,15 @@ export default function NuevoTrabajoRoute() {
   const [internalNotes, setInternalNotes] = useState('');
   const [workerNotes, setWorkerNotes] = useState('');
   const [assignedEmployees, setAssignedEmployees] = useState<string[]>([]);
+  // Loaded from assignment rows that carry a worker_name with no employee_id,
+  // and written back on save so those rows survive an edit.
+  //
+  // DELIBERATELY NOT RENDERED. The owner removed this field on purpose —
+  // leads were typing crew names as free text instead of picking employees,
+  // which produces workers who earn no payroll hours and appear in no crew
+  // report. Do not "restore" it as a missing feature; its absence is the
+  // decision. The rows it represents are protected by loadedAssignsRef in the
+  // save path, so hiding the field cannot destroy them.
   const [manualWorkers, setManualWorkers] = useState<string[]>(['']);
   const [leadEmployeeId, setLeadEmployeeId] = useState<string | null>(null);
   // Optional drivers — any employees paid extra driverHours (each) on top of
@@ -1191,38 +1200,6 @@ export default function NuevoTrabajoRoute() {
                 ) : null}
               </View>
 
-              {/* Workers carried as a NAME with no employee_id. CSV imports
-                  create these — the old system's crew names never resolved to
-                  employee records. The state was loaded and written back on
-                  save but never rendered, so a job could list six workers on
-                  its detail page and show "1 selected" here, looking like the
-                  form had dropped five people. */}
-              <View className="mt-4">
-                <Text className="text-sm font-semibold text-ink mb-2">{t.additionalWorkersLabel}</Text>
-                {manualWorkers.map((name, i) => (
-                  <View key={i} className="flex-row items-center gap-2 mb-2">
-                    <TextInput
-                      value={name}
-                      onChangeText={(v) => setManualWorkers((prev) => prev.map((w, j) => (j === i ? v : w)))}
-                      placeholder={t.workerNumberPlaceholder.replace('{{count}}', String(i + 1))}
-                      placeholderTextColor={c.faint}
-                      className="flex-1 rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink"
-                    />
-                    {manualWorkers.length > 1 ? (
-                      <Pressable
-                        onPress={() => setManualWorkers((prev) => prev.filter((_, j) => j !== i))}
-                        hitSlop={8}
-                        className="p-2"
-                      >
-                        <X size={16} color={c.faint} />
-                      </Pressable>
-                    ) : null}
-                  </View>
-                ))}
-                <Pressable onPress={() => setManualWorkers((prev) => [...prev, ''])} hitSlop={6} className="self-start py-1">
-                  <Text className="text-sm font-semibold text-primary">{t.addWorker}</Text>
-                </Pressable>
-              </View>
             </>
           ) : null}
 
