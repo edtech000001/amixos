@@ -86,6 +86,10 @@ async function searchOrClause(
     `phone_cell.ilike.${like}`, `phone_office.ilike.${like}`,
     `email_office.ilike.${like}`, `email_home.ilike.${like}`, `email.ilike.${like}`,
     `city.ilike.${like}`, `state.ilike.${like}`,
+    // Values of the business's own custom fields (migration 218). Matched via a
+    // generated column because a PostgREST .or() cannot express a JSONB
+    // traversal — and values only, so "type" doesn't match the KEY on every row.
+    `custom_fields_text.ilike.${like}`,
     // Multi-word terms: match as first+last split across the words.
     ...fullNameOrArms(term),
   ];

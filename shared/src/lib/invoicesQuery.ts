@@ -111,7 +111,13 @@ async function searchOrClause(
   if (!term) return null;
   const { clientIds, invoiceIds } = await resolveSearchIds(supabase, businessId, term);
   const like = `%${escLike(term)}%`;
-  const ors = [`invoice_number.ilike.${like}`];
+  const ors = [
+    `invoice_number.ilike.${like}`,
+    // Values of the business's own custom fields (migration 218). Matched via a
+    // generated column because a PostgREST .or() cannot express a JSONB
+    // traversal — and values only, so "type" doesn't match the KEY on every row.
+    `custom_fields_text.ilike.${like}`,
+  ];
   // Amount search: a bare number matches the total exactly (the client list also
   // does a substring match on the formatted total, which can't be pushed to SQL —
   // exact match is the server-side approximation).
