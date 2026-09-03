@@ -1887,6 +1887,45 @@ function NuevoTrabajoContent() {
                   )}
                 </div>
                 )}
+
+                {/* Workers carried as a NAME with no employee_id. CSV imports
+                    create these — the old system's crew names never resolved to
+                    employee records. The state was loaded and written back on
+                    save but never rendered, so a job could list six workers on
+                    its detail page and show "1 selected" here, looking like the
+                    form had dropped five people. */}
+                {canStaff && (
+                  <div className="flex flex-col gap-1.5 mb-3 max-w-xs">
+                    <label className="text-sm font-medium text-ink">{t.additionalWorkersLabel}</label>
+                    {manualWorkers.map((name, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={name}
+                          placeholder={t.workerNumberPlaceholder.replace('{{count}}', String(i + 1))}
+                          onChange={e => setManualWorkers(prev => prev.map((w, j) => (j === i ? e.target.value : w)))}
+                          className="flex-1 rounded-xl border border-border bg-card px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                        {manualWorkers.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setManualWorkers(prev => prev.filter((_, j) => j !== i))}
+                            className="p-2 rounded-lg text-faint hover:text-red-500 hover:bg-red-500/10"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setManualWorkers(prev => [...prev, ''])}
+                      className="self-start text-xs font-semibold text-primary hover:underline"
+                    >
+                      {t.addWorker}
+                    </button>
+                  </div>
+                )}
               </>
             )}
             {/* Drivers — optional multi-select (like crew). Each driver is
