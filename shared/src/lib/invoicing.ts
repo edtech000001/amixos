@@ -494,6 +494,12 @@ export async function rebuildInvoiceLineItems(
   // stored description in sync with the current job title (a rename from the
   // job side then shows on print/send too). Multi-line/itemized jobs and add-on
   // lines keep their own descriptions.
+  //
+  // Migration 219 also does this in a trigger on jobs.title, so a rename lands
+  // immediately instead of waiting for the next invoice open. This stays as the
+  // backstop: it repairs rows written before that trigger existed, and covers a
+  // title changed by any path that somehow bypasses it. The two rules must match
+  // — change both together.
   const jobTitleById = new Map<string, string>((jobs ?? []).map((j: any) => [j.id as string, (j.title ?? '') as string]));
   const rawOverridden = existing.filter(li => li.job_id && overriddenJobs.has(li.job_id));
   const singleLineJobs = new Set(
