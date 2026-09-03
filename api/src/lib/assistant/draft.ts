@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { supabase } from '../../config/supabase';
 import type { AssistantContext, JobDraft, JobUpdateDraft } from './types';
+import { matchEmployeeId, type EmployeeLite } from './matchEmployee';
 
 // Confirm-side validation + insert. Mirrors the job form's save() contract
 // (mobile/app/dashboard/trabajos/nuevo.tsx): jobs row + job_assignments rows
@@ -163,6 +164,27 @@ export async function confirmDraft(
 
   // Crew: single valid lead (must be registered), field creator self-assigns.
   const crew = (draft.crew ?? []).filter(c => (c.worker_name ?? '').trim());
+
+  // Resolve names the model returned WITHOUT an employee_id. The crew tool
+  // makes employee_id optional, so a bare name is normal output — and a row
+  // stored without it is a string, not a person: no payroll hours, no crew
+  // reporting, and invisible to the job form's crew picker. Matching here means
+  // that only happens when the name genuinely cannot be resolved, rather than
+  // whenever the model omits the id.
+  const unresolved = crew.filter(c => !c.employee_id && (c.worker_name ?? '').trim());
+  if (unresolved.length) {
+    const { data: roster } = await ctx.db
+      .from('employees')
+      .select('id, first_name, last_name, check_name, active')
+      .eq('business_id', ctx.businessId);
+    const employees = (roster ?? []) as EmployeeLite[];
+    for (const c of unresolved) {
+      const id = matchEmployeeId(c.worker_name, employees);
+      // Still no confident match → keep the name. Better an unlinked worker
+      // than one silently attributed to the wrong person's payroll.
+      if (id) c.employee_id = id;
+    }
+  }
   let leadSeen = false;
   for (const c of crew) {
     if (c.is_lead) {
@@ -319,6 +341,21 @@ export async function confirmJobUpdate(
       const { data } = await ctx.db.from('employees').select('id').eq('business_id', ctx.businessId).in('id', ids);
       const found = new Set((data ?? []).map((r: any) => r.id));
       if (ids.some(id => !found.has(id))) throw new DraftValidationError('empleado no encontrado');
+    }
+    // Same resolution as the create path: a bare name from the model becomes a
+    // real employee link where the name is unambiguous, instead of a text row
+    // that earns no payroll hours.
+    const unresolvedUp = crew.filter(c => !c.employee_id && (c.worker_name ?? '').trim());
+    if (unresolvedUp.length) {
+      const { data: roster } = await ctx.db
+        .from('employees')
+        .select('id, first_name, last_name, check_name, active')
+        .eq('business_id', ctx.businessId);
+      const employees = (roster ?? []) as EmployeeLite[];
+      for (const c of unresolvedUp) {
+        const id = matchEmployeeId(c.worker_name, employees);
+        if (id) c.employee_id = id;
+      }
     }
     let leadSeen = false;
     for (const c of crew) {
