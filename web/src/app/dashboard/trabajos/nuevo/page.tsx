@@ -208,6 +208,11 @@ function NuevoTrabajoContent() {
   // True once the edit prefill obtained the job's existing assignments. Guards
   // the save's delete+reinsert against wiping crew that simply failed to load.
   const assignsBaselineRef = useRef(false);
+  /** The assignment rows this job was loaded with. The save rebuilds
+   *  job_assignments by deleting and re-inserting from the pickers, so anything
+   *  the form could not put INTO a picker would be destroyed. Keeping the
+   *  originals lets the save carry those rows through untouched. */
+  const loadedAssignsRef = useRef<{ employee_id: string | null; worker_name: string | null; is_lead: boolean | null; crew: boolean | null }[]>([]);
   // Crew-assignment rights (matches migration 164's job_assignments policy):
   // managers+ get the dispatcher tools; a field creator keeps self-assign on
   // their own job; office/viewer get nothing (they can't write job_assignments).
@@ -943,6 +948,7 @@ function NuevoTrabajoContent() {
           })));
         }
         if (assigns) {
+          loadedAssignsRef.current = assigns as any[];
           setAssignedEmployees(assigns.filter((a: any) => a.employee_id && a.crew !== false).map((a: any) => a.employee_id));
           const manual = assigns.filter((a: any) => !a.employee_id && a.worker_name).map((a: any) => a.worker_name);
           if (manual.length > 0) setManualWorkers(manual);
@@ -1597,6 +1603,30 @@ function NuevoTrabajoContent() {
         manualWorkers.filter(w => w.trim()).forEach(name => {
           assignments.push({ job_id: finalJobId, worker_name: name.trim() });
         });
+        // Carry through any loaded row the form could not represent. The save
+        // deletes every assignment and re-inserts from the pickers, so without
+        // this a row the UI cannot show is silently destroyed on any save —
+        // renaming a job wiped its crew. Nothing here is user-visible; it just
+        // refuses to lose data the form does not understand.
+        if (editId) {
+          const pickedIds = new Set(assignments.map(a => a.employee_id).filter(Boolean) as string[]);
+          const pickedNames = new Set(
+            assignments.map(a => String(a.worker_name ?? '').trim().toLowerCase()).filter(Boolean),
+          );
+          for (const row of loadedAssignsRef.current) {
+            const byId = row.employee_id && pickedIds.has(row.employee_id);
+            const byName = String(row.worker_name ?? '').trim() && pickedNames.has(String(row.worker_name ?? '').trim().toLowerCase());
+            if (byId || byName) continue;
+            if (!row.employee_id && !String(row.worker_name ?? '').trim()) continue; // nothing to keep
+            assignments.push({
+              job_id: finalJobId,
+              ...(row.employee_id ? { employee_id: row.employee_id } : {}),
+              worker_name: String(row.worker_name ?? '').trim(),
+              ...(row.is_lead ? { is_lead: true } : {}),
+              ...(row.crew === false ? { crew: false } : {}),
+            });
+          }
+        }
         // Field creator: self-assign so they can see their own job (RLS 044/089
         // requires assigned + published for field reads) and become the lead if
         // none was picked — "the person logging the job is the lead".

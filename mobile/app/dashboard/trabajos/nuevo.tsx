@@ -468,12 +468,19 @@ export default function NuevoTrabajoRoute() {
             if (error) throw error;
             return data;
           }),
-          loadCached<{ worker_name: string | null; is_lead: boolean | null; crew: boolean | null; employees: { id: string } | null }[]>(
+          loadCached<{ employee_id: string | null; worker_name: string | null; is_lead: boolean | null; crew: boolean | null; employees: { id: string } | null }[]>(
             `job_assignments_${sourceId}`,
             async () => {
               const { data, error } = await supabase
                 .from('job_assignments')
-                .select('id, worker_name, is_lead, crew, employees(id, first_name, last_name, user_id)')
+                // employee_id is selected DIRECTLY. Deriving it from the
+                // joined employees row silently unlinked every worker whenever
+                // that join came back null — a deleted employee, or a viewer
+                // without the Employees permission, since full employees reads
+                // are gated (migration 178). The save then rewrote them as
+                // name-only rows, or dropped them entirely when worker_name was
+                // null.
+                .select('id, employee_id, worker_name, is_lead, crew, employees(id, first_name, last_name, user_id)')
                 .eq('job_id', sourceId);
               if (error) throw error;
               return (data ?? []) as never;
@@ -486,7 +493,7 @@ export default function NuevoTrabajoRoute() {
         // save must NOT delete-and-reinsert assignments (see save path).
         assignsBaselineRef.current = asgRes.data != null;
         const assigns = (asgRes.data ?? []).map((a) => ({
-          employee_id: a.employees?.id ?? null,
+          employee_id: a.employee_id ?? a.employees?.id ?? null,
           worker_name: a.worker_name,
           is_lead: a.is_lead,
           crew: a.crew,
@@ -556,6 +563,7 @@ export default function NuevoTrabajoRoute() {
             }
           }
         }
+        loadedAssignsRef.current = assigns;
         if (assignsBaselineRef.current) {
           setAssignedEmployees(
             assigns.filter((a: any) => a.employee_id && a.crew !== false).map((a: any) => a.employee_id),
@@ -638,6 +646,11 @@ export default function NuevoTrabajoRoute() {
   // or cached). Guards the save's delete+reinsert against wiping crew that
   // simply failed to load.
   const assignsBaselineRef = useRef(false);
+  /** The assignment rows this job was loaded with. The save rebuilds
+   *  job_assignments by deleting and re-inserting from the pickers, so anything
+   *  the form could not put INTO a picker would be destroyed. Keeping the
+   *  originals lets the save carry those rows through untouched. */
+  const loadedAssignsRef = useRef<{ employee_id: string | null; worker_name: string | null; is_lead: boolean | null; crew: boolean | null }[]>([]);
   useEffect(() => { coordsTextRef.current = coordsText; }, [coordsText]);
   useEffect(() => {
     if (editId || duplicate || !defaultsCompleted) return;
@@ -1868,6 +1881,30 @@ export default function NuevoTrabajoRoute() {
           .map((w) => w.trim())
           .filter(Boolean)
           .forEach((name) => assignments.push({ job_id: jobId, worker_name: name }));
+        // Carry through any loaded row the form could not represent. The save
+        // deletes every assignment and re-inserts from the pickers, so without
+        // this a row the UI cannot show is silently destroyed on any save —
+        // renaming a job wiped its crew. Nothing here is user-visible; it just
+        // refuses to lose data the form does not understand.
+        if (editId) {
+          const pickedIds = new Set(assignments.map((a) => a.employee_id).filter(Boolean) as string[]);
+          const pickedNames = new Set(
+            assignments.map((a) => (a.worker_name ?? '').trim().toLowerCase()).filter(Boolean),
+          );
+          for (const row of loadedAssignsRef.current) {
+            const byId = row.employee_id && pickedIds.has(row.employee_id);
+            const byName = (row.worker_name ?? '').trim() && pickedNames.has((row.worker_name ?? '').trim().toLowerCase());
+            if (byId || byName) continue;
+            if (!row.employee_id && !(row.worker_name ?? '').trim()) continue; // nothing to keep
+            assignments.push({
+              job_id: jobId,
+              ...(row.employee_id ? { employee_id: row.employee_id } : {}),
+              worker_name: (row.worker_name ?? '').trim(),
+              ...(row.is_lead ? { is_lead: true } : {}),
+              ...(row.crew === false ? { crew: false } : {}),
+            });
+          }
+        }
         // Field creator: self-assign so they can see their own job (RLS 044/089
         // requires assigned + published for field reads) and become the lead if
         // none was picked — "the person logging the job is the lead".
