@@ -21,6 +21,10 @@ import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { isGoogleSyncConnected } from '@amixos/shared/lib/googleSync';
 import { parseTimestamp } from '@amixos/shared/lib/dataImport';
 import { US_STATE_NAME_TO_ABBR } from '@amixos/shared/lib/usStates';
+import {
+  buildClientIndex, matchExistingClient, clientFieldPatch, mergeContacts,
+  type DuplicateStrategy, type ExistingClientLite, type ContactLite,
+} from '@amixos/shared/lib/clientImportMerge';
 
 const normalizeState = (val: string) => {
   const t = val.trim();
@@ -61,6 +65,8 @@ export default function ImportClientsModal({ open, businessId, templates, locati
   const { label: elapsedLabel } = useElapsedTimer(importing);
   const [dragOver, setDragOver] = useState(false);
   const [importResult, setImportResult] = useState<{
+    updated?: number;
+    skippedExisting?: number;
     success: number;
     failedRows: { label: string; reason: string }[];
   }>({ success: 0, failedRows: [] });
@@ -116,6 +122,21 @@ export default function ImportClientsModal({ open, businessId, templates, locati
   const [fileName, setFileName] = useState('');
   // Import progress (per 50-row batch).
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  // Rows whose client already exists. The importer used to insert
+  // unconditionally, so re-importing a file silently created a second copy of
+  // every client and contact. Now it asks once, before writing anything.
+  const [dupPrompt, setDupPrompt] = useState<{ count: number; total: number } | null>(null);
+  const dupChoice = useRef<((s: DuplicateStrategy | null) => void) | null>(null);
+  const askDuplicateStrategy = (count: number, total: number) =>
+    new Promise<DuplicateStrategy | null>(resolve => {
+      dupChoice.current = resolve;
+      setDupPrompt({ count, total });
+    });
+  const answerDuplicates = (choice: DuplicateStrategy | null) => {
+    setDupPrompt(null);
+    dupChoice.current?.(choice);
+    dupChoice.current = null;
+  };
   const handleFileSelect = (file: File) => {
     setFileName(file.name);
     Papa.parse<Record<string, string>>(file, {
@@ -175,7 +196,7 @@ export default function ImportClientsModal({ open, businessId, templates, locati
 
   const runImport = async () => {
     setImporting(true);
-    const batch: { entry: any; csvLine: number; originalRow: Record<string, string>; branchId: string | null; branchRaw: string; contacts?: ReturnType<typeof parseClientContactsCell> }[] = [];
+    const batch: { entry: any; csvLine: number; originalRow: Record<string, string>; branchId: string | null; branchRaw: string; contacts?: ReturnType<typeof parseClientContactsCell>; existingId?: string | null }[] = [];
     const failedRows: { label: string; reason: string }[] = [];
     const unknownBranches = new Set<string>();
     csvRows.forEach((row, idx) => {
@@ -231,7 +252,28 @@ export default function ImportClientsModal({ open, businessId, templates, locati
       const cpRaw = cpCol && row[cpCol] ? row[cpCol].trim() : '';
       batch.push({ entry, csvLine, originalRow: row, branchId, branchRaw, contacts: cpRaw ? parseClientContactsCell(cpRaw) : undefined });
     });
+    // Which rows already exist? Same matching rule as the jobs importer's
+    // client resolver, so the two agree on what "already exists" means.
+    const { data: existingRows } = await supabase
+      .from('clients')
+      .select('id, first_name, last_name, company')
+      .eq('business_id', businessId);
+    const clientIndex = buildClientIndex((existingRows ?? []) as ExistingClientLite[]);
+    for (const b of batch) {
+      const full = [b.entry.first_name, b.entry.last_name].filter(Boolean).join(' ');
+      b.existingId = matchExistingClient(clientIndex, full, b.entry.company);
+    }
+    const dupes = batch.filter(b => b.existingId);
+    let strategy: DuplicateStrategy = 'skip';
+    if (dupes.length) {
+      const answer = await askDuplicateStrategy(dupes.length, batch.length);
+      if (answer === null) { setImporting(false); setProgress(null); return; } // cancelled
+      strategy = answer;
+    }
+    const toInsert = batch.filter(b => !b.existingId);
+
     let success = 0;
+    let mergedCount = 0;
     const insertedIds: string[] = [];
     // Branch links to write once all clients exist (matched branches only).
     const branchLinks: { business_id: string; client_id: string; location_id: string; is_primary: boolean }[] = [];
@@ -240,9 +282,10 @@ export default function ImportClientsModal({ open, businessId, templates, locati
     const queueContacts = (clientId: string, list?: ReturnType<typeof parseClientContactsCell>) => {
       (list ?? []).forEach(ct => contactRows.push({ business_id: businessId, client_id: clientId, ...ct }));
     };
-    for (let i = 0; i < batch.length; i += 50) {
+    // New clients only — existing ones are handled by the strategy below.
+    for (let i = 0; i < toInsert.length; i += 50) {
       setProgress({ done: i, total: batch.length });
-      const slice = batch.slice(i, i + 50);
+      const slice = toInsert.slice(i, i + 50);
       const { data, error } = await supabase.from('clients').insert(slice.map(b => b.entry)).select('id');
       if (error) {
         // Batch rolled back. Retry one-by-one so we can pinpoint which
@@ -275,6 +318,32 @@ export default function ImportClientsModal({ open, businessId, templates, locati
         }
       }
     }
+    // Existing clients: apply the chosen strategy. 'skip' does nothing at all,
+    // which is why it is the safe default.
+    if (strategy !== 'skip') {
+      for (const b of dupes) {
+        const id = b.existingId!;
+        const existing = (existingRows ?? []).find((r: any) => r.id === id) ?? {};
+        const patch = clientFieldPatch(existing as Record<string, unknown>, b.entry, strategy);
+        if (Object.keys(patch).length) {
+          await supabase.from('clients').update(patch).eq('id', id);
+        }
+        if (b.contacts?.length) {
+          const { data: have } = await supabase
+            .from('client_contacts').select('id, name, email').eq('client_id', id);
+          const plan = mergeContacts((have ?? []) as ContactLite[], b.contacts, strategy);
+          if (strategy === 'replace' && (have ?? []).length) {
+            await supabase.from('client_contacts').delete().eq('client_id', id);
+          }
+          if (plan.toInsert.length) {
+            await supabase.from('client_contacts')
+              .insert(plan.toInsert.map(ct => ({ business_id: businessId, client_id: id, ...ct })));
+          }
+        }
+        mergedCount++;
+      }
+    }
+
     // Write branch links in chunks. Best-effort — a failure here doesn't undo
     // the imported clients (they just stay shared across branches).
     for (let i = 0; i < branchLinks.length; i += 200) {
@@ -304,9 +373,11 @@ export default function ImportClientsModal({ open, businessId, templates, locati
           : `${shown} — clientes importados como compartidos (todas las sucursales).`,
       });
     }
-    setImportResult({ success, failedRows });
-    // Audit trail (migration 137).
-    void logImportRun(supabase, businessId, 'clients', fileName || null, { success, skipped: 0, failedRows });
+    setImportResult({ success, failedRows, updated: mergedCount, skippedExisting: strategy === 'skip' ? dupes.length : 0 });
+    // Audit trail (migration 137). skipped = existing clients left untouched.
+    void logImportRun(supabase, businessId, 'clients', fileName || null, {
+      success, skipped: strategy === 'skip' ? dupes.length : 0, failedRows,
+    });
     onDone?.();
     setImporting(false);
     setImportStep('done');
@@ -334,12 +405,49 @@ export default function ImportClientsModal({ open, businessId, templates, locati
 
   const resetImport = () => {
     setImportStep('upload'); setCsvHeaders([]); setCsvRows([]); setColMap({});
-    setImportResult({ success: 0, failedRows: [] }); setShowImportErrorDetails(false);
+    setImportResult({ success: 0, failedRows: [], updated: 0, skippedExisting: 0 }); setShowImportErrorDetails(false);
     onClose();
   };
 
+
+  // Duplicate prompt. Rendered above everything else and blocks the run —
+  // runImport awaits the answer, so nothing is written until a choice is made.
+  const duplicateDialog = dupPrompt ? (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" />
+      <div className="relative w-full max-w-md bg-card rounded-2xl shadow-xl p-5">
+        <h3 className="text-base font-bold text-ink">{t.dupTitle}</h3>
+        <p className="text-sm text-muted mt-1">
+          {t.dupBody.replace('{{count}}', String(dupPrompt.count)).replace('{{total}}', String(dupPrompt.total))}
+        </p>
+        <div className="flex flex-col gap-2 mt-4">
+          <button type="button" onClick={() => answerDuplicates('merge')}
+            className="w-full text-left px-4 py-3 rounded-xl border border-border hover:border-primary/40 hover:bg-surface">
+            <span className="block text-sm font-semibold text-ink">{t.dupMerge}</span>
+            <span className="block text-xs text-faint mt-0.5">{t.dupMergeHint}</span>
+          </button>
+          <button type="button" onClick={() => answerDuplicates('replace')}
+            className="w-full text-left px-4 py-3 rounded-xl border border-border hover:border-primary/40 hover:bg-surface">
+            <span className="block text-sm font-semibold text-ink">{t.dupReplace}</span>
+            <span className="block text-xs text-faint mt-0.5">{t.dupReplaceHint}</span>
+          </button>
+          <button type="button" onClick={() => answerDuplicates('skip')}
+            className="w-full text-left px-4 py-3 rounded-xl border border-border hover:border-primary/40 hover:bg-surface">
+            <span className="block text-sm font-semibold text-ink">{t.dupSkip}</span>
+            <span className="block text-xs text-faint mt-0.5">{t.dupSkipHint}</span>
+          </button>
+        </div>
+        <button type="button" onClick={() => answerDuplicates(null)}
+          className="w-full mt-3 py-2.5 rounded-xl text-sm font-semibold text-muted hover:bg-surface">
+          {tc.buttons.cancel}
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
+      {duplicateDialog}
       <input ref={fileRef} type="file" accept=".csv" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ''; }}/>
 

@@ -395,6 +395,10 @@ export type DashboardDict = {
       noValue: string;
     };
     importBtn: string;
+    dupTitle: string; dupBody: string;
+    dupMerge: string; dupMergeHint: string;
+    dupReplace: string; dupReplaceHint: string;
+    dupSkip: string; dupSkipHint: string;
     importHint: string;
     searchPlaceholder: string;
     selectButton: string;
@@ -3495,6 +3499,14 @@ export const dashboard: Record<Locale, DashboardDict> = {
         noValue: 'Sin valor',
       },
       importBtn: 'Importar clientes desde CSV',
+      dupTitle: 'Algunos clientes ya existen',
+      dupBody: '{{count}} de {{total}} ya están en este negocio. ¿Qué hacemos con esos?',
+      dupMerge: 'Completar lo que falta',
+      dupMergeHint: 'Solo llena campos vacíos y agrega contactos nuevos. No cambia nada de lo que ya tienes.',
+      dupReplace: 'Reemplazar con el archivo',
+      dupReplaceHint: 'El archivo gana. Reemplaza los datos y la lista de contactos.',
+      dupSkip: 'Dejarlos como están',
+      dupSkipHint: 'Solo importa los clientes nuevos.',
       importHint: 'Sube un archivo CSV o usa tus contactos del teléfono. Útil al migrar desde otra app.',
       searchPlaceholder: 'Buscar clientes...',
       selectButton: 'Seleccionar',
@@ -6592,6 +6604,14 @@ export const dashboard: Record<Locale, DashboardDict> = {
         noValue: 'No value',
       },
       importBtn: 'Import clients from CSV',
+      dupTitle: 'Some clients already exist',
+      dupBody: '{{count}} of {{total}} are already in this business. What should happen to those?',
+      dupMerge: 'Fill in what is missing',
+      dupMergeHint: 'Only fills blank fields and adds new contacts. Nothing you already have is changed.',
+      dupReplace: 'Replace with the file',
+      dupReplaceHint: 'The file wins. Overwrites the details and the contact list.',
+      dupSkip: 'Leave them alone',
+      dupSkipHint: 'Import only the new clients.',
       importHint: 'Upload a CSV or pull from your phone contacts. Useful when migrating from another app.',
       searchPlaceholder: 'Search clients...',
       selectButton: 'Select',
