@@ -517,6 +517,9 @@ export type DashboardDict = {
         primaryLabel: string;
         ccLabel: string;
         ccBadge: string;
+        recipientLabel: string;
+        recipientHint: string;
+        recipientBadge: string;
         addBtn: string;
         confirmDelete: string;
       };
@@ -3614,6 +3617,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
           primaryLabel: 'Contacto principal',
           ccLabel: 'CC en facturas',
           ccBadge: 'CC',
+          recipientLabel: 'Enviar correos aquí',
+          recipientHint: 'Los correos van a esta persona en vez del cliente.',
+          recipientBadge: 'Correo',
           addBtn: 'Agregar contacto',
           confirmDelete: '¿Eliminar este contacto?',
         },
@@ -6708,6 +6714,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
           primaryLabel: 'Primary contact',
           ccLabel: 'CC on invoices',
           ccBadge: 'CC',
+          recipientLabel: 'Send emails here',
+          recipientHint: 'Email goes to this person instead of the client.',
+          recipientBadge: 'Email',
           addBtn: 'Add contact',
           confirmDelete: 'Delete this contact?',
         },

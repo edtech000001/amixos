@@ -60,6 +60,7 @@ interface ClientContact {
   notes: string | null;
   is_primary: boolean;
   cc_on_invoices: boolean;
+  receives_email: boolean;
   created_at: string;
 }
 
@@ -81,7 +82,7 @@ const US_STATES = [
   'OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
 ];
 
-const EMPTY_CONTACT = { name: '', role: '', phone: '', email: '', notes: '', is_primary: false, cc_on_invoices: false };
+const EMPTY_CONTACT = { name: '', role: '', phone: '', email: '', notes: '', is_primary: false, cc_on_invoices: false, receives_email: false };
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
@@ -413,7 +414,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
 
   const openEditContact = (ct: ClientContact) => {
     setEditingContact(ct);
-    setContactForm({ name: ct.name, role: ct.role ?? '', phone: ct.phone ?? '', email: ct.email ?? '', notes: ct.notes ?? '', is_primary: ct.is_primary, cc_on_invoices: ct.cc_on_invoices });
+    setContactForm({ name: ct.name, role: ct.role ?? '', phone: ct.phone ?? '', email: ct.email ?? '', notes: ct.notes ?? '', is_primary: ct.is_primary, cc_on_invoices: ct.cc_on_invoices, receives_email: ct.receives_email });
     setContactError('');
     setContactModal(true);
   };
@@ -435,6 +436,9 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
       is_primary: contactForm.is_primary,
       // Only meaningful with an email — CC needs an address to copy.
       cc_on_invoices: contactForm.cc_on_invoices && !!contactForm.email.trim(),
+      // Both flags need an address to mean anything — storing them without one
+      // would suppress the client's email and supply nothing in its place.
+      receives_email: contactForm.receives_email && !!contactForm.email.trim(),
     };
 
     if (contactForm.is_primary) {
@@ -660,6 +664,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                           <p className="text-sm font-semibold text-ink truncate">{ct.name}</p>
                           {ct.is_primary && <Star size={11} className="text-amber-400 fill-amber-400 shrink-0"/>}
                           {ct.cc_on_invoices && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">{td.contactModal.ccBadge}</span>}
+                          {ct.receives_email && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 shrink-0">{td.contactModal.recipientBadge}</span>}
                         </div>
                         {ct.role && <p className="text-xs text-faint">{ct.role}</p>}
                         {ct.phone && (
@@ -996,6 +1001,20 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
               disabled={!contactForm.email.trim()}
             />
             <span className={`text-sm select-none ${contactForm.email.trim() ? 'text-ink' : 'text-faint'}`}>{td.contactModal.ccLabel}</span>
+          </div>
+          {/* Addressed TO instead of the client (migration 220). Applies to
+              every send — invoices, proposals, the ad-hoc Email button — not
+              just invoices, which is what CC above is limited to. */}
+          <div className="flex items-start gap-3">
+            <Toggle
+              checked={contactForm.receives_email}
+              onChange={(v) => setContactForm(f => ({ ...f, receives_email: v }))}
+              disabled={!contactForm.email.trim()}
+            />
+            <span className="min-w-0">
+              <span className={`block text-sm select-none ${contactForm.email.trim() ? 'text-ink' : 'text-faint'}`}>{td.contactModal.recipientLabel}</span>
+              <span className="block text-xs text-faint mt-0.5">{td.contactModal.recipientHint}</span>
+            </span>
           </div>
           {contactError && <p className="text-xs text-red-500">{contactError}</p>}
           <div className="flex gap-3 pt-1">

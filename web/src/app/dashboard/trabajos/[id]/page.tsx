@@ -37,6 +37,7 @@ import { JobPhotosSection } from '@/components/jobs/JobPhotosSection';
 import { JobDocumentsSection } from '@/components/jobs/JobDocumentsSection';
 import { SignaturePad } from '@/components/SignaturePad';
 import { Tooltip } from '@amixos/shared/ui/Tooltip';
+import { resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
 
 interface Job {
   id: string; business_id: string;
@@ -751,7 +752,10 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
         dueDate: job.expiry_date ?? '',
       },
     });
-    window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    // A contact flagged receives_email is addressed instead of the client
+    // (migration 220). No CC — that is invoice-only.
+    const proposalTo = await resolveClientRecipients(supabase, job.client_id ?? null, email);
+    window.location.href = `mailto:${encodeURIComponent(joinRecipients(proposalTo.to))}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     if (job.status === 'proposal') void updateStatus('sent');
   };
 

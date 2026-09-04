@@ -29,6 +29,7 @@ import { INVOICE_PAYMENT_BUCKET, paymentPhotoPath } from '@amixos/shared/lib/inv
 import { autonameEnabled, autonameJobTitle, detectAutonameType } from '@amixos/shared/lib/autoname';
 import { sortInvoiceLinesByDate, detectLineSortDirection, setLineItemExcluded, removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, AUTOPRICE_SKIP, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
 import { applicableRate, rowToPriceSheetItem, groupPriceItemsByCategory, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
+import { resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { formatDateLong, formatNumberGrouped, formatMoneyInput } from '@amixos/shared/lib/format';
 import { usePasteImage } from '@/lib/usePasteImage';
@@ -953,22 +954,13 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     if (!email) { void alertMessage({ message: tInv.sendNoEmail, destructive: true }); return; }
     // Auto-CC the client's contacts flagged "CC on invoices" (deduped, and
     // never the To address itself).
+    // Recipients come from the shared resolver: a contact flagged
+    // receives_email is addressed INSTEAD of the client (migration 220), and CC
+    // excludes anyone already in To.
     const clientId = invoice.clients[0]?.id ?? null;
-    let ccList: string[] = [];
-    if (clientId) {
-      const { data: ccRows } = await supabase
-        .from('client_contacts')
-        .select('email')
-        .eq('client_id', clientId)
-        .eq('cc_on_invoices', true)
-        .not('email', 'is', null);
-      ccList = Array.from(new Set(
-        ((ccRows ?? []) as { email: string | null }[])
-          .map(r => (r.email ?? '').trim())
-          .filter(e => e && e.toLowerCase() !== email.toLowerCase()),
-      ));
-    }
-    const ccParam = ccList.length ? `&cc=${encodeURIComponent(ccList.join(','))}` : '';
+    const recipients = await resolveClientRecipients(supabase, clientId, email, { includeInvoiceCc: true });
+    const toParam = joinRecipients(recipients.to);
+    const ccParam = recipients.cc.length ? `&cc=${encodeURIComponent(joinRecipients(recipients.cc))}` : '';
     const token = await ensureShareToken();
     const url = `${window.location.origin}/factura/${token}`;
     // Delivery mode (Ajustes → Facturas → Email delivery). Default = PDF.
@@ -1000,7 +992,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     // PDF (or both): open the printable view in a new tab so the user can save
     // the PDF and attach it (mailto can't attach files itself).
     if (includePdf) window.open(`/factura/${token}?print=1`, '_blank');
-    window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}${ccParam}`;
+    window.location.href = `mailto:${encodeURIComponent(toParam)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}${ccParam}`;
     await updateStatus('sent');
   };
 

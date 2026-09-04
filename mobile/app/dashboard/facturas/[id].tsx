@@ -34,6 +34,7 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { sortInvoiceLinesByDate, detectLineSortDirection, setLineItemExcluded, removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, AUTOPRICE_SKIP, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
 import { applicableRate, rowToPriceSheetItem, groupPriceItemsByCategory, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
+import { resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { formatDateLong, formatMoneyInput, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { can } from '@amixos/shared/lib/permissions';
@@ -1080,23 +1081,13 @@ export default function FacturaDetailRoute() {
     if (!invoice) return;
     const email = invoice.clients[0]?.email ?? '';
     if (!email) { Alert.alert('', tInv.sendNoEmail); return; }
-    // Auto-CC the client's contacts flagged "CC on invoices" (deduped, and
-    // never the To address itself).
+    // Recipients come from the shared resolver: a contact flagged
+    // receives_email is addressed INSTEAD of the client (migration 220), and CC
+    // excludes anyone already in To.
     const clientId = invoice.clients[0]?.id ?? null;
-    let ccList: string[] = [];
-    if (clientId) {
-      const { data: ccRows } = await supabase
-        .from('client_contacts')
-        .select('email')
-        .eq('client_id', clientId)
-        .eq('cc_on_invoices', true)
-        .not('email', 'is', null);
-      ccList = Array.from(new Set(
-        ((ccRows ?? []) as { email: string | null }[])
-          .map(r => (r.email ?? '').trim())
-          .filter(e => e && e.toLowerCase() !== email.toLowerCase()),
-      ));
-    }
+    const recipients = await resolveClientRecipients(supabase, clientId, email, { includeInvoiceCc: true });
+    const toList = recipients.to;
+    const ccList = recipients.cc;
     const token = await ensureShareToken();
     const base = WEB_APP_URL;
     const url = `${base}/factura/${token}`;
@@ -1156,7 +1147,7 @@ export default function FacturaDetailRoute() {
           attachments = [uri];
         }
         const result = await MailComposer.composeAsync({
-          recipients: [email],
+          recipients: toList,
           ...(ccList.length ? { ccRecipients: ccList } : {}),
           subject,
           body,
@@ -1174,7 +1165,7 @@ export default function FacturaDetailRoute() {
 
     // Fallback: mailto link (body carries the public link; no attachment).
     const ccParam = ccList.length ? `&cc=${encodeURIComponent(ccList.join(','))}` : '';
-    const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}${ccParam}`;
+    const mailto = `mailto:${encodeURIComponent(joinRecipients(toList))}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}${ccParam}`;
     try {
       await Linking.openURL(mailto);
       // Only mark sent when a mail composer actually opened — previously a

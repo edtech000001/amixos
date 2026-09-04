@@ -57,6 +57,7 @@ import { CommunicationLog } from '@amixos/shared/screens/dashboard/Communication
 import { useContactOutcomePrompt } from '@/lib/useContactOutcomePrompt';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useThemeColors } from '@/lib/ThemeProvider';
+import { resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
 
 interface FieldTemplate {
   id: string;
@@ -102,6 +103,7 @@ interface ClientContact {
   notes: string | null;
   is_primary: boolean;
   cc_on_invoices: boolean;
+  receives_email: boolean;
   created_at: string;
 }
 
@@ -157,6 +159,7 @@ const EMPTY_CONTACT = {
   notes: '',
   is_primary: false,
   cc_on_invoices: false,
+  receives_email: false,
 };
 
 export default function ClienteDetailRoute() {
@@ -570,6 +573,7 @@ export default function ClienteDetailRoute() {
       notes: ct.notes ?? '',
       is_primary: ct.is_primary,
       cc_on_invoices: ct.cc_on_invoices,
+      receives_email: ct.receives_email,
     });
     setContactModalOpen(true);
   };
@@ -585,6 +589,9 @@ export default function ClienteDetailRoute() {
       notes: contactForm.notes.trim() || null,
       is_primary: contactForm.is_primary,
       cc_on_invoices: contactForm.cc_on_invoices && !!contactForm.email.trim(),
+      // Both flags need an address to mean anything — storing them without one
+      // would suppress the client's email and supply nothing in its place.
+      receives_email: contactForm.receives_email && !!contactForm.email.trim(),
     };
 
     let syncContactId: string | null = null;
@@ -876,12 +883,17 @@ export default function ClienteDetailRoute() {
           </Pressable>
           <Pressable
             disabled={!primaryEmail}
-            onPress={() => primaryEmail && fireContact({
-              type: 'email',
-              target: `mailto:${primaryEmail}`,
-              contactMethod: primaryEmail,
-              clientId: client.id,
-            })}
+            onPress={async () => {
+              if (!primaryEmail) return;
+              // Generic "email this client": a contact flagged receives_email
+              // is addressed instead (migration 220). The labelled email ROW
+              // below deliberately does NOT redirect — tapping a visible
+              // address must mail that address.
+              const r = await resolveClientRecipients(supabase, client.id, primaryEmail);
+              const to = joinRecipients(r.to);
+              if (!to) return;
+              fireContact({ type: 'email', target: `mailto:${to}`, contactMethod: to, clientId: client.id });
+            }}
             className={`flex-1 items-center justify-center py-3 rounded-2xl shadow-sm border ${
               primaryEmail
                 ? 'bg-card border-border-soft active:bg-surface'
@@ -1043,6 +1055,11 @@ export default function ClienteDetailRoute() {
                         {ct.cc_on_invoices ? (
                           <View className="px-1.5 py-0.5 rounded-full bg-primary/10">
                             <Text className="text-[10px] font-semibold text-primary">{td.contactModal.ccBadge}</Text>
+                          </View>
+                        ) : null}
+                        {ct.receives_email ? (
+                          <View className="px-1.5 py-0.5 rounded-full bg-emerald-500/10">
+                            <Text className="text-[10px] font-semibold text-emerald-700">{td.contactModal.recipientBadge}</Text>
                           </View>
                         ) : null}
                       </View>
@@ -1399,6 +1416,20 @@ export default function ClienteDetailRoute() {
                   disabled={!contactForm.email.trim()}
                 />
                 <Text className={`text-sm ${contactForm.email.trim() ? 'text-ink' : 'text-faint'}`}>{td.contactModal.ccLabel}</Text>
+              </View>
+              {/* Addressed TO instead of the client (migration 220). Applies to
+                  every send — invoices, proposals, the ad-hoc Email button —
+                  not just invoices, which is what CC above is limited to. */}
+              <View className="flex-row items-start gap-3 mt-1">
+                <Toggle
+                  value={contactForm.receives_email}
+                  onValueChange={v => setContactForm(f => ({ ...f, receives_email: v }))}
+                  disabled={!contactForm.email.trim()}
+                />
+                <View className="flex-1">
+                  <Text className={`text-sm ${contactForm.email.trim() ? 'text-ink' : 'text-faint'}`}>{td.contactModal.recipientLabel}</Text>
+                  <Text className="text-xs text-faint mt-0.5">{td.contactModal.recipientHint}</Text>
+                </View>
               </View>
             </View>
           </ScrollView>

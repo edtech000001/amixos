@@ -72,6 +72,7 @@ import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { JobPhotosSection } from '@/components/JobPhotosSection';
 import { JobDocumentsSection } from '@/components/JobDocumentsSection';
 import { SignaturePad } from '@/components/SignaturePad';
+import { resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
 
 // Local-date helpers for the schedule sheet (avoid UTC parsing shifting the
 // picked day across midnight).
@@ -750,7 +751,10 @@ export default function JobDetailRoute() {
         dueDate: job.expiry_date ?? '',
       },
     });
-    const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    // A contact flagged receives_email is addressed instead of the client
+    // (migration 220). No CC — that is invoice-only.
+    const proposalTo = await resolveClientRecipients(supabase, job.client_id ?? null, email);
+    const mailto = `mailto:${encodeURIComponent(joinRecipients(proposalTo.to))}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     const canMail = await Linking.canOpenURL(mailto).catch(() => false);
     if (!canMail) { Alert.alert('', td.shareError); return; }
     openLink(mailto);
