@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { parseClientContactsCell } from '@amixos/shared/lib/clientShare';
 import { logImportRun } from '@amixos/shared/lib/importRunners';
 import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
@@ -18,6 +18,10 @@ import { useThemeColors } from '@/lib/ThemeProvider';
 import { createSupabaseClient } from '@/lib/supabase';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { RecentImports } from './RecentImports';
+import {
+  buildClientIndex, matchExistingClient, clientFieldPatch, mergeContacts,
+  type DuplicateStrategy, type ExistingClientLite, type ContactLite,
+} from '@amixos/shared/lib/clientImportMerge';
 
 export interface ImportClientsModalProps {
   open: boolean;
@@ -76,6 +80,7 @@ export function ImportClientsModal({
   const { t: full, locale } = useLang();
   const c = useThemeColors();
   const t = full.dashboard.clients;
+  const tc = full.common;
   const syncBanner = useGoogleSyncBanner();
 
   // Branch column only for multi-location businesses. Not a `clients` column —
@@ -113,6 +118,21 @@ export function ImportClientsModal({
     failedRows: { label: string; reason: string }[];
   }>({ success: 0, failedRows: [] });
   const [showErrorDetails, setShowErrorDetails] = useState(false);
+  // Rows whose client already exists. The importer inserted unconditionally, so
+  // re-importing a file silently created a second copy of every client and
+  // contact. It now asks once, before writing anything. Mirrors web.
+  const [dupPrompt, setDupPrompt] = useState<{ count: number; total: number } | null>(null);
+  const dupChoice = useRef<((s: DuplicateStrategy | null) => void) | null>(null);
+  const askDuplicateStrategy = (count: number, total: number) =>
+    new Promise<DuplicateStrategy | null>(resolve => {
+      dupChoice.current = resolve;
+      setDupPrompt({ count, total });
+    });
+  const answerDuplicates = (choice: DuplicateStrategy | null) => {
+    setDupPrompt(null);
+    dupChoice.current?.(choice);
+    dupChoice.current = null;
+  };
 
   const reset = () => {
     setStep('upload');
@@ -165,10 +185,38 @@ export function ImportClientsModal({
     success: number;
     insertedIds: string[];
     failedRows: { label: string; reason: string }[];
+    merged?: number;
+    skippedExisting?: number;
+    /** User dismissed the duplicate prompt — nothing was written. */
+    cancelled?: boolean;
   }> => {
     let success = 0;
+    let mergedCount = 0;
     const insertedIds: string[] = [];
     const failedRows: { label: string; reason: string }[] = [];
+    // Which rows already exist? Same rule as web and as the jobs importer's
+    // client resolver, so all three agree on what "already exists" means.
+    const { data: existingRows } = await supabase
+      .from('clients')
+      .select('id, first_name, last_name, company')
+      .eq('business_id', businessId);
+    const clientIndex = buildClientIndex((existingRows ?? []) as ExistingClientLite[]);
+    const withMatch = batch.map(b => ({
+      b,
+      existingId: matchExistingClient(
+        clientIndex,
+        [b.entry.first_name, b.entry.last_name].filter(Boolean).join(' '),
+        (b.entry.company as string | null) ?? null,
+      ),
+    }));
+    const dupes = withMatch.filter(x => x.existingId);
+    let strategy: DuplicateStrategy = 'skip';
+    if (dupes.length) {
+      const answer = await askDuplicateStrategy(dupes.length, batch.length);
+      if (answer === null) return { success: 0, insertedIds: [], failedRows: [], cancelled: true };
+      strategy = answer;
+    }
+    const toInsert = withMatch.filter(x => !x.existingId).map(x => x.b);
     // Branch links (matched branches only) written once all clients exist.
     const branchLinks: { business_id: string; client_id: string; location_id: string; is_primary: boolean }[] = [];
     // Contact-people rows (from the serialized export column).
@@ -176,9 +224,10 @@ export function ImportClientsModal({
     const queueContacts = (clientId: string, list?: ReturnType<typeof parseClientContactsCell>) => {
       (list ?? []).forEach(ct => contactRows.push({ business_id: businessId, client_id: clientId, ...ct }));
     };
-    for (let i = 0; i < batch.length; i += 50) {
+    // New clients only — existing ones are handled by the strategy below.
+    for (let i = 0; i < toInsert.length; i += 50) {
       setProgress({ done: i, total: batch.length });
-      const slice = batch.slice(i, i + 50);
+      const slice = toInsert.slice(i, i + 50);
       const { data, error: err } = await supabase
         .from('clients')
         .insert(slice.map(b => b.entry))
@@ -215,6 +264,30 @@ export function ImportClientsModal({
         }
       }
     }
+    // Existing clients: apply the chosen strategy. 'skip' writes nothing, which
+    // is why it is the safe default and what cancelling falls back to.
+    if (strategy !== 'skip') {
+      for (const { b, existingId } of dupes) {
+        const id = existingId!;
+        const existing = (existingRows ?? []).find((r: { id: string }) => r.id === id) ?? {};
+        const patch = clientFieldPatch(existing as Record<string, unknown>, b.entry, strategy);
+        if (Object.keys(patch).length) await supabase.from('clients').update(patch).eq('id', id);
+        if (b.contacts?.length) {
+          const { data: have } = await supabase
+            .from('client_contacts').select('id, name, email').eq('client_id', id);
+          const plan = mergeContacts((have ?? []) as ContactLite[], b.contacts, strategy);
+          if (strategy === 'replace' && (have ?? []).length) {
+            await supabase.from('client_contacts').delete().eq('client_id', id);
+          }
+          if (plan.toInsert.length) {
+            await supabase.from('client_contacts')
+              .insert(plan.toInsert.map(ct => ({ business_id: businessId, client_id: id, ...ct })));
+          }
+        }
+        mergedCount++;
+      }
+    }
+
     // Best-effort — a link failure doesn't undo imported clients (they just
     // stay shared across branches).
     for (let i = 0; i < branchLinks.length; i += 200) {
@@ -223,7 +296,7 @@ export function ImportClientsModal({
     for (let i = 0; i < contactRows.length; i += 200) {
       await supabase.from('client_contacts').insert(contactRows.slice(i, i + 200));
     }
-    return { success, insertedIds, failedRows };
+    return { success, insertedIds, failedRows, merged: mergedCount, skippedExisting: strategy === 'skip' ? dupes.length : 0 };
   };
 
   // Build a sample CSV (headers + one example row) and share it via the
@@ -315,7 +388,17 @@ export function ImportClientsModal({
       success,
       insertedIds: batchInsertedIds,
       failedRows,
+      cancelled,
     } = await insertBatchWithRetry(batch);
+
+    // Dismissed the duplicate prompt → nothing was written. Return to the
+    // preview rather than showing a "done" screen for an import that did not
+    // happen.
+    if (cancelled) {
+      setImporting(false);
+      setProgress(null);
+      return;
+    }
 
     // Hand off to the banner provider — it owns throttling, persistence,
     // and auto-resume if the app is killed mid-batch.
@@ -545,8 +628,15 @@ export function ImportClientsModal({
       batch.push({ entry, csvLine, originalRow: row, branchId, contacts: cpRaw ? parseClientContactsCell(cpRaw) : undefined });
     });
 
-    const { success, insertedIds, failedRows: dbFailures } =
+    const { success, insertedIds, failedRows: dbFailures, cancelled } =
       await insertBatchWithRetry(batch);
+    // Dismissed the duplicate prompt → nothing was written, so do not fall
+    // through and report a completed import.
+    if (cancelled) {
+      setImporting(false);
+      setProgress(null);
+      return;
+    }
     failedRows.push(...dbFailures);
     if (unknownBranches.size) {
       const shown = Array.from(unknownBranches).slice(0, 10).join(', ');
@@ -873,6 +963,44 @@ export function ImportClientsModal({
           <Button onPress={close} fullWidth>
             <Text className="text-white font-semibold">Cerrar</Text>
           </Button>
+        </View>
+      ) : null}
+
+      {/* Duplicate prompt. An in-modal absolute overlay, NOT a second RNModal —
+          iOS silently refuses to present one while another is visible, so the
+          import would just appear to hang (see CLAUDE.md). runImport awaits the
+          answer, so nothing is written until a choice is made. */}
+      {dupPrompt ? (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', padding: 16 }}>
+          <Pressable
+            onPress={() => answerDuplicates(null)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' }}
+          />
+          <View className="bg-card rounded-2xl p-5">
+            <Text className="text-base font-bold text-ink">{t.dupTitle}</Text>
+            <Text className="text-sm text-muted mt-1">
+              {t.dupBody.replace('{{count}}', String(dupPrompt.count)).replace('{{total}}', String(dupPrompt.total))}
+            </Text>
+            <View className="gap-2 mt-4">
+              {([
+                ['merge', t.dupMerge, t.dupMergeHint],
+                ['replace', t.dupReplace, t.dupReplaceHint],
+                ['skip', t.dupSkip, t.dupSkipHint],
+              ] as const).map(([key, label, hint]) => (
+                <Pressable
+                  key={key}
+                  onPress={() => answerDuplicates(key)}
+                  className="px-4 py-3 rounded-xl border border-border active:bg-surface"
+                >
+                  <Text className="text-sm font-semibold text-ink">{label}</Text>
+                  <Text className="text-xs text-faint mt-0.5">{hint}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable onPress={() => answerDuplicates(null)} className="mt-3 py-3 items-center rounded-xl active:bg-surface">
+              <Text className="text-sm font-semibold text-muted">{tc.buttons.cancel}</Text>
+            </Pressable>
+          </View>
         </View>
       ) : null}
     </Modal>
