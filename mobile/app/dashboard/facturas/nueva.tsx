@@ -100,7 +100,9 @@ function addDaysISO(iso: string, days: number): string {
 
 export default function NuevaFacturaRoute() {
   const router = useRouter();
-  const { edit } = useLocalSearchParams<{ edit?: string }>();
+  // `client` comes from the client detail page's New invoice action, which
+  // has always passed it — nothing here read it, so the picker opened empty.
+  const { edit, client: clientParam } = useLocalSearchParams<{ edit?: string; client?: string }>();
   const supabase = createSupabaseClient();
   const insets = useSafeAreaInsets();
   const { business, currentRole, activeLocationId, myHomeLocationId } = useApp();
@@ -130,7 +132,7 @@ export default function NuevaFacturaRoute() {
   // Existing-invoice count for this business (null = not loaded yet). Drives the
   // sequential auto-number: business.invoice_start_number + count.
   const invoiceCountRef = useRef<number | null>(null);
-  const [clientIds, setClientIds] = useState<string[]>([]);
+  const [clientIds, setClientIds] = useState<string[]>(clientParam ? [clientParam] : []);
   const [issueDate, setIssueDate] = useState(todayISO());
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');

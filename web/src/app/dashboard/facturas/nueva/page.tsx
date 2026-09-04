@@ -93,7 +93,11 @@ function NuevaFacturaContent() {
     if (!allowed) router.replace('/dashboard/facturas');
   }, [business, currentRole, editId, router]);
   const [clients, setClients] = useState<Client[]>([]);
-  const initialClient = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('client') : null;
+  // useSearchParams, not window.location: this initializer also runs during
+  // the server render, where `window` is undefined — so the client id was
+  // read as null and hydration kept that empty state, leaving the picker
+  // blank even though the link carried ?client=.
+  const initialClient = searchParams.get('client');
   const [clientIds, setClientIds] = useState<string[]>(initialClient ? [initialClient] : []);
   const [clientSearch, setClientSearch] = useState('');
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
