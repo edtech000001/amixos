@@ -33,6 +33,12 @@ export interface ClientShareContact {
   role: string | null;
   phone: string | null;
   email: string | null;
+  /** Addressed instead of the client (migration 220). */
+  receives_email?: boolean;
+  /** Copied on invoices. */
+  cc_on_invoices?: boolean;
+  /** The client's main point of contact. */
+  is_primary?: boolean;
 }
 
 export interface ClientFieldTemplateLite {
@@ -72,9 +78,17 @@ export function csvCell(v: string): string {
  *  joined by `;;`. parseClientContactsCell reverses it on import, so a client
  *  exported from one Amixos business drops cleanly into another. */
 export function serializeClientContacts(contacts: ClientShareContact[]): string {
+  // Fields 5-7 are the behaviour flags, appended AFTER the original four so a
+  // file exported before they existed still parses — the reader defaults a
+  // missing field to false rather than failing. Dropping them silently was the
+  // old behaviour, and it meant a client who had asked not to be emailed
+  // started receiving mail again in the destination business.
+  const flag = (v: boolean | undefined) => (v ? '1' : '0');
   return contacts
-    .map(c => [c.name, c.role ?? '', c.phone ?? '', c.email ?? '']
-      .map(x => x.replace(/\|/g, '/').replace(/;;/g, ';')).join('|'))
+    .map(c => [
+      c.name, c.role ?? '', c.phone ?? '', c.email ?? '',
+      flag(c.receives_email), flag(c.cc_on_invoices), flag(c.is_primary),
+    ].map(x => x.replace(/\|/g, '/').replace(/;;/g, ';')).join('|'))
     .join(';;');
 }
 
@@ -82,8 +96,22 @@ export function parseClientContactsCell(raw: string | null | undefined): ClientS
   if (!raw || !raw.trim()) return [];
   return raw.split(';;')
     .map(part => {
-      const [name = '', role = '', phone = '', email = ''] = part.split('|').map(x => x.trim());
-      return { name, role: role || null, phone: phone || null, email: email || null };
+      // Flags are optional: a file written before they existed has only four
+      // fields, and must still import rather than error.
+      const [name = '', role = '', phone = '', email = '', rec = '', cc = '', prim = ''] =
+        part.split('|').map(x => x.trim());
+      const on = (v: string) => v === '1' || v.toLowerCase() === 'true';
+      return {
+        name,
+        role: role || null,
+        phone: phone || null,
+        email: email || null,
+        // A flag without an address would suppress the client's own email and
+        // supply nothing, making them unreachable — so it needs one to count.
+        receives_email: on(rec) && !!email,
+        cc_on_invoices: on(cc) && !!email,
+        is_primary: on(prim),
+      };
     })
     .filter(c => c.name);
 }
