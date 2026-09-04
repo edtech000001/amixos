@@ -57,7 +57,6 @@ import { CommunicationLog } from '@amixos/shared/screens/dashboard/Communication
 import { useContactOutcomePrompt } from '@/lib/useContactOutcomePrompt';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useThemeColors } from '@/lib/ThemeProvider';
-import { resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
 
 interface FieldTemplate {
   id: string;
@@ -689,6 +688,19 @@ export default function ClienteDetailRoute() {
   const primaryPhone = client.phone_cell ?? client.phone;
   const officePhone = client.phone_office;
   const primaryEmail = client.email_office ?? client.email;
+  // Who the generic "Email" action actually reaches. A contact flagged
+  // receives_email is addressed INSTEAD of the client (migration 220) — which
+  // means a client with NO email of their own is still reachable through that
+  // contact, so the button must not be disabled on primaryEmail alone.
+  // Contacts are already loaded here, so this needs no extra query.
+  const emailRecipients = useMemo(() => {
+    const flagged = contacts
+      .filter(ct => ct.receives_email)
+      .map(ct => (ct.email ?? '').trim())
+      .filter(Boolean);
+    return flagged.length ? flagged : [(primaryEmail ?? '').trim()].filter(Boolean);
+  }, [contacts, primaryEmail]);
+  const emailTarget = emailRecipients.join(',');
   const homeEmail = client.email_home;
   const fullAddress = [
     client.address,
@@ -882,28 +894,26 @@ export default function ClienteDetailRoute() {
             </Text>
           </Pressable>
           <Pressable
-            disabled={!primaryEmail}
-            onPress={async () => {
-              if (!primaryEmail) return;
-              // Generic "email this client": a contact flagged receives_email
-              // is addressed instead (migration 220). The labelled email ROW
-              // below deliberately does NOT redirect — tapping a visible
-              // address must mail that address.
-              const r = await resolveClientRecipients(supabase, client.id, primaryEmail);
-              const to = joinRecipients(r.to);
-              if (!to) return;
-              fireContact({ type: 'email', target: `mailto:${to}`, contactMethod: to, clientId: client.id });
-            }}
+            disabled={!emailTarget}
+            onPress={() => emailTarget && fireContact({
+              // Generic "email this client". The labelled email ROW below
+              // deliberately does NOT redirect — tapping a visible address must
+              // mail that address.
+              type: 'email',
+              target: `mailto:${emailTarget}`,
+              contactMethod: emailTarget,
+              clientId: client.id,
+            })}
             className={`flex-1 items-center justify-center py-3 rounded-2xl shadow-sm border ${
-              primaryEmail
+              emailTarget
                 ? 'bg-card border-border-soft active:bg-surface'
                 : 'bg-surface border-border-soft opacity-50'
             }`}
           >
-            <Mail size={18} color={primaryEmail ? c.primary : c.faint} />
+            <Mail size={18} color={emailTarget ? c.primary : c.faint} />
             <Text
               className={`text-[11px] font-semibold mt-1 ${
-                primaryEmail ? 'text-primary' : 'text-faint'
+                emailTarget ? 'text-primary' : 'text-faint'
               }`}
             >
               {td.actionEmail}
