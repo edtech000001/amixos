@@ -1080,7 +1080,10 @@ export default function FacturaDetailRoute() {
   const sendInvoice = async () => {
     if (!invoice) return;
     const email = invoice.clients[0]?.email ?? '';
-    if (!email) { Alert.alert('', tInv.sendNoEmail); return; }
+    // Resolve recipients BEFORE deciding there is nobody to send to: a client
+    // with no email of their own is still reachable through a contact flagged
+    // receives_email (migration 220). Guarding on the client's address alone
+    // blocked exactly the case the flag exists for.
     // Recipients come from the shared resolver: a contact flagged
     // receives_email is addressed INSTEAD of the client (migration 220), and CC
     // excludes anyone already in To.
@@ -1088,6 +1091,7 @@ export default function FacturaDetailRoute() {
     const recipients = await resolveClientRecipients(supabase, clientId, email, { includeInvoiceCc: true });
     const toList = recipients.to;
     const ccList = recipients.cc;
+    if (!toList.length) { Alert.alert('', tInv.sendNoEmail); return; }
     const token = await ensureShareToken();
     const base = WEB_APP_URL;
     const url = `${base}/factura/${token}`;

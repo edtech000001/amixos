@@ -951,14 +951,18 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const sendInvoice = async () => {
     if (!invoice) return;
     const email = invoice.clients[0]?.email ?? '';
-    if (!email) { void alertMessage({ message: tInv.sendNoEmail, destructive: true }); return; }
     // Auto-CC the client's contacts flagged "CC on invoices" (deduped, and
     // never the To address itself).
+    // Resolve recipients BEFORE deciding there is nobody to send to: a client
+    // with no email of their own is still reachable through a contact flagged
+    // receives_email (migration 220). Guarding on the client's address alone
+    // blocked exactly the case the flag exists for.
     // Recipients come from the shared resolver: a contact flagged
     // receives_email is addressed INSTEAD of the client (migration 220), and CC
     // excludes anyone already in To.
     const clientId = invoice.clients[0]?.id ?? null;
     const recipients = await resolveClientRecipients(supabase, clientId, email, { includeInvoiceCc: true });
+    if (!recipients.to.length) { void alertMessage({ message: tInv.sendNoEmail, destructive: true }); return; }
     const toParam = joinRecipients(recipients.to);
     const ccParam = recipients.cc.length ? `&cc=${encodeURIComponent(joinRecipients(recipients.cc))}` : '';
     const token = await ensureShareToken();

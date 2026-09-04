@@ -689,18 +689,21 @@ export default function ClienteDetailRoute() {
   const officePhone = client.phone_office;
   const primaryEmail = client.email_office ?? client.email;
   // Who the generic "Email" action actually reaches. A contact flagged
-  // receives_email is addressed INSTEAD of the client (migration 220) — which
-  // means a client with NO email of their own is still reachable through that
-  // contact, so the button must not be disabled on primaryEmail alone.
-  // Contacts are already loaded here, so this needs no extra query.
-  const emailRecipients = useMemo(() => {
+  // receives_email is addressed INSTEAD of the client (migration 220) — so a
+  // client with NO email of their own is still reachable through that contact,
+  // and the button must not be disabled on primaryEmail alone.
+  //
+  // Plain computation, NOT useMemo: this sits after the loading early-return,
+  // so a hook here runs only once the client resolves and React counts a
+  // different number of hooks between renders. Over a handful of contacts the
+  // memo bought nothing anyway.
+  const emailTarget = (() => {
     const flagged = contacts
       .filter(ct => ct.receives_email)
       .map(ct => (ct.email ?? '').trim())
       .filter(Boolean);
-    return flagged.length ? flagged : [(primaryEmail ?? '').trim()].filter(Boolean);
-  }, [contacts, primaryEmail]);
-  const emailTarget = emailRecipients.join(',');
+    return (flagged.length ? flagged : [(primaryEmail ?? '').trim()].filter(Boolean)).join(',');
+  })();
   const homeEmail = client.email_home;
   const fullAddress = [
     client.address,
