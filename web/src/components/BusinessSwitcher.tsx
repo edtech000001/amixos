@@ -94,8 +94,6 @@ export function BusinessSwitcher() {
             <GripVertical size={14} />
           </span>
         ) : null}
-
-            return (
               <button
                 key={b.id}
                 onClick={() => {
