@@ -1322,7 +1322,17 @@ export default function ClienteDetailRoute() {
               KeyboardAvoidingView — that keeps every field reachable without
               the layout jump a padding-based avoider causes on a long form.
               iOS-only prop; Android already resizes the window. */}
-          <ScrollView contentContainerClassName="px-5 pt-5 pb-12" automaticallyAdjustKeyboardInsets>
+          {/* keyboardShouldPersistTaps: without it the FIRST tap while the
+              keyboard is open is spent dismissing the keyboard, so tapping a
+              suggestion in the Role autocomplete did nothing — and the parent
+              claimed the drag, so its list could not be scrolled either. The
+              inner list already sets this; a nested scroll view only receives
+              the gesture if every ancestor allows it through. */}
+          <ScrollView
+            contentContainerClassName="px-5 pt-5 pb-12"
+            automaticallyAdjustKeyboardInsets
+            keyboardShouldPersistTaps="handled"
+          >
             <View className="gap-3">
               <Input
                 label={td.contactModal.nameLabel}
