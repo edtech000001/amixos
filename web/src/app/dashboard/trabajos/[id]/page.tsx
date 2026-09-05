@@ -1466,6 +1466,10 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               <div className="flex flex-col gap-2">
                 {assignments.map(a => {
                   const name = a.employees ? `${a.employees.first_name} ${a.employees.last_name}` : a.worker_name ?? '—';
+                  // Listed but paid nothing: no employee to pay, or explicitly
+                  // marked outside the crew. Badged so a full-looking roster
+                  // can't hide that half of it earns no hours.
+                  const unpaid = !a.employees || a.crew === false;
                   return (
                     <div key={a.id} className="flex items-center gap-2">
                       <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
@@ -1475,6 +1479,11 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                       {a.is_lead && (
                         <span className="ml-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold">
                           {full.dashboard.jobs.new.leadBadge}
+                        </span>
+                      )}
+                      {unpaid && (
+                        <span className="ml-1 px-2 py-0.5 rounded-full bg-border-soft text-faint text-[10px] font-semibold">
+                          {full.dashboard.jobs.new.noHoursBadge}
                         </span>
                       )}
                     </div>

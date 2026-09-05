@@ -364,6 +364,13 @@ function NuevoTrabajoContent() {
   const [leadSearch, setLeadSearch] = useState('');
   const leadDropdownRef = useRef<HTMLDivElement>(null);
   const [crewDropdownOpen, setCrewDropdownOpen] = useState(false);
+  /** Loaded assignment rows that earn nothing and that no picker can show:
+   *  an employee explicitly marked crew=false, or a row that only ever stored
+   *  a NAME. They used to be invisible here while still listing on the job
+   *  detail, so a job looked staffed by people nobody was paying. */
+  const [unpaidLinked, setUnpaidLinked] = useState<{ id: string; name: string }[]>([]);
+  /** Name-only worker currently being matched to a real employee. */
+  const [linkingName, setLinkingName] = useState<string | null>(null);
   const [crewFinderOpen, setCrewFinderOpen] = useState(false);
   const [crewSearch, setCrewSearch] = useState('');
   const crewDropdownRef = useRef<HTMLDivElement>(null);
@@ -966,6 +973,18 @@ function NuevoTrabajoContent() {
           if (manual.length > 0) setManualWorkers(manual);
           const lead = assigns.find((a: any) => a.is_lead && a.employee_id);
           if (lead) setLeadEmployeeId(lead.employee_id);
+          // Assigned but explicitly not crew: real employees credited zero
+          // hours. The lead has its own hint, so it is excluded here.
+          setUnpaidLinked(
+            assigns
+              .filter((a: any) => a.employee_id && a.crew === false && !a.is_lead)
+              .map((a: any) => ({
+                id: a.employee_id,
+                name: a.employees
+                  ? `${a.employees.first_name} ${a.employees.last_name}`
+                  : a.worker_name ?? '',
+              })),
+          );
         }
         setLoadingEdit(false);
       }
@@ -1128,6 +1147,19 @@ function NuevoTrabajoContent() {
   // pay a lead at all.
   const crewEmployees = employees;
   const filteredCrewEmployees = filterEmployeesByName(crewEmployees, crewSearch);
+
+  // Everyone the job carries who earns nothing: name-only rows (no employee to
+  // pay) and employees marked crew=false. Anyone already ticked into the crew
+  // drops off the list as soon as they are.
+  const unpaidWorkers: { key: string; name: string; employeeId: string | null }[] = [
+    ...unpaidLinked
+      .filter(w => !assignedEmployees.includes(w.id))
+      .map(w => ({ key: w.id, name: w.name, employeeId: w.id as string | null })),
+    ...manualWorkers
+      .map(w => w.trim())
+      .filter(Boolean)
+      .map(name => ({ key: name.toLowerCase(), name, employeeId: null as string | null })),
+  ];
   const leadEmployee = employees.find(e => e.id === leadEmployeeId) ?? null;
 
   // ─── Double-booking detection ──────────────────────────────────────────────
@@ -1273,6 +1305,41 @@ function NuevoTrabajoContent() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceId, defaultsCompleted]);
+
+  /** Put an already-linked but unpaid worker into the crew. The save then
+   *  writes them crew=true, and the carry-through net skips the old row. */
+  const payUnpaidWorker = (id: string) => {
+    setAssignedEmployees(prev => (prev.includes(id) ? prev : [...prev, id]));
+    setUnpaidLinked(prev => prev.filter(w => w.id !== id));
+  };
+
+  /** Drop a row nobody wants to keep. Name-only rows are re-inserted from
+   *  manualWorkers on save, so removing the name is what deletes the row. */
+  const dropUnpaidWorker = (key: string, byName: boolean) => {
+    if (byName) {
+      setManualWorkers(prev => prev.filter(w => w.trim().toLowerCase() !== key));
+    } else {
+      setUnpaidLinked(prev => prev.filter(w => w.id !== key));
+      loadedAssignsRef.current = loadedAssignsRef.current.filter((r: any) => r.employee_id !== key);
+    }
+  };
+
+  /** A name-only row matched to a real employee: add them to the crew and
+   *  retire the name, so the job stops carrying an unpayable duplicate. */
+  const linkPickedEmployee = (id: string) => {
+    const name = linkingName;
+    setAssignedEmployees(prev => (prev.includes(id) ? prev : [...prev, id]));
+    if (name) {
+      const key = name.trim().toLowerCase();
+      setManualWorkers(prev => prev.filter(w => w.trim().toLowerCase() !== key));
+      loadedAssignsRef.current = loadedAssignsRef.current.filter(
+        (r: any) => (r.worker_name ?? '').trim().toLowerCase() !== key || r.employee_id,
+      );
+    }
+    setLinkingName(null);
+    setCrewDropdownOpen(false);
+    setCrewSearch('');
+  };
 
   const toggleEmployee = (id: string) => {
     // Removing the lead from the crew is allowed — they stay lead (unpaid on
@@ -1895,6 +1962,11 @@ function NuevoTrabajoContent() {
                     </button>
                     {crewDropdownOpen && (
                       <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
+                        {linkingName && (
+                          <p className="px-3 pt-2 text-xs font-semibold text-ink truncate">
+                            {t.linkWorkerTitle.replace('{{name}}', linkingName)}
+                          </p>
+                        )}
                         <div className="p-2 border-b border-border-soft">
                           <div className="relative">
                             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint"/>
@@ -1907,7 +1979,8 @@ function NuevoTrabajoContent() {
                           {filteredCrewEmployees.map(emp => {
                             const on = assignedEmployees.includes(emp.id);
                             return (
-                              <button type="button" key={emp.id} onClick={() => toggleEmployee(emp.id)}
+                              <button type="button" key={emp.id}
+                                onClick={() => (linkingName ? linkPickedEmployee(emp.id) : toggleEmployee(emp.id))}
                                 className={`w-full text-left px-4 py-2.5 text-sm hover:bg-surface transition-colors truncate flex items-center justify-between ${on ? 'text-primary font-medium bg-primary/5' : 'text-ink'}`}>
                                 <span className="truncate">{emp.first_name} {emp.last_name}</span>
                                 {on && <span className="text-xs text-primary ml-2">✓</span>}
@@ -1919,7 +1992,7 @@ function NuevoTrabajoContent() {
                           )}
                         </div>
                         <div className="p-2 border-t border-border-soft">
-                          <button type="button" onClick={() => { setCrewDropdownOpen(false); setCrewSearch(''); }}
+                          <button type="button" onClick={() => { setCrewDropdownOpen(false); setCrewSearch(''); setLinkingName(null); }}
                             className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors">
                             {t.crewDoneBtn}
                           </button>
@@ -1935,6 +2008,34 @@ function NuevoTrabajoContent() {
                           {emp.first_name} {emp.last_name}
                           <X size={11}/>
                         </button>
+                      ))}
+                    </div>
+                  )}
+                  {unpaidWorkers.length > 0 && (
+                    <div className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+                      <p className="text-xs font-semibold text-ink mb-1">{t.unpaidWorkersTitle}</p>
+                      <p className="text-[11px] text-faint mb-2">{t.unpaidWorkersBody}</p>
+                      {unpaidWorkers.map(w => (
+                        <div key={w.key} className="flex items-center gap-2 py-1">
+                          <span className="text-sm text-ink flex-1 truncate">{w.name}</span>
+                          <button type="button"
+                            onClick={() => {
+                              if (w.employeeId) {
+                                payUnpaidWorker(w.employeeId);
+                              } else {
+                                setLinkingName(w.name);
+                                setCrewSearch(w.name);
+                                setCrewDropdownOpen(true);
+                              }
+                            }}
+                            className="px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-medium text-primary hover:bg-primary/15 transition-colors">
+                            {w.employeeId ? t.unpaidAddBtn : t.unpaidLinkBtn}
+                          </button>
+                          <button type="button" onClick={() => dropUnpaidWorker(w.employeeId ?? w.key, !w.employeeId)}
+                            className="p-1 text-faint hover:text-ink transition-colors">
+                            <X size={13}/>
+                          </button>
+                        </div>
                       ))}
                     </div>
                   )}

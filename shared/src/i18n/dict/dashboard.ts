@@ -1004,6 +1004,12 @@ export type DashboardDict = {
       markAsLead: string;
       leadLabel: string;
       leadUnpaidHint: string;
+      unpaidWorkersTitle: string;
+      unpaidWorkersBody: string;
+      unpaidAddBtn: string;
+      unpaidLinkBtn: string;
+      linkWorkerTitle: string;
+      noHoursBadge: string;
       leadNone: string;
       crewLabel: string;
       driverLabel: string;
@@ -4095,6 +4101,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         markAsLead: 'Marcar como líder',
         leadLabel: 'Líder del trabajo',
         leadUnpaidHint: 'No cuenta horas de trabajo. Agrégalo a Trabajadores para pagarle.',
+        unpaidWorkersTitle: 'No cuentan horas',
+        unpaidWorkersBody: 'Aparecen en el trabajo pero no se les pagan horas. Agrégalos a Trabajadores, o vincúlalos con un empleado si solo se guardó el nombre.',
+        unpaidAddBtn: 'Agregar',
+        unpaidLinkBtn: 'Vincular',
+        linkWorkerTitle: 'Vincular a {{name}}',
+        noHoursBadge: 'Sin horas',
         leadNone: 'Sin líder',
         crewLabel: 'Trabajadores',
         driverLabel: 'Conductor',
@@ -7201,6 +7213,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         markAsLead: 'Mark as lead',
         leadLabel: 'Job lead',
         leadUnpaidHint: 'Not counted in work hours. Add them to Crew to pay them.',
+        unpaidWorkersTitle: 'Not earning hours',
+        unpaidWorkersBody: 'These show on the job but are paid no hours. Add them to Crew, or link them to an employee if only a name was saved.',
+        unpaidAddBtn: 'Add',
+        unpaidLinkBtn: 'Link',
+        linkWorkerTitle: 'Link {{name}}',
+        noHoursBadge: 'No hours',
         leadNone: 'No lead',
         crewLabel: 'Crew',
         driverLabel: 'Driver',

@@ -1786,6 +1786,10 @@ export default function JobDetailRoute() {
             <View className="gap-2.5">
               {assignments.map(a => {
                 const name = a.employees ? `${a.employees.first_name} ${a.employees.last_name}` : a.worker_name ?? '—';
+                // Listed but paid nothing: no employee to pay, or explicitly
+                // marked outside the crew. Badged so a full-looking roster
+                // can't hide that half of it earns no hours.
+                const unpaid = !a.employees || a.crew === false;
                 return (
                   <View key={a.id} className="flex-row items-center gap-2">
                     <View className="w-7 h-7 rounded-full bg-primary/10 items-center justify-center">
@@ -1795,6 +1799,11 @@ export default function JobDetailRoute() {
                     {a.is_lead ? (
                       <View className="px-2 py-0.5 rounded-full bg-amber-100">
                         <Text className="text-[10px] font-semibold text-amber-700">{t.new.leadBadge}</Text>
+                      </View>
+                    ) : null}
+                    {unpaid ? (
+                      <View className="px-2 py-0.5 rounded-full bg-border-soft">
+                        <Text className="text-[10px] font-semibold text-faint">{t.new.noHoursBadge}</Text>
                       </View>
                     ) : null}
                   </View>

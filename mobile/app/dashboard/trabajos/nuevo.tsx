@@ -329,6 +329,13 @@ export default function NuevoTrabajoRoute() {
   const [leadPickerOpen, setLeadPickerOpen] = useState(false);
   const [leadSearch, setLeadSearch] = useState('');
   const [crewPickerOpen, setCrewPickerOpen] = useState(false);
+  /** Loaded assignment rows that earn nothing and that no picker can show:
+   *  an employee explicitly marked crew=false, or a row that only ever stored
+   *  a NAME. They used to be invisible here while still listing on the job
+   *  detail, so a job looked staffed by people nobody was paying. */
+  const [unpaidLinked, setUnpaidLinked] = useState<{ id: string; name: string }[]>([]);
+  /** Name-only worker currently being matched to a real employee. */
+  const [linkingName, setLinkingName] = useState<string | null>(null);
   const [crewFinderOpen, setCrewFinderOpen] = useState(false);
   const [crewSearch, setCrewSearch] = useState('');
 
@@ -586,6 +593,18 @@ export default function NuevoTrabajoRoute() {
           if (manual.length > 0) setManualWorkers(manual);
           const lead = assigns.find((a: any) => a.is_lead && a.employee_id);
           if (lead) setLeadEmployeeId(lead.employee_id);
+          // Assigned but explicitly not crew: real employees credited zero
+          // hours. The lead has its own hint, so it is excluded here.
+          setUnpaidLinked(
+            assigns
+              .filter((a: any) => a.employee_id && a.crew === false && !a.is_lead)
+              .map((a: any) => ({
+                id: a.employee_id,
+                name: a.employees
+                  ? `${a.employees.first_name} ${a.employees.last_name}`
+                  : a.worker_name ?? '',
+              })),
+          );
         }
         setLoadingEdit(false);
       }
@@ -1205,6 +1224,40 @@ export default function NuevoTrabajoRoute() {
                       ))}
                   </View>
                 ) : null}
+                {unpaidWorkers.length > 0 ? (
+                  <View className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3">
+                    <Text className="text-xs font-semibold text-ink mb-1">{t.unpaidWorkersTitle}</Text>
+                    <Text className="text-[11px] text-faint mb-2">{t.unpaidWorkersBody}</Text>
+                    {unpaidWorkers.map((w) => (
+                      <View key={w.key} className="flex-row items-center gap-2 py-1.5">
+                        <Text className="text-sm text-ink flex-1" numberOfLines={1}>{w.name}</Text>
+                        <Pressable
+                          onPress={() => {
+                            if (w.employeeId) {
+                              payUnpaidWorker(w.employeeId);
+                            } else {
+                              setLinkingName(w.name);
+                              setCrewSearch(w.name);
+                              setCrewPickerOpen(true);
+                            }
+                          }}
+                          className="px-2.5 py-1.5 rounded-full bg-primary/10 border border-primary/20 active:opacity-60"
+                        >
+                          <Text className="text-xs font-medium text-primary">
+                            {w.employeeId ? t.unpaidAddBtn : t.unpaidLinkBtn}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => dropUnpaidWorker(w.employeeId ?? w.key, !w.employeeId)}
+                          hitSlop={8}
+                          className="p-1 active:opacity-60"
+                        >
+                          <X size={14} color={c.faint} />
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
               </View>
 
             </>
@@ -1380,6 +1433,19 @@ export default function NuevoTrabajoRoute() {
   // ZERO hours, and hiding them from this picker then made it impossible to
   // pay a lead at all — searching their name returned "No results".
   const crewEmployees = employees;
+  // Everyone the job carries who earns nothing: name-only rows (no employee to
+  // pay) and employees marked crew=false. Anyone already ticked into the crew
+  // drops off the list as soon as they are.
+  const unpaidWorkers: { key: string; name: string; employeeId: string | null }[] = [
+    ...unpaidLinked
+      .filter((w) => !assignedEmployees.includes(w.id))
+      .map((w) => ({ key: w.id, name: w.name, employeeId: w.id as string | null })),
+    ...manualWorkers
+      .map((w) => w.trim())
+      .filter(Boolean)
+      .map((name) => ({ key: name.toLowerCase(), name, employeeId: null as string | null })),
+  ];
+
   const filteredCrewEmployees = useMemo(
     () => filterEmployees(crewEmployees, crewSearch),
     [crewEmployees, crewSearch],
@@ -1505,6 +1571,40 @@ export default function NuevoTrabajoRoute() {
     } finally {
       setQaSaving(false);
     }
+  };
+
+  /** Put an already-linked but unpaid worker into the crew. The save then
+   *  writes them crew=true, and the carry-through net skips the old row. */
+  const payUnpaidWorker = (id: string) => {
+    setAssignedEmployees((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setUnpaidLinked((prev) => prev.filter((w) => w.id !== id));
+  };
+
+  /** Drop a row nobody wants to keep. Name-only rows are re-inserted from
+   *  manualWorkers on save, so removing the name is what deletes the row. */
+  const dropUnpaidWorker = (key: string, byName: boolean) => {
+    if (byName) {
+      setManualWorkers((prev) => prev.filter((w) => w.trim().toLowerCase() !== key));
+    } else {
+      setUnpaidLinked((prev) => prev.filter((w) => w.id !== key));
+      loadedAssignsRef.current = loadedAssignsRef.current.filter((r) => r.employee_id !== key);
+    }
+  };
+
+  /** A name-only row matched to a real employee: add them to the crew and
+   *  retire the name, so the job stops carrying an unpayable duplicate. */
+  const linkPickedEmployee = (id: string) => {
+    const name = linkingName;
+    setAssignedEmployees((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    if (name) {
+      const key = name.trim().toLowerCase();
+      setManualWorkers((prev) => prev.filter((w) => w.trim().toLowerCase() !== key));
+      loadedAssignsRef.current = loadedAssignsRef.current.filter(
+        (r) => (r.worker_name ?? '').trim().toLowerCase() !== key || r.employee_id,
+      );
+    }
+    setLinkingName(null);
+    setCrewPickerOpen(false);
   };
 
   const toggleEmployee = (id: string) => {
@@ -2636,7 +2736,7 @@ export default function NuevoTrabajoRoute() {
         visible={crewPickerOpen}
         animationType="fade"
         transparent
-        onRequestClose={() => setCrewPickerOpen(false)}
+        onRequestClose={() => { setLinkingName(null); setCrewPickerOpen(false); }}
       >
         {/* KeyboardAvoidingView: the sheet is anchored to the bottom, exactly
             where the keyboard opens, so its fields sat underneath it. */}
@@ -2645,7 +2745,7 @@ export default function NuevoTrabajoRoute() {
           style={{ flex: 1, justifyContent: 'flex-end' }}
         >
           <Pressable
-            onPress={() => setCrewPickerOpen(false)}
+            onPress={() => { setLinkingName(null); setCrewPickerOpen(false); }}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
           />
           <View
@@ -2664,12 +2764,16 @@ export default function NuevoTrabajoRoute() {
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>
             <View className="px-5 mb-3 flex-row items-center justify-between">
-              <Text className="text-base font-semibold text-ink">{t.crewLabel}</Text>
+              <Text className="text-base font-semibold text-ink" numberOfLines={1}>
+                {linkingName ? t.linkWorkerTitle.replace('{{name}}', linkingName) : t.crewLabel}
+              </Text>
               <View className="flex-row items-center gap-3">
-                <Text className="text-xs text-faint">
-                  {t.crewSelectedCount.replace('{{count}}', String(assignedEmployees.length))}
-                </Text>
-                <Pressable onPress={() => setCrewPickerOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                {linkingName ? null : (
+                  <Text className="text-xs text-faint">
+                    {t.crewSelectedCount.replace('{{count}}', String(assignedEmployees.length))}
+                  </Text>
+                )}
+                <Pressable onPress={() => { setLinkingName(null); setCrewPickerOpen(false); }} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
                   <X size={22} color={c.faint} />
                 </Pressable>
               </View>
@@ -2692,7 +2796,7 @@ export default function NuevoTrabajoRoute() {
                 return (
                   <Pressable
                     key={emp.id}
-                    onPress={() => toggleEmployee(emp.id)}
+                    onPress={() => (linkingName ? linkPickedEmployee(emp.id) : toggleEmployee(emp.id))}
                     className={`flex-row items-center justify-between px-5 py-3.5 active:bg-surface ${
                       isSel ? 'bg-primary/5' : ''
                     }`}
