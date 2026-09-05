@@ -1003,6 +1003,7 @@ export type DashboardDict = {
       leadBadge: string;
       markAsLead: string;
       leadLabel: string;
+      leadUnpaidHint: string;
       leadNone: string;
       crewLabel: string;
       driverLabel: string;
@@ -4093,6 +4094,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         leadBadge: 'Líder',
         markAsLead: 'Marcar como líder',
         leadLabel: 'Líder del trabajo',
+        leadUnpaidHint: 'No cuenta horas de trabajo. Agrégalo a Trabajadores para pagarle.',
         leadNone: 'Sin líder',
         crewLabel: 'Trabajadores',
         driverLabel: 'Conductor',
@@ -7198,6 +7200,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         leadBadge: 'Lead',
         markAsLead: 'Mark as lead',
         leadLabel: 'Job lead',
+        leadUnpaidHint: 'Not counted in work hours. Add them to Crew to pay them.',
         leadNone: 'No lead',
         crewLabel: 'Crew',
         driverLabel: 'Driver',

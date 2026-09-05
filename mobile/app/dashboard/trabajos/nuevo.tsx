@@ -354,8 +354,11 @@ export default function NuevoTrabajoRoute() {
     if (!myEmployeeId || !employees.some((e) => e.id === myEmployeeId)) return;
     if (leadEmployeeId || assignedEmployees.length > 0) return;
     leadDefaulted.current = true;
-    // Lead only — crew membership (paid hours) stays an explicit choice.
+    // Lead AND crew: whoever enters the job normally works it, and a lead
+    // outside the crew earns zero hours (migration 189). They can still be
+    // removed from the crew for the supervises-only case.
     setLeadEmployeeId(myEmployeeId);
+    setAssignedEmployees(prev => (prev.includes(myEmployeeId) ? prev : [...prev, myEmployeeId]));
   }, [sourceId, creatorStaff, canAssign, restrictedCreator, myEmployeeId, employees, leadEmployeeId, assignedEmployees, business?.job_crew_mode]);
 
   // Load clients + employees + (optionally) the job being edited.
@@ -1162,11 +1165,15 @@ export default function NuevoTrabajoRoute() {
                     </Text>
                     <ChevronDown size={16} color={c.faint} />
                   </Pressable>
+                  {leadEmployeeId && !assignedEmployees.includes(leadEmployeeId) ? (
+                    <Text className="text-xs text-faint mt-1.5">{t.leadUnpaidHint}</Text>
+                  ) : null}
                 </View>
               ) : null}
 
-              {/* Crew — searchable multi-select. The lead is shown in its own
-                 picker above and excluded here. */}
+              {/* Crew — searchable multi-select. The lead is listed here too:
+                 a lead outside the crew is credited zero hours, so they must
+                 be tickable. */}
               <View className="mb-3">
                 <Text className="text-sm font-semibold text-ink mb-2">{t.crewLabel}</Text>
                 <Pressable
@@ -1368,12 +1375,11 @@ export default function NuevoTrabajoRoute() {
     () => filterEmployees(employees, leadSearch),
     [employees, leadSearch],
   );
-  // Crew picker excludes the current lead — the lead is always part of the
-  // crew at save time but is shown in its own picker, not here.
-  const crewEmployees = useMemo(
-    () => employees.filter((e) => business?.job_crew_mode !== false ? e.id !== leadEmployeeId : true),
-    [employees, leadEmployeeId, business?.job_crew_mode],
-  );
+  // The lead IS listed here. That exclusion was written when the lead was
+  // always crew at save time; migration 189 made a lead outside the crew earn
+  // ZERO hours, and hiding them from this picker then made it impossible to
+  // pay a lead at all — searching their name returned "No results".
+  const crewEmployees = employees;
   const filteredCrewEmployees = useMemo(
     () => filterEmployees(crewEmployees, crewSearch),
     [crewEmployees, crewSearch],
@@ -1513,6 +1519,10 @@ export default function NuevoTrabajoRoute() {
   // (e.g. the owner leads without billing hours). Clearing leaves nobody lead.
   const setLead = (id: string) => {
     setLeadEmployeeId(id || null);
+    // Leads normally work the job, so they join the crew by default and get
+    // paid. Removing them from the crew afterwards is the deliberate
+    // "supervises but is not paid" case migration 189 exists for.
+    if (id) setAssignedEmployees(prev => (prev.includes(id) ? prev : [...prev, id]));
   };
 
   // Photos picked while CREATING a job — staged locally (nothing uploads if

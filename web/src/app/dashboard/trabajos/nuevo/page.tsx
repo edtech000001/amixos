@@ -329,8 +329,11 @@ function NuevoTrabajoContent() {
     if (!myEmployeeId || !employees.some((e) => e.id === myEmployeeId)) return;
     if (leadEmployeeId || assignedEmployees.length > 0) return;
     leadDefaulted.current = true;
-    // Lead only — crew membership (paid hours) stays an explicit choice.
+    // Lead AND crew: whoever enters the job normally works it, and a lead
+    // outside the crew earns zero hours (migration 189). They can still be
+    // removed from the crew for the supervises-only case.
     setLeadEmployeeId(myEmployeeId);
+    setAssignedEmployees(prev => (prev.includes(myEmployeeId) ? prev : [...prev, myEmployeeId]));
   }, [sourceId, creatorStaff, canAssign, restrictedCreator, myEmployeeId, employees, leadEmployeeId, assignedEmployees, business?.job_crew_mode]);
   // Optional drivers — any employees paid extra driverHours (each) on top of
   // the job's total hours. Multi-select, like crew.
@@ -1119,9 +1122,11 @@ function NuevoTrabajoContent() {
   const filteredLeadEmployees = filterEmployeesByName(employees, leadSearch);
   // Crew picker excludes the current lead — the lead is always part of the
   // crew at save time but is shown in its own picker, not here.
-  const crewEmployees = employees.filter(
-    e => business?.job_crew_mode !== false ? e.id !== leadEmployeeId : true,
-  );
+  // The lead IS listed here. That exclusion was written when the lead was
+  // always crew at save time; migration 189 made a lead outside the crew earn
+  // ZERO hours, and hiding them from this picker then made it impossible to
+  // pay a lead at all.
+  const crewEmployees = employees;
   const filteredCrewEmployees = filterEmployeesByName(crewEmployees, crewSearch);
   const leadEmployee = employees.find(e => e.id === leadEmployeeId) ?? null;
 
@@ -1281,6 +1286,10 @@ function NuevoTrabajoContent() {
   // (e.g. the owner leads without billing hours). Clearing leaves nobody lead.
   const setLead = (id: string) => {
     setLeadEmployeeId(id || null);
+    // Leads normally work the job, so they join the crew by default and get
+    // paid. Removing them afterwards is the deliberate "supervises but is not
+    // paid" case migration 189 exists for.
+    if (id) setAssignedEmployees(prev => (prev.includes(id) ? prev : [...prev, id]));
   };
 
   const updateItem = (id: string, field: keyof LineItem, value: any) =>
@@ -1858,10 +1867,15 @@ function NuevoTrabajoContent() {
                         </div>
                       )}
                     </div>
+                    {leadEmployeeId && !assignedEmployees.includes(leadEmployeeId) && (
+                      <p className="text-xs text-faint mt-1.5">{t.leadUnpaidHint}</p>
+                    )}
                   </div>
                 )}
 
-                {/* Crew — searchable multi-select dropdown. Replaces the
+                {/* Crew — the lead is listed here too: a lead outside the crew
+                   is credited zero hours, so they must be tickable.
+                   Searchable multi-select dropdown. Replaces the
                    all-at-once grid so larger teams aren't overwhelming.
                    Managers+ assign; a field creator self-assigns their job. */}
                 {canStaff && (
