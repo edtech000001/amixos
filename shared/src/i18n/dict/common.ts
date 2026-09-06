@@ -64,6 +64,23 @@ export type CommonDict = {
     hourAbbr: string;
     minAbbr: string;
   };
+  // The update prompt (mobile). Deliberately worded as an invitation, never a
+  // demand: an OTA is already downloaded and applies on the NEXT restart, so
+  // there is no deadline and no reason to interrupt someone mid-form.
+  appUpdate: {
+    otaTitle: string;
+    otaBody: string;
+    restartBtn: string;
+    storeTitle: string;
+    storeBody: string;
+    storeBtn: string;
+    laterBtn: string;
+    checkBtn: string;
+    checking: string;
+    upToDate: string;
+    downloading: string;
+    checkFailed: string;
+  };
   mobileAppBanner: {
     title: string;
     subtitle: string;
@@ -175,6 +192,20 @@ export const common: Record<Locale, CommonDict> = {
       hourAbbr: 'h',
       minAbbr: 'min',
     },
+    appUpdate: {
+      otaTitle: 'Actualización lista',
+      otaBody: 'Reinicia la app cuando puedas para usar la nueva versión.',
+      restartBtn: 'Reiniciar',
+      storeTitle: 'Nueva versión disponible',
+      storeBody: 'Actualiza desde la tienda para recibir las últimas mejoras.',
+      storeBtn: 'Actualizar',
+      laterBtn: 'Después',
+      checkBtn: 'Buscar actualización',
+      checking: 'Buscando…',
+      upToDate: 'Ya tienes la última versión',
+      downloading: 'Descargando actualización…',
+      checkFailed: 'No se pudo buscar. Revisa tu conexión.',
+    },
     mobileAppBanner: {
       title: 'Amixos para iPhone',
       subtitle: 'Mejor experiencia en la app.',
@@ -272,6 +303,20 @@ export const common: Record<Locale, CommonDict> = {
       days: 'days',
       hourAbbr: 'h',
       minAbbr: 'min',
+    },
+    appUpdate: {
+      otaTitle: 'Update ready',
+      otaBody: 'Restart the app when you get a chance to use the new version.',
+      restartBtn: 'Restart',
+      storeTitle: 'New version available',
+      storeBody: 'Update from the store to get the latest improvements.',
+      storeBtn: 'Update',
+      laterBtn: 'Later',
+      checkBtn: 'Check for update',
+      checking: 'Checking…',
+      upToDate: "You're on the latest version",
+      downloading: 'Downloading update…',
+      checkFailed: "Couldn't check. Check your connection.",
     },
     mobileAppBanner: {
       title: 'Amixos for iPhone',

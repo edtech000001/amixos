@@ -24,6 +24,7 @@ import * as Application from 'expo-application';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useTheme, useThemeColors } from '@/lib/ThemeProvider';
 import { useApp } from '@/lib/AppContext';
+import { useAppUpdate } from '@/lib/updates/useAppUpdate';
 import { can } from '@amixos/shared/lib/permissions';
 import { SUPPORT_EMAIL, buildSupportMailto } from '@amixos/shared/lib/support';
 
@@ -256,8 +257,49 @@ export default function AjustesIndex() {
         {APP_VERSION ? (
           <Text className="text-center text-[11px] text-faint mt-6">{APP_VERSION}</Text>
         ) : null}
+        {/* Manual check. The app already checks on its own, but support needs
+            something to point at: "tap this and tell me what it says". */}
+        <UpdateCheckRow />
       </ScrollView>
       </Animated.View>
     </SafeAreaView>
+  );
+}
+
+/** "Check for update" + its result, under the version line. Restarting is a
+ *  separate deliberate tap — finding an update never applies it. */
+function UpdateCheckRow() {
+  const { t } = useLang();
+  const c = useThemeColors();
+  const { check, restart, checking, downloading, otaReady, storeUpdate, checkedUpToDate, checkFailed } = useAppUpdate();
+  const u = t.common.appUpdate;
+
+  const status = downloading
+    ? u.downloading
+    : checking
+      ? u.checking
+      : checkFailed
+        ? u.checkFailed
+        : checkedUpToDate
+          ? u.upToDate
+          : null;
+
+  return (
+    <View className="items-center mt-2 mb-4">
+      {otaReady ? (
+        <Pressable onPress={() => void restart()} className="px-4 py-2 rounded-xl bg-primary active:opacity-80">
+          <Text className="text-xs font-semibold text-white">{u.restartBtn}</Text>
+        </Pressable>
+      ) : storeUpdate ? (
+        <Pressable onPress={() => void Linking.openURL(storeUpdate.url)} className="px-4 py-2 rounded-xl bg-primary active:opacity-80">
+          <Text className="text-xs font-semibold text-white">{u.storeBtn}</Text>
+        </Pressable>
+      ) : (
+        <Pressable onPress={() => void check(true)} disabled={checking} className="px-4 py-2 active:opacity-60">
+          <Text className="text-xs font-medium text-primary">{u.checkBtn}</Text>
+        </Pressable>
+      )}
+      {status ? <Text className="text-[11px] text-faint mt-1">{status}</Text> : null}
+    </View>
   );
 }

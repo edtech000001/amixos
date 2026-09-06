@@ -13,6 +13,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { LangProvider } from '@/lib/i18n/LangProvider';
 import { ThemeProvider, useTheme } from '@/lib/ThemeProvider';
 import { useProtectedRoute } from '@/lib/auth/gate';
+import { UpdateBanner } from '@/components/UpdateBanner';
 // Importing the auth store at module load wires up the single
 // onAuthStateChange listener and the safety timeout.
 import '@/lib/auth/store';
@@ -64,7 +65,14 @@ if (_orig) {
 // (those hooks must be called inside the router tree).
 function AuthAwareApp() {
   useProtectedRoute();
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <>
+      <Stack screenOptions={{ headerShown: false }} />
+      {/* Sits above every screen. Renders nothing until an update is actually
+          waiting, and hides itself while a form is focused. */}
+      <UpdateBanner />
+    </>
+  );
 }
 
 // Status-bar icons follow the theme: dark glyphs on the light bg, light glyphs
