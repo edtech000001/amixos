@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { useLang } from '@/i18n/LangProvider';
 import { createSupabaseClient } from '@/lib/supabase';
 import { parseClientContactsCell } from '@amixos/shared/lib/clientShare';
+import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { RecentImports } from './RecentImports';
 import { logImportRun } from '@amixos/shared/lib/importRunners';
 import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
@@ -254,11 +255,20 @@ export default function ImportClientsModal({ open, businessId, templates, locati
     });
     // Which rows already exist? Same matching rule as the jobs importer's
     // client resolver, so the two agree on what "already exists" means.
-    const { data: existingRows } = await supabase
-      .from('clients')
-      .select('id, first_name, last_name, company')
-      .eq('business_id', businessId);
-    const clientIndex = buildClientIndex((existingRows ?? []) as ExistingClientLite[]);
+    // PAGINATED: PostgREST caps a select at 1000 rows. Reading only the first
+    // page made every client past #1000 invisible to the match, so re-importing
+    // one of them silently created a second copy instead of updating it — the
+    // exact failure this whole duplicate check exists to prevent, and one that
+    // only appears once a business gets big.
+    const existingRows = await fetchAll<ExistingClientLite>((from, to) =>
+      supabase
+        .from('clients')
+        .select('id, first_name, last_name, company')
+        .eq('business_id', businessId)
+        .order('id')
+        .range(from, to),
+    );
+    const clientIndex = buildClientIndex(existingRows);
     for (const b of batch) {
       const full = [b.entry.first_name, b.entry.last_name].filter(Boolean).join(' ');
       b.existingId = matchExistingClient(clientIndex, full, b.entry.company);

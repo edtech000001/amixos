@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { parseClientContactsCell } from '@amixos/shared/lib/clientShare';
+import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { logImportRun } from '@amixos/shared/lib/importRunners';
 import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
 import { View, Text, Pressable, ActivityIndicator, Alert, ScrollView } from 'react-native';
@@ -196,11 +197,20 @@ export function ImportClientsModal({
     const failedRows: { label: string; reason: string }[] = [];
     // Which rows already exist? Same rule as web and as the jobs importer's
     // client resolver, so all three agree on what "already exists" means.
-    const { data: existingRows } = await supabase
-      .from('clients')
-      .select('id, first_name, last_name, company')
-      .eq('business_id', businessId);
-    const clientIndex = buildClientIndex((existingRows ?? []) as ExistingClientLite[]);
+    // PAGINATED: PostgREST caps a select at 1000 rows. Reading only the first
+    // page made every client past #1000 invisible to the match, so re-importing
+    // one of them silently created a second copy instead of updating it — the
+    // exact failure this whole duplicate check exists to prevent, and one that
+    // only appears once a business gets big.
+    const existingRows = await fetchAll<ExistingClientLite>((from, to) =>
+      supabase
+        .from('clients')
+        .select('id, first_name, last_name, company')
+        .eq('business_id', businessId)
+        .order('id')
+        .range(from, to),
+    );
+    const clientIndex = buildClientIndex(existingRows);
     const withMatch = batch.map(b => ({
       b,
       existingId: matchExistingClient(
