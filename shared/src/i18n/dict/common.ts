@@ -74,7 +74,6 @@ export type CommonDict = {
     storeTitle: string;
     storeBody: string;
     storeBtn: string;
-    laterBtn: string;
     checkBtn: string;
     checking: string;
     upToDate: string;
@@ -199,7 +198,6 @@ export const common: Record<Locale, CommonDict> = {
       storeTitle: 'Nueva versión disponible',
       storeBody: 'Actualiza desde la tienda para recibir las últimas mejoras.',
       storeBtn: 'Actualizar',
-      laterBtn: 'Después',
       checkBtn: 'Buscar actualización',
       checking: 'Buscando…',
       upToDate: 'Ya tienes la última versión',
@@ -311,7 +309,6 @@ export const common: Record<Locale, CommonDict> = {
       storeTitle: 'New version available',
       storeBody: 'Update from the store to get the latest improvements.',
       storeBtn: 'Update',
-      laterBtn: 'Later',
       checkBtn: 'Check for update',
       checking: 'Checking…',
       upToDate: "You're on the latest version",

@@ -52,10 +52,21 @@ create policy "app_releases readable by authenticated"
   to authenticated
   using (true);
 
--- Seed with the CURRENT version so nobody is prompted until a build actually
--- ships. Inserting a higher number here would prompt every user immediately.
+-- Seeded at 0.0.0 — a version no build can be behind — so nobody is prompted
+-- until these rows are deliberately filled in.
+--
+-- Do NOT seed this from app.json's `version`. The client compares against the
+-- NATIVE version (Info.plist CFBundleShortVersionString / build.gradle
+-- versionName), and the two drift badly: app.json is bumped on every OTA while
+-- the native files only change on a rebuild. At the time of writing app.json
+-- said 0.1.50 and both native files said 0.1.0, so seeding from app.json
+-- prompted every install to "update from the store" — to a placeholder URL.
+--
+-- The store URLs are placeholders until the app is published. The client
+-- refuses to prompt while store_url is empty or still carries Apple's zeroed
+-- id, so an unfinished row is inert rather than a dead button.
 insert into public.app_releases (platform, latest_version, store_url)
 values
-  ('ios',     '0.1.50', 'https://apps.apple.com/app/id0000000000'),
-  ('android', '0.1.50', 'https://play.google.com/store/apps/details?id=com.amixos.app')
+  ('ios',     '0.0.0', 'https://apps.apple.com/app/id0000000000'),
+  ('android', '0.0.0', 'https://play.google.com/store/apps/details?id=com.amixos.app')
 on conflict (platform) do nothing;

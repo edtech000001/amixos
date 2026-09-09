@@ -54,7 +54,20 @@ export interface AppUpdateState {
   suppressed: boolean;
   check: (manual?: boolean) => Promise<void>;
   restart: () => Promise<void>;
-  dismiss: () => void;
+}
+
+/** Whether a release row should prompt. Separate from the raw version test so
+ *  the URL check can never be forgotten: a prompt whose button opens a store
+ *  page that does not exist is worse than no prompt, and while the app is
+ *  unpublished the seeded URL is a placeholder. */
+function isStoreReleaseNewer(
+  row: { latest_version: string; store_url: string },
+  currentVersion: string,
+): boolean {
+  const url = (row.store_url ?? '').trim();
+  // An unfilled seed: no URL, or Apple's id with the digits still zeroed.
+  if (!url || /\/id0+(\?|$|\/)/.test(url)) return false;
+  return isNewerVersion(row.latest_version, currentVersion);
 }
 
 /** `a` is newer than `b`, comparing dotted segments as NUMBERS. String
@@ -93,11 +106,9 @@ interface UpdateStore {
   downloading: boolean;
   checkedUpToDate: boolean;
   checkFailed: boolean;
-  dismissed: boolean;
   lastCheck: number;
   running: boolean;
   check: (manual?: boolean) => Promise<void>;
-  dismiss: () => void;
 }
 
 /** Module-level, not per-component: the banner and the Ajustes row both read
@@ -110,7 +121,6 @@ const useUpdateStore = create<UpdateStore>((set, get) => ({
   downloading: false,
   checkedUpToDate: false,
   checkFailed: false,
-  dismissed: false,
   lastCheck: 0,
   running: false,
 
@@ -173,7 +183,12 @@ const useUpdateStore = create<UpdateStore>((set, get) => ({
             .maybeSingle();
           if (error) throw error;
           const current = Application.nativeApplicationVersion ?? '';
-          if (data && current && isNewerVersion(data.latest_version, current)) {
+          // NOTE: this is the NATIVE version (Info.plist / build.gradle), not
+          // app.json's `version`. The two drift — app.json is bumped on every
+          // OTA while the native files only change on a rebuild — and the
+          // store row must be written against the native one, because that is
+          // what a shipped binary actually reports.
+          if (data && current && isStoreReleaseNewer(data, current)) {
             set({
               storeUpdate: {
                 version: data.latest_version,
@@ -202,10 +217,6 @@ const useUpdateStore = create<UpdateStore>((set, get) => ({
     }
   },
 
-  // Session-only: a cold start applies the OTA anyway, so there is nothing to
-  // remember. Persisting a dismissal would just be a way to never nag someone
-  // who genuinely needs to restart.
-  dismiss: () => set({ dismissed: true }),
 }));
 
 /** Guards the mount/foreground effect so it runs once for the app, not once
@@ -240,8 +251,8 @@ export function useAppUpdate(): AppUpdateState {
   }, []);
 
   return {
-    otaReady: s.otaReady && !s.dismissed,
-    storeUpdate: s.dismissed ? null : s.storeUpdate,
+    otaReady: s.otaReady,
+    storeUpdate: s.storeUpdate,
     checking: s.checking,
     downloading: s.downloading,
     checkedUpToDate: s.checkedUpToDate,
@@ -253,6 +264,5 @@ export function useAppUpdate(): AppUpdateState {
       if (!Updates) return;
       await Updates.reloadAsync();
     },
-    dismiss: s.dismiss,
   };
 }
