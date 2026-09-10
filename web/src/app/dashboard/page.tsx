@@ -40,6 +40,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { useSwr } from '@amixos/shared/lib/swrCache';
+import { fetchPayrollPeriodSummary } from '@amixos/shared/lib/payrollSummary';
 import { kvGet, kvSet } from '@amixos/shared/lib/kvStore';
 import {
   DASHBOARD_WIDGET_SIZES,
@@ -135,6 +136,7 @@ const WIDGET_ICONS: Record<DashboardWidgetId, LucideIcon> = {
   quickActions: Plus,
   earningsMonth: DollarSign,
   invoicesPending: FileText,
+  payrollPeriod: DollarSign,
   clientsTotal: Users,
   invoicesOverdue: AlertCircle,
   clockedIn: Clock,
@@ -378,6 +380,25 @@ export default function DashboardPage() {
     },
     { cacheKey: dashKey, resetKey: business?.id ?? '' },
   );
+  // Payroll rides its OWN cache entry rather than the dashboard payload: it is
+  // a different RPC with a different cost, and a slow or failing payroll query
+  // must not hold up (or invalidate) the rest of the dashboard. Keyed to null
+  // for roles without access, so the RPC is never even issued for them.
+  const payrollKey = business && can.seeReports(currentRole)
+    ? `dashboard_payroll_${business.id}`
+    : null;
+  const payrollSwr = useSwr<{ total: number; hours: number; workers: number }>(
+    payrollKey,
+    async () => {
+      const r = await fetchPayrollPeriodSummary(supabase, business!);
+      // Only the three primitives — the full result carries Date objects,
+      // which would come back from the JSON cache as strings.
+      return { total: r.total, hours: r.hours, workers: r.workers };
+    },
+    { cacheKey: payrollKey, resetKey: business?.id ?? '' },
+  );
+  const payroll = payrollSwr.data ?? null;
+
   useEffect(() => {
     if (!dash.data) return;
     setStats(dash.data.stats);
@@ -471,7 +492,26 @@ export default function DashboardPage() {
 
   // `list` fills the extra room at md/lg — a widget that carries one stops
   // looking identical at every size, buying content instead of whitespace.
-  const statWidgets = useMemo<Partial<Record<DashboardWidgetId, { label: string; value: string | number; icon: LucideIcon; color: string; bg: string; sub: string; extra?: string | null; bars?: boolean; list?: { id: string; primary: string; secondary?: string | null }[]; listHeading?: string; onListItemPress?: (id: string) => void }>>>(() => ({
+  const statWidgets = useMemo<Partial<Record<DashboardWidgetId, { label: string; value: string | number; icon: LucideIcon; color: string; bg: string; sub: string; extra?: string | null; bars?: boolean; list?: { id: string; primary: string; secondary?: string | null }[]; listHeading?: string; onListItemPress?: (id: string) => void;
+    /** Makes the WHOLE tile a link (payroll → the payroll page). Separate from
+     *  onListItemPress so row clicks don't fall through to the tile. */
+    onClick?: () => void }>>>(() => ({
+    payrollPeriod: {
+      label: t.home.widgets.payrollPeriodLabel,
+      value: formatCurrency(payroll?.total ?? 0),
+      icon: DollarSign,
+      color: 'text-teal-600 dark:text-teal-400',
+      bg: 'bg-teal-500/10',
+      // Hours + headcount rather than the date range: the range is already on
+      // the payroll page this opens, and "0 h" is the honest reading of an
+      // empty period — a $0 total with no context looks like a broken tile.
+      sub: payroll && payroll.workers > 0
+        ? t.home.widgets.payrollPeriodSub
+            .replace('{{hours}}', String(Math.round(payroll.hours)))
+            .replace('{{count}}', String(payroll.workers))
+        : t.home.widgets.payrollPeriodEmpty,
+      onClick: () => router.push('/dashboard/reportes/nomina'),
+    },
     invoicesPending: { label: t.home.widgets.invoicesPendingLabel, value: stats?.invoicesPending ?? 0, icon: FileText, color: 'text-primary', bg: 'bg-primary/10', sub: t.home.widgets.invoicesPendingSub },
     clientsTotal: {
       label: t.home.widgets.clientsLabel, value: stats?.clientsTotal ?? 0, icon: Users,
@@ -554,7 +594,13 @@ export default function DashboardPage() {
 
     const stat = statWidgets[id];
     if (stat) {
-      const { label, value, icon: Icon, color, bg, sub, extra, bars, list, listHeading, onListItemPress } = stat;
+      const { label, value, icon: Icon, color, bg, sub, extra, bars, list, listHeading, onListItemPress, onClick } = stat;
+      // A clickable tile is a button so it's keyboard-reachable; a plain one
+      // stays a div rather than advertising an interaction it doesn't have.
+      const Card = onClick ? 'button' : 'div';
+      const cardProps = onClick
+        ? { type: 'button' as const, onClick, className: 'text-left w-full cursor-pointer' }
+        : {};
       // lg has room for four rows, md for two.
       const listRows = (list ?? []).slice(0, size === 'lg' ? 4 : 2);
       const statList = listRows.length > 0 ? (
@@ -582,7 +628,7 @@ export default function DashboardPage() {
       // different from the vertical sm/md tiles even with zero data.
       if (size === 'lg') {
         return (
-          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 h-full transition-shadow hover:shadow-md">
+          <Card {...cardProps} className={`bg-card rounded-2xl border border-border-soft shadow-sm p-5 h-full transition-shadow hover:shadow-md ${cardProps.className ?? ''}`}>
             <div className="flex items-center gap-4">
               <div className={`w-14 h-14 rounded-2xl ${bg} flex items-center justify-center shrink-0`}>
                 <Icon size={26} className={color} />
@@ -598,11 +644,11 @@ export default function DashboardPage() {
               {bars ? <MiniBars monthly={monthly} /> : null}
             </div>
             {statList}
-          </div>
+          </Card>
         );
       }
       return (
-        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 h-full transition-shadow hover:shadow-md">
+        <Card {...cardProps} className={`bg-card rounded-2xl border border-border-soft shadow-sm p-5 h-full transition-shadow hover:shadow-md ${cardProps.className ?? ''}`}>
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center`}>
               <Icon size={18} className={color} />
@@ -615,7 +661,7 @@ export default function DashboardPage() {
             <p className="text-xs font-semibold text-muted mt-1">{extra}</p>
           ) : null}
           {size === 'md' ? statList : null}
-        </div>
+        </Card>
       );
     }
 

@@ -28,6 +28,7 @@ import { can, type Role } from './permissions';
 export type DashboardWidgetId =
   | 'quickActions'
   | 'earningsMonth'
+  | 'payrollPeriod'
   | 'invoicesPending'
   | 'clientsTotal'
   | 'invoicesOverdue'
@@ -61,6 +62,11 @@ export const DASHBOARD_WIDGETS: DashboardWidgetDef[] = [
   // role that can do at least one action (writers). Read-only roles see none.
   { id: 'quickActions', defaultSize: 'lg', visibleFor: (r) => can.createJob(r) || can.createInvoice(r) || can.createClient(r) || can.editCalendar(r) },
   { id: 'earningsMonth', defaultSize: 'sm', visibleFor: can.seeFinancials },
+  // Payroll for the current pay period; tapping opens the Payroll screen.
+  // Gated on seeReports because that is exactly who can already reach Payroll
+  // (Reports → Nómina) — a tile that navigates somewhere the role is bounced
+  // from would be worse than no tile.
+  { id: 'payrollPeriod', defaultSize: 'sm', visibleFor: can.seeReports },
   { id: 'invoicesPending', defaultSize: 'sm', visibleFor: can.seeInvoices },
   { id: 'clientsTotal', defaultSize: 'sm', visibleFor: can.seeAllClients },
   { id: 'invoicesOverdue', defaultSize: 'sm', visibleFor: can.seeInvoices },

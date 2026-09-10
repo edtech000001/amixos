@@ -15,7 +15,8 @@ import {
 import { type DashboardLayout } from '@amixos/shared/lib/dashboardWidgets';
 import { useSwr } from '@amixos/shared/lib/swrCache';
 import { kvGet, kvSet } from '@amixos/shared/lib/kvStore';
-import { isFieldOnly } from '@amixos/shared/lib/permissions';
+import { can, isFieldOnly } from '@amixos/shared/lib/permissions';
+import { fetchPayrollPeriodSummary } from '@amixos/shared/lib/payrollSummary';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
 import { FieldHomeContainer } from '@/components/FieldHomeContainer';
 import { TrialBanner } from '@/components/TrialBanner';
@@ -185,6 +186,24 @@ function OwnerDashboardHome() {
     },
     { cacheKey: dashKey, resetKey: business?.id ?? '' },
   );
+  // Payroll rides its OWN cache entry rather than the dashboard payload: it is
+  // a different RPC with a different cost, and a slow or failing payroll query
+  // must not hold up (or invalidate) the rest of the dashboard. Keyed to null
+  // for roles without access, so the RPC is never even issued for them.
+  const payrollKey = business && can.seeReports(currentRole)
+    ? `dashboard_payroll_${business.id}`
+    : null;
+  const payrollSwr = useSwr<{ total: number; hours: number; workers: number }>(
+    payrollKey,
+    async () => {
+      const s = await fetchPayrollPeriodSummary(supabase, business!);
+      // Only the three primitives — the full result carries Date objects,
+      // which would come back from the JSON cache as strings.
+      return { total: s.total, hours: s.hours, workers: s.workers };
+    },
+    { cacheKey: payrollKey, resetKey: business?.id ?? '' },
+  );
+
   useEffect(() => {
     if (!dash.data) return;
     setStats(dash.data.stats);
@@ -245,6 +264,8 @@ function OwnerDashboardHome() {
         }}
         onNewJobPress={() => router.push('/dashboard/trabajos/nuevo')}
         onCalendarPress={() => router.push('/dashboard/mas/calendario')}
+        onPayrollPress={() => router.push('/dashboard/mas/nomina' as never)}
+        payroll={payrollSwr.data ?? null}
       />
     </View>
   );

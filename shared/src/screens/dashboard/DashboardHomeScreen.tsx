@@ -112,6 +112,11 @@ export interface DashboardHomeScreenProps {
   /** Open a client from the Clients widget's recent list. */
   onClientPress?: (id: string) => void;
   onNewJobPress: () => void;
+  /** Opens the payroll screen from the payroll tile. */
+  onPayrollPress: () => void;
+  /** Current pay period's totals. Undefined while loading — the tile shows
+   *  zeros rather than a spinner, matching every other stat here. */
+  payroll?: { total: number; hours: number; workers: number } | null;
   onCalendarPress: () => void;
 }
 
@@ -160,6 +165,7 @@ const JOB_STATUS_PILL_TEXT: Record<string, string> = {
 const WIDGET_ICONS: Record<DashboardWidgetId, LucideIcon> = {
   quickActions: Plus,
   earningsMonth: DollarSign,
+  payrollPeriod: DollarSign,
   invoicesPending: FileText,
   clientsTotal: Users,
   invoicesOverdue: AlertCircle,
@@ -226,6 +232,8 @@ export function DashboardHomeScreen({
   onNewClientPress,
   onClientPress,
   onNewJobPress,
+  onPayrollPress,
+  payroll,
   onCalendarPress,
 }: DashboardHomeScreenProps) {
   const { t: full } = useLang();
@@ -355,9 +363,29 @@ export function DashboardHomeScreen({
     list?: { id: string; primary: string; secondary?: string | null }[];
     listHeading?: string;
     onListItemPress?: (id: string) => void;
+    /** Makes the WHOLE tile a tap target (e.g. payroll → the payroll screen).
+     *  Kept separate from onListItemPress so a tile can have both without the
+     *  row taps falling through to the tile. */
+    onPress?: () => void;
   };
 
   const statWidgets: Partial<Record<DashboardWidgetId, StatWidget>> = {
+    payrollPeriod: {
+      label: t.home.widgets.payrollPeriodLabel,
+      value: formatCurrency(payroll?.total ?? 0),
+      icon: DollarSign,
+      color: 'text-teal-600',
+      bg: 'bg-teal-500/10',
+      // Hours + headcount rather than the date range: the range is already on
+      // the payroll screen this opens, and "0 h" is the honest reading of an
+      // empty period — a $0 total with no context looks like a broken tile.
+      sub: payroll && payroll.workers > 0
+        ? t.home.widgets.payrollPeriodSub
+            .replace('{{hours}}', String(Math.round(payroll.hours)))
+            .replace('{{count}}', String(payroll.workers))
+        : t.home.widgets.payrollPeriodEmpty,
+      onPress: onPayrollPress,
+    },
     invoicesPending: {
       label: t.home.widgets.invoicesPendingLabel,
       value: stats?.invoicesPending ?? 0,
@@ -482,7 +510,11 @@ export function DashboardHomeScreen({
 
     const stat = statWidgets[id];
     if (stat) {
-      const { label, value, icon: Icon, color, bg, sub, extra, bars, list, listHeading, onListItemPress } = stat;
+      const { label, value, icon: Icon, color, bg, sub, extra, bars, list, listHeading, onListItemPress, onPress } = stat;
+      // A tappable tile is a Pressable; a plain one stays a View so it doesn't
+      // advertise an interaction it doesn't have.
+      const Card = onPress ? Pressable : View;
+      const cardProps = onPress ? { onPress, className: 'active:opacity-80' } : {};
       // lg has room for four rows, md for two.
       const listRows = (list ?? []).slice(0, size === 'lg' ? 4 : 2);
       const statList = listRows.length > 0 ? (
@@ -511,7 +543,7 @@ export function DashboardHomeScreen({
       // different from the vertical sm/md tiles even with zero data.
       if (size === 'lg') {
         return (
-          <View className="bg-card rounded-2xl border border-border-soft p-5 flex-1">
+          <Card {...cardProps} className={`bg-card rounded-2xl border border-border-soft p-5 flex-1 ${onPress ? 'active:opacity-80' : ''}`}>
             <View className="flex-row items-center gap-4">
               <View className={`w-14 h-14 rounded-2xl ${bg} items-center justify-center`}>
                 <Icon size={26} className={color} />
@@ -527,11 +559,11 @@ export function DashboardHomeScreen({
               {bars ? <MiniBars monthly={monthly} /> : null}
             </View>
             {statList}
-          </View>
+          </Card>
         );
       }
       return (
-        <View className="bg-card rounded-2xl border border-border-soft p-5 flex-1">
+        <Card {...cardProps} className={`bg-card rounded-2xl border border-border-soft p-5 flex-1 ${onPress ? 'active:opacity-80' : ''}`}>
           <View className={`w-9 h-9 rounded-xl ${bg} items-center justify-center mb-3`}>
             <Icon size={18} className={color} />
           </View>
@@ -542,7 +574,7 @@ export function DashboardHomeScreen({
             <Text className="text-xs font-semibold text-muted mt-1">{extra}</Text>
           ) : null}
           {size === 'md' ? statList : null}
-        </View>
+        </Card>
       );
     }
 

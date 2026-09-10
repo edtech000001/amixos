@@ -140,6 +140,7 @@ export type DashboardDict = {
     widgetNames: {
       quickActions: string;
       earningsMonth: string;
+      payrollPeriod: string;
       invoicesPending: string;
       clientsTotal: string;
       invoicesOverdue: string;
@@ -152,6 +153,9 @@ export type DashboardDict = {
     };
     widgets: {
       earningsMonthLabel: string;
+      payrollPeriodLabel: string;
+      payrollPeriodSub: string;
+      payrollPeriodEmpty: string;
       earningsMonthSub: string;
       invoicesPendingLabel: string;
       invoicesPendingSub: string;
@@ -3255,6 +3259,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       widgetNames: {
         quickActions: 'Acciones rápidas',
         earningsMonth: 'Ganancias del mes',
+        payrollPeriod: 'Nómina del período',
         invoicesPending: 'Facturas pendientes',
         clientsTotal: 'Clientes',
         invoicesOverdue: 'Facturas vencidas',
@@ -3267,6 +3272,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       widgets: {
         earningsMonthLabel: 'Ganancias del mes',
+        payrollPeriodLabel: 'Nómina del período',
+        payrollPeriodSub: '{{hours}} h · {{count}} trabajadores',
+        payrollPeriodEmpty: 'Sin horas este período',
         earningsMonthSub: '{{amount}} este año',
         invoicesPendingLabel: 'Facturas pendientes',
         invoicesPendingSub: 'esperando pago',
@@ -6369,6 +6377,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       widgetNames: {
         quickActions: 'Quick actions',
         earningsMonth: 'Earnings this month',
+        payrollPeriod: 'Payroll this period',
         invoicesPending: 'Pending invoices',
         clientsTotal: 'Clients',
         invoicesOverdue: 'Overdue invoices',
@@ -6381,6 +6390,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       widgets: {
         earningsMonthLabel: 'Earnings this month',
+        payrollPeriodLabel: 'Payroll this period',
+        payrollPeriodSub: '{{hours}} h · {{count}} workers',
+        payrollPeriodEmpty: 'No hours this period',
         earningsMonthSub: '{{amount}} this year',
         invoicesPendingLabel: 'Pending invoices',
         invoicesPendingSub: 'awaiting payment',
