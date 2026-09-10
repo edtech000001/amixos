@@ -47,14 +47,22 @@ export interface PayrollPeriodSummary {
   /** Per-worker rows, highest pay first — what the tile shows at md/lg so the
    *  extra space buys content rather than whitespace. */
   top: { id: string; name: string; pay: number; hours: number }[];
+  /** Same figure for the PREVIOUS period, so the tile can say which way payroll
+   *  is moving. Null when it couldn't be read — the tile then omits the
+   *  comparison rather than implying a drop to zero. */
+  previousTotal: number | null;
   period: PayrollPeriod;
 }
 
-export function currentPayrollPeriod(business: PayrollSummaryBusiness): PayrollPeriod {
+export function currentPayrollPeriod(
+  business: PayrollSummaryBusiness,
+  /** 0 = the open period, -1 = the one before it. */
+  offset = 0,
+): PayrollPeriod {
   return getPayrollPeriod(
     normalizeFrequency(business.payroll_frequency),
     new Date(),
-    0,
+    offset,
     parsePayrollAnchor(business.payroll_anchor_date ?? null),
     business.payroll_custom_days ?? null,
   );
@@ -69,34 +77,8 @@ interface RawInput {
   jcf_raw: Record<string, unknown[]> | null; breakdown: PayrollBreakdown;
 }
 
-/**
- * Throws nothing: a dashboard tile must not be able to break the dashboard.
- * On any failure it returns zeros, and the caller renders an empty state
- * rather than an error.
- */
-export async function fetchPayrollPeriodSummary(
-  supabase: Supa,
-  business: PayrollSummaryBusiness,
-): Promise<PayrollPeriodSummary> {
-  const period = currentPayrollPeriod(business);
-  const empty: PayrollPeriodSummary = { total: 0, hours: 0, workers: 0, top: [], period };
-
-  const config = normalizePayrollConfig(business.payroll_config);
-  // Only the job custom fields the active formula actually reads — the RPC
-  // collects raw values per key, so asking for everything would be wasteful.
-  const jcfKeys = Array.from(
-    new Set((config.formula ? formulaJobFieldRefs(config.formula) : []).map(r => r.k)),
-  ).sort();
-
-  const { data, error } = await supabase.rpc('payroll_period_inputs', {
-    p_business_id: business.id,
-    p_start: period.startStr,
-    p_end: period.endStr,
-    p_jcf_keys: jcfKeys.length ? jcfKeys : null,
-  });
-  if (error || !data) return empty;
-
-  const aggregates = (data as RawInput[]).map(r => ({
+function toAggregates(rows: RawInput[]) {
+  return rows.map(r => ({
     employee: {
       id: r.employee_id,
       first_name: r.first_name,
@@ -115,6 +97,56 @@ export async function fetchPayrollPeriodSummary(
     jcfRaw: r.jcf_raw,
     breakdown: r.breakdown,
   }));
+}
+
+/**
+ * Throws nothing: a dashboard tile must not be able to break the dashboard.
+ * On any failure it returns zeros, and the caller renders an empty state
+ * rather than an error.
+ */
+export async function fetchPayrollPeriodSummary(
+  supabase: Supa,
+  business: PayrollSummaryBusiness,
+): Promise<PayrollPeriodSummary> {
+  const period = currentPayrollPeriod(business);
+  const empty: PayrollPeriodSummary = { total: 0, hours: 0, workers: 0, top: [], previousTotal: null, period };
+
+  const config = normalizePayrollConfig(business.payroll_config);
+  // Only the job custom fields the active formula actually reads — the RPC
+  // collects raw values per key, so asking for everything would be wasteful.
+  const jcfKeys = Array.from(
+    new Set((config.formula ? formulaJobFieldRefs(config.formula) : []).map(r => r.k)),
+  ).sort();
+
+  // Both periods go through the SAME pipeline. The comparison is only
+  // meaningful if the two numbers are computed identically — a "previous
+  // total" from a cheaper approximation would show phantom swings whenever the
+  // pay rules (overtime, driver pay, formulas) did any real work.
+  const rowsFor = async (per: PayrollPeriod) => {
+    const { data, error } = await supabase.rpc('payroll_period_inputs', {
+      p_business_id: business.id,
+      p_start: per.startStr,
+      p_end: per.endStr,
+      p_jcf_keys: jcfKeys.length ? jcfKeys : null,
+    });
+    if (error || !data) return null;
+    return computePayrollRowsFromAggregates({
+      aggregates: toAggregates(data as RawInput[]),
+      period: per,
+      includeZero: false,
+      config,
+    });
+  };
+
+  const { data, error } = await supabase.rpc('payroll_period_inputs', {
+    p_business_id: business.id,
+    p_start: period.startStr,
+    p_end: period.endStr,
+    p_jcf_keys: jcfKeys.length ? jcfKeys : null,
+  });
+  if (error || !data) return empty;
+
+  const aggregates = toAggregates(data as RawInput[]);
 
   // includeZero: false — a worker with no hours contributes nothing to the
   // total, and counting them would make "3 workers" mean "3 on the roster"
@@ -126,7 +158,13 @@ export async function fetchPayrollPeriodSummary(
     config,
   });
 
+  // Previous period, for the trend line at lg. Runs after the current one
+  // rather than in parallel: it is secondary information, and a dashboard tile
+  // should not fire two heavy RPCs at once on a phone connection.
+  const prevRows = await rowsFor(currentPayrollPeriod(business, -1));
+
   return {
+    previousTotal: prevRows ? prevRows.reduce((sum, r) => sum + (r.pay || 0), 0) : null,
     total: rows.reduce((sum, r) => sum + (r.pay || 0), 0),
     hours: rows.reduce((sum, r) => sum + (r.hours || 0), 0),
     workers: rows.length,

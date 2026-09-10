@@ -43,6 +43,10 @@ export interface DashboardStats {
   earningsMonth: number;
   earningsYear: number;
   invoicesPending: number;
+  /** Money behind the pending/overdue counts (migration 223). Absent until
+   *  that migration is run, so both read 0 rather than breaking. */
+  invoicesPendingAmount?: number;
+  invoicesOverdueAmount?: number;
   invoicesOverdue: number;
   clientsTotal: number;
   clockedInNow: number;
@@ -114,12 +118,26 @@ export interface DashboardHomeScreenProps {
   onNewJobPress: () => void;
   /** Opens the payroll screen from the payroll tile. */
   onPayrollPress: () => void;
+  /** Stat tiles are shortcuts into the list they count — the number is only
+   *  useful next to the rows behind it. Each carries its own filter. */
+  onPendingInvoicesPress?: () => void;
+  onOverdueInvoicesPress?: () => void;
+  onClientsPress?: () => void;
+  onReportsPress?: (range: 'month' | 'year') => void;
   /** Current pay period's totals. Undefined while loading — the tile shows
    *  zeros rather than a spinner, matching every other stat here. */
   payroll?: {
     total: number; hours: number; workers: number;
     top?: { id: string; name: string; pay: number; hours: number }[];
+    /** Previous period's total, for the trend at lg. Null when unavailable. */
+    previousTotal?: number | null;
   } | null;
+  /** Unpaid invoices, due soonest first — the pending tile's right column. */
+  pendingInvoices?: { id: string; invoiceNumber: string | null; totalAmount: number | null; dueDate: string | null; clientName: string | null }[];
+  /** Highest-revenue clients this year (migration 224) — the clients tile. */
+  topClients?: { id: string; name: string; company: string | null; total: number; invoices: number }[];
+  /** Overdue invoices, oldest first — the overdue tile's right column. */
+  overdueInvoices?: { id: string; invoiceNumber: string | null; totalAmount: number | null; dueDate: string | null; clientName: string | null }[];
   onCalendarPress: () => void;
 }
 
@@ -273,6 +291,13 @@ export function DashboardHomeScreen({
   onClientPress,
   onNewJobPress,
   onPayrollPress,
+  pendingInvoices,
+  overdueInvoices,
+  topClients,
+  onPendingInvoicesPress,
+  onOverdueInvoicesPress,
+  onClientsPress,
+  onReportsPress,
   payroll,
   onCalendarPress,
 }: DashboardHomeScreenProps) {
@@ -288,14 +313,11 @@ export function DashboardHomeScreen({
   const [sizes, setSizes] = useState<Record<string, DashboardWidgetSize>>({});
   // null = saved. A string is the failure reason, shown under the banner.
   const [saveError, setSaveError] = useState<string | null>(null);
-  // Hold-and-drag readout for the revenue widget. Its bar count depends on the
-  // widget's size (sm shows 6 months, md/lg the full year), and the gesture is
-  // off in edit mode so the widget stays draggable for reordering.
-  const scrub = useBarScrub({
-    count: (sizes.monthlyChart ?? defaultWidgetSize('monthlyChart')) === 'sm' ? 6 : 12,
-    gap: CHART_BAR_GAP,
-    enabled: !editing,
-  });
+  // Hold-and-drag (and tap) readout for the bar chart, which now lives only on
+  // the large earnings tile — Revenue by month became a comparison list. Always
+  // the full year, so the count is fixed. Off in edit mode so the widget stays
+  // draggable for reordering.
+  const earningsScrub = useBarScrub({ count: 12, gap: CHART_BAR_GAP, enabled: !editing });
 
   // Re-resolve when the saved layout actually changes (auto-saves write the
   // same value back on refetch, so JSON-keying avoids clobbering edits).
@@ -310,6 +332,7 @@ export function DashboardHomeScreen({
   const containerWidth = screenWidth - H_PAD * 2;
   const widthFor = (size: DashboardWidgetSize) =>
     size === 'sm' ? Math.floor((containerWidth - GAP) / 2) : containerWidth;
+
 
   const persist = (
     nextVisible: DashboardWidgetId[],
@@ -454,6 +477,7 @@ export function DashboardHomeScreen({
       color: 'text-primary',
       bg: 'bg-primary/10',
       sub: t.home.widgets.invoicesPendingSub,
+      onPress: onPendingInvoicesPress,
     },
     clientsTotal: {
       label: t.home.widgets.clientsLabel,
@@ -465,6 +489,7 @@ export function DashboardHomeScreen({
       extra: newClientsThisMonth
         ? t.home.widgets.clientsNewThisMonth.replace('{{count}}', String(newClientsThisMonth))
         : null,
+      onPress: onClientsPress,
       list: (recentClients ?? []).map(cl => ({ id: cl.id, primary: cl.name, secondary: cl.company })),
       listHeading: t.home.widgets.clientsRecentHeading,
       onListItemPress: onClientPress,
@@ -476,6 +501,7 @@ export function DashboardHomeScreen({
       color: 'text-red-500',
       bg: 'bg-red-500/10',
       sub: t.home.widgets.invoicesOverdueSub,
+      onPress: onOverdueInvoicesPress,
     },
     clockedIn: {
       label: t.home.widgets.clockedInLabel,
@@ -494,6 +520,7 @@ export function DashboardHomeScreen({
       sub: t.home.widgets.earningsYearSub.replace('{{year}}', yearStr),
       extra: avgPerMonthLine,
       bars: true,
+      onPress: onReportsPress ? () => onReportsPress('year') : undefined,
     },
     jobsActive: {
       label: t.home.widgets.jobsActiveLabel,
@@ -515,8 +542,164 @@ export function DashboardHomeScreen({
     return new Intl.DateTimeFormat(t.dateLocale, { day: 'numeric', month: 'short' }).format(date);
   };
 
+  // The revenue chart, shared by the standalone widget and the large earnings
+  // tile. One implementation so the two can never drift — the earnings tile is
+  // meant to BE this chart, with its own headline above it.
+  const monthlyChartCard = (
+    size: DashboardWidgetSize,
+    s: ReturnType<typeof useBarScrub>,
+    header?: ReactNode,
+    /** Render on the brand-blue card instead of the neutral one. Every colour
+     *  below has to flip together — theme tokens like text-faint and
+     *  bg-border-soft are tuned for the card background and vanish on blue. */
+    light?: boolean,
+  ) => {
+        const max = Math.max(...monthly);
+        // sm shows the most recent 6 months; md/lg show the full year.
+        const startIdx = size === 'sm' ? Math.max(0, currentMonth - 5) : 0;
+        const shown = size === 'sm' ? monthly.slice(startIdx, startIdx + 6) : monthly;
+        const barArea = size === 'sm' ? 64 : 96;
+        const monthLabel = (i: number) =>
+          new Intl.DateTimeFormat(t.dateLocale, { month: 'narrow' }).format(new Date(2026, i, 1));
+        // Scale to a rounded ceiling, not the raw peak, so the axis labels are
+        // round numbers and the tallest bar lands on the top gridline.
+        const axisMax = niceCeil(max);
+        // The small widget is half-width — two bands keep its labels legible.
+        const ticks = size === 'sm' ? 2 : 4;
+        const barH = (amount: number) =>
+          Math.max(amount > 0 ? 8 : 3, Math.round((amount / axisMax) * barArea));
+        return (
+          <View className={`rounded-2xl p-5 flex-1 ${light ? 'bg-primary' : 'bg-card border border-border-soft'}`}>
+            {header ?? (
+              <Text className={`text-sm font-semibold mb-1 ${light ? 'text-white' : 'text-ink'}`}>
+                {t.home.monthlyChart.title}
+              </Text>
+            )}
+            {/* The totals line is part of the chart, not the heading: it is what
+                makes the axis readable ("is 250k a lot?"), so every caller
+                gets it. */}
+            {(size === 'lg' || header) && max > 0 ? (
+              <Text className={`text-xs mb-3 ${light ? 'text-white/70' : 'text-muted'}`}>
+                {t.home.monthlyChart.totalLabel.replace('{{year}}', yearStr)}: {yearAmount} · {t.home.monthlyChart.avgLabel}: {formatCurrency((stats?.earningsYear ?? 0) / (currentMonth + 1))}
+              </Text>
+            ) : (
+              <View className="mb-3" />
+            )}
+            {max === 0 ? (
+              <Text className={`text-sm text-center py-6 ${light ? 'text-white/70' : 'text-faint'}`}>
+                {t.home.monthlyChart.empty}
+              </Text>
+            ) : (
+              <View className="flex-row">
+                {/* Y axis — labels sit ON their gridline (same top = i × band
+                    formula), so the two can never drift apart. */}
+                <View style={{ width: AXIS_W, height: barArea }}>
+                  {Array.from({ length: ticks + 1 }, (_, i) => (
+                    <Text
+                      key={i}
+                      className={`text-[9px] ${light ? 'text-white/60' : 'text-faint'}`}
+                      style={{ position: 'absolute', top: (barArea / ticks) * i - 5, right: 6 }}
+                    >
+                      {axisTick((axisMax / ticks) * (ticks - i))}
+                    </Text>
+                  ))}
+                </View>
+
+                <View className="flex-1">
+                  <View style={{ height: barArea }}>
+                    {Array.from({ length: ticks + 1 }, (_, i) => (
+                      <View
+                        key={i}
+                        className={`absolute left-0 right-0 h-px ${light ? 'bg-white/20' : 'bg-border-soft'}`}
+                        style={{ top: (barArea / ticks) * i }}
+                      />
+                    ))}
+
+                    <View className="flex-row items-end gap-1.5" style={{ height: barArea }}>
+                      {shown.map((amount, idx) => {
+                        const i = startIdx + idx;
+                        // While scrubbing, the held bar takes the highlight so
+                        // the finger — not today's date — is what the eye
+                        // follows.
+                        const lit = s.active === null ? i === currentMonth : s.active === idx;
+                        return (
+                          <View key={i} className="flex-1 justify-end" style={{ height: barArea }}>
+                            <View
+                              className={`w-full rounded-t-md ${
+                                light
+                                  ? lit ? 'bg-white' : amount > 0 ? 'bg-white/45' : 'bg-white/15'
+                                  : lit ? 'bg-primary' : amount > 0 ? 'bg-primary/30' : 'bg-border-soft'
+                              }`}
+                              style={{ height: barH(amount) }}
+                            />
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  <View className="flex-row gap-1.5 mt-1">
+                    {shown.map((amount, idx) => {
+                      const i = startIdx + idx;
+                      const lit = s.active === null ? i === currentMonth : s.active === idx;
+                      return (
+                        <Text
+                          key={i}
+                          className={`flex-1 text-center text-[10px] ${
+                            light
+                              ? lit ? 'text-white font-bold' : 'text-white/60'
+                              : lit ? 'text-primary font-semibold' : 'text-faint'
+                          }`}
+                        >
+                          {monthLabel(i)}
+                        </Text>
+                      );
+                    })}
+                  </View>
+
+                  {/* Value bubble, positioned in pixels over the held bar. */}
+                  {s.active !== null && s.width > 0 && shown[s.active] !== undefined ? (
+                    <View
+                      className={`absolute rounded-lg px-2 py-1 ${light ? 'bg-white' : 'bg-ink'}`}
+                      style={{
+                        width: CHART_BUBBLE_W,
+                        // `bottom` is measured from below the month-label row,
+                        // and clamped so a full-height bar can't push the
+                        // bubble out of the card (Android clips overflow).
+                        bottom: Math.min(
+                          barH(shown[s.active]) + 6 + LABEL_ROW_H,
+                          LABEL_ROW_H + barArea - CHART_BUBBLE_H,
+                        ),
+                        left: Math.min(
+                          Math.max(0, ((s.active + 0.5) / shown.length) * s.width - CHART_BUBBLE_W / 2),
+                          Math.max(0, s.width - CHART_BUBBLE_W),
+                        ),
+                      }}
+                    >
+                      <Text className={`text-[10px] font-bold text-center ${light ? 'text-primary' : 'text-surface'}`} numberOfLines={1}>
+                        {formatCurrency(shown[s.active])}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {/* Hold-and-slide layer, over the plot only (the axis gutter
+                      is outside it, so x maps straight onto a bar). Disabled in
+                      edit mode so the widget stays draggable for reordering. */}
+                  <View className="absolute left-0 right-0 top-0 bottom-0" {...s.handlers} />
+                </View>
+              </View>
+            )}
+          </View>
+        );
+  };
+
   const renderWidget = (id: DashboardWidgetId, size: DashboardWidgetSize) => {
     if (id === 'earningsMonth') {
+      // Tapping opens Reports scoped to THIS month — the number's context.
+      const EarnCard = onReportsPress ? Pressable : View;
+      const earnProps = onReportsPress
+        ? { onPress: () => onReportsPress('month'), className: 'active:opacity-90' }
+        : {};
       // Hero card — solid brand background so the headline number pops.
       //
       // md is the horizontal banner: it reads as a WIDER card, not a taller
@@ -525,7 +708,7 @@ export function DashboardHomeScreen({
       // than lg — the ladder ran backwards.
       if (size === 'md') {
         return (
-          <View className="bg-primary rounded-2xl p-5 overflow-hidden relative flex-1 justify-center">
+          <EarnCard {...earnProps} className={`bg-primary rounded-2xl p-5 overflow-hidden relative flex-1 justify-center ${earnProps.className ?? ''}`}>
 
 
             <View className="flex-row items-center gap-4">
@@ -546,39 +729,44 @@ export function DashboardHomeScreen({
               </View>
               <MiniBars monthly={monthly} light labels width={116} />
             </View>
-          </View>
+          </EarnCard>
         );
       }
       if (size === 'lg') {
-        // The biggest size: the hero number over a full-width labelled chart,
-        // so the extra room shows twelve months of trend rather than padding.
-        return (
-          <View className="bg-primary rounded-2xl p-5 overflow-hidden relative flex-1">
-            <View className="flex-row items-start gap-3">
-              <View className="w-11 h-11 rounded-2xl bg-white/15 items-center justify-center">
-                <DollarSign size={22} color="#FFFFFF" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-xs font-medium text-white/80">
-                  {t.home.widgets.earningsMonthLabel}
-                </Text>
-                <Text className="text-3xl font-bold text-white mt-0.5">
-                  {formatCurrency(stats?.earningsMonth ?? 0)}
-                </Text>
-                <Text className="text-xs text-white/70 mt-0.5">
-                  {t.home.widgets.earningsMonthSub.replace('{{amount}}', yearAmount)}
-                  {vsLastMonthLine ? ` · ${vsLastMonthLine}` : ''}
-                </Text>
-              </View>
+        // The biggest size IS the revenue chart, headed by this month's number:
+        // same axis, same totals line, same hold-to-scrub and tap-to-read. It
+        // replaces the standalone Revenue-by-month widget rather than sitting
+        // beside it showing the same twelve bars in a poorer form.
+        return monthlyChartCard(
+          'lg',
+          earningsScrub,
+          // The PLOT owns taps here (tap a bar to read it), so the card can't
+          // also be a link. The headline row is the nav target instead.
+          <Pressable
+            onPress={onReportsPress ? () => onReportsPress('month') : undefined}
+            disabled={!onReportsPress}
+            className="flex-row items-center gap-3 mb-1 active:opacity-70"
+          >
+            <View className="w-10 h-10 rounded-xl bg-white/15 items-center justify-center">
+              <DollarSign size={18} color="#FFFFFF" />
             </View>
-            <View className="mt-4">
-              <MiniBars monthly={monthly} light labels height={72} />
+            <View className="flex-1">
+              <Text className="text-xs font-medium text-white/80">
+                {t.home.widgets.earningsMonthLabel}
+              </Text>
+              <Text className="text-2xl font-bold text-white">
+                {formatCurrency(stats?.earningsMonth ?? 0)}
+              </Text>
             </View>
-          </View>
+            {vsLastMonthLine ? (
+              <Text className="text-xs font-semibold text-white/90">{vsLastMonthLine}</Text>
+            ) : null}
+          </Pressable>,
+          true,
         );
       }
       return (
-        <View className="bg-primary rounded-2xl p-5 overflow-hidden relative flex-1">
+        <EarnCard {...earnProps} className={`bg-primary rounded-2xl p-5 overflow-hidden relative flex-1 ${earnProps.className ?? ''}`}>
 
 
           <View className="w-9 h-9 rounded-xl bg-white/15 items-center justify-center mb-3">
@@ -593,7 +781,317 @@ export function DashboardHomeScreen({
           <Text className="text-xs text-white/70 mt-0.5">
             {t.home.widgets.earningsMonthSub.replace('{{amount}}', yearAmount)}
           </Text>
-        </View>
+        </EarnCard>
+      );
+    }
+
+    // Clients at md/lg: the count on the left, WHO those clients are on the
+    // right. A headcount is the least useful thing about a client list — the
+    // question is which of them actually pay, and who just arrived.
+    if (id === 'clientsTotal' && size !== 'sm') {
+      const top = (topClients ?? []).slice(0, size === 'lg' ? 5 : 3);
+      const fresh = (recentClients ?? []).slice(0, 3);
+      return (
+        <Pressable
+          onPress={onClientsPress}
+          className="bg-card rounded-2xl border border-border-soft p-5 flex-1 active:opacity-80"
+        >
+          <View className="flex-row" style={{ columnGap: 16 }}>
+            <View className="flex-1">
+              <View className="w-9 h-9 rounded-xl bg-blue-500/10 items-center justify-center mb-3">
+                <Users size={18} className="text-blue-600" />
+              </View>
+              <Text className="text-2xl font-bold text-ink">{stats?.clientsTotal ?? 0}</Text>
+              <Text className="text-xs font-medium text-ink mt-0.5">
+                {t.home.widgets.clientsLabel}
+              </Text>
+              {newClientsThisMonth ? (
+                <View className="mt-3">
+                  <Text className="text-sm font-semibold text-emerald-600">
+                    {t.home.widgets.clientsNewThisMonth.replace('{{count}}', String(newClientsThisMonth))}
+                  </Text>
+                  <Text className="text-[10px] text-faint">{t.home.widgets.clientsSub}</Text>
+                </View>
+              ) : null}
+              {/* lg only, mirroring the divider block on payroll and invoices:
+                  who came in recently, which the top list never shows (a new
+                  client has no revenue yet by definition). */}
+              {size === 'lg' && fresh.length > 0 ? (
+                <View className="mt-3 pt-3 border-t border-border-soft">
+                  <Text className="text-[10px] font-semibold text-faint uppercase tracking-wide mb-1">
+                    {t.home.widgets.clientsRecent}
+                  </Text>
+                  {fresh.map(cl => (
+                    <Pressable
+                      key={cl.id}
+                      onPress={() => onClientPress(cl.id)}
+                      className="py-0.5 active:opacity-70"
+                    >
+                      <Text className="text-xs text-ink" numberOfLines={1}>{cl.name}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+
+            <View className="flex-1">
+              <Text className="text-[10px] font-semibold text-faint uppercase tracking-wide mb-1.5">
+                {t.home.widgets.clientsTop}
+              </Text>
+              {top.length === 0 ? (
+                <Text className="text-xs text-faint">{t.home.widgets.clientsNoRevenue}</Text>
+              ) : (
+                top.map(cl => (
+                  <Pressable
+                    key={cl.id}
+                    onPress={() => onClientPress(cl.id)}
+                    className="flex-row items-center gap-2 py-1 active:opacity-70"
+                  >
+                    <Text className="text-xs text-ink flex-1" numberOfLines={1}>{cl.name}</Text>
+                    <Text className="text-[11px] font-semibold text-ink">
+                      {formatCurrency(cl.total)}
+                    </Text>
+                  </Pressable>
+                ))
+              )}
+            </View>
+          </View>
+        </Pressable>
+      );
+    }
+
+    // Date-only columns: append a time or they render a day early in US zones.
+    const daysPastDue = (d: string | null): number | null => {
+      if (!d) return null;
+      const due = new Date(`${d}T00:00:00`);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      return Math.round((today.getTime() - due.getTime()) / 86400000);
+    };
+    const dueLabel = (d: string | null) => {
+      if (!d) return '';
+      const late = daysPastDue(d);
+      if (late === 0) return t.home.upcomingJobs.today;
+      if (late === -1) return t.home.upcomingJobs.tomorrow;
+      return new Intl.DateTimeFormat(t.dateLocale, { day: 'numeric', month: 'short' })
+        .format(new Date(`${d}T00:00:00`));
+    };
+
+    // Overdue at md/lg mirrors pending, but leads with how LATE things are —
+    // an overdue invoice's age is the thing that decides who gets called first.
+    if (id === 'invoicesOverdue' && size !== 'sm') {
+      const rows = (overdueInvoices ?? []).slice(0, size === 'lg' ? 8 : 3);
+      // The list is ordered oldest-first, so the head is the worst one.
+      const oldest = rows.length ? daysPastDue(rows[0].dueDate) : null;
+      return (
+        <Pressable
+          onPress={onOverdueInvoicesPress}
+          className="bg-card rounded-2xl border border-border-soft p-5 flex-1 active:opacity-80"
+        >
+          <View className="flex-row" style={{ columnGap: 16 }}>
+            <View className="flex-1">
+              <View className="w-9 h-9 rounded-xl bg-red-500/10 items-center justify-center mb-3">
+                <AlertCircle size={18} className="text-red-500" />
+              </View>
+              <Text className="text-2xl font-bold text-ink">{stats?.invoicesOverdue ?? 0}</Text>
+              <Text className="text-xs font-medium text-ink mt-0.5">
+                {t.home.widgets.invoicesOverdueLabel}
+              </Text>
+              {/* Same shape as the payroll tile's stat row, so the two cards
+                  come out the same height at the same size. */}
+              <View className="mt-3">
+                <Text className="text-sm font-semibold text-red-500">
+                  {formatCurrency(stats?.invoicesOverdueAmount ?? 0)}
+                </Text>
+                <Text className="text-[10px] text-faint">{t.home.widgets.overdueTotalLabel}</Text>
+              </View>
+              {size === 'lg' && oldest !== null && oldest > 0 ? (
+                <View className="mt-3 pt-3 border-t border-border-soft">
+                  <Text className="text-sm font-bold text-ink">
+                    {t.home.widgets.overdueDaysShort.replace('{{count}}', String(oldest))}
+                  </Text>
+                  <Text className="text-[10px] text-faint">{t.home.widgets.overdueOldest}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View className="flex-1">
+              <Text className="text-[10px] font-semibold text-faint uppercase tracking-wide mb-1.5">
+                {t.home.widgets.invoicesOverdueLabel}
+              </Text>
+              {rows.length === 0 ? (
+                <Text className="text-xs text-faint">{t.home.widgets.overdueNone}</Text>
+              ) : (
+                rows.map(inv => {
+                  const late = daysPastDue(inv.dueDate);
+                  return (
+                    <Pressable
+                      key={inv.id}
+                      onPress={() => onInvoicePress(inv.id)}
+                      className="flex-row items-center gap-2 py-1 active:opacity-70"
+                    >
+                      <Text className="text-xs text-ink flex-1" numberOfLines={1}>
+                        {inv.clientName ?? inv.invoiceNumber ?? '—'}
+                      </Text>
+                      {late !== null && late > 0 ? (
+                        <Text className="text-[10px] font-semibold text-red-500">
+                          {t.home.widgets.overdueDaysShort.replace('{{count}}', String(late))}
+                        </Text>
+                      ) : null}
+                      <Text className="text-[11px] font-semibold text-ink">
+                        {formatCurrency(inv.totalAmount ?? 0)}
+                      </Text>
+                    </Pressable>
+                  );
+                })
+              )}
+            </View>
+          </View>
+        </Pressable>
+      );
+    }
+
+    // Pending invoices at md/lg: the count on the left, WHICH invoices on the
+    // right. A count alone says nothing actionable — seven pending could be
+    // $700 or $70,000, and the ones that matter are those due soonest.
+    if (id === 'invoicesPending' && size !== 'sm') {
+      const rows = (pendingInvoices ?? []).slice(0, size === 'lg' ? 8 : 3);
+      return (
+        <Pressable
+          onPress={onPendingInvoicesPress}
+          className="bg-card rounded-2xl border border-border-soft p-5 flex-1 active:opacity-80"
+        >
+          <View className="flex-row" style={{ columnGap: 16 }}>
+            <View className="flex-1">
+              <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center mb-3">
+                <FileText size={18} className="text-primary" />
+              </View>
+              <Text className="text-2xl font-bold text-ink">{stats?.invoicesPending ?? 0}</Text>
+              <Text className="text-xs font-medium text-ink mt-0.5">
+                {t.home.widgets.invoicesPendingLabel}
+              </Text>
+              {/* Same shape as the payroll tile's stat row, so the two cards
+                  come out the same height at the same size. */}
+              <View className="mt-3">
+                <Text className="text-sm font-semibold text-ink">
+                  {formatCurrency(stats?.invoicesPendingAmount ?? 0)}
+                </Text>
+                <Text className="text-[10px] text-faint">{t.home.widgets.pendingTotalLabel}</Text>
+              </View>
+              {size === 'lg' && (stats?.invoicesOverdue ?? 0) > 0 ? (
+                <View className="mt-3 pt-3 border-t border-border-soft">
+                  <Text className="text-sm font-bold text-red-500">
+                    {formatCurrency(stats?.invoicesOverdueAmount ?? 0)}
+                  </Text>
+                  <Text className="text-[10px] text-faint">
+                    {t.home.widgets.pendingOverdueLabel} · {stats?.invoicesOverdue ?? 0}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View className="flex-1">
+              <Text className="text-[10px] font-semibold text-faint uppercase tracking-wide mb-1.5">
+                {t.home.widgets.pendingDueSoon}
+              </Text>
+              {rows.length === 0 ? (
+                <Text className="text-xs text-faint">{t.home.widgets.pendingNone}</Text>
+              ) : (
+                rows.map(inv => (
+                  // ONE line per invoice, like the payroll worker rows. A
+                  // second line for the date doubled the row height, which is
+                  // what made this card tower over the others at the same size.
+                  <Pressable
+                    key={inv.id}
+                    onPress={() => onInvoicePress(inv.id)}
+                    className="flex-row items-center gap-2 py-1 active:opacity-70"
+                  >
+                    <Text className="text-xs text-ink flex-1" numberOfLines={1}>
+                      {inv.clientName ?? inv.invoiceNumber ?? '—'}
+                    </Text>
+                    <Text className="text-[10px] text-faint">{dueLabel(inv.dueDate)}</Text>
+                    <Text className="text-[11px] font-semibold text-ink">
+                      {formatCurrency(inv.totalAmount ?? 0)}
+                    </Text>
+                  </Pressable>
+                ))
+              )}
+            </View>
+          </View>
+        </Pressable>
+      );
+    }
+
+    // Payroll at md/lg is its own layout: numbers on the left, who the hours
+    // came from on the right. The generic stat card stacks a list UNDER the
+    // number, which at full width is a narrow column of names beside a lot of
+    // empty space. sm still uses the generic card — there is no room to split.
+    if (id === 'payrollPeriod' && size !== 'sm' && payroll) {
+      const prev = payroll.previousTotal;
+      const deltaPct = prev != null && prev > 0 ? ((payroll.total - prev) / prev) * 100 : null;
+      const workerRows = (payroll.top ?? []).slice(0, size === 'lg' ? 8 : 3);
+      return (
+        <Pressable
+          onPress={onPayrollPress}
+          className="bg-card rounded-2xl border border-border-soft p-5 flex-1 active:opacity-80"
+        >
+          <View className="flex-row" style={{ columnGap: 16 }}>
+            <View className="flex-1">
+              <View className="w-9 h-9 rounded-xl bg-teal-500/10 items-center justify-center mb-3">
+                <DollarSign size={18} className="text-teal-600" />
+              </View>
+              <Text className="text-2xl font-bold text-ink">{formatCurrency(payroll.total)}</Text>
+              <Text className="text-xs font-medium text-ink mt-0.5">
+                {t.home.widgets.payrollPeriodLabel}
+              </Text>
+              <View className="flex-row mt-3" style={{ columnGap: 16 }}>
+                <View>
+                  <Text className="text-sm font-semibold text-ink">{Math.round(payroll.hours)}</Text>
+                  <Text className="text-[10px] text-faint">{t.home.widgets.payrollPeriodHours}</Text>
+                </View>
+                <View>
+                  <Text className="text-sm font-semibold text-ink">{payroll.workers}</Text>
+                  <Text className="text-[10px] text-faint">{t.home.widgets.payrollPeriodWorkerCount}</Text>
+                </View>
+              </View>
+              {/* lg adds the trend. Omitted when there is no comparable prior
+                  period — "−100%" against a period nobody worked is noise. */}
+              {size === 'lg' ? (
+                <View className="mt-3 pt-3 border-t border-border-soft">
+                  {deltaPct === null ? (
+                    <Text className="text-[11px] text-faint">{t.home.widgets.payrollPeriodNoPrev}</Text>
+                  ) : (
+                    <>
+                      <Text
+                        className={`text-sm font-bold ${deltaPct >= 0 ? 'text-red-500' : 'text-emerald-600'}`}
+                      >
+                        {deltaPct >= 0 ? '▲' : '▼'} {Math.abs(Math.round(deltaPct))}%
+                      </Text>
+                      <Text className="text-[10px] text-faint">
+                        {t.home.widgets.payrollPeriodVsPrev} · {formatCurrency(prev ?? 0)}
+                      </Text>
+                    </>
+                  )}
+                </View>
+              ) : null}
+            </View>
+
+            <View className="flex-1">
+              <Text className="text-[10px] font-semibold text-faint uppercase tracking-wide mb-1.5">
+                {t.home.widgets.payrollPeriodWorkers}
+              </Text>
+              {workerRows.length === 0 ? (
+                <Text className="text-xs text-faint">{t.home.widgets.payrollPeriodEmpty}</Text>
+              ) : (
+                workerRows.map(w => (
+                  <View key={w.id} className="flex-row items-center gap-2 py-1">
+                    <Text className="text-xs text-ink flex-1" numberOfLines={1}>{w.name}</Text>
+                    <Text className="text-[11px] text-muted">{Math.round(w.hours)} h</Text>
+                  </View>
+                ))
+              )}
+            </View>
+          </View>
+        </Pressable>
       );
     }
 
@@ -747,129 +1245,86 @@ export function DashboardHomeScreen({
       }
 
       case 'monthlyChart': {
-        const max = Math.max(...monthly);
-        // sm shows the most recent 6 months; md/lg show the full year.
-        const startIdx = size === 'sm' ? Math.max(0, currentMonth - 5) : 0;
-        const shown = size === 'sm' ? monthly.slice(startIdx, startIdx + 6) : monthly;
-        const barArea = size === 'sm' ? 64 : 96;
-        const monthLabel = (i: number) =>
-          new Intl.DateTimeFormat(t.dateLocale, { month: 'narrow' }).format(new Date(2026, i, 1));
-        // Scale to a rounded ceiling, not the raw peak, so the axis labels are
-        // round numbers and the tallest bar lands on the top gridline.
-        const axisMax = niceCeil(max);
-        // The small widget is half-width — two bands keep its labels legible.
-        const ticks = size === 'sm' ? 2 : 4;
-        const barH = (amount: number) =>
-          Math.max(amount > 0 ? 8 : 3, Math.round((amount / axisMax) * barArea));
+        // A LIST, not a chart — the large earnings tile already carries the
+        // bars. Bars answer "what shape was the year"; this answers "what did
+        // each month actually make, and which way is it moving", which is the
+        // part you cannot read off a bar. Newest first: the months people act
+        // on are the recent ones.
+        const rows = size === 'sm' ? 3 : size === 'md' ? 6 : 12;
+        const monthName = (i: number) =>
+          new Intl.DateTimeFormat(t.dateLocale, { month: 'short' }).format(new Date(2026, i, 1)).replace('.', '');
+        const items = Array.from({ length: rows }, (_, n) => currentMonth - n)
+          .filter(i => i >= 0)
+          .map(i => {
+            const amount = monthly[i] ?? 0;
+            const prev = i > 0 ? monthly[i - 1] ?? 0 : null;
+            // Percent change needs a non-zero base; a month after nothing is
+            // an infinite rise, which is true but useless, so it reads as new.
+            const delta = prev === null || prev === 0 ? null : ((amount - prev) / prev) * 100;
+            return { i, amount, delta, isFirst: prev === null };
+          });
+        const yearTotal = stats?.earningsYear ?? 0;
         return (
           <View className="bg-card rounded-2xl border border-border-soft p-5 flex-1">
             <Text className="text-sm font-semibold text-ink mb-1">
               {t.home.monthlyChart.title}
             </Text>
-            {size === 'lg' && max > 0 ? (
-              <Text className="text-xs text-muted mb-3">
-                {t.home.monthlyChart.totalLabel.replace('{{year}}', yearStr)}: {yearAmount} · {t.home.monthlyChart.avgLabel}: {formatCurrency((stats?.earningsYear ?? 0) / (currentMonth + 1))}
+            {size !== 'sm' && yearTotal > 0 ? (
+              <Text className="text-xs text-muted mb-2">
+                {t.home.monthlyChart.totalLabel.replace('{{year}}', yearStr)}: {yearAmount} · {t.home.monthlyChart.avgLabel}: {formatCurrency(yearTotal / (currentMonth + 1))}
               </Text>
-            ) : (
-              <View className="mb-3" />
-            )}
-            {max === 0 ? (
+            ) : null}
+            {items.every(m => m.amount === 0) ? (
               <Text className="text-sm text-faint text-center py-6">
                 {t.home.monthlyChart.empty}
               </Text>
             ) : (
-              <View className="flex-row">
-                {/* Y axis — labels sit ON their gridline (same top = i × band
-                    formula), so the two can never drift apart. */}
-                <View style={{ width: AXIS_W, height: barArea }}>
-                  {Array.from({ length: ticks + 1 }, (_, i) => (
+              // Two columns at md/lg. A single column grows taller than the
+              // grid cube the card sits in, which is what made the row ragged:
+              // some widgets sized to content, the rest stretched to match the
+              // tallest. Splitting in half keeps 6 rows within one cube-height
+              // and 12 within two.
+              (() => {
+                const cols = size === 'sm' ? 1 : 2;
+                const perCol = Math.ceil(items.length / cols);
+                const row = (m: typeof items[number], first: boolean) => (
+                  <View
+                    key={m.i}
+                    className={`flex-row items-center py-1.5 ${first ? '' : 'border-t border-border-soft'}`}
+                  >
                     <Text
-                      key={i}
-                      className="text-[9px] text-faint"
-                      style={{ position: 'absolute', top: (barArea / ticks) * i - 5, right: 6 }}
+                      className={`text-xs w-9 ${m.i === currentMonth ? 'text-primary font-bold' : 'text-muted'}`}
                     >
-                      {axisTick((axisMax / ticks) * (ticks - i))}
+                      {monthName(m.i)}
                     </Text>
-                  ))}
-                </View>
-
-                <View className="flex-1">
-                  <View style={{ height: barArea }}>
-                    {Array.from({ length: ticks + 1 }, (_, i) => (
-                      <View
-                        key={i}
-                        className="absolute left-0 right-0 h-px bg-border-soft"
-                        style={{ top: (barArea / ticks) * i }}
-                      />
-                    ))}
-
-                    <View className="flex-row items-end gap-1.5" style={{ height: barArea }}>
-                      {shown.map((amount, idx) => {
-                        const i = startIdx + idx;
-                        // While scrubbing, the held bar takes the highlight so
-                        // the finger — not today's date — is what the eye
-                        // follows.
-                        const lit = scrub.active === null ? i === currentMonth : scrub.active === idx;
-                        return (
-                          <View key={i} className="flex-1 justify-end" style={{ height: barArea }}>
-                            <View
-                              className={`w-full rounded-t-md ${
-                                lit ? 'bg-primary' : amount > 0 ? 'bg-primary/30' : 'bg-border-soft'
-                              }`}
-                              style={{ height: barH(amount) }}
-                            />
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </View>
-
-                  <View className="flex-row gap-1.5 mt-1">
-                    {shown.map((amount, idx) => {
-                      const i = startIdx + idx;
-                      const lit = scrub.active === null ? i === currentMonth : scrub.active === idx;
-                      return (
+                    <Text className="flex-1 text-sm font-semibold text-ink" numberOfLines={1}>
+                      {formatCurrency(m.amount)}
+                    </Text>
+                    {size !== 'sm' ? (
+                      m.isFirst ? (
+                        <Text className="text-[10px] text-faint ml-1">{t.home.monthlyChart.noPrevMonth}</Text>
+                      ) : m.delta === null ? (
+                        <Text className="text-[10px] text-faint ml-1">—</Text>
+                      ) : (
                         <Text
-                          key={i}
-                          className={`flex-1 text-center text-[10px] ${lit ? 'text-primary font-semibold' : 'text-faint'}`}
+                          className={`text-[10px] font-semibold ml-1 ${m.delta >= 0 ? 'text-emerald-600' : 'text-red-500'}`}
                         >
-                          {monthLabel(i)}
+                          {m.delta >= 0 ? '▲' : '▼'} {Math.abs(Math.round(m.delta))}%
                         </Text>
-                      );
-                    })}
+                      )
+                    ) : null}
                   </View>
-
-                  {/* Value bubble, positioned in pixels over the held bar. */}
-                  {scrub.active !== null && scrub.width > 0 && shown[scrub.active] !== undefined ? (
-                    <View
-                      className="absolute bg-ink rounded-lg px-2 py-1"
-                      style={{
-                        width: CHART_BUBBLE_W,
-                        // `bottom` is measured from below the month-label row,
-                        // and clamped so a full-height bar can't push the
-                        // bubble out of the card (Android clips overflow).
-                        bottom: Math.min(
-                          barH(shown[scrub.active]) + 6 + LABEL_ROW_H,
-                          LABEL_ROW_H + barArea - CHART_BUBBLE_H,
-                        ),
-                        left: Math.min(
-                          Math.max(0, ((scrub.active + 0.5) / shown.length) * scrub.width - CHART_BUBBLE_W / 2),
-                          Math.max(0, scrub.width - CHART_BUBBLE_W),
-                        ),
-                      }}
-                    >
-                      <Text className="text-[10px] font-bold text-surface text-center" numberOfLines={1}>
-                        {formatCurrency(shown[scrub.active])}
-                      </Text>
-                    </View>
-                  ) : null}
-
-                  {/* Hold-and-slide layer, over the plot only (the axis gutter
-                      is outside it, so x maps straight onto a bar). Disabled in
-                      edit mode so the widget stays draggable for reordering. */}
-                  <View className="absolute left-0 right-0 top-0 bottom-0" {...scrub.handlers} />
-                </View>
-              </View>
+                );
+                return (
+                  <View className="flex-row" style={{ columnGap: 16 }}>
+                    {Array.from({ length: cols }, (_, cIdx) => (
+                      <View key={cIdx} className="flex-1">
+                        {items.slice(cIdx * perCol, (cIdx + 1) * perCol).map((m, rIdx) => row(m, rIdx === 0))}
+                      </View>
+                    ))}
+                  </View>
+                );
+              })()
             )}
           </View>
         );

@@ -157,6 +157,22 @@ export type DashboardDict = {
       payrollPeriodSub: string;
       payrollPeriodEmpty: string;
       payrollPeriodWorkers: string;
+      payrollPeriodVsPrev: string;
+      payrollPeriodNoPrev: string;
+      payrollPeriodHours: string;
+      payrollPeriodWorkerCount: string;
+      pendingTotalLabel: string;
+      pendingDueSoon: string;
+      pendingOverdueLabel: string;
+      pendingNone: string;
+      overdueTotalLabel: string;
+      overdueOldest: string;
+      overdueDaysShort: string;
+      overdueNone: string;
+      clientsTop: string;
+      clientsRecent: string;
+      clientsNoRevenue: string;
+      clientsInvoiceCount: string;
       earningsMonthSub: string;
       invoicesPendingLabel: string;
       invoicesPendingSub: string;
@@ -187,6 +203,7 @@ export type DashboardDict = {
       empty: string;
       totalLabel: string;
       avgLabel: string;
+      noPrevMonth: string;
     };
     upcomingJobs: {
       title: string;
@@ -3277,6 +3294,22 @@ export const dashboard: Record<Locale, DashboardDict> = {
         payrollPeriodSub: '{{hours}} h · {{count}} trabajadores',
         payrollPeriodEmpty: 'Sin horas este período',
         payrollPeriodWorkers: 'Por trabajador',
+        payrollPeriodVsPrev: 'vs período anterior',
+        payrollPeriodNoPrev: 'Sin período anterior',
+        payrollPeriodHours: 'Horas',
+        payrollPeriodWorkerCount: 'Trabajadores',
+        pendingTotalLabel: 'Total por cobrar',
+        pendingDueSoon: 'Vencen primero',
+        pendingOverdueLabel: 'Vencidas',
+        pendingNone: 'Nada pendiente',
+        overdueTotalLabel: 'Total vencido',
+        overdueOldest: 'Más atrasada',
+        overdueDaysShort: '{{count}} d',
+        overdueNone: 'Nada vencido',
+        clientsTop: 'Mejores clientes',
+        clientsRecent: 'Agregados',
+        clientsNoRevenue: 'Sin pagos este año',
+        clientsInvoiceCount: '{{count}} fact.',
         earningsMonthSub: '{{amount}} este año',
         invoicesPendingLabel: 'Facturas pendientes',
         invoicesPendingSub: 'esperando pago',
@@ -3306,6 +3339,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         empty: 'Aún no hay pagos este año.',
         totalLabel: 'Total {{year}}',
         avgLabel: 'Promedio mensual',
+        noPrevMonth: 'primer mes',
       },
       upcomingJobs: {
         title: 'Próximos trabajos',
@@ -6396,6 +6430,22 @@ export const dashboard: Record<Locale, DashboardDict> = {
         payrollPeriodSub: '{{hours}} h · {{count}} workers',
         payrollPeriodEmpty: 'No hours this period',
         payrollPeriodWorkers: 'By worker',
+        payrollPeriodVsPrev: 'vs last period',
+        payrollPeriodNoPrev: 'No previous period',
+        payrollPeriodHours: 'Hours',
+        payrollPeriodWorkerCount: 'Workers',
+        pendingTotalLabel: 'Total outstanding',
+        pendingDueSoon: 'Due first',
+        pendingOverdueLabel: 'Overdue',
+        pendingNone: 'Nothing pending',
+        overdueTotalLabel: 'Total overdue',
+        overdueOldest: 'Oldest',
+        overdueDaysShort: '{{count}}d',
+        overdueNone: 'Nothing overdue',
+        clientsTop: 'Top clients',
+        clientsRecent: 'Recently added',
+        clientsNoRevenue: 'No payments this year',
+        clientsInvoiceCount: '{{count}} inv.',
         earningsMonthSub: '{{amount}} this year',
         invoicesPendingLabel: 'Pending invoices',
         invoicesPendingSub: 'awaiting payment',
@@ -6425,6 +6475,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         empty: 'No payments yet this year.',
         totalLabel: 'Total {{year}}',
         avgLabel: 'Monthly average',
+        noPrevMonth: 'first month',
       },
       upcomingJobs: {
         title: 'Upcoming jobs',

@@ -70,6 +70,10 @@ interface DashboardStats {
   earningsMonth: number;
   earningsYear: number;
   invoicesPending: number;
+  /** Money behind the pending/overdue counts (migration 223). Absent until
+   *  that migration is run, so both read 0 rather than breaking. */
+  invoicesPendingAmount?: number;
+  invoicesOverdueAmount?: number;
   invoicesOverdue: number;
   clientsTotal: number;
   clockedInNow: number;
@@ -296,6 +300,9 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recent, setRecent] = useState<RecentInvoice[]>([]);
   const [upcoming, setUpcoming] = useState<UpcomingJob[]>([]);
+  const [pendingInvoices, setPendingInvoices] = useState<{ id: string; invoiceNumber: string | null; totalAmount: number | null; dueDate: string | null; clientName: string | null }[]>([]);
+  const [overdueInvoices, setOverdueInvoices] = useState<{ id: string; invoiceNumber: string | null; totalAmount: number | null; dueDate: string | null; clientName: string | null }[]>([]);
+  const [topClients, setTopClients] = useState<{ id: string; name: string; company: string | null; total: number; invoices: number }[]>([]);
   const [recentClients, setRecentClients] = useState<RecentClient[]>([]);
   const [newClientsThisMonth, setNewClientsThisMonth] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -341,8 +348,11 @@ export default function DashboardPage() {
   type DashPayload = {
     stats: DashboardStats;
     recent: RecentInvoice[];
+    pending: { id: string; invoiceNumber: string | null; totalAmount: number | null; dueDate: string | null; clientName: string | null }[];
+    overdue: { id: string; invoiceNumber: string | null; totalAmount: number | null; dueDate: string | null; clientName: string | null }[];
     upcoming: UpcomingJob[];
     recentClients: RecentClient[];
+    topClients: { id: string; name: string; company: string | null; total: number; invoices: number }[];
     newClientsThisMonth: number;
   };
   const dashKey = business ? `dashboard_home_${business.id}` : null;
@@ -354,15 +364,28 @@ export default function DashboardPage() {
       const startYear = new Date(now.getFullYear(), 0, 1).toISOString();
       const today = now.toISOString().split('T')[0];
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
-      const [statsRes, recentInv, upcomingJobs, recentCl, newClientCount] = await Promise.all([
+      const [statsRes, recentInv, pendingInv, overdueInv, topCl, upcomingJobs, recentCl, newClientCount] = await Promise.all([
         supabase.rpc('dashboard_stats', {
           p_business_id: business!.id, p_start_month: startMonth, p_start_year: startYear, p_tz: tz,
         }),
         supabase.from('invoices').select('id, invoice_number, total_amount, status, due_date, clients(first_name, last_name)').eq('business_id', business!.id).order('created_at', { ascending: false }).limit(LIST_ROWS.lg),
+        // Pending invoices for the pending tile, DUE SOONEST first. Filtering
+        // the recent list above would show nothing whenever the newest invoices
+        // happen to be paid, and "recent" is the wrong order anyway — what
+        // matters about an unpaid invoice is how close its due date is.
+        // Bounded, so no pagination loop needed.
+        supabase.from('invoices').select('id, invoice_number, total_amount, due_date, clients(first_name, last_name)').eq('business_id', business!.id).eq('status', 'sent').order('due_date', { ascending: true, nullsFirst: false }).limit(8),
+        // Overdue, OLDEST first — the further past due, the more it needs
+        // chasing. Same bounded shape as the pending query above.
+        supabase.from('invoices').select('id, invoice_number, total_amount, due_date, clients(first_name, last_name)').eq('business_id', business!.id).eq('status', 'overdue').order('due_date', { ascending: true, nullsFirst: false }).limit(8),
+        // Top clients by paid revenue this year (migration 224). A GROUP BY,
+        // so it has to be an RPC — summing client-side would truncate at 1000
+        // invoices and quietly rank the wrong people.
+        supabase.rpc('dashboard_top_clients', { p_business_id: business!.id, p_start: startYear, p_limit: 8 }),
         supabase.from('jobs').select('id, title, status, scheduled_date, clients(first_name, last_name)').eq('business_id', business!.id).in('status', ['scheduled', 'in_progress']).gte('scheduled_date', today).order('scheduled_date', { ascending: true }).limit(LIST_ROWS.lg),
         // Both bounded — a .limit(4) peek and a count-only query, so neither
         // needs the pagination loop the "load every row" reads do.
-        supabase.from('clients').select('id, first_name, last_name, company').eq('business_id', business!.id).order('created_at', { ascending: false }).limit(4),
+        supabase.from('clients').select('id, first_name, last_name, company').eq('business_id', business!.id).order('created_at', { ascending: false }).limit(6),
         supabase.from('clients').select('id', { head: true, count: 'exact' }).eq('business_id', business!.id).gte('created_at', startMonth),
       ]);
       if (statsRes.error) throw new Error(statsRes.error.message);
@@ -373,6 +396,8 @@ export default function DashboardPage() {
         earningsMonth: Number(d.earnings_month ?? 0),
         earningsYear: Number(d.earnings_year ?? 0),
         invoicesPending: Number(d.invoices_pending ?? 0),
+        invoicesPendingAmount: Number(d.invoices_pending_amount ?? 0),
+        invoicesOverdueAmount: Number(d.invoices_overdue_amount ?? 0),
         invoicesOverdue: Number(d.invoices_overdue ?? 0),
         clientsTotal: Number(d.clients_total ?? 0),
         clockedInNow: Number(d.clocked_in_now ?? 0),
@@ -386,6 +411,13 @@ export default function DashboardPage() {
       const rawClients = (recentCl.data ?? []) as unknown as RawRecentClient[];
       return {
         stats,
+        topClients: ((topCl.data ?? []) as any[]).map(r => ({
+          id: r.client_id,
+          name: `${r.first_name ?? ''} ${r.last_name ?? ''}`.trim() || (r.company ?? '—'),
+          company: r.company,
+          total: Number(r.total) || 0,
+          invoices: Number(r.invoice_count) || 0,
+        })),
         recentClients: rawClients.map(cl => ({
           id: cl.id,
           name: `${cl.first_name} ${cl.last_name}`.trim(),
@@ -397,6 +429,20 @@ export default function DashboardPage() {
           invoiceNumber: inv.invoice_number,
           totalAmount: inv.total_amount,
           status: inv.status,
+          clientName: inv.clients ? `${inv.clients.first_name} ${inv.clients.last_name}` : null,
+        })),
+        pending: ((pendingInv.data ?? []) as any[]).map(inv => ({
+          id: inv.id,
+          invoiceNumber: inv.invoice_number,
+          totalAmount: inv.total_amount,
+          dueDate: inv.due_date,
+          clientName: inv.clients ? `${inv.clients.first_name} ${inv.clients.last_name}` : null,
+        })),
+        overdue: ((overdueInv.data ?? []) as any[]).map(inv => ({
+          id: inv.id,
+          invoiceNumber: inv.invoice_number,
+          totalAmount: inv.total_amount,
+          dueDate: inv.due_date,
           clientName: inv.clients ? `${inv.clients.first_name} ${inv.clients.last_name}` : null,
         })),
         upcoming: rawJobs.map(job => ({
@@ -420,6 +466,7 @@ export default function DashboardPage() {
   const payrollSwr = useSwr<{
       total: number; hours: number; workers: number;
       top: { id: string; name: string; pay: number; hours: number }[];
+      previousTotal: number | null;
     }>(
     payrollKey,
     async () => {
@@ -428,7 +475,7 @@ export default function DashboardPage() {
       // which would come back from the JSON cache as strings.
       // Cap the list here, not at render: the whole roster would bloat the
       // cached payload for rows no size ever shows.
-      return { total: r.total, hours: r.hours, workers: r.workers, top: r.top.slice(0, 8) };
+      return { total: r.total, hours: r.hours, workers: r.workers, top: r.top.slice(0, 8), previousTotal: r.previousTotal };
     },
     { cacheKey: payrollKey, resetKey: business?.id ?? '' },
   );
@@ -438,6 +485,9 @@ export default function DashboardPage() {
     if (!dash.data) return;
     setStats(dash.data.stats);
     setRecent(dash.data.recent);
+    setPendingInvoices(dash.data.pending);
+    setOverdueInvoices(dash.data.overdue);
+    setTopClients(dash.data.topClients);
     setUpcoming(dash.data.upcoming);
     setRecentClients(dash.data.recentClients);
     setNewClientsThisMonth(dash.data.newClientsThisMonth);
@@ -555,20 +605,21 @@ export default function DashboardPage() {
       })),
       listHeading: t.home.widgets.payrollPeriodWorkers,
     },
-    invoicesPending: { label: t.home.widgets.invoicesPendingLabel, value: stats?.invoicesPending ?? 0, icon: FileText, color: 'text-primary', bg: 'bg-primary/10', sub: t.home.widgets.invoicesPendingSub },
+    invoicesPending: { label: t.home.widgets.invoicesPendingLabel, value: stats?.invoicesPending ?? 0, icon: FileText, color: 'text-primary', bg: 'bg-primary/10', sub: t.home.widgets.invoicesPendingSub, onClick: () => router.push('/dashboard/facturas?status=sent') },
     clientsTotal: {
       label: t.home.widgets.clientsLabel, value: stats?.clientsTotal ?? 0, icon: Users,
       color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-500/10', sub: t.home.widgets.clientsSub,
       extra: newClientsThisMonth
         ? t.home.widgets.clientsNewThisMonth.replace('{{count}}', String(newClientsThisMonth))
         : null,
+      onClick: () => router.push('/dashboard/clientes'),
       list: recentClients.map(cl => ({ id: cl.id, primary: cl.name, secondary: cl.company })),
       listHeading: t.home.widgets.clientsRecentHeading,
       onListItemPress: (id: string) => router.push(`/dashboard/clientes/${id}`),
     },
-    invoicesOverdue: { label: t.home.widgets.invoicesOverdueLabel, value: stats?.invoicesOverdue ?? 0, icon: AlertCircle, color: 'text-red-500 dark:text-red-400', bg: 'bg-red-500/10', sub: t.home.widgets.invoicesOverdueSub },
+    invoicesOverdue: { label: t.home.widgets.invoicesOverdueLabel, value: stats?.invoicesOverdue ?? 0, icon: AlertCircle, color: 'text-red-500 dark:text-red-400', bg: 'bg-red-500/10', sub: t.home.widgets.invoicesOverdueSub, onClick: () => router.push('/dashboard/facturas?status=overdue') },
     clockedIn: { label: t.home.widgets.clockedInLabel, value: stats?.clockedInNow ?? 0, icon: Clock, color: 'text-orange-500 dark:text-orange-400', bg: 'bg-orange-500/10', sub: t.home.widgets.clockedInSub },
-    earningsYear: { label: t.home.widgets.earningsYearLabel, value: yearAmount, icon: TrendingUp, color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-500/10', sub: t.home.widgets.earningsYearSub.replace('{{year}}', yearStr), extra: avgPerMonthLine, bars: true },
+    earningsYear: { label: t.home.widgets.earningsYearLabel, value: yearAmount, icon: TrendingUp, color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-500/10', sub: t.home.widgets.earningsYearSub.replace('{{year}}', yearStr), extra: avgPerMonthLine, bars: true, onClick: () => router.push('/dashboard/reportes?range=year') },
     jobsActive: { label: t.home.widgets.jobsActiveLabel, value: stats?.jobsActive ?? 0, icon: Briefcase, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-500/10', sub: t.home.widgets.jobsActiveSub },
   }), [stats, t, yearAmount, yearStr, avgPerMonthLine, recentClients, newClientsThisMonth, router]);
 
@@ -591,8 +642,80 @@ export default function DashboardPage() {
     { label: t.home.quickActions.calendar, icon: CalendarDays, onClick: () => router.push('/dashboard/calendario'), classes: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20', show: can.editCalendar(currentRole) },
   ].filter(a => a.show);
 
+  // The revenue chart, shared by the standalone widget and the large earnings
+  // tile. One implementation so the two can never drift — the earnings tile is
+  // meant to BE this chart, with its own headline above it.
+  const monthlyChartCard = (
+    size: DashboardWidgetSize,
+    header?: React.ReactNode,
+    /** Render on the brand-blue card instead of the neutral one. Every colour
+     *  below has to flip together — theme tokens like text-faint are tuned for
+     *  the card background and vanish on blue. */
+    light?: boolean,
+  ) => {
+        const max = Math.max(...monthly);
+        // sm shows the most recent 6 months; md/lg show the full year.
+        const startIdx = size === 'sm' ? Math.max(0, currentMonth - 5) : 0;
+        const shown = size === 'sm' ? monthly.slice(startIdx, startIdx + 6) : monthly;
+        const monthLabel = (i: number) =>
+          new Intl.DateTimeFormat(t.dateLocale, { month: 'short' }).format(new Date(2026, i, 1)).replace('.', '');
+        return (
+          <div className={`rounded-2xl shadow-sm p-5 h-full ${light ? 'bg-primary' : 'bg-card border border-border-soft'}`}>
+            <div className="flex items-center justify-between mb-4 gap-4">
+              {header ?? <h2 className={`text-sm font-semibold ${light ? 'text-white' : 'text-ink'}`}>{t.home.monthlyChart.title}</h2>}
+              {/* The totals line is part of the chart, not the heading: it is
+                  what makes the axis readable ("is 250k a lot?"). */}
+              {(size === 'lg' || header) && max > 0 ? (
+                <div className={`flex items-center gap-4 text-xs ${light ? 'text-white/70' : 'text-muted'}`}>
+                  <span><span className={`font-semibold ${light ? 'text-white' : 'text-ink'}`}>{yearAmount}</span> · {t.home.monthlyChart.totalLabel.replace('{{year}}', yearStr)}</span>
+                  <span><span className={`font-semibold ${light ? 'text-white' : 'text-ink'}`}>{formatCurrency((stats?.earningsYear ?? 0) / (currentMonth + 1))}</span> · {t.home.monthlyChart.avgLabel}</span>
+                </div>
+              ) : null}
+            </div>
+            {max === 0 ? (
+              <p className={`text-sm py-8 text-center ${light ? 'text-white/70' : 'text-faint'}`}>{t.home.monthlyChart.empty}</p>
+            ) : (
+              <div className={`flex items-end gap-2 ${size === 'sm' ? 'h-24' : 'h-32'}`}>
+                {shown.map((amount, idx) => {
+                  const i = startIdx + idx;
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
+                      <span className={`absolute -top-6 text-[10px] font-semibold px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap ${light ? 'bg-white text-primary' : 'bg-border-soft text-ink'}`}>
+                        {formatCurrency(amount)}
+                      </span>
+                      <div className={`w-full flex items-end ${size === 'sm' ? 'h-16' : 'h-24'}`}>
+                        <div
+                          className={`w-full rounded-t-md transition-colors ${
+                            light
+                              ? i === currentMonth ? 'bg-white' : amount > 0 ? 'bg-white/45 group-hover:bg-white/70' : 'bg-white/15'
+                              : i === currentMonth ? 'bg-primary' : amount > 0 ? 'bg-primary/30 group-hover:bg-primary/50' : 'bg-border-soft'
+                          }`}
+                          style={{ height: `${Math.max(amount > 0 ? 8 : 3, Math.round((amount / max) * 100))}%` }}
+                        />
+                      </div>
+                      <span className={`text-[10px] ${
+                        light
+                          ? i === currentMonth ? 'text-white font-bold' : 'text-white/60'
+                          : i === currentMonth ? 'text-primary font-semibold' : 'text-faint'
+                      }`}>{monthLabel(i)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+  };
+
   const renderWidget = (id: DashboardWidgetId, size: DashboardWidgetSize) => {
     if (id === 'earningsMonth') {
+      // Clicking opens Reports scoped to THIS month — the number's context.
+      const EarnCard = 'button';
+      const earnProps = {
+        type: 'button' as const,
+        onClick: () => router.push('/dashboard/reportes?range=month'),
+        className: 'text-left w-full cursor-pointer',
+      };
       // Hero card — gradient brand background so the headline number pops.
       //
       // md is the horizontal banner: it reads as a WIDER card, not a taller
@@ -601,7 +724,7 @@ export default function DashboardPage() {
       // than lg — the ladder ran backwards.
       if (size === 'md') {
         return (
-          <div className="rounded-2xl bg-primary shadow-sm p-5 h-full text-white transition-shadow hover:shadow-md">
+          <EarnCard {...earnProps} className={`rounded-2xl bg-primary shadow-sm p-5 h-full text-white transition-shadow hover:shadow-md ${earnProps.className}`}>
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-2xl bg-white/15 flex items-center justify-center shrink-0">
                 <DollarSign size={26} className="text-white" />
@@ -616,35 +739,37 @@ export default function DashboardPage() {
               </div>
               <MiniBars monthly={monthly} light labels className="w-44 shrink-0" />
             </div>
-          </div>
+          </EarnCard>
         );
       }
       if (size === 'lg') {
-        // The biggest size: the hero number over a full-width labelled chart,
-        // so the extra room shows twelve months of trend rather than padding.
-        return (
-          <div className="rounded-2xl bg-primary shadow-sm p-5 h-full text-white transition-shadow hover:shadow-md">
-            <div className="flex items-start gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-white/15 flex items-center justify-center shrink-0">
-                <DollarSign size={22} className="text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-white/80">{t.home.widgets.earningsMonthLabel}</p>
-                <p className="text-3xl font-bold mt-0.5">{formatCurrency(stats?.earningsMonth ?? 0)}</p>
-                <p className="text-xs text-white/70 mt-0.5">
-                  {t.home.widgets.earningsMonthSub.replace('{{amount}}', yearAmount)}
-                  {vsLastMonthLine ? ` · ${vsLastMonthLine}` : ''}
-                </p>
-              </div>
-            </div>
-            <div className="mt-4">
-              <MiniBars monthly={monthly} light labels className="w-full h-20" />
-            </div>
-          </div>
+        // The biggest size IS the revenue chart, headed by this month's number:
+        // same bars, same totals line, same per-bar readout. It replaces the
+        // standalone Revenue-by-month widget rather than sitting beside it
+        // showing the same twelve months in a poorer form.
+        return monthlyChartCard(
+          'lg',
+          <button
+            type="button"
+            onClick={() => router.push('/dashboard/reportes?range=month')}
+            className="flex items-center gap-3 text-left cursor-pointer min-w-0"
+          >
+            <span className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+              <DollarSign size={18} className="text-white" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-xs font-medium text-white/80">{t.home.widgets.earningsMonthLabel}</span>
+              <span className="block text-2xl font-bold text-white">{formatCurrency(stats?.earningsMonth ?? 0)}</span>
+            </span>
+            {vsLastMonthLine ? (
+              <span className="text-xs font-semibold text-white/90 shrink-0">{vsLastMonthLine}</span>
+            ) : null}
+          </button>,
+          true,
         );
       }
       return (
-        <div className="rounded-2xl bg-primary shadow-sm p-5 h-full text-white transition-shadow hover:shadow-md">
+        <EarnCard {...earnProps} className={`rounded-2xl bg-primary shadow-sm p-5 h-full text-white transition-shadow hover:shadow-md ${earnProps.className}`}>
           <div>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
@@ -655,7 +780,315 @@ export default function DashboardPage() {
             <p className="text-2xl font-bold mt-3">{formatCurrency(stats?.earningsMonth ?? 0)}</p>
             <p className="text-xs text-white/70 mt-0.5">{t.home.widgets.earningsMonthSub.replace('{{amount}}', yearAmount)}</p>
           </div>
+        </EarnCard>
+      );
+    }
+
+    // Clients at md/lg: the count on the left, WHO those clients are on the
+    // right. A headcount is the least useful thing about a client list — the
+    // question is which of them actually pay, and who just arrived.
+    if (id === 'clientsTotal' && size !== 'sm') {
+      const top = topClients.slice(0, size === 'lg' ? 5 : 3);
+      const fresh = recentClients.slice(0, 3);
+      return (
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 h-full">
+          <div className="flex gap-6">
+            <button
+              type="button"
+              onClick={() => router.push('/dashboard/clientes')}
+              className="flex-1 min-w-0 text-left cursor-pointer"
+            >
+              <span className="w-9 h-9 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3">
+                <Users size={18} className="text-blue-600 dark:text-blue-400" />
+              </span>
+              <p className="text-2xl font-bold text-ink">{stats?.clientsTotal ?? 0}</p>
+              <p className="text-xs font-medium text-ink mt-0.5">{t.home.widgets.clientsLabel}</p>
+              {newClientsThisMonth ? (
+                <span className="block mt-3">
+                  <span className="block text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                    {t.home.widgets.clientsNewThisMonth.replace('{{count}}', String(newClientsThisMonth))}
+                  </span>
+                  <span className="block text-[10px] text-faint">{t.home.widgets.clientsSub}</span>
+                </span>
+              ) : null}
+            </button>
+
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-semibold text-faint uppercase tracking-wide mb-1.5">
+                {t.home.widgets.clientsTop}
+              </p>
+              {top.length === 0 ? (
+                <p className="text-xs text-faint">{t.home.widgets.clientsNoRevenue}</p>
+              ) : (
+                top.map(cl => (
+                  <button
+                    key={cl.id}
+                    type="button"
+                    onClick={() => router.push(`/dashboard/clientes/${cl.id}`)}
+                    className="w-full flex items-center gap-2 py-1 text-left hover:opacity-70 transition-opacity"
+                  >
+                    <span className="text-xs text-ink flex-1 truncate">{cl.name}</span>
+                    <span className="text-[11px] font-semibold text-ink shrink-0">
+                      {formatCurrency(cl.total)}
+                    </span>
+                  </button>
+                ))
+              )}
+              {/* lg only, mirroring the divider block on payroll and invoices:
+                  who came in recently, which the top list never shows (a new
+                  client has no revenue yet by definition). */}
+              {size === 'lg' && fresh.length > 0 ? (
+                <div className="mt-3 pt-3 border-t border-border-soft">
+                  <p className="text-[10px] font-semibold text-faint uppercase tracking-wide mb-1">
+                    {t.home.widgets.clientsRecent}
+                  </p>
+                  {fresh.map(cl => (
+                    <button
+                      key={cl.id}
+                      type="button"
+                      onClick={() => router.push(`/dashboard/clientes/${cl.id}`)}
+                      className="block w-full py-0.5 text-left hover:opacity-70 transition-opacity"
+                    >
+                      <span className="text-xs text-ink truncate block">{cl.name}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
+      );
+    }
+
+    // Date-only columns: append a time or they render a day early in US zones.
+    const daysPastDue = (d: string | null): number | null => {
+      if (!d) return null;
+      const due = new Date(`${d}T00:00:00`);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      return Math.round((today.getTime() - due.getTime()) / 86400000);
+    };
+    const dueLabel = (d: string | null) => {
+      if (!d) return '';
+      const late = daysPastDue(d);
+      if (late === 0) return t.home.upcomingJobs.today;
+      if (late === -1) return t.home.upcomingJobs.tomorrow;
+      return new Intl.DateTimeFormat(t.dateLocale, { day: 'numeric', month: 'short' })
+        .format(new Date(`${d}T00:00:00`));
+    };
+
+    // Overdue at md/lg mirrors pending, but leads with how LATE things are —
+    // an overdue invoice's age is the thing that decides who gets called first.
+    if (id === 'invoicesOverdue' && size !== 'sm') {
+      const rows = overdueInvoices.slice(0, size === 'lg' ? 8 : 3);
+      // The list is ordered oldest-first, so the head is the worst one.
+      const oldest = rows.length ? daysPastDue(rows[0].dueDate) : null;
+      return (
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 h-full">
+          <div className="flex gap-6">
+            <button
+              type="button"
+              onClick={() => router.push('/dashboard/facturas?status=overdue')}
+              className="flex-1 min-w-0 text-left cursor-pointer"
+            >
+              <span className="w-9 h-9 rounded-xl bg-red-500/10 flex items-center justify-center mb-3">
+                <AlertCircle size={18} className="text-red-500 dark:text-red-400" />
+              </span>
+              <p className="text-2xl font-bold text-ink">{stats?.invoicesOverdue ?? 0}</p>
+              <p className="text-xs font-medium text-ink mt-0.5">{t.home.widgets.invoicesOverdueLabel}</p>
+              {/* Same shape as the payroll tile's stat row, so the two cards
+                  come out the same height at the same size. */}
+              <span className="block mt-3">
+                <span className="block text-sm font-semibold text-red-500 dark:text-red-400">
+                  {formatCurrency(stats?.invoicesOverdueAmount ?? 0)}
+                </span>
+                <span className="block text-[10px] text-faint">{t.home.widgets.overdueTotalLabel}</span>
+              </span>
+              {size === 'lg' && oldest !== null && oldest > 0 ? (
+                <span className="block mt-3 pt-3 border-t border-border-soft">
+                  <span className="block text-sm font-bold text-ink">
+                    {t.home.widgets.overdueDaysShort.replace('{{count}}', String(oldest))}
+                  </span>
+                  <span className="block text-[10px] text-faint">{t.home.widgets.overdueOldest}</span>
+                </span>
+              ) : null}
+            </button>
+
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-semibold text-faint uppercase tracking-wide mb-1.5">
+                {t.home.widgets.invoicesOverdueLabel}
+              </p>
+              {rows.length === 0 ? (
+                <p className="text-xs text-faint">{t.home.widgets.overdueNone}</p>
+              ) : (
+                rows.map(inv => {
+                  const late = daysPastDue(inv.dueDate);
+                  return (
+                    <button
+                      key={inv.id}
+                      type="button"
+                      onClick={() => router.push(`/dashboard/facturas/${inv.id}`)}
+                      className="w-full flex items-center gap-2 py-1 text-left hover:opacity-70 transition-opacity"
+                    >
+                      <span className="text-xs text-ink flex-1 truncate">
+                        {inv.clientName ?? inv.invoiceNumber ?? '—'}
+                      </span>
+                      {late !== null && late > 0 ? (
+                        <span className="text-[10px] font-semibold text-red-500 dark:text-red-400 shrink-0">
+                          {t.home.widgets.overdueDaysShort.replace('{{count}}', String(late))}
+                        </span>
+                      ) : null}
+                      <span className="text-[11px] font-semibold text-ink shrink-0">
+                        {formatCurrency(inv.totalAmount ?? 0)}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Pending invoices at md/lg: the count on the left, WHICH invoices on the
+    // right. A count alone says nothing actionable — seven pending could be
+    // $700 or $70,000, and the ones that matter are those due soonest.
+    if (id === 'invoicesPending' && size !== 'sm') {
+      const rows = pendingInvoices.slice(0, size === 'lg' ? 8 : 3);
+      return (
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 h-full">
+          <div className="flex gap-6">
+            <button
+              type="button"
+              onClick={() => router.push('/dashboard/facturas?status=sent')}
+              className="flex-1 min-w-0 text-left cursor-pointer"
+            >
+              <span className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
+                <FileText size={18} className="text-primary" />
+              </span>
+              <p className="text-2xl font-bold text-ink">{stats?.invoicesPending ?? 0}</p>
+              <p className="text-xs font-medium text-ink mt-0.5">{t.home.widgets.invoicesPendingLabel}</p>
+              {/* Same shape as the payroll tile's stat row, so the two cards
+                  come out the same height at the same size. */}
+              <span className="block mt-3">
+                <span className="block text-sm font-semibold text-ink">
+                  {formatCurrency(stats?.invoicesPendingAmount ?? 0)}
+                </span>
+                <span className="block text-[10px] text-faint">{t.home.widgets.pendingTotalLabel}</span>
+              </span>
+              {size === 'lg' && (stats?.invoicesOverdue ?? 0) > 0 ? (
+                <span className="block mt-3 pt-3 border-t border-border-soft">
+                  <span className="block text-sm font-bold text-red-500 dark:text-red-400">
+                    {formatCurrency(stats?.invoicesOverdueAmount ?? 0)}
+                  </span>
+                  <span className="block text-[10px] text-faint">
+                    {t.home.widgets.pendingOverdueLabel} · {stats?.invoicesOverdue ?? 0}
+                  </span>
+                </span>
+              ) : null}
+            </button>
+
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-semibold text-faint uppercase tracking-wide mb-1.5">
+                {t.home.widgets.pendingDueSoon}
+              </p>
+              {rows.length === 0 ? (
+                <p className="text-xs text-faint">{t.home.widgets.pendingNone}</p>
+              ) : (
+                rows.map(inv => (
+                  // ONE line per invoice, like the payroll worker rows. A
+                  // second line for the date doubled the row height, which is
+                  // what made this card tower over the others at the same size.
+                  <button
+                    key={inv.id}
+                    type="button"
+                    onClick={() => router.push(`/dashboard/facturas/${inv.id}`)}
+                    className="w-full flex items-center gap-2 py-1 text-left hover:opacity-70 transition-opacity"
+                  >
+                    <span className="text-xs text-ink flex-1 truncate">
+                      {inv.clientName ?? inv.invoiceNumber ?? '—'}
+                    </span>
+                    <span className="text-[10px] text-faint shrink-0">{dueLabel(inv.dueDate)}</span>
+                    <span className="text-[11px] font-semibold text-ink shrink-0">
+                      {formatCurrency(inv.totalAmount ?? 0)}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Payroll at md/lg is its own layout: numbers on the left, who the hours
+    // came from on the right. The generic stat card stacks a list UNDER the
+    // number, which at full width is a narrow column of names beside a lot of
+    // empty space. sm still uses the generic card — there is no room to split.
+    if (id === 'payrollPeriod' && size !== 'sm' && payroll) {
+      const prev = payroll.previousTotal;
+      const deltaPct = prev != null && prev > 0 ? ((payroll.total - prev) / prev) * 100 : null;
+      const workerRows = (payroll.top ?? []).slice(0, size === 'lg' ? 8 : 3);
+      return (
+        <button
+          type="button"
+          onClick={() => router.push('/dashboard/reportes/nomina')}
+          className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 h-full w-full text-left cursor-pointer transition-shadow hover:shadow-md"
+        >
+          <div className="flex gap-6">
+            <div className="flex-1 min-w-0">
+              <span className="w-9 h-9 rounded-xl bg-teal-500/10 flex items-center justify-center mb-3">
+                <DollarSign size={18} className="text-teal-600 dark:text-teal-400" />
+              </span>
+              <p className="text-2xl font-bold text-ink">{formatCurrency(payroll.total)}</p>
+              <p className="text-xs font-medium text-ink mt-0.5">{t.home.widgets.payrollPeriodLabel}</p>
+              <div className="flex gap-6 mt-3">
+                <span>
+                  <span className="block text-sm font-semibold text-ink">{Math.round(payroll.hours)}</span>
+                  <span className="block text-[10px] text-faint">{t.home.widgets.payrollPeriodHours}</span>
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-ink">{payroll.workers}</span>
+                  <span className="block text-[10px] text-faint">{t.home.widgets.payrollPeriodWorkerCount}</span>
+                </span>
+              </div>
+              {/* lg adds the trend. Omitted when there is no comparable prior
+                  period — "−100%" against a period nobody worked is noise. */}
+              {size === 'lg' ? (
+                <div className="mt-3 pt-3 border-t border-border-soft">
+                  {deltaPct === null ? (
+                    <p className="text-[11px] text-faint">{t.home.widgets.payrollPeriodNoPrev}</p>
+                  ) : (
+                    <>
+                      <p className={`text-sm font-bold ${deltaPct >= 0 ? 'text-red-500 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        {deltaPct >= 0 ? '▲' : '▼'} {Math.abs(Math.round(deltaPct))}%
+                      </p>
+                      <p className="text-[10px] text-faint">
+                        {t.home.widgets.payrollPeriodVsPrev} · {formatCurrency(prev ?? 0)}
+                      </p>
+                    </>
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-semibold text-faint uppercase tracking-wide mb-1.5">
+                {t.home.widgets.payrollPeriodWorkers}
+              </p>
+              {workerRows.length === 0 ? (
+                <p className="text-xs text-faint">{t.home.widgets.payrollPeriodEmpty}</p>
+              ) : (
+                workerRows.map(w => (
+                  <div key={w.id} className="flex items-center gap-2 py-1">
+                    <span className="text-xs text-ink flex-1 truncate">{w.name}</span>
+                    <span className="text-[11px] text-muted shrink-0">{Math.round(w.hours)} h</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </button>
       );
     }
 
@@ -753,45 +1186,79 @@ export default function DashboardPage() {
         );
 
       case 'monthlyChart': {
-        const max = Math.max(...monthly);
-        // sm shows the most recent 6 months; md/lg show the full year.
-        const startIdx = size === 'sm' ? Math.max(0, currentMonth - 5) : 0;
-        const shown = size === 'sm' ? monthly.slice(startIdx, startIdx + 6) : monthly;
-        const monthLabel = (i: number) =>
+        // A LIST, not a chart — the large earnings tile already carries the
+        // bars. Bars answer "what shape was the year"; this answers "what did
+        // each month actually make, and which way is it moving", which is the
+        // part you cannot read off a bar. Newest first: the months people act
+        // on are the recent ones.
+        const rows = size === 'sm' ? 3 : size === 'md' ? 6 : 12;
+        const monthName = (i: number) =>
           new Intl.DateTimeFormat(t.dateLocale, { month: 'short' }).format(new Date(2026, i, 1)).replace('.', '');
+        const items = Array.from({ length: rows }, (_, n) => currentMonth - n)
+          .filter(i => i >= 0)
+          .map(i => {
+            const amount = monthly[i] ?? 0;
+            const prev = i > 0 ? monthly[i - 1] ?? 0 : null;
+            // Percent change needs a non-zero base; a month after nothing is
+            // an infinite rise, which is true but useless, so it reads as new.
+            const delta = prev === null || prev === 0 ? null : ((amount - prev) / prev) * 100;
+            return { i, amount, delta, isFirst: prev === null };
+          });
+        const yearTotal = stats?.earningsYear ?? 0;
         return (
           <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 h-full">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3 gap-4">
               <h2 className="text-sm font-semibold text-ink">{t.home.monthlyChart.title}</h2>
-              {size === 'lg' && max > 0 ? (
+              {size !== 'sm' && yearTotal > 0 ? (
                 <div className="flex items-center gap-4 text-xs text-muted">
                   <span><span className="font-semibold text-ink">{yearAmount}</span> · {t.home.monthlyChart.totalLabel.replace('{{year}}', yearStr)}</span>
-                  <span><span className="font-semibold text-ink">{formatCurrency((stats?.earningsYear ?? 0) / (currentMonth + 1))}</span> · {t.home.monthlyChart.avgLabel}</span>
+                  <span><span className="font-semibold text-ink">{formatCurrency(yearTotal / (currentMonth + 1))}</span> · {t.home.monthlyChart.avgLabel}</span>
                 </div>
               ) : null}
             </div>
-            {max === 0 ? (
+            {items.every(m => m.amount === 0) ? (
               <p className="text-sm text-faint py-8 text-center">{t.home.monthlyChart.empty}</p>
             ) : (
-              <div className={`flex items-end gap-2 ${size === 'sm' ? 'h-24' : 'h-32'}`}>
-                {shown.map((amount, idx) => {
-                  const i = startIdx + idx;
-                  return (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group relative">
-                      <span className="absolute -top-6 text-[10px] font-semibold text-ink bg-border-soft px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                        {formatCurrency(amount)}
-                      </span>
-                      <div className={`w-full flex items-end ${size === 'sm' ? 'h-16' : 'h-24'}`}>
-                        <div
-                          className={`w-full rounded-t-md transition-colors ${i === currentMonth ? 'bg-primary' : amount > 0 ? 'bg-primary/30 group-hover:bg-primary/50' : 'bg-border-soft'}`}
-                          style={{ height: `${Math.max(amount > 0 ? 8 : 3, Math.round((amount / max) * 100))}%` }}
-                        />
+              // Two columns at md/lg. A single column grows taller than the
+              // grid cell the card sits in, leaving the row ragged. Splitting
+              // in half keeps 6 rows within one cell-height and 12 within two.
+              (() => {
+                const cols = size === 'sm' ? 1 : 2;
+                const perCol = Math.ceil(items.length / cols);
+                const row = (m: typeof items[number], first: boolean) => (
+                  <div
+                    key={m.i}
+                    className={`flex items-center py-1.5 ${first ? '' : 'border-t border-border-soft'}`}
+                  >
+                    <span className={`text-xs w-10 shrink-0 ${m.i === currentMonth ? 'text-primary font-bold' : 'text-muted'}`}>
+                      {monthName(m.i)}
+                    </span>
+                    <span className="flex-1 text-sm font-semibold text-ink truncate">
+                      {formatCurrency(m.amount)}
+                    </span>
+                    {size !== 'sm' ? (
+                      m.isFirst ? (
+                        <span className="text-[10px] text-faint ml-1">{t.home.monthlyChart.noPrevMonth}</span>
+                      ) : m.delta === null ? (
+                        <span className="text-[10px] text-faint ml-1">—</span>
+                      ) : (
+                        <span className={`text-[10px] font-semibold ml-1 ${m.delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+                          {m.delta >= 0 ? '▲' : '▼'} {Math.abs(Math.round(m.delta))}%
+                        </span>
+                      )
+                    ) : null}
+                  </div>
+                );
+                return (
+                  <div className="flex gap-6">
+                    {Array.from({ length: cols }, (_, cIdx) => (
+                      <div key={cIdx} className="flex-1 min-w-0">
+                        {items.slice(cIdx * perCol, (cIdx + 1) * perCol).map((m, rIdx) => row(m, rIdx === 0))}
                       </div>
-                      <span className={`text-[10px] ${i === currentMonth ? 'text-primary font-semibold' : 'text-faint'}`}>{monthLabel(i)}</span>
-                    </div>
-                  );
-                })}
-              </div>
+                    ))}
+                  </div>
+                );
+              })()
             )}
           </div>
         );
@@ -853,7 +1320,9 @@ export default function DashboardPage() {
           <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden h-full">
             <div className="flex items-center justify-between px-5 py-4 border-b border-border-soft">
               <h2 className="text-sm font-semibold text-ink">{t.home.recent.title}</h2>
-              <button onClick={() => router.push('/dashboard/facturas')} className="text-xs text-primary font-medium hover:underline">
+              {/* status=all clears any saved filter — otherwise "View all" lands
+                 on whatever the list was last filtered to, showing a subset. */}
+              <button onClick={() => router.push('/dashboard/facturas?status=all')} className="text-xs text-primary font-medium hover:underline">
                 {t.home.recent.viewAll}
               </button>
             </div>

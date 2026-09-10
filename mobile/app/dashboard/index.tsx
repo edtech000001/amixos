@@ -100,8 +100,11 @@ function OwnerDashboardHome() {
   type DashPayload = {
     stats: DashboardStats;
     recent: DashboardRecentInvoice[];
+    pending: { id: string; invoiceNumber: string | null; totalAmount: number | null; dueDate: string | null; clientName: string | null }[];
+    overdue: { id: string; invoiceNumber: string | null; totalAmount: number | null; dueDate: string | null; clientName: string | null }[];
     upcoming: DashboardUpcomingJob[];
     recentClients: DashboardRecentClient[];
+    topClients: { id: string; name: string; company: string | null; total: number; invoices: number }[];
     newClientsThisMonth: number;
   };
   const dashKey = business ? `dashboard_home_${business.id}` : null;
@@ -113,7 +116,7 @@ function OwnerDashboardHome() {
       const startYear = new Date(now.getFullYear(), 0, 1).toISOString();
       const today = now.toISOString().split('T')[0];
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
-      const [statsRes, recentInv, upcomingJobs, recentCl, newClientCount] = await Promise.all([
+      const [statsRes, recentInv, pendingInv, overdueInv, topCl, upcomingJobs, recentCl, newClientCount] = await Promise.all([
         supabase.rpc('dashboard_stats', {
           p_business_id: business!.id, p_start_month: startMonth, p_start_year: startYear, p_tz: tz,
         }),
@@ -122,6 +125,31 @@ function OwnerDashboardHome() {
           .eq('business_id', business!.id)
           .order('created_at', { ascending: false })
           .limit(8),
+        // Pending invoices for the pending tile, DUE SOONEST first. Filtering
+        // the recent-8 above would show nothing whenever the newest invoices
+        // happen to be paid, and "recent" is the wrong order anyway — what
+        // matters about an unpaid invoice is how close its due date is.
+        // Bounded, so no pagination loop needed.
+        supabase.from('invoices')
+          .select('id, invoice_number, total_amount, due_date, clients(first_name, last_name)')
+          .eq('business_id', business!.id)
+          .eq('status', 'sent')
+          .order('due_date', { ascending: true, nullsFirst: false })
+          .limit(8),
+        // Overdue, OLDEST first — the further past due, the more it needs
+        // chasing. Same bounded shape as the pending query above.
+        supabase.from('invoices')
+          .select('id, invoice_number, total_amount, due_date, clients(first_name, last_name)')
+          .eq('business_id', business!.id)
+          .eq('status', 'overdue')
+          .order('due_date', { ascending: true, nullsFirst: false })
+          .limit(8),
+        // Top clients by paid revenue this year (migration 224). A GROUP BY,
+        // so it has to be an RPC — summing client-side would truncate at 1000
+        // invoices and quietly rank the wrong people.
+        supabase.rpc('dashboard_top_clients', {
+          p_business_id: business!.id, p_start: startYear, p_limit: 8,
+        }),
         supabase.from('jobs')
           .select('id, title, status, scheduled_date, clients(first_name, last_name)')
           .eq('business_id', business!.id)
@@ -135,7 +163,7 @@ function OwnerDashboardHome() {
           .select('id, first_name, last_name, company')
           .eq('business_id', business!.id)
           .order('created_at', { ascending: false })
-          .limit(4),
+          .limit(6),
         supabase.from('clients')
           .select('id', { head: true, count: 'exact' })
           .eq('business_id', business!.id)
@@ -151,6 +179,8 @@ function OwnerDashboardHome() {
         earningsMonth: Number(d.earnings_month ?? 0),
         earningsYear: Number(d.earnings_year ?? 0),
         invoicesPending: Number(d.invoices_pending ?? 0),
+        invoicesPendingAmount: Number(d.invoices_pending_amount ?? 0),
+        invoicesOverdueAmount: Number(d.invoices_overdue_amount ?? 0),
         invoicesOverdue: Number(d.invoices_overdue ?? 0),
         clientsTotal: Number(d.clients_total ?? 0),
         clockedInNow: Number(d.clocked_in_now ?? 0),
@@ -162,6 +192,13 @@ function OwnerDashboardHome() {
       const rawClients = (recentCl.data ?? []) as unknown as RawRecentClient[];
       return {
         stats,
+        topClients: ((topCl.data ?? []) as any[]).map(r => ({
+          id: r.client_id,
+          name: `${r.first_name ?? ''} ${r.last_name ?? ''}`.trim() || (r.company ?? '—'),
+          company: r.company,
+          total: Number(r.total) || 0,
+          invoices: Number(r.invoice_count) || 0,
+        })),
         recentClients: rawClients.map(cl => ({
           id: cl.id,
           name: `${cl.first_name} ${cl.last_name}`.trim(),
@@ -173,6 +210,20 @@ function OwnerDashboardHome() {
           invoiceNumber: inv.invoice_number,
           totalAmount: inv.total_amount,
           status: inv.status,
+          clientName: inv.clients ? `${inv.clients.first_name} ${inv.clients.last_name}` : null,
+        })),
+        pending: ((pendingInv.data ?? []) as any[]).map(inv => ({
+          id: inv.id,
+          invoiceNumber: inv.invoice_number,
+          totalAmount: inv.total_amount,
+          dueDate: inv.due_date,
+          clientName: inv.clients ? `${inv.clients.first_name} ${inv.clients.last_name}` : null,
+        })),
+        overdue: ((overdueInv.data ?? []) as any[]).map(inv => ({
+          id: inv.id,
+          invoiceNumber: inv.invoice_number,
+          totalAmount: inv.total_amount,
+          dueDate: inv.due_date,
           clientName: inv.clients ? `${inv.clients.first_name} ${inv.clients.last_name}` : null,
         })),
         upcoming: rawJobs.map(job => ({
@@ -196,6 +247,7 @@ function OwnerDashboardHome() {
   const payrollSwr = useSwr<{
       total: number; hours: number; workers: number;
       top: { id: string; name: string; pay: number; hours: number }[];
+      previousTotal: number | null;
     }>(
     payrollKey,
     async () => {
@@ -204,7 +256,7 @@ function OwnerDashboardHome() {
       // which would come back from the JSON cache as strings.
       // Cap the list here, not at render: the whole roster would bloat the
       // cached payload for rows no size ever shows.
-      return { total: s.total, hours: s.hours, workers: s.workers, top: s.top.slice(0, 8) };
+      return { total: s.total, hours: s.hours, workers: s.workers, top: s.top.slice(0, 8), previousTotal: s.previousTotal };
     },
     { cacheKey: payrollKey, resetKey: business?.id ?? '' },
   );
@@ -255,7 +307,7 @@ function OwnerDashboardHome() {
         onEditingDone={() => {}}
         onNewInvoicePress={() => router.push('/dashboard/facturas/nueva')}
         onInvoicePress={(id) => router.push(`/dashboard/facturas/${id}`)}
-        onViewAllInvoicesPress={() => router.push('/dashboard/facturas')}
+        onViewAllInvoicesPress={() => router.push('/dashboard/facturas?status=all' as never)}
         onCreateFirstInvoicePress={() => router.push('/dashboard/facturas/nueva')}
         onJobPress={(id) => {
           markSectionVisitor('trabajos');
@@ -270,6 +322,13 @@ function OwnerDashboardHome() {
         onNewJobPress={() => router.push('/dashboard/trabajos/nuevo')}
         onCalendarPress={() => router.push('/dashboard/mas/calendario')}
         onPayrollPress={() => router.push('/dashboard/mas/nomina' as never)}
+        onPendingInvoicesPress={() => router.push('/dashboard/facturas?status=sent' as never)}
+        pendingInvoices={dash.data?.pending ?? []}
+        topClients={dash.data?.topClients ?? []}
+        overdueInvoices={dash.data?.overdue ?? []}
+        onOverdueInvoicesPress={() => router.push('/dashboard/facturas?status=overdue' as never)}
+        onClientsPress={() => { markSectionVisitor('clientes'); router.push('/dashboard/clientes' as never); }}
+        onReportsPress={(range) => router.push(`/dashboard/mas/reportes?range=${range}` as never)}
         payroll={payrollSwr.data ?? null}
       />
     </View>
