@@ -44,6 +44,9 @@ export interface PayrollPeriodSummary {
   hours: number;
   /** How many workers have any hours — 0 means nothing has been logged yet. */
   workers: number;
+  /** Per-worker rows, highest pay first — what the tile shows at md/lg so the
+   *  extra space buys content rather than whitespace. */
+  top: { id: string; name: string; pay: number; hours: number }[];
   period: PayrollPeriod;
 }
 
@@ -76,7 +79,7 @@ export async function fetchPayrollPeriodSummary(
   business: PayrollSummaryBusiness,
 ): Promise<PayrollPeriodSummary> {
   const period = currentPayrollPeriod(business);
-  const empty: PayrollPeriodSummary = { total: 0, hours: 0, workers: 0, period };
+  const empty: PayrollPeriodSummary = { total: 0, hours: 0, workers: 0, top: [], period };
 
   const config = normalizePayrollConfig(business.payroll_config);
   // Only the job custom fields the active formula actually reads — the RPC
@@ -127,6 +130,11 @@ export async function fetchPayrollPeriodSummary(
     total: rows.reduce((sum, r) => sum + (r.pay || 0), 0),
     hours: rows.reduce((sum, r) => sum + (r.hours || 0), 0),
     workers: rows.length,
+    // Highest pay first: on a tile that shows only the first few, the ones
+    // worth surfacing are the ones moving the total.
+    top: [...rows]
+      .sort((a, b) => (b.pay || 0) - (a.pay || 0))
+      .map(r => ({ id: r.employeeId, name: r.name, pay: r.pay || 0, hours: r.hours || 0 })),
     period,
   };
 }

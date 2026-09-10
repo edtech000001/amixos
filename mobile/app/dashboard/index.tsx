@@ -193,13 +193,18 @@ function OwnerDashboardHome() {
   const payrollKey = business && can.seeReports(currentRole)
     ? `dashboard_payroll_${business.id}`
     : null;
-  const payrollSwr = useSwr<{ total: number; hours: number; workers: number }>(
+  const payrollSwr = useSwr<{
+      total: number; hours: number; workers: number;
+      top: { id: string; name: string; pay: number; hours: number }[];
+    }>(
     payrollKey,
     async () => {
       const s = await fetchPayrollPeriodSummary(supabase, business!);
       // Only the three primitives — the full result carries Date objects,
       // which would come back from the JSON cache as strings.
-      return { total: s.total, hours: s.hours, workers: s.workers };
+      // Cap the list here, not at render: the whole roster would bloat the
+      // cached payload for rows no size ever shows.
+      return { total: s.total, hours: s.hours, workers: s.workers, top: s.top.slice(0, 8) };
     },
     { cacheKey: payrollKey, resetKey: business?.id ?? '' },
   );

@@ -149,25 +149,55 @@ const WIDGET_ICONS: Record<DashboardWidgetId, LucideIcon> = {
 
 // 12 thin bars used inside lg-sized earnings widgets. `light` renders white
 // bars for the gradient hero card.
-function MiniBars({ monthly, light }: { monthly: number[]; light?: boolean }) {
+function MiniBars({
+  monthly,
+  light,
+  /** Month initials under each bar. Without them the bars are decoration —
+   *  a shape with no axis tells you nothing about WHEN the peak was. */
+  labels,
+  className = 'h-12 w-40 shrink-0',
+}: {
+  monthly: number[];
+  light?: boolean;
+  labels?: boolean;
+  className?: string;
+}) {
   const max = Math.max(...monthly);
   if (max === 0) return null;
   const currentMonth = new Date().getMonth();
   return (
-    <div className="flex items-end gap-1 h-12 w-40 shrink-0">
-      {monthly.map((amount, i) => (
-        <div
-          key={i}
-          className={`flex-1 rounded-sm ${
-            i === currentMonth
-              ? light ? 'bg-card' : 'bg-primary'
-              : amount > 0
-                ? light ? 'bg-white/40' : 'bg-primary/30'
-                : light ? 'bg-white/15' : 'bg-border-soft'
-          }`}
-          style={{ height: `${Math.max(amount > 0 ? 12 : 6, Math.round((amount / max) * 100))}%` }}
-        />
-      ))}
+    <div className={labels ? className.replace('h-12', 'h-auto') : className}>
+      <div className={`flex items-end gap-1 ${labels ? 'h-12' : 'h-full'}`}>
+        {monthly.map((amount, i) => (
+          <div
+            key={i}
+            className={`flex-1 rounded-sm ${
+              i === currentMonth
+                ? light ? 'bg-card' : 'bg-primary'
+                : amount > 0
+                  ? light ? 'bg-white/40' : 'bg-primary/30'
+                  : light ? 'bg-white/15' : 'bg-border-soft'
+            }`}
+            style={{ height: `${Math.max(amount > 0 ? 12 : 6, Math.round((amount / max) * 100))}%` }}
+          />
+        ))}
+      </div>
+      {labels ? (
+        <div className="flex gap-1 mt-1">
+          {monthly.map((_, i) => (
+            <span
+              key={i}
+              className={`flex-1 text-center text-[9px] ${
+                i === currentMonth
+                  ? light ? 'text-white font-bold' : 'text-ink font-bold'
+                  : light ? 'text-white/50' : 'text-faint'
+              }`}
+            >
+              {new Intl.DateTimeFormat(undefined, { month: 'narrow' }).format(new Date(2024, i, 1))}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -387,13 +417,18 @@ export default function DashboardPage() {
   const payrollKey = business && can.seeReports(currentRole)
     ? `dashboard_payroll_${business.id}`
     : null;
-  const payrollSwr = useSwr<{ total: number; hours: number; workers: number }>(
+  const payrollSwr = useSwr<{
+      total: number; hours: number; workers: number;
+      top: { id: string; name: string; pay: number; hours: number }[];
+    }>(
     payrollKey,
     async () => {
       const r = await fetchPayrollPeriodSummary(supabase, business!);
       // Only the three primitives — the full result carries Date objects,
       // which would come back from the JSON cache as strings.
-      return { total: r.total, hours: r.hours, workers: r.workers };
+      // Cap the list here, not at render: the whole roster would bloat the
+      // cached payload for rows no size ever shows.
+      return { total: r.total, hours: r.hours, workers: r.workers, top: r.top.slice(0, 8) };
     },
     { cacheKey: payrollKey, resetKey: business?.id ?? '' },
   );
@@ -511,6 +546,14 @@ export default function DashboardPage() {
             .replace('{{count}}', String(payroll.workers))
         : t.home.widgets.payrollPeriodEmpty,
       onClick: () => router.push('/dashboard/reportes/nomina'),
+      // The list is what makes md/lg worth their extra space — without it a
+      // wider tile is the same number with more whitespace around it.
+      list: (payroll?.top ?? []).map(w => ({
+        id: w.id,
+        primary: w.name,
+        secondary: `${formatCurrency(w.pay)} · ${Math.round(w.hours)} h`,
+      })),
+      listHeading: t.home.widgets.payrollPeriodWorkers,
     },
     invoicesPending: { label: t.home.widgets.invoicesPendingLabel, value: stats?.invoicesPending ?? 0, icon: FileText, color: 'text-primary', bg: 'bg-primary/10', sub: t.home.widgets.invoicesPendingSub },
     clientsTotal: {
@@ -551,9 +594,12 @@ export default function DashboardPage() {
   const renderWidget = (id: DashboardWidgetId, size: DashboardWidgetSize) => {
     if (id === 'earningsMonth') {
       // Hero card — gradient brand background so the headline number pops.
-      // lg switches to a horizontal banner layout (big icon left) so the
-      // size jump is obvious even before there's any data.
-      if (size === 'lg') {
+      //
+      // md is the horizontal banner: it reads as a WIDER card, not a taller
+      // one, and the width buys the chart on the right. lg is the tall card
+      // below it. These were the other way round, which made md look bigger
+      // than lg — the ladder ran backwards.
+      if (size === 'md') {
         return (
           <div className="rounded-2xl bg-primary shadow-sm p-5 h-full text-white transition-shadow hover:shadow-md">
             <div className="flex items-center gap-4">
@@ -568,7 +614,31 @@ export default function DashboardPage() {
                   {vsLastMonthLine ? ` · ${vsLastMonthLine}` : ''}
                 </p>
               </div>
-              <MiniBars monthly={monthly} light />
+              <MiniBars monthly={monthly} light labels className="w-44 shrink-0" />
+            </div>
+          </div>
+        );
+      }
+      if (size === 'lg') {
+        // The biggest size: the hero number over a full-width labelled chart,
+        // so the extra room shows twelve months of trend rather than padding.
+        return (
+          <div className="rounded-2xl bg-primary shadow-sm p-5 h-full text-white transition-shadow hover:shadow-md">
+            <div className="flex items-start gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-white/15 flex items-center justify-center shrink-0">
+                <DollarSign size={22} className="text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-white/80">{t.home.widgets.earningsMonthLabel}</p>
+                <p className="text-3xl font-bold mt-0.5">{formatCurrency(stats?.earningsMonth ?? 0)}</p>
+                <p className="text-xs text-white/70 mt-0.5">
+                  {t.home.widgets.earningsMonthSub.replace('{{amount}}', yearAmount)}
+                  {vsLastMonthLine ? ` · ${vsLastMonthLine}` : ''}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4">
+              <MiniBars monthly={monthly} light labels className="w-full h-20" />
             </div>
           </div>
         );
@@ -584,9 +654,6 @@ export default function DashboardPage() {
             </div>
             <p className="text-2xl font-bold mt-3">{formatCurrency(stats?.earningsMonth ?? 0)}</p>
             <p className="text-xs text-white/70 mt-0.5">{t.home.widgets.earningsMonthSub.replace('{{amount}}', yearAmount)}</p>
-            {size === 'md' && vsLastMonthLine ? (
-              <p className="text-xs font-semibold text-white/90 mt-1">{vsLastMonthLine}</p>
-            ) : null}
           </div>
         </div>
       );

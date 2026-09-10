@@ -156,6 +156,7 @@ export type DashboardDict = {
       payrollPeriodLabel: string;
       payrollPeriodSub: string;
       payrollPeriodEmpty: string;
+      payrollPeriodWorkers: string;
       earningsMonthSub: string;
       invoicesPendingLabel: string;
       invoicesPendingSub: string;
@@ -3275,6 +3276,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         payrollPeriodLabel: 'Nómina del período',
         payrollPeriodSub: '{{hours}} h · {{count}} trabajadores',
         payrollPeriodEmpty: 'Sin horas este período',
+        payrollPeriodWorkers: 'Por trabajador',
         earningsMonthSub: '{{amount}} este año',
         invoicesPendingLabel: 'Facturas pendientes',
         invoicesPendingSub: 'esperando pago',
@@ -6393,6 +6395,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         payrollPeriodLabel: 'Payroll this period',
         payrollPeriodSub: '{{hours}} h · {{count}} workers',
         payrollPeriodEmpty: 'No hours this period',
+        payrollPeriodWorkers: 'By worker',
         earningsMonthSub: '{{amount}} this year',
         invoicesPendingLabel: 'Pending invoices',
         invoicesPendingSub: 'awaiting payment',

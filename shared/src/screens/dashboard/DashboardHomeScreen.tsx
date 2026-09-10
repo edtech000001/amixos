@@ -116,7 +116,10 @@ export interface DashboardHomeScreenProps {
   onPayrollPress: () => void;
   /** Current pay period's totals. Undefined while loading — the tile shows
    *  zeros rather than a spinner, matching every other stat here. */
-  payroll?: { total: number; hours: number; workers: number } | null;
+  payroll?: {
+    total: number; hours: number; workers: number;
+    top?: { id: string; name: string; pay: number; hours: number }[];
+  } | null;
   onCalendarPress: () => void;
 }
 
@@ -187,25 +190,62 @@ function formatCurrency(n: number): string {
 
 // 12 thin bars used inside lg-sized earnings widgets. `light` renders white
 // bars for the brand-colored hero card.
-function MiniBars({ monthly, light }: { monthly: number[]; light?: boolean }) {
+function MiniBars({
+  monthly,
+  light,
+  labels,
+  height = 48,
+  width,
+}: {
+  monthly: number[];
+  light?: boolean;
+  /** Month initials under each bar. Without them the bars are decoration —
+   *  a shape with no axis tells you nothing about WHEN the peak was. */
+  labels?: boolean;
+  height?: number;
+  /** Fixed width for the inline variant; omitted = fill the parent. */
+  width?: number;
+}) {
   const max = Math.max(...monthly);
   if (max === 0) return null;
   const currentMonth = new Date().getMonth();
+  const initials = labels
+    ? monthly.map((_, i) =>
+        new Intl.DateTimeFormat(undefined, { month: 'narrow' }).format(new Date(2024, i, 1)))
+    : null;
   return (
-    <View className="flex-row items-end gap-1" style={{ height: 48, width: 110 }}>
-      {monthly.map((amount, i) => (
-        <View
-          key={i}
-          className={`flex-1 rounded-sm ${
-            i === currentMonth
-              ? light ? 'bg-card' : 'bg-primary'
-              : amount > 0
-                ? light ? 'bg-white/40' : 'bg-primary/30'
-                : light ? 'bg-white/15' : 'bg-border-soft'
-          }`}
-          style={{ height: Math.max(amount > 0 ? 6 : 3, Math.round((amount / max) * 48)) }}
-        />
-      ))}
+    <View style={width ? { width } : { flex: 1 }}>
+      <View className="flex-row items-end gap-1" style={{ height }}>
+        {monthly.map((amount, i) => (
+          <View
+            key={i}
+            className={`flex-1 rounded-sm ${
+              i === currentMonth
+                ? light ? 'bg-card' : 'bg-primary'
+                : amount > 0
+                  ? light ? 'bg-white/40' : 'bg-primary/30'
+                  : light ? 'bg-white/15' : 'bg-border-soft'
+            }`}
+            style={{ height: Math.max(amount > 0 ? 6 : 3, Math.round((amount / max) * height)) }}
+          />
+        ))}
+      </View>
+      {initials ? (
+        <View className="flex-row gap-1 mt-1">
+          {initials.map((m, i) => (
+            <Text
+              key={i}
+              className={`flex-1 text-center text-[9px] ${
+                i === currentMonth
+                  ? light ? 'text-white font-bold' : 'text-ink font-bold'
+                  : light ? 'text-white/50' : 'text-faint'
+              }`}
+            >
+              {m}
+            </Text>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -398,6 +438,14 @@ export function DashboardHomeScreen({
             .replace('{{count}}', String(payroll.workers))
         : t.home.widgets.payrollPeriodEmpty,
       onPress: onPayrollPress,
+      // The list is what makes md/lg worth their extra space — without it a
+      // wider tile is the same number with more whitespace around it.
+      list: (payroll?.top ?? []).map(w => ({
+        id: w.id,
+        primary: w.name,
+        secondary: `${formatCurrency(w.pay)} · ${Math.round(w.hours)} h`,
+      })),
+      listHeading: t.home.widgets.payrollPeriodWorkers,
     },
     invoicesPending: {
       label: t.home.widgets.invoicesPendingLabel,
@@ -470,9 +518,12 @@ export function DashboardHomeScreen({
   const renderWidget = (id: DashboardWidgetId, size: DashboardWidgetSize) => {
     if (id === 'earningsMonth') {
       // Hero card — solid brand background so the headline number pops.
-      // lg switches to a horizontal banner layout (big icon left) so the
-      // size jump is obvious even before there's any data.
-      if (size === 'lg') {
+      //
+      // md is the horizontal banner: it reads as a WIDER card, not a taller
+      // one, and the width buys the chart on the right. lg is the tall card
+      // below it. These were the other way round, which made md look bigger
+      // than lg — the ladder ran backwards.
+      if (size === 'md') {
         return (
           <View className="bg-primary rounded-2xl p-5 overflow-hidden relative flex-1 justify-center">
 
@@ -493,7 +544,35 @@ export function DashboardHomeScreen({
                   {vsLastMonthLine ? ` · ${vsLastMonthLine}` : ''}
                 </Text>
               </View>
-              <MiniBars monthly={monthly} light />
+              <MiniBars monthly={monthly} light labels width={116} />
+            </View>
+          </View>
+        );
+      }
+      if (size === 'lg') {
+        // The biggest size: the hero number over a full-width labelled chart,
+        // so the extra room shows twelve months of trend rather than padding.
+        return (
+          <View className="bg-primary rounded-2xl p-5 overflow-hidden relative flex-1">
+            <View className="flex-row items-start gap-3">
+              <View className="w-11 h-11 rounded-2xl bg-white/15 items-center justify-center">
+                <DollarSign size={22} color="#FFFFFF" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-xs font-medium text-white/80">
+                  {t.home.widgets.earningsMonthLabel}
+                </Text>
+                <Text className="text-3xl font-bold text-white mt-0.5">
+                  {formatCurrency(stats?.earningsMonth ?? 0)}
+                </Text>
+                <Text className="text-xs text-white/70 mt-0.5">
+                  {t.home.widgets.earningsMonthSub.replace('{{amount}}', yearAmount)}
+                  {vsLastMonthLine ? ` · ${vsLastMonthLine}` : ''}
+                </Text>
+              </View>
+            </View>
+            <View className="mt-4">
+              <MiniBars monthly={monthly} light labels height={72} />
             </View>
           </View>
         );
@@ -514,9 +593,6 @@ export function DashboardHomeScreen({
           <Text className="text-xs text-white/70 mt-0.5">
             {t.home.widgets.earningsMonthSub.replace('{{amount}}', yearAmount)}
           </Text>
-          {size === 'md' && vsLastMonthLine ? (
-            <Text className="text-xs font-semibold text-white/90 mt-1">{vsLastMonthLine}</Text>
-          ) : null}
         </View>
       );
     }
