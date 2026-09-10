@@ -281,9 +281,22 @@ export function DashboardHomeScreen({
   };
 
   const handleDragEnd = ({ indexToKey }: SortableFlexDragEndParams) => {
+    // react-native-sortables reports React's INTERNAL child keys, not ours:
+    // it builds its list with Children.toArray, which prefixes array children
+    // ("payrollPeriod" → ".$payrollPeriod"). Matching those raw against our
+    // ids found nothing, the handler returned early, and since the library
+    // moves the cards itself the reorder looked like it worked while never
+    // being written. Strip everything up to the last '$' to get our id back.
     const idSet = new Set(visibleIds);
-    const next = indexToKey.filter(k => idSet.has(k as DashboardWidgetId)) as DashboardWidgetId[];
-    if (!next.length) return;
+    const next = indexToKey
+      .map(k => String(k).replace(/^.*\$/, '') as DashboardWidgetId)
+      .filter(id => idSet.has(id));
+    // Require a COMPLETE permutation before writing. A partial list would be
+    // saved as the whole order, silently dropping the widgets missing from it.
+    if (next.length !== visibleIds.length) {
+      console.warn('[dashboard] drag produced an unexpected key set', indexToKey);
+      return;
+    }
     setVisibleIds(next);
     persist(next, hiddenIds, sizes);
   };
