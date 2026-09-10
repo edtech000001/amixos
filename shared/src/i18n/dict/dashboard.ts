@@ -616,6 +616,8 @@ export type DashboardDict = {
       importNRows: string;
       importDone: string;
       importedCount: string;
+      updatedCount: string;
+      skippedCount: string;
       errorsCount: string;
       errorsExplanation: string;
       goToList: string;
@@ -3731,6 +3733,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         importNRows: 'Importar {{count}} cliente(s)',
         importDone: 'Importación terminada',
         importedCount: '{{count}} importados',
+        updatedCount: '{{count}} actualizados',
+        skippedCount: '{{count}} omitidos (ya existían)',
         errorsCount: '{{count}} con error',
         errorsExplanation: 'Las filas con error no tenían "Nombre" o fallaron al guardar.',
         goToList: 'Ver clientes',
@@ -6843,6 +6847,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         importNRows: 'Import {{count}} client(s)',
         importDone: 'Import finished',
         importedCount: '{{count}} imported',
+        updatedCount: '{{count}} updated',
+        skippedCount: '{{count}} skipped (already existed)',
         errorsCount: '{{count}} with errors',
         errorsExplanation: 'Rows with errors were missing a "Name" or failed to save.',
         goToList: 'View clients',

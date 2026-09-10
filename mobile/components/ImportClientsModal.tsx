@@ -117,6 +117,10 @@ export function ImportClientsModal({
   const [result, setResult] = useState<{
     success: number;
     failedRows: { label: string; reason: string }[];
+    // The batch runner has always returned these; the state dropped them, so
+    // an import that updated 40 existing clients reported "0 importados".
+    merged?: number;
+    skippedExisting?: number;
   }>({ success: 0, failedRows: [] });
   const [showErrorDetails, setShowErrorDetails] = useState(false);
   // Rows whose client already exists. The importer inserted unconditionally, so
@@ -277,9 +281,21 @@ export function ImportClientsModal({
     // Existing clients: apply the chosen strategy. 'skip' writes nothing, which
     // is why it is the safe default and what cancelling falls back to.
     if (strategy !== 'skip') {
+      // Re-read the duplicates in FULL. The match index only holds
+      // id/first_name/last_name/company, and 'merge' means "fill blanks only" —
+      // judged against a 4-column record, every phone, email and address looks
+      // blank, so merge silently overwrote them exactly like replace. Reading
+      // the whole row is what makes the two strategies actually differ.
+      const dupIds = dupes.map(d => d.existingId!);
+      const fullExisting = new Map<string, Record<string, unknown>>();
+      for (let i = 0; i < dupIds.length; i += 200) {
+        const { data: rows } = await supabase
+          .from('clients').select('*').in('id', dupIds.slice(i, i + 200));
+        for (const r of (rows ?? []) as { id: string }[]) fullExisting.set(r.id, r as Record<string, unknown>);
+      }
       for (const { b, existingId } of dupes) {
         const id = existingId!;
-        const existing = (existingRows ?? []).find((r: { id: string }) => r.id === id) ?? {};
+        const existing = fullExisting.get(id) ?? {};
         const patch = clientFieldPatch(existing as Record<string, unknown>, b.entry, strategy);
         if (Object.keys(patch).length) await supabase.from('clients').update(patch).eq('id', id);
         if (b.contacts?.length) {
@@ -398,6 +414,8 @@ export function ImportClientsModal({
       success,
       insertedIds: batchInsertedIds,
       failedRows,
+      merged,
+      skippedExisting,
       cancelled,
     } = await insertBatchWithRetry(batch);
 
@@ -414,7 +432,7 @@ export function ImportClientsModal({
     // and auto-resume if the app is killed mid-batch.
     await queueGoogleMirrorIfConnected(batchInsertedIds);
 
-    setResult({ success, failedRows });
+    setResult({ success, failedRows, merged, skippedExisting });
     setImporting(false);
     setStep('done');
     onImportComplete();
@@ -638,7 +656,7 @@ export function ImportClientsModal({
       batch.push({ entry, csvLine, originalRow: row, branchId, contacts: cpRaw ? parseClientContactsCell(cpRaw) : undefined });
     });
 
-    const { success, insertedIds, failedRows: dbFailures, cancelled } =
+    const { success, insertedIds, failedRows: dbFailures, merged, skippedExisting, cancelled } =
       await insertBatchWithRetry(batch);
     // Dismissed the duplicate prompt → nothing was written, so do not fall
     // through and report a completed import.
@@ -663,8 +681,10 @@ export function ImportClientsModal({
     await queueGoogleMirrorIfConnected(insertedIds);
 
     // Audit trail (migration 137).
-    void logImportRun(supabase, businessId, 'clients', filename || null, { success, skipped: 0, failedRows });
-    setResult({ success, failedRows });
+    // skipped was hardcoded 0, so the audit trail claimed a pure-duplicate
+    // import touched nothing at all.
+    void logImportRun(supabase, businessId, 'clients', filename || null, { success, skipped: skippedExisting ?? 0, failedRows });
+    setResult({ success, failedRows, merged, skippedExisting });
     setImporting(false);
     setStep('done');
     onImportComplete();
@@ -915,6 +935,21 @@ export function ImportClientsModal({
               <Text className="text-sm text-muted">Importados</Text>
               <Text className="text-base font-bold text-green-600">{result.success}</Text>
             </View>
+            {/* Updating an existing client is not an insert, so `success` stays
+               0 on a file of pure duplicates. Showing only that read as
+               "nothing happened" right after it had rewritten every one. */}
+            {result.merged ? (
+              <View className="flex-row justify-between items-center mb-1">
+                <Text className="text-sm text-muted">Actualizados</Text>
+                <Text className="text-base font-bold text-green-600">{result.merged}</Text>
+              </View>
+            ) : null}
+            {result.skippedExisting ? (
+              <View className="flex-row justify-between items-center mb-1">
+                <Text className="text-sm text-muted">Omitidos (ya existían)</Text>
+                <Text className="text-base font-bold text-muted">{result.skippedExisting}</Text>
+              </View>
+            ) : null}
             {result.failedRows.length > 0 ? (
               <View className="flex-row justify-between items-center">
                 <Text className="text-sm text-muted">Errores</Text>

@@ -331,9 +331,21 @@ export default function ImportClientsModal({ open, businessId, templates, locati
     // Existing clients: apply the chosen strategy. 'skip' does nothing at all,
     // which is why it is the safe default.
     if (strategy !== 'skip') {
+      // Re-read the duplicates in FULL. The match index only holds
+      // id/first_name/last_name/company, and 'merge' means "fill blanks only" —
+      // judged against a 4-column record, every phone, email and address looks
+      // blank, so merge silently overwrote them exactly like replace. Reading
+      // the whole row is what makes the two strategies actually differ.
+      const dupIds = dupes.map(b => b.existingId!);
+      const fullExisting = new Map<string, Record<string, unknown>>();
+      for (let i = 0; i < dupIds.length; i += 200) {
+        const { data: rows } = await supabase
+          .from('clients').select('*').in('id', dupIds.slice(i, i + 200));
+        for (const r of (rows ?? []) as { id: string }[]) fullExisting.set(r.id, r as Record<string, unknown>);
+      }
       for (const b of dupes) {
         const id = b.existingId!;
-        const existing = (existingRows ?? []).find((r: any) => r.id === id) ?? {};
+        const existing = fullExisting.get(id) ?? {};
         const patch = clientFieldPatch(existing as Record<string, unknown>, b.entry, strategy);
         if (Object.keys(patch).length) {
           await supabase.from('clients').update(patch).eq('id', id);
@@ -592,6 +604,16 @@ export default function ImportClientsModal({ open, businessId, templates, locati
                 <p className="text-lg font-bold text-ink">{t.importModal.importDone}</p>
                 <p className="text-sm text-muted mt-1">
                   <span className="text-emerald-600 font-semibold">{t.importModal.importedCount.replace('{{count}}', String(importResult.success))}</span>
+                  {/* Updating an existing client is not an insert, so `success`
+                     stays 0 on a file of pure duplicates. Reporting only that
+                     read as "nothing happened" right after it had rewritten
+                     every one of them. */}
+                  {!!importResult.updated && (
+                    <span className="text-emerald-600 font-semibold ml-2">· {t.importModal.updatedCount.replace('{{count}}', String(importResult.updated))}</span>
+                  )}
+                  {!!importResult.skippedExisting && (
+                    <span className="text-faint font-semibold ml-2">· {t.importModal.skippedCount.replace('{{count}}', String(importResult.skippedExisting))}</span>
+                  )}
                   {importResult.failedRows.length > 0 && <span className="text-red-500 font-semibold ml-2">· {t.importModal.errorsCount.replace('{{count}}', String(importResult.failedRows.length))}</span>}
                 </p>
                 <p className="text-xs text-faint mt-1">{locale === 'es' ? 'Tiempo' : 'Time'}: {elapsedLabel}</p>
