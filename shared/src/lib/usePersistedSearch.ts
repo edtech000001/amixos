@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { kvGet, kvSet } from './kvStore';
+import { kvGet, kvSet, kvKeys, kvRemoveMany } from './kvStore';
 
 /**
  * A search-string state that PERSISTS to platform storage (localStorage on web,
@@ -64,4 +64,22 @@ export function usePersistedSearch(
   }, [value]);
 
   return [value, setValue, debounced];
+}
+
+/**
+ * Forget every saved search. Call this when the ACTIVE BUSINESS changes.
+ *
+ * Keys are already scoped per business, so switching away and back used to
+ * restore the old term — and the list underneath did not always come back
+ * filtered with it. The result was a search box showing "Vanessa" above a list
+ * of every client, which reads as a broken filter: the user has to delete a
+ * character to make the two agree.
+ *
+ * Clearing is the honest fix rather than re-running the query, because a term
+ * typed against one business's data is rarely meaningful in another. Switching
+ * companies is a context switch, and the search bar should reflect that.
+ */
+export async function clearPersistedSearches(): Promise<void> {
+  const keys = await kvKeys('search.');
+  if (keys.length) await kvRemoveMany(keys);
 }

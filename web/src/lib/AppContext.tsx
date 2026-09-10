@@ -25,6 +25,7 @@ import {
 import { displayNameFromUser } from '@amixos/shared/lib/userName';
 import { fetchLocations, fetchMyHomeLocation, type Location } from '@amixos/shared/lib/locations';
 import { purgeSwrCache } from '@amixos/shared/lib/swrCache';
+import { clearPersistedSearches } from '@amixos/shared/lib/usePersistedSearch';
 
 export interface Business {
   id: string;
@@ -481,6 +482,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setActiveBusiness = (id: string) => {
     if (!businesses.some((b) => b.id === id)) return;
+    // Saved search terms belong to the business they were typed in. Keeping
+    // them across a switch left search boxes populated over unfiltered lists.
+    void clearPersistedSearches();
     setActiveBusinessIdState(id);
     writeActiveCookie(id);
   };

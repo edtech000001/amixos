@@ -14,6 +14,7 @@ import {
   type RolePermissions,
 } from '@amixos/shared/lib/permissions';
 import { displayNameFromUser } from '@amixos/shared/lib/userName';
+import { clearPersistedSearches } from '@amixos/shared/lib/usePersistedSearch';
 import { fetchLocations, fetchMyHomeLocation, type Location } from '@amixos/shared/lib/locations';
 import { purgeSwrCache } from '@amixos/shared/lib/swrCache';
 import {
@@ -462,6 +463,9 @@ export const useAuthStore = create<AuthStore>()(
         const list = get().businesses;
         const next = list.find((b) => b.id === businessId);
         if (!next) return;
+        // Saved search terms belong to the business they were typed in. Keeping
+        // them across a switch left search boxes populated over unfiltered lists.
+        void clearPersistedSearches();
         const roleMap = get().roles;
         set({
           activeBusinessId: businessId,
