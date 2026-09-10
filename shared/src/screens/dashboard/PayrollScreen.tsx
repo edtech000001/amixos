@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, type ReactNode } from 'react';
+import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
 import { SkeletonList } from '../../ui/Skeleton';
 import { View, Text, Pressable, ScrollView, TextInput, Modal as RNModal, Alert, Keyboard, useWindowDimensions, KeyboardAvoidingView, Platform } from 'react-native';
 import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, Wrench, Truck, Clock, Settings, List, LayoutGrid, History, Trash2, Pencil, Search, ChevronDown } from 'lucide-react-native';
@@ -520,13 +520,21 @@ export function PayrollScreen({
   // Coming back from a job / arriving from Payment history: open that
   // worker's breakdown once their row exists (the prop may arrive after the
   // right period has been applied — only consume on an actual match).
-  const [initialDetailDone, setInitialDetailDone] = useState(false);
+  //
+  // Tracks WHICH id was consumed rather than a one-shot boolean. This screen
+  // stays mounted while a job is open, so a boolean latched true on the first
+  // return and every later trip back left the sheet shut. Clearing on a null
+  // prop is what lets the same worker be reopened twice in a row: the caller
+  // resets the prop to null on the way out, so the next arrival reads as a
+  // fresh request rather than the one already served.
+  const consumedDetailIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (initialDetailDone || !initialDetailEmployeeId || !rows.length) return;
+    if (!initialDetailEmployeeId) { consumedDetailIdRef.current = null; return; }
+    if (consumedDetailIdRef.current === initialDetailEmployeeId || !rows.length) return;
     const match = rows.find(x => x.employeeId === initialDetailEmployeeId);
     if (match) {
       setDetailRow(match);
-      setInitialDetailDone(true);
+      consumedDetailIdRef.current = initialDetailEmployeeId;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, initialDetailEmployeeId]);

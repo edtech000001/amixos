@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
@@ -70,8 +70,13 @@ export default function NominaPage() {
   const [busy, setBusy] = useState(false);
   // Worker whose hours breakdown should reopen (back-from-job navigation or
   // a Payment-history record). ?period=YYYY-MM-DD also jumps to that period.
-  const [initialWorker] = useState<string | null>(() =>
-    typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('worker'));
+  // Read REACTIVELY, not once at mount. Returning from a job carries a
+  // ?worker= that may differ from the one this page mounted with, and if Next
+  // restores the page from its client cache instead of remounting, a value
+  // captured at mount would keep re-requesting the FIRST worker — already
+  // consumed, so the breakdown would never reopen on a second visit.
+  const searchParams = useSearchParams();
+  const initialWorker = searchParams.get('worker');
   const [periodParam] = useState<string | null>(() =>
     typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('period'));
   const [periodApplied, setPeriodApplied] = useState(!periodParam);
@@ -476,7 +481,19 @@ export default function NominaPage() {
       onConfigChange={onConfigChange}
       onMarkPaid={onMarkPaid}
       onDeletePayment={onDeletePayment}
-      onJobPress={(id, employeeId) => router.push(`/dashboard/trabajos/${id}?from=nomina&worker=${employeeId}`)}
+      onJobPress={(id, employeeId) => {
+        // Stamp the worker onto THIS page's history entry before leaving, so
+        // the BROWSER back button returns to the open breakdown. The in-app
+        // back link already carries ?worker=, but the browser button doesn't
+        // go through it — it restores this URL exactly as it was, which was
+        // the bare list. replaceState rewrites the entry without a re-render.
+        if (typeof window !== 'undefined') {
+          const sp = new URLSearchParams(window.location.search);
+          sp.set('worker', employeeId);
+          window.history.replaceState(null, '', `${window.location.pathname}?${sp.toString()}`);
+        }
+        router.push(`/dashboard/trabajos/${id}?from=nomina&worker=${employeeId}`);
+      }}
       initialDetailEmployeeId={periodApplied ? initialWorker : null}
       onClearPayments={onClearPayments}
       onBack={() => router.push('/dashboard/reportes')}

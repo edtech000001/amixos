@@ -191,7 +191,35 @@ export default function NominaRoute() {
   // store action.
   const loadRef = useRef(load);
   loadRef.current = load;
-  useFocusEffect(useCallback(() => { void refetchBusiness(); void loadRef.current(); }, [refetchBusiness]));
+  // Which worker's breakdown to reopen when this screen comes back into focus.
+  // The sheet must be CLOSED before pushing a job (an open RNModal covers the
+  // incoming screen on iOS), and the ?worker= param only survives the in-app
+  // back arrow — a swipe-back or hardware back pops straight here and lost it,
+  // dropping the user on the payroll list instead of the breakdown they were
+  // reading. Remembering it here covers every way back.
+  const pendingWorkerRef = useRef<string | null>(null);
+  const [reopenWorker, setReopenWorker] = useState<string | null>(null);
+  // ?worker= is consumed ONCE into that state rather than read on every render.
+  // The back arrow does router.replace('...?worker=X'), which stamps the param
+  // on this route permanently — so reading it directly meant the FIRST worker
+  // won forever: opening a second worker's job and coming back re-requested
+  // the first one, which was already consumed, and the sheet stayed shut.
+  const lastUrlWorkerRef = useRef<string | null>(null);
+  useEffect(() => {
+    const w = workerParam ?? null;
+    if (w && w !== lastUrlWorkerRef.current) {
+      lastUrlWorkerRef.current = w;
+      setReopenWorker(w);
+    }
+  }, [workerParam]);
+  useFocusEffect(useCallback(() => {
+    if (pendingWorkerRef.current) {
+      setReopenWorker(pendingWorkerRef.current);
+      pendingWorkerRef.current = null;
+    }
+    void refetchBusiness();
+    void loadRef.current();
+  }, [refetchBusiness]));
 
   // Pay components — hydrated from the business, saved on change.
   // Formula builder palette — numeric/boolean custom fields only, so a text
@@ -472,12 +500,18 @@ export default function NominaRoute() {
         onDeleteLoan={onDeleteLoan}
         onEditLoan={onEditLoan}
         onHistoryPress={() => router.push('/dashboard/mas/nomina-historial')}
-        initialDetailEmployeeId={periodApplied ? (workerParam ?? null) : null}
+        initialDetailEmployeeId={periodApplied ? reopenWorker : null}
         onConfigChange={onConfigChange}
         onMarkPaid={onMarkPaid}
         onDeletePayment={onDeletePayment}
-        onJobPress={(id, employeeId) =>
-          { markSectionVisitor('trabajos'); router.push(`/dashboard/trabajos/${id}?from=nomina&worker=${employeeId}` as never); }}
+        onJobPress={(id, employeeId) => {
+          // Null first, so returning to the SAME worker still reads as a new
+          // request rather than the one already served.
+          pendingWorkerRef.current = employeeId;
+          setReopenWorker(null);
+          markSectionVisitor('trabajos');
+          router.push(`/dashboard/trabajos/${id}?from=nomina&worker=${employeeId}` as never);
+        }}
         onClearPayments={onClearPayments}
         onBack={() => router.back()}
         canManage={canManage}

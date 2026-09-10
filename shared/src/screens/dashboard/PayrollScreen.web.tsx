@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, type ReactNode } from 'react';
+import { useRef, useEffect, useState, useMemo, type ReactNode } from 'react';
 import { SkeletonList } from '../../ui/Skeleton';
 import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, ChevronRight as Chevron, Wrench, Truck, Clock, Settings, List, LayoutGrid, History, Trash2, Pencil, Search } from 'lucide-react';
 import { useLang } from '../../i18n';
@@ -504,13 +504,16 @@ export function PayrollScreen({
   // Coming back from a job / arriving from Payment history: open that
   // worker's breakdown once their row exists (the prop may arrive after the
   // right period has been applied — only consume on an actual match).
-  const [initialDetailDone, setInitialDetailDone] = useState(false);
+  // Tracks WHICH id was consumed rather than a one-shot boolean, so a second
+  // trip to the same worker's breakdown still opens it.
+  const consumedDetailIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (initialDetailDone || !initialDetailEmployeeId || !rows.length) return;
+    if (!initialDetailEmployeeId) { consumedDetailIdRef.current = null; return; }
+    if (consumedDetailIdRef.current === initialDetailEmployeeId || !rows.length) return;
     const match = rows.find(x => x.employeeId === initialDetailEmployeeId);
     if (match) {
       setDetailRow(match);
-      setInitialDetailDone(true);
+      consumedDetailIdRef.current = initialDetailEmployeeId;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, initialDetailEmployeeId]);
