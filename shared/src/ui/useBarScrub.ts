@@ -11,6 +11,11 @@
 // first. One responder spanning the whole plot converts the finger's x into a
 // bar index on every move, which is what makes the scrub continuous.
 //
+// A quick TAP (released before the hold registers) latches that bar's value
+// open instead of doing nothing — holding still is awkward one-handed, and a
+// tap is what people try first. Tapping the same bar again closes it, tapping
+// another moves it, and starting a real scrub takes over.
+//
 // Usage: spread `handlers` onto a transparent overlay covering the plot (an
 // overlay, not the plot itself, so `locationX` is measured against a view with
 // no children — touches landing on a child report coordinates relative to that
@@ -54,6 +59,8 @@ export interface BarScrubOptions {
 
 export function useBarScrub({ count, gap = 0, enabled = true, holdMs = HOLD_MS }: BarScrubOptions): BarScrub {
   const [active, setActive] = useState<number | null>(null);
+  /** Bar latched open by a tap. Survives the finger lifting, unlike `active`. */
+  const [sticky, setSticky] = useState<number | null>(null);
   const [width, setWidth] = useState(0);
 
   // Refs shadow the state the gesture callbacks read: they are created once
@@ -94,8 +101,23 @@ export function useBarScrub({ count, gap = 0, enabled = true, holdMs = HOLD_MS }
     setActive(null);
   }, []);
 
+  // Release is the only path that can latch. Terminate means the ScrollView
+  // took the gesture — that was a scroll, not a tap, and latching a bubble
+  // under a scrolling finger would be baffling.
+  const release = useCallback(() => {
+    const wasHolding = holding.current;
+    clearTimer();
+    holding.current = false;
+    setActive(null);
+    // A scrub ends by clearing everything; a tap toggles the bar it landed on.
+    if (wasHolding) setSticky(null);
+    else setSticky(prev => (prev === indexAt(xRef.current) ? null : indexAt(xRef.current)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return {
-    active: enabled ? active : null,
+    // A live scrub wins over a latched tap; otherwise the latched bar shows.
+    active: enabled ? (active ?? sticky) : null,
     width,
     handlers: {
       onLayout: (e: LayoutChangeEvent) => {
@@ -120,7 +142,7 @@ export function useBarScrub({ count, gap = 0, enabled = true, holdMs = HOLD_MS }
         xRef.current = e.nativeEvent.locationX;
         if (holding.current) setActive(indexAt(xRef.current));
       },
-      onResponderRelease: end,
+      onResponderRelease: release,
       onResponderTerminate: end,
       // Before the hold registers the enclosing ScrollView may steal the touch,
       // so a scroll that happens to start on the chart still scrolls. Once the

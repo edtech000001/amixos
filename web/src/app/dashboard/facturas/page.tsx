@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import {
@@ -58,6 +58,14 @@ const totalFor = (counts: Record<string, number>, statuses?: string[]) =>
 
 export default function FacturasPage() {
   const router = useRouter();
+  // ?status=sent|overdue|all — dashboard tiles deep-link here. 'all' clears
+  // the saved filter, which is what "View all" has to do or it would land
+  // on whatever was filtered last.
+  const searchParams = useSearchParams();
+  const statusParam = searchParams.get('status');
+  const initialStatuses = statusParam
+    ? (statusParam === 'all' ? [] : statusParam.split(','))
+    : null;
   const supabase = createSupabaseClient();
   const { business, currentRole, activeLocationId } = useApp();
   const { t: full } = useLang();
@@ -364,6 +372,7 @@ export default function FacturasPage() {
       />
     )}
     <InvoicesListScreen
+      initialStatuses={initialStatuses}
         payPeriod={business ? { frequency: business.payroll_frequency, anchorDate: business.payroll_anchor_date, customDays: business.payroll_custom_days } : undefined}
       loading={loading}
       invoices={invoices}

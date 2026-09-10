@@ -9,6 +9,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   TrendingUp, TrendingDown, DollarSign, Users, ClipboardList,
   FileText, Clock, Package, BarChart3, X, ChevronRight, MapPin, Calendar, XCircle,
@@ -47,7 +48,6 @@ interface Employee {
 interface InventoryItem { id: string; quantity: number; unit_cost: number; }
 
 type Range = 'month' | 'last_month' | 'quarter' | 'half' | 'year' | 'last_year' | 'all';
-
 const RANGE_KEYS: Range[] = ['month', 'last_month', 'quarter', 'half', 'year', 'last_year', 'all'];
 
 const PIE_COLORS = {
@@ -149,7 +149,25 @@ export default function ReportesPage() {
   const tdate = full.dashboard.jobs.dateFilter; // reuse the date-filter labels
   const dateLocale = full.dashboard.dateLocale;
 
-  const [range, setRange] = useState<Range>('year');
+  // ?range=month|year|… — the earnings tiles deep-link here so "Earnings this
+  // month" lands on the month view rather than the default year. Read
+  // reactively so a link from an already-open dashboard still applies.
+  const searchParams = useSearchParams();
+  const rangeParam = searchParams.get('range');
+  const [range, setRange] = useState<Range>(
+    RANGE_KEYS.includes(rangeParam as Range) ? (rangeParam as Range) : 'year',
+  );
+  // The initializer only covers a fresh mount. Navigating here from a page
+  // that is already this route (or a second tile click) updates the URL
+  // without remounting, so the range has to follow the param as it changes.
+  useEffect(() => {
+    if (rangeParam && RANGE_KEYS.includes(rangeParam as Range)) {
+      setRange(rangeParam as Range);
+      // '' not null — these are string state on web (they feed date inputs).
+      setCustomFrom('');
+      setCustomTo('');
+    }
+  }, [rangeParam]);
   // Custom date range overrides the preset when set; picking a preset clears it.
   const [dateOpen, setDateOpen] = useState(false);
   const [customFrom, setCustomFrom] = useState<string>('');

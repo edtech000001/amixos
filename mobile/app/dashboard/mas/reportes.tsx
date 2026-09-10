@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 import { ReportsScreen } from '@amixos/shared/screens/dashboard/ReportsScreen';
-import {
+import { REPORT_RANGE_KEYS,
   fetchReportsMetricsServer,
   type ReportsMetrics,
   type ReportRange,
@@ -23,7 +23,26 @@ export default function ReportesRoute() {
   const manualWorker = t.dashboard.reports.employees.manualWorker;
   const unassignedLocation = t.dashboard.reports.byLocation.unassigned;
 
+  // ?range=month|year|… — the earnings tiles deep-link here so "Earnings this
+  // month" lands on the month view rather than the default year.
+  const { range: rangeParam } = useLocalSearchParams<{ range?: string }>();
   const [range, setRange] = useState<ReportRange>('year');
+  // Applied on FOCUS, not in the useState initializer. This screen lives in the
+  // Más stack and stays mounted, so the initializer runs once ever — the range
+  // from the first visit stuck, and every later tile opened the wrong range.
+  // The param is cleared right after so returning here later (from Payroll,
+  // say) can't silently re-apply a stale range over a manual choice.
+  useFocusEffect(
+    useCallback(() => {
+      if (!rangeParam) return;
+      if (REPORT_RANGE_KEYS.includes(rangeParam as ReportRange)) {
+        setRange(rangeParam as ReportRange);
+        setCustomFrom(null);
+        setCustomTo(null);
+      }
+      router.setParams({ range: undefined });
+    }, [rangeParam, router]),
+  );
   // Custom date range overrides the preset when set; picking a preset clears it.
   const [customFrom, setCustomFrom] = useState<string | null>(null);
   const [customTo, setCustomTo] = useState<string | null>(null);

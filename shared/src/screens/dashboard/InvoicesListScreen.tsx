@@ -50,6 +50,10 @@ export interface InvoicesListScreenProps {
    *  + the actual delete (incl. reverting linked jobs). */
   onBulkDelete?: (ids: string[]) => Promise<void> | void;
   /** Scopes the persisted group-by preference per business. */
+  /** Status filter to arrive with, overriding the persisted one — used by
+   *  dashboard tiles that deep-link ("Pending invoices" → sent). An empty
+   *  array is meaningful: it means "clear the filter, show everything". */
+  initialStatuses?: string[] | null;
   businessId?: string;
   // ── Server mode (opt-in) — the wrapper does the search/status/counts/paging in
   // the DB. On: this screen skips its own filtering, uses `serverCounts` for the
@@ -107,6 +111,7 @@ export function InvoicesListScreen({
   onUpdateStatus,
   onBulkDelete,
   businessId,
+  initialStatuses,
   serverMode = false,
   serverCounts,
   serverTotal,
@@ -165,14 +170,21 @@ export function InvoicesListScreen({
       .then(raw => {
         if (cancelled) return;
         const f = parseInvoicesFilters(raw);
-        setStatuses(Array.isArray(f?.statuses) ? f!.statuses.filter((k): k is StatusKey => (STATUS_KEYS as readonly string[]).includes(k)) : []);
+        // A deep link wins over the saved filter: someone who tapped "Pending
+        // invoices" wants pending, not whatever they last looked at. Compared
+        // by identity so it applies once per arrival, not on every hydrate.
+        const deepLink = initialStatuses
+          ? initialStatuses.filter((k): k is StatusKey => (STATUS_KEYS as readonly string[]).includes(k))
+          : null;
+        setStatuses(deepLink ?? (Array.isArray(f?.statuses) ? f!.statuses.filter((k): k is StatusKey => (STATUS_KEYS as readonly string[]).includes(k)) : []));
         setDateFrom(f?.dateFrom ?? null);
         setDateTo(f?.dateTo ?? null);
         filtersHydrated.current = true;
       })
       .catch(() => { filtersHydrated.current = true; });
     return () => { cancelled = true; };
-  }, [filtersKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey, initialStatuses]);
   useEffect(() => {
     if (!filtersHydrated.current) return;
     void AsyncStorage.setItem(filtersKey, JSON.stringify({ statuses, dateFrom, dateTo })).catch(() => {});

@@ -50,6 +50,10 @@ export interface InvoicesListScreenProps {
    *  + the actual delete (incl. reverting linked jobs). */
   onBulkDelete?: (ids: string[]) => Promise<void> | void;
   /** Scopes the persisted group-by preference per business. */
+  /** Status filter to arrive with, overriding the persisted one — used by
+   *  dashboard tiles that deep-link ("Pending invoices" → sent). An empty
+   *  array is meaningful: it means "clear the filter, show everything". */
+  initialStatuses?: string[] | null;
   businessId?: string;
   // ── Server mode (opt-in) — the wrapper does the search/status/counts/paging in
   // the DB. On: this screen skips its own filtering, uses `serverCounts` for the
@@ -99,6 +103,7 @@ export function InvoicesListScreen({
   onUpdateStatus,
   onBulkDelete,
   businessId,
+  initialStatuses,
   serverMode = false,
   serverCounts,
   serverTotal,
@@ -139,12 +144,18 @@ export function InvoicesListScreen({
     const saved = typeof window !== 'undefined' ? window.localStorage.getItem(groupStoreKey) : null;
     if (saved === 'status' || saved === 'company' || saved === 'state' || saved === 'none') setGroupByState(saved);
     const f = parseInvoicesFilters(typeof window !== 'undefined' ? window.localStorage.getItem(filtersKey) : null);
-    setStatuses(Array.isArray(f?.statuses) ? f!.statuses.filter((k): k is StatusKey => (STATUS_KEYS as readonly string[]).includes(k)) : []);
+    // A deep link wins over the saved filter: someone who clicked "Pending
+    // invoices" wants pending, not whatever they last looked at.
+    const deepLink = initialStatuses
+      ? initialStatuses.filter((k): k is StatusKey => (STATUS_KEYS as readonly string[]).includes(k))
+      : null;
+    setStatuses(deepLink ?? (Array.isArray(f?.statuses) ? f!.statuses.filter((k): k is StatusKey => (STATUS_KEYS as readonly string[]).includes(k)) : []));
     setDateFrom(f?.dateFrom ?? null);
     setDateTo(f?.dateTo ?? null);
     setHydrated(true);
     // Re-run when the business changes so filters are scoped per company.
-  }, [groupStoreKey, filtersKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupStoreKey, filtersKey, initialStatuses]);
   const setGroupBy = (g: GroupKey) => {
     setGroupByState(g);
     try { window.localStorage.setItem(groupStoreKey, g); } catch { /* private mode */ }
