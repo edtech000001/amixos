@@ -434,8 +434,11 @@ export default function FilesModule() {
             <p className="text-sm text-muted">{t.subtitle}</p>
           </div>
         </div>
-        {/* View toggle sits outside the canManage block: read-only members
-            browse these folders too and want thumbnails just as much. */}
+        {/* ONE right-hand group. The view toggle used to be its own flex
+            child, so justify-between spread three children and stranded it in
+            the middle of the header with empty space either side. It stays
+            outside the canManage check — read-only members browse these
+            folders too and want thumbnails just as much. */}
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={toggleViewMode}
@@ -445,9 +448,8 @@ export default function FilesModule() {
           >
             {viewMode === 'grid' ? <ListIcon size={16} /> : <LayoutGrid size={16} />}
           </button>
-        </div>
-        {canManage && (
-          <div className="flex items-center gap-2 shrink-0">
+          {canManage && (
+            <>
             {/* Enter selection mode (checkboxes appear). Shown only where
                 there are selectable items and we're not already selecting. */}
             {/* Edit/delete live in the selection bar now, so this has to be
@@ -466,8 +468,9 @@ export default function FilesModule() {
                 <FilePlus2 size={16} className="mr-1.5" /> {t.addEntry}
               </Button>
             )}
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Breadcrumb */}
