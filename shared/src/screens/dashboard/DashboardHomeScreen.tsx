@@ -47,6 +47,10 @@ export interface DashboardStats {
    *  that migration is run, so both read 0 rather than breaking. */
   invoicesPendingAmount?: number;
   invoicesOverdueAmount?: number;
+  /** Job status split (migration 225). Absent until it is run. */
+  jobsScheduled?: number;
+  jobsInProgress?: number;
+  jobsToday?: number;
   invoicesOverdue: number;
   clientsTotal: number;
   clockedInNow: number;
@@ -145,6 +149,23 @@ export interface DashboardHomeScreenProps {
 const LIST_ROWS: Record<DashboardWidgetSize, number> = { sm: 3, md: 5, lg: 8 };
 
 const GAP = 12;
+/**
+ * FIXED height of a small widget. Sortable.Flex does not stretch items in a
+ * wrap line to the tallest, so every sm card was simply its own content height
+ * and no two matched. A minimum height only fixes cards that are too SHORT —
+ * the list widgets were too TALL — so this is a ceiling as well as a floor,
+ * applied to every sm widget so a 1x1 is literally one size.
+ *
+ * Sized to the tallest sm content (quick actions' 2x2 icon grid, ~158);
+ * shorter cards like the stat cubes just carry a little slack.
+ *
+ * Only sm. Every other size is content-driven, which is what the rest of the
+ * widgets want — pinning them all clipped cards that were perfectly fine.
+ */
+const SM_CARD_H = 160;
+/** Two cube rows plus the gap between them — a true 2x2. Used by the upcoming
+ *  jobs card only; nothing else asked for a pinned lg. */
+const LG_CARD_H = SM_CARD_H * 2 + GAP;
 const H_PAD = 24;
 
 // Revenue-chart scrub readout: bubble box, the flex gap between bars (needed to
@@ -785,6 +806,149 @@ export function DashboardHomeScreen({
       );
     }
 
+    // Active jobs at md/lg: the count on the left, WHICH jobs on the right.
+    // The total alone can't tell "twelve crews are out right now" from "twelve
+    // are booked for next month" — different days entirely.
+    if (id === 'jobsActive' && size !== 'sm') {
+      const rows = upcomingJobs.slice(0, size === 'lg' ? 6 : 3);
+      return (
+        <Pressable
+          onPress={onViewAllJobsPress}
+          className="bg-card rounded-2xl border border-border-soft p-5 flex-1 active:opacity-80"
+        >
+          <View className="flex-row" style={{ columnGap: 16 }}>
+            <View className="flex-1">
+              <View className="w-9 h-9 rounded-xl bg-emerald-500/10 items-center justify-center mb-3">
+                <Briefcase size={18} className="text-emerald-600" />
+              </View>
+              <Text className="text-2xl font-bold text-ink">{stats?.jobsActive ?? 0}</Text>
+              <Text className="text-xs font-medium text-ink mt-0.5">
+                {t.home.widgets.jobsActiveLabel}
+              </Text>
+              <View className="flex-row mt-3" style={{ columnGap: 16 }}>
+                <View>
+                  <Text className="text-sm font-semibold text-ink">{stats?.jobsInProgress ?? 0}</Text>
+                  <Text className="text-[10px] text-faint">{t.home.widgets.jobsInProgress}</Text>
+                </View>
+                <View>
+                  <Text className="text-sm font-semibold text-ink">{stats?.jobsScheduled ?? 0}</Text>
+                  <Text className="text-[10px] text-faint">{t.home.widgets.jobsScheduled}</Text>
+                </View>
+              </View>
+              {size === 'lg' ? (
+                <View className="mt-3 pt-3 border-t border-border-soft">
+                  <Text className="text-sm font-bold text-ink">{stats?.jobsToday ?? 0}</Text>
+                  <Text className="text-[10px] text-faint">{t.home.widgets.jobsToday}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View className="flex-1">
+              <Text className="text-[10px] font-semibold text-faint uppercase tracking-wide mb-1.5">
+                {t.home.widgets.jobsUpcoming}
+              </Text>
+              {rows.length === 0 ? (
+                <Text className="text-xs text-faint">{t.home.widgets.jobsNone}</Text>
+              ) : (
+                rows.map(job => (
+                  <Pressable
+                    key={job.id}
+                    onPress={() => onJobPress(job.id)}
+                    className="flex-row items-center gap-2 py-1 active:opacity-70"
+                  >
+                    <Text className="text-xs text-ink flex-1" numberOfLines={1}>{job.title}</Text>
+                    <Text className="text-[10px] text-faint shrink-0">
+                      {job.scheduledDate ? formatJobDate(job.scheduledDate) : ''}
+                    </Text>
+                  </Pressable>
+                ))
+              )}
+            </View>
+          </View>
+        </Pressable>
+      );
+    }
+
+    // Earnings this year at md/lg. A single yearly total is a number with no
+    // shape — the useful questions are how it split across the year, which
+    // month carried it, and whether the current pace lands anywhere near it.
+    if (id === 'earningsYear' && size !== 'sm') {
+      const yearTotal = stats?.earningsYear ?? 0;
+      const quarters = [0, 1, 2, 3].map(q => ({
+        q,
+        amount: monthly.slice(q * 3, q * 3 + 3).reduce((sum, m) => sum + m, 0),
+      }));
+      const bestIdx = monthly.reduce((best, m, i) => (m > monthly[best] ? i : best), 0);
+      const monthsElapsed = currentMonth + 1;
+      // Straight-line pace, NOT a forecast: this year's average carried to
+      // twelve months. Seasonal work will beat or miss it badly, which is why
+      // it sits next to the quarters rather than replacing them.
+      const projected = monthsElapsed > 0 ? (yearTotal / monthsElapsed) * 12 : 0;
+      return (
+        <Pressable
+          onPress={onReportsPress ? () => onReportsPress('year') : undefined}
+          disabled={!onReportsPress}
+          className="bg-card rounded-2xl border border-border-soft p-5 flex-1 active:opacity-80"
+        >
+          <View className="flex-row" style={{ columnGap: 16 }}>
+            <View className="flex-1">
+              <View className="w-9 h-9 rounded-xl bg-violet-500/10 items-center justify-center mb-3">
+                <TrendingUp size={18} className="text-violet-600" />
+              </View>
+              <Text className="text-2xl font-bold text-ink">{yearAmount}</Text>
+              <Text className="text-xs font-medium text-ink mt-0.5">
+                {t.home.widgets.earningsYearLabel}
+              </Text>
+              <View className="mt-3">
+                <Text className="text-sm font-semibold text-ink">{avgPerMonthLine}</Text>
+                <Text className="text-[10px] text-faint">
+                  {t.home.widgets.earningsYearSub.replace('{{year}}', yearStr)}
+                </Text>
+              </View>
+              {size === 'lg' && yearTotal > 0 ? (
+                <View className="mt-3 pt-3 border-t border-border-soft">
+                  <Text className="text-sm font-bold text-ink">{formatCurrency(projected)}</Text>
+                  <Text className="text-[10px] text-faint">{t.home.widgets.yearProjected}</Text>
+                  <Text className="text-sm font-semibold text-ink mt-2">
+                    {new Intl.DateTimeFormat(t.dateLocale, { month: 'short' })
+                      .format(new Date(2026, bestIdx, 1))
+                      .replace('.', '')} · {formatCurrency(monthly[bestIdx] ?? 0)}
+                  </Text>
+                  <Text className="text-[10px] text-faint">{t.home.widgets.yearBestMonth}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View className="flex-1">
+              <Text className="text-[10px] font-semibold text-faint uppercase tracking-wide mb-1.5">
+                {t.home.widgets.yearQuarters}
+              </Text>
+              {yearTotal === 0 ? (
+                <Text className="text-xs text-faint">{t.home.widgets.yearNoRevenue}</Text>
+              ) : (
+                quarters.map(({ q, amount }) => {
+                  // A quarter the year hasn't reached yet is blank, not $0 —
+                  // zero reads as "we earned nothing then", which is false.
+                  const future = q * 3 > currentMonth;
+                  return (
+                    <View key={q} className="flex-row items-center gap-2 py-1">
+                      <Text className="text-xs text-muted w-7">Q{q + 1}</Text>
+                      <Text
+                        className={`flex-1 text-right text-[11px] font-semibold ${future ? 'text-faint' : 'text-ink'}`}
+                        numberOfLines={1}
+                      >
+                        {future ? '—' : formatCurrency(amount)}
+                      </Text>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          </View>
+        </Pressable>
+      );
+    }
+
     // Clients at md/lg: the count on the left, WHO those clients are on the
     // right. A headcount is the least useful thing about a client list — the
     // question is which of them actually pay, and who just arrived.
@@ -1331,24 +1495,28 @@ export function DashboardHomeScreen({
       }
 
       case 'upcomingJobs': {
-        const rows = upcomingJobs.slice(0, LIST_ROWS[size]);
+        // ONE column at every size, like recent invoices: the job title is the
+        // part you read, and splitting the row in half truncates it to nothing.
+        // Extra size buys rows.
+        const rows = upcomingJobs.slice(0, size === 'sm' ? 3 : size === 'md' ? 4 : 7);
         return (
-          <View className="bg-card rounded-2xl border border-border-soft flex-1">
-            <View className="px-6 py-4 border-b border-border-soft flex-row items-center justify-between">
-              <Text className="text-sm font-semibold text-ink">
-                {t.home.upcomingJobs.title}
-              </Text>
-              <Pressable onPress={onViewAllJobsPress}>
-                <Text className="text-xs text-primary font-medium">
-                  {t.home.upcomingJobs.viewAll}
-                </Text>
-              </Pressable>
-            </View>
+          // The whole card opens the jobs list — a separate "View all" link sat
+          // on top of the title at sm.
+          <Pressable
+            onPress={onViewAllJobsPress}
+            style={size === 'lg' ? { height: LG_CARD_H } : undefined}
+            className={`bg-card rounded-2xl border border-border-soft p-5 flex-1 active:opacity-80 ${
+              size === 'lg' ? 'overflow-hidden' : ''
+            }`}
+          >
+            <Text className="text-sm font-semibold text-ink mb-2">
+              {t.home.upcomingJobs.title}
+            </Text>
+            {/* Compact empty state: an icon plus py-6 made the EMPTY card
+                taller than a populated stat cube beside it, so a widget with
+                nothing to show was the biggest thing in the row. */}
             {rows.length === 0 ? (
-              <View className="px-6 py-10 items-center">
-                <CalendarDays size={32} color={c.faint} />
-                <Text className="text-faint text-sm mt-3">{t.home.upcomingJobs.empty}</Text>
-              </View>
+              <Text className="text-xs text-faint py-2">{t.home.upcomingJobs.empty}</Text>
             ) : (
               <View>
                 {rows.map((job, idx) => {
@@ -1357,30 +1525,23 @@ export function DashboardHomeScreen({
                     <Pressable
                       key={job.id}
                       onPress={() => onJobPress(job.id)}
-                      className={`flex-row items-center justify-between px-6 active:bg-surface ${
-                        size === 'sm' ? 'py-2.5' : 'py-3.5'
+                      className={`flex-row items-center gap-2 active:opacity-70 ${
+                        size === 'sm' ? 'py-1.5' : 'py-2'
                       } ${idx > 0 ? 'border-t border-border-soft' : ''}`}
                     >
-                      <View className="flex-row items-center gap-3 flex-1 mr-3">
-                        <View className="bg-primary/10 px-2 py-1 rounded-lg">
-                          <Text className="text-[11px] font-semibold text-primary">
-                            {formatJobDate(job.scheduledDate)}
-                          </Text>
-                        </View>
-                        <View className="flex-1">
-                          <Text className="text-sm font-medium text-ink" numberOfLines={1}>
-                            {job.title}
-                          </Text>
-                          {size !== 'sm' ? (
-                            <Text className="text-xs text-faint" numberOfLines={1}>
-                              {job.clientName ?? t.home.upcomingJobs.noClient}
-                            </Text>
-                          ) : null}
-                        </View>
+                      {/* Date chip first — for a scheduled job WHEN is what
+                         orders the list, so it reads before the name. */}
+                      <View className="bg-primary/10 px-2 py-0.5 rounded-lg shrink-0">
+                        <Text className="text-[10px] font-semibold text-primary">
+                          {formatJobDate(job.scheduledDate)}
+                        </Text>
                       </View>
+                      <Text className="text-sm font-medium text-ink flex-1" numberOfLines={1}>
+                        {job.title}
+                      </Text>
                       {size !== 'sm' ? (
-                        <View className={`px-2.5 py-1 rounded-full ${JOB_STATUS_PILL_BG[job.status] ?? 'bg-border-soft'}`}>
-                          <Text className={`text-xs font-medium ${JOB_STATUS_PILL_TEXT[job.status] ?? 'text-muted'}`}>
+                        <View className={`px-2 py-0.5 rounded-full shrink-0 ${JOB_STATUS_PILL_BG[job.status] ?? 'bg-border-soft'}`}>
+                          <Text className={`text-[10px] font-medium ${JOB_STATUS_PILL_TEXT[job.status] ?? 'text-muted'}`}>
                             {t.jobs.statuses[statusKey] ?? job.status}
                           </Text>
                         </View>
@@ -1390,70 +1551,76 @@ export function DashboardHomeScreen({
                 })}
               </View>
             )}
-          </View>
+          </Pressable>
         );
       }
 
       case 'recentInvoices': {
-        const rows = recent.slice(0, LIST_ROWS[size]);
+        // ONE column at every size. Two columns fit more invoices but gave
+        // each row half the width for a name, a status pill and an amount —
+        // so the names truncated to "Corey…", which is the one part of the row
+        // you actually read. Extra height buys rows instead.
+        const cols = 1;
+        const rows = recent.slice(0, size === 'sm' ? 3 : size === 'md' ? 4 : 8);
+        const perCol = rows.length;
+        const invoiceRow = (inv: typeof rows[number], first: boolean) => {
+          const statusKey = inv.status as keyof typeof t.invoiceStatus;
+          const statusLabel = t.invoiceStatus[statusKey] ?? inv.status;
+          const pillBg = STATUS_PILL_BG[inv.status] ?? 'bg-border-soft';
+          const pillText = STATUS_PILL_TEXT[inv.status] ?? 'text-muted';
+          return (
+            <Pressable
+              key={inv.id}
+              onPress={() => onInvoicePress(inv.id)}
+              className={`flex-row items-center gap-2 active:opacity-70 ${
+                size === 'sm' ? 'py-1.5' : 'py-2'
+              } ${first ? '' : 'border-t border-border-soft'}`}
+            >
+              {/* flex-1 on the label + shrink-0 on the trailing cells: without
+                 it a long invoice number pushed the amount past the card edge
+                 instead of truncating, which is what made sm overlap. */}
+              <Text className="text-sm font-medium text-ink flex-1" numberOfLines={1}>
+                {size === 'sm' ? inv.invoiceNumber : (inv.clientName ?? t.home.recent.noClient)}
+              </Text>
+              {size !== 'sm' ? (
+                <View className={`px-2 py-0.5 rounded-full shrink-0 ${pillBg}`}>
+                  <Text className={`text-[10px] font-medium ${pillText}`}>{statusLabel}</Text>
+                </View>
+              ) : null}
+              <Text className="text-sm font-semibold text-ink shrink-0">
+                {formatCurrency(inv.totalAmount)}
+              </Text>
+            </Pressable>
+          );
+        };
         return (
-          <View className="bg-card rounded-2xl border border-border-soft flex-1">
-            <View className="px-6 py-4 border-b border-border-soft flex-row items-center justify-between">
-              <Text className="text-sm font-semibold text-ink">{t.home.recent.title}</Text>
-              <Pressable onPress={onViewAllInvoicesPress}>
-                <Text className="text-xs text-primary font-medium">{t.home.recent.viewAll}</Text>
-              </Pressable>
-            </View>
+          // The whole card opens the list — a separate "View all" link sat on
+          // top of the title at sm, and a card that is already one tap does not
+          // need a second target inside it.
+          <Pressable
+            onPress={onViewAllInvoicesPress}
+            className="bg-card rounded-2xl border border-border-soft p-5 flex-1 active:opacity-80"
+          >
+            <Text className="text-sm font-semibold text-ink mb-2">{t.home.recent.title}</Text>
             {rows.length === 0 ? (
-              <View className="px-6 py-12 items-center">
-                <FileText size={32} color={c.faint} />
-                <Text className="text-faint text-sm mt-3">{t.home.recent.empty}</Text>
+              <View className="py-2">
+                <Text className="text-xs text-faint">{t.home.recent.empty}</Text>
                 <Pressable onPress={onCreateFirstInvoicePress} className="mt-1">
-                  <Text className="text-primary font-medium text-sm">
+                  <Text className="text-primary font-medium text-xs">
                     {t.home.recent.createFirst}
                   </Text>
                 </Pressable>
               </View>
             ) : (
-              <View>
-                {rows.map((inv, idx) => {
-                  const statusKey = inv.status as keyof typeof t.invoiceStatus;
-                  const statusLabel = t.invoiceStatus[statusKey] ?? inv.status;
-                  const pillBg = STATUS_PILL_BG[inv.status] ?? 'bg-border-soft';
-                  const pillText = STATUS_PILL_TEXT[inv.status] ?? 'text-muted';
-                  const clientName = inv.clientName ?? t.home.recent.noClient;
-                  return (
-                    <Pressable
-                      key={inv.id}
-                      onPress={() => onInvoicePress(inv.id)}
-                      className={`flex-row items-center justify-between px-6 active:bg-surface ${
-                        size === 'sm' ? 'py-2.5' : 'py-3.5'
-                      } ${idx > 0 ? 'border-t border-border-soft' : ''}`}
-                    >
-                      <View className="flex-1 mr-3">
-                        <Text className="text-sm font-medium text-ink" numberOfLines={1}>
-                          {inv.invoiceNumber}
-                        </Text>
-                        {size !== 'sm' ? (
-                          <Text className="text-xs text-faint" numberOfLines={1}>{clientName}</Text>
-                        ) : null}
-                      </View>
-                      <View className="flex-row items-center gap-3">
-                        {size !== 'sm' ? (
-                          <View className={`px-2.5 py-1 rounded-full ${pillBg}`}>
-                            <Text className={`text-xs font-medium ${pillText}`}>{statusLabel}</Text>
-                          </View>
-                        ) : null}
-                        <Text className="text-sm font-semibold text-ink">
-                          {formatCurrency(inv.totalAmount)}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
+              <View className="flex-row" style={{ columnGap: 16 }}>
+                {Array.from({ length: cols }, (_, cIdx) => (
+                  <View key={cIdx} className="flex-1">
+                    {rows.slice(cIdx * perCol, (cIdx + 1) * perCol).map((inv, rIdx) => invoiceRow(inv, rIdx === 0))}
+                  </View>
+                ))}
               </View>
             )}
-          </View>
+          </Pressable>
         );
       }
 
@@ -1526,7 +1693,10 @@ export function DashboardHomeScreen({
         {visibleIds.map((id) => {
           const size = sizes[id] ?? defaultWidgetSize(id);
           return (
-            <View key={id} style={{ width: widthFor(size) }}>
+            <View
+              key={id}
+              style={{ width: widthFor(size), ...(size === 'sm' ? { height: SM_CARD_H } : null) }}
+            >
               {/* flex:1 so the card fills the row height (Sortable.Flex
                   stretches items in a wrap line to the tallest), letting
                   half-width widgets like quick-actions fill their cube

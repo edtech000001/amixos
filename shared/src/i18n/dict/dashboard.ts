@@ -173,6 +173,15 @@ export type DashboardDict = {
       clientsRecent: string;
       clientsNoRevenue: string;
       clientsInvoiceCount: string;
+      yearQuarters: string;
+      yearBestMonth: string;
+      yearProjected: string;
+      yearNoRevenue: string;
+      jobsScheduled: string;
+      jobsInProgress: string;
+      jobsToday: string;
+      jobsUpcoming: string;
+      jobsNone: string;
       earningsMonthSub: string;
       invoicesPendingLabel: string;
       invoicesPendingSub: string;
@@ -3310,6 +3319,15 @@ export const dashboard: Record<Locale, DashboardDict> = {
         clientsRecent: 'Agregados',
         clientsNoRevenue: 'Sin pagos este año',
         clientsInvoiceCount: '{{count}} fact.',
+        yearQuarters: 'Por trimestre',
+        yearBestMonth: 'Mejor mes',
+        yearProjected: 'Proyección anual',
+        yearNoRevenue: 'Sin ingresos este año',
+        jobsScheduled: 'Programados',
+        jobsInProgress: 'En progreso',
+        jobsToday: 'Hoy',
+        jobsUpcoming: 'Próximos',
+        jobsNone: 'Sin trabajos activos',
         earningsMonthSub: '{{amount}} este año',
         invoicesPendingLabel: 'Facturas pendientes',
         invoicesPendingSub: 'esperando pago',
@@ -6446,6 +6464,15 @@ export const dashboard: Record<Locale, DashboardDict> = {
         clientsRecent: 'Recently added',
         clientsNoRevenue: 'No payments this year',
         clientsInvoiceCount: '{{count}} inv.',
+        yearQuarters: 'By quarter',
+        yearBestMonth: 'Best month',
+        yearProjected: 'Projected year',
+        yearNoRevenue: 'No revenue this year',
+        jobsScheduled: 'Scheduled',
+        jobsInProgress: 'In progress',
+        jobsToday: 'Today',
+        jobsUpcoming: 'Upcoming',
+        jobsNone: 'No active jobs',
         earningsMonthSub: '{{amount}} this year',
         invoicesPendingLabel: 'Pending invoices',
         invoicesPendingSub: 'awaiting payment',

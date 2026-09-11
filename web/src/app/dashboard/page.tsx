@@ -60,11 +60,61 @@ const formatCurrency = (n: number) =>
 const LIST_ROWS: Record<DashboardWidgetSize, number> = { sm: 3, md: 5, lg: 8 };
 
 // Grid spans per size: 6-col grid on lg screens, 2-col on sm, stacked below.
-const SIZE_SPAN: Record<DashboardWidgetSize, string> = {
-  sm: 'sm:col-span-1 lg:col-span-2',
-  md: 'sm:col-span-1 lg:col-span-3',
-  lg: 'sm:col-span-2 lg:col-span-6',
+// Base width of each size, in columns of the 6-wide grid.
+const SIZE_COLS: Record<DashboardWidgetSize, number> = { sm: 2, md: 3, lg: 6 };
+// Written out rather than interpolated: Tailwind only emits classes it can see
+// as literals in the source.
+const COL_SPAN: Record<number, string> = {
+  2: 'lg:col-span-2',
+  3: 'lg:col-span-3',
+  4: 'lg:col-span-4',
+  5: 'lg:col-span-5',
+  6: 'lg:col-span-6',
 };
+const NARROW_SPAN: Record<DashboardWidgetSize, string> = {
+  sm: 'sm:col-span-1',
+  md: 'sm:col-span-1',
+  lg: 'sm:col-span-2',
+};
+
+/**
+ * Widen the cards on any row that doesn't fill all 6 columns.
+ *
+ * Two small widgets are 2+2 of 6, so the row ended with a third of the screen
+ * empty — a hole that reads as a missing card rather than a deliberate gap.
+ * Pack greedily into rows, then hand each row's leftover columns to its own
+ * cards (left to right), so a row always spans the full width.
+ *
+ * Only affects the 6-column breakpoint; narrower layouts stack.
+ */
+function resolveSpans(
+  ids: DashboardWidgetId[],
+  sizes: Record<string, DashboardWidgetSize>,
+): Record<string, number> {
+  const spans: Record<string, number> = {};
+  let row: DashboardWidgetId[] = [];
+  let used = 0;
+  const flush = () => {
+    if (!row.length) return;
+    let leftover = 6 - used;
+    // Round-robin from the left, so three 2s stay 2/2/2 and two 2s become 3/3.
+    for (let i = 0; leftover > 0; i = (i + 1) % row.length) {
+      spans[row[i]] += 1;
+      leftover -= 1;
+    }
+    row = [];
+    used = 0;
+  };
+  for (const id of ids) {
+    const cols = SIZE_COLS[sizes[id] ?? 'sm'];
+    if (used + cols > 6) flush();
+    spans[id] = cols;
+    row.push(id);
+    used += cols;
+  }
+  flush();
+  return spans;
+}
 
 interface DashboardStats {
   earningsMonth: number;
@@ -74,6 +124,10 @@ interface DashboardStats {
    *  that migration is run, so both read 0 rather than breaking. */
   invoicesPendingAmount?: number;
   invoicesOverdueAmount?: number;
+  /** Job status split (migration 225). Absent until it is run. */
+  jobsScheduled?: number;
+  jobsInProgress?: number;
+  jobsToday?: number;
   invoicesOverdue: number;
   clientsTotal: number;
   clockedInNow: number;
@@ -212,6 +266,7 @@ function MiniBars({
 function SortableWidget({
   id,
   size,
+  span,
   editing,
   hideLabel,
   sizeLabels,
@@ -221,6 +276,9 @@ function SortableWidget({
 }: {
   id: DashboardWidgetId;
   size: DashboardWidgetSize;
+  /** Resolved column span (see resolveSpans) — may be wider than the size's
+   *  base width when its row had columns to spare. */
+  span: number;
   editing: boolean;
   hideLabel: string;
   sizeLabels: Record<DashboardWidgetSize, string>;
@@ -235,7 +293,7 @@ function SortableWidget({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1, zIndex: isDragging ? 10 : undefined }}
-      className={`relative ${SIZE_SPAN[size]}`}
+      className={`relative ${NARROW_SPAN[size]} ${COL_SPAN[span] ?? COL_SPAN[2]}`}
       {...(editing ? { ...attributes, ...listeners } : {})}
     >
       {editing && (
@@ -397,6 +455,9 @@ export default function DashboardPage() {
         earningsYear: Number(d.earnings_year ?? 0),
         invoicesPending: Number(d.invoices_pending ?? 0),
         invoicesPendingAmount: Number(d.invoices_pending_amount ?? 0),
+        jobsScheduled: Number(d.jobs_scheduled ?? 0),
+        jobsInProgress: Number(d.jobs_in_progress ?? 0),
+        jobsToday: Number(d.jobs_today ?? 0),
         invoicesOverdueAmount: Number(d.invoices_overdue_amount ?? 0),
         invoicesOverdue: Number(d.invoices_overdue ?? 0),
         clientsTotal: Number(d.clients_total ?? 0),
@@ -494,6 +555,10 @@ export default function DashboardPage() {
     setLoading(false);
   }, [dash.data]);
   useEffect(() => { if (dash.error) setLoading(false); }, [dash.error]);
+
+  // Recomputed whenever the order or any size changes — the packing depends on
+  // both, since a widget moving rows changes what its neighbours have spare.
+  const widgetSpans = useMemo(() => resolveSpans(visibleIds, sizes), [visibleIds, sizes]);
 
   const persistLayout = async (
     visible: DashboardWidgetId[],
@@ -781,6 +846,144 @@ export default function DashboardPage() {
             <p className="text-xs text-white/70 mt-0.5">{t.home.widgets.earningsMonthSub.replace('{{amount}}', yearAmount)}</p>
           </div>
         </EarnCard>
+      );
+    }
+
+    // Active jobs at md/lg: the count on the left, WHICH jobs on the right.
+    // The total alone can't tell "twelve crews are out right now" from "twelve
+    // are booked for next month" — different days entirely.
+    if (id === 'jobsActive' && size !== 'sm') {
+      const rows = upcoming.slice(0, size === 'lg' ? 6 : 3);
+      return (
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 h-full">
+          <div className="flex gap-6">
+            <button
+              type="button"
+              onClick={() => router.push('/dashboard/trabajos')}
+              className="flex-1 min-w-0 text-left cursor-pointer"
+            >
+              <span className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-3">
+                <Briefcase size={18} className="text-emerald-600 dark:text-emerald-400" />
+              </span>
+              <p className="text-2xl font-bold text-ink">{stats?.jobsActive ?? 0}</p>
+              <p className="text-xs font-medium text-ink mt-0.5">{t.home.widgets.jobsActiveLabel}</p>
+              <span className="flex gap-6 mt-3">
+                <span>
+                  <span className="block text-sm font-semibold text-ink">{stats?.jobsInProgress ?? 0}</span>
+                  <span className="block text-[10px] text-faint">{t.home.widgets.jobsInProgress}</span>
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-ink">{stats?.jobsScheduled ?? 0}</span>
+                  <span className="block text-[10px] text-faint">{t.home.widgets.jobsScheduled}</span>
+                </span>
+              </span>
+              {size === 'lg' ? (
+                <span className="block mt-3 pt-3 border-t border-border-soft">
+                  <span className="block text-sm font-bold text-ink">{stats?.jobsToday ?? 0}</span>
+                  <span className="block text-[10px] text-faint">{t.home.widgets.jobsToday}</span>
+                </span>
+              ) : null}
+            </button>
+
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-semibold text-faint uppercase tracking-wide mb-1.5">
+                {t.home.widgets.jobsUpcoming}
+              </p>
+              {rows.length === 0 ? (
+                <p className="text-xs text-faint">{t.home.widgets.jobsNone}</p>
+              ) : (
+                rows.map(job => (
+                  <button
+                    key={job.id}
+                    type="button"
+                    onClick={() => router.push(`/dashboard/trabajos/${job.id}`)}
+                    className="w-full flex items-center gap-2 py-1 text-left hover:opacity-70 transition-opacity"
+                  >
+                    <span className="text-xs text-ink flex-1 truncate">{job.title}</span>
+                    <span className="text-[10px] text-faint shrink-0">
+                      {job.scheduledDate ? formatJobDate(job.scheduledDate) : ''}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Earnings this year at md/lg. A single yearly total is a number with no
+    // shape — the useful questions are how it split across the year, which
+    // month carried it, and whether the current pace lands anywhere near it.
+    if (id === 'earningsYear' && size !== 'sm') {
+      const yearTotal = stats?.earningsYear ?? 0;
+      const quarters = [0, 1, 2, 3].map(q => ({
+        q,
+        amount: monthly.slice(q * 3, q * 3 + 3).reduce((sum, m) => sum + m, 0),
+      }));
+      const bestIdx = monthly.reduce((best, m, i) => (m > monthly[best] ? i : best), 0);
+      const monthsElapsed = currentMonth + 1;
+      // Straight-line pace, NOT a forecast: this year's average carried to
+      // twelve months. Seasonal work will beat or miss it badly, which is why
+      // it sits next to the quarters rather than replacing them.
+      const projected = monthsElapsed > 0 ? (yearTotal / monthsElapsed) * 12 : 0;
+      return (
+        <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 h-full">
+          <div className="flex gap-6">
+            <button
+              type="button"
+              onClick={() => router.push('/dashboard/reportes?range=year')}
+              className="flex-1 min-w-0 text-left cursor-pointer"
+            >
+              <span className="w-9 h-9 rounded-xl bg-violet-500/10 flex items-center justify-center mb-3">
+                <TrendingUp size={18} className="text-violet-600 dark:text-violet-400" />
+              </span>
+              <p className="text-2xl font-bold text-ink">{yearAmount}</p>
+              <p className="text-xs font-medium text-ink mt-0.5">{t.home.widgets.earningsYearLabel}</p>
+              <span className="block mt-3">
+                <span className="block text-sm font-semibold text-ink">{avgPerMonthLine}</span>
+                <span className="block text-[10px] text-faint">
+                  {t.home.widgets.earningsYearSub.replace('{{year}}', yearStr)}
+                </span>
+              </span>
+              {size === 'lg' && yearTotal > 0 ? (
+                <span className="block mt-3 pt-3 border-t border-border-soft">
+                  <span className="block text-sm font-bold text-ink">{formatCurrency(projected)}</span>
+                  <span className="block text-[10px] text-faint">{t.home.widgets.yearProjected}</span>
+                  <span className="block text-sm font-semibold text-ink mt-2">
+                    {new Intl.DateTimeFormat(t.dateLocale, { month: 'short' })
+                      .format(new Date(2026, bestIdx, 1))
+                      .replace('.', '')} · {formatCurrency(monthly[bestIdx] ?? 0)}
+                  </span>
+                  <span className="block text-[10px] text-faint">{t.home.widgets.yearBestMonth}</span>
+                </span>
+              ) : null}
+            </button>
+
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-semibold text-faint uppercase tracking-wide mb-1.5">
+                {t.home.widgets.yearQuarters}
+              </p>
+              {yearTotal === 0 ? (
+                <p className="text-xs text-faint">{t.home.widgets.yearNoRevenue}</p>
+              ) : (
+                quarters.map(({ q, amount }) => {
+                  // A quarter the year hasn't reached yet is blank, not $0 —
+                  // zero reads as "we earned nothing then", which is false.
+                  const future = q * 3 > currentMonth;
+                  return (
+                    <div key={q} className="flex items-center gap-2 py-1">
+                      <span className="text-xs text-muted w-7 shrink-0">Q{q + 1}</span>
+                      <span className={`flex-1 text-right text-[11px] font-semibold truncate ${future ? 'text-faint' : 'text-ink'}`}>
+                        {future ? '—' : formatCurrency(amount)}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
       );
     }
 
@@ -1265,41 +1468,42 @@ export default function DashboardPage() {
       }
 
       case 'upcomingJobs': {
-        const rows = upcoming.slice(0, LIST_ROWS[size]);
+        // ONE column at every size, like recent invoices: the job title is the
+        // part you read, and splitting the row in half truncates it to nothing.
+        // Extra size buys rows.
+        const rows = upcoming.slice(0, size === 'sm' ? 3 : size === 'md' ? 4 : 8);
         return (
-          <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden h-full">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border-soft">
-              <h2 className="text-sm font-semibold text-ink">{t.home.upcomingJobs.title}</h2>
-              <button onClick={() => router.push('/dashboard/trabajos')} className="text-xs text-primary font-medium hover:underline">
-                {t.home.upcomingJobs.viewAll}
-              </button>
-            </div>
+          // The whole card opens the jobs list — a separate "View all" link sat
+          // on top of the title at sm.
+          <div
+            onClick={() => router.push('/dashboard/trabajos')}
+            className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 h-full cursor-pointer transition-shadow hover:shadow-md"
+          >
+            <h2 className="text-sm font-semibold text-ink mb-2">{t.home.upcomingJobs.title}</h2>
+            {/* Compact empty state: an icon plus py-8 made the EMPTY card
+                taller than a populated stat card beside it, so a widget with
+                nothing to show was the biggest thing in the row. */}
             {rows.length === 0 ? (
-              <div className="flex flex-col items-center py-10">
-                <CalendarDays size={36} className="text-faint" />
-                <p className="text-faint text-sm mt-3">{t.home.upcomingJobs.empty}</p>
-              </div>
+              <p className="text-xs text-faint py-2">{t.home.upcomingJobs.empty}</p>
             ) : (
               <div>
-                {rows.map((job) => {
+                {rows.map((job, idx) => {
                   const statusKey = job.status as keyof typeof t.jobs.statuses;
                   return (
                     <button
                       key={job.id}
-                      onClick={() => router.push(`/dashboard/trabajos/${job.id}`)}
-                      className={`w-full flex items-center justify-between px-5 border-b border-border-soft last:border-b-0 hover:bg-surface text-left ${size === 'sm' ? 'py-2.5' : 'py-4'}`}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/trabajos/${job.id}`); }}
+                      className={`w-full flex items-center gap-2 text-left hover:opacity-70 transition-opacity ${
+                        size === 'sm' ? 'py-1.5' : 'py-2'
+                      } ${idx > 0 ? 'border-t border-border-soft' : ''}`}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="text-[11px] font-semibold text-primary bg-primary/10 px-2 py-1 rounded-lg shrink-0">
-                          {formatJobDate(job.scheduledDate)}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-ink truncate">{job.title}</p>
-                          {size !== 'sm' ? (
-                            <p className="text-xs text-muted truncate">{job.clientName ?? t.home.upcomingJobs.noClient}</p>
-                          ) : null}
-                        </div>
-                      </div>
+                      {/* Date chip first — for a scheduled job WHEN is what
+                         orders the list, so it reads before the name. */}
+                      <span className="text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-lg shrink-0">
+                        {formatJobDate(job.scheduledDate)}
+                      </span>
+                      <span className="text-sm font-medium text-ink flex-1 truncate">{job.title}</span>
                       {size !== 'sm' ? (
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${JOB_STATUS_PILL[job.status] ?? 'bg-border-soft text-muted'}`}>
                           {t.jobs.statuses[statusKey] ?? job.status}
@@ -1315,52 +1519,66 @@ export default function DashboardPage() {
       }
 
       case 'recentInvoices': {
-        const rows = recent.slice(0, LIST_ROWS[size]);
+        // ONE column at every size. Two columns fit more invoices but gave
+        // each row half the width for a name, a status pill and an amount —
+        // so the names truncated to "Corey…", which is the one part of the row
+        // you actually read. Extra height buys rows instead.
+        const cols = 1;
+        const rows = recent.slice(0, size === 'sm' ? 3 : size === 'md' ? 4 : 8);
+        const perCol = rows.length;
+        const invoiceRow = (inv: typeof rows[number], first: boolean) => {
+          const statusKey = inv.status as keyof typeof t.invoiceStatus;
+          const statusLabel = t.invoiceStatus[statusKey] ?? inv.status;
+          const pill = STATUS_PILL[inv.status] ?? 'bg-border-soft text-muted';
+          return (
+            <button
+              key={inv.id}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/facturas/${inv.id}`); }}
+              className={`w-full flex items-center gap-2 text-left hover:opacity-70 transition-opacity ${
+                size === 'sm' ? 'py-1.5' : 'py-2'
+              } ${first ? '' : 'border-t border-border-soft'}`}
+            >
+              {/* flex-1 on the label + shrink-0 on the trailing cells: without
+                 it a long invoice number pushed the amount past the card edge
+                 instead of truncating. */}
+              <span className="text-sm font-medium text-ink flex-1 truncate">
+                {size === 'sm' ? inv.invoiceNumber : (inv.clientName ?? t.home.recent.noClient)}
+              </span>
+              {size !== 'sm' ? (
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${pill}`}>{statusLabel}</span>
+              ) : null}
+              <span className="text-sm font-semibold text-ink shrink-0">{formatCurrency(inv.totalAmount)}</span>
+            </button>
+          );
+        };
         return (
-          <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden h-full">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border-soft">
-              <h2 className="text-sm font-semibold text-ink">{t.home.recent.title}</h2>
-              {/* status=all clears any saved filter — otherwise "View all" lands
-                 on whatever the list was last filtered to, showing a subset. */}
-              <button onClick={() => router.push('/dashboard/facturas?status=all')} className="text-xs text-primary font-medium hover:underline">
-                {t.home.recent.viewAll}
-              </button>
-            </div>
+          // The whole card opens the list — a separate "View all" link sat on
+          // top of the title at sm, and a card that is already one click does
+          // not need a second target inside it.
+          <div
+            onClick={() => router.push('/dashboard/facturas?status=all')}
+            className="bg-card rounded-2xl border border-border-soft shadow-sm p-5 h-full cursor-pointer transition-shadow hover:shadow-md"
+          >
+            <h2 className="text-sm font-semibold text-ink mb-2">{t.home.recent.title}</h2>
             {rows.length === 0 ? (
-              <div className="flex flex-col items-center py-12">
-                <FileText size={40} className="text-faint" />
-                <p className="text-faint text-sm mt-3">{t.home.recent.empty}</p>
-                <button onClick={() => router.push('/dashboard/facturas/nueva')} className="text-primary text-sm font-medium mt-1 hover:underline">
+              <div className="py-2">
+                <p className="text-xs text-faint">{t.home.recent.empty}</p>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); router.push('/dashboard/facturas/nueva'); }}
+                  className="text-primary font-medium text-xs mt-1"
+                >
                   {t.home.recent.createFirst}
                 </button>
               </div>
             ) : (
-              <div>
-                {rows.map((inv) => {
-                  const statusKey = inv.status as keyof typeof t.invoiceStatus;
-                  const statusLabel = t.invoiceStatus[statusKey] ?? inv.status;
-                  const pill = STATUS_PILL[inv.status] ?? STATUS_PILL.draft;
-                  return (
-                    <button
-                      key={inv.id}
-                      onClick={() => router.push(`/dashboard/facturas/${inv.id}`)}
-                      className={`w-full flex items-center justify-between px-5 border-b border-border-soft last:border-b-0 hover:bg-surface text-left ${size === 'sm' ? 'py-2.5' : 'py-4'}`}
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-ink truncate">{inv.invoiceNumber}</p>
-                        {size !== 'sm' ? (
-                          <p className="text-xs text-muted truncate">{inv.clientName ?? t.home.recent.noClient}</p>
-                        ) : null}
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-sm font-semibold text-ink">{formatCurrency(inv.totalAmount)}</span>
-                        {size !== 'sm' ? (
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${pill}`}>{statusLabel}</span>
-                        ) : null}
-                      </div>
-                    </button>
-                  );
-                })}
+              <div className="flex gap-6">
+                {Array.from({ length: cols }, (_, cIdx) => (
+                  <div key={cIdx} className="flex-1 min-w-0">
+                    {rows.slice(cIdx * perCol, (cIdx + 1) * perCol).map((inv, rIdx) => invoiceRow(inv, rIdx === 0))}
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -1450,6 +1668,7 @@ export default function DashboardPage() {
                   key={id}
                   id={id}
                   size={size}
+                  span={widgetSpans[id] ?? SIZE_COLS[size]}
                   editing={editing}
                   hideLabel={t.home.customize.hideLabel}
                   sizeLabels={t.home.customize.sizes}
