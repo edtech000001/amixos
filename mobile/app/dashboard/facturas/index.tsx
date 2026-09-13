@@ -6,6 +6,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useSwr } from '@amixos/shared/lib/swrCache';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { LocationSwitcher } from '@/components/LocationSwitcher';
 import {
   InvoicesListScreen,
   type InvoiceListItem,
@@ -323,6 +324,7 @@ export default function FacturasTab() {
 
   return (
     <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
+      <LocationSwitcher />
       <InvoicesListScreen
         initialStatuses={initialStatuses}
         payPeriod={business ? { frequency: business.payroll_frequency, anchorDate: business.payroll_anchor_date, customDays: business.payroll_custom_days } : undefined}

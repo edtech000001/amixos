@@ -8,6 +8,7 @@
 // hung the mobile Reports screen for a business with 4000+ jobs).
 
 import { fetchAllById } from './supabaseFetch';
+import { employeeIdsAtLocation, fetchEmployeeLocations } from './locations';
 import { computePayrollRows, computePayrollRowsFromAggregates, normalizePayrollConfig, type PayrollAggregate, type PayrollConfig } from './payroll';
 import { formulaJobFieldRefs } from './payrollFormula';
 
@@ -92,18 +93,32 @@ export async function fetchReportsData(
   supabase: SupabaseLike,
   businessId: string,
   inventoryEnabled: boolean,
+  /**
+   * Scope every metric to one branch. Null = the whole business.
+   *
+   * Only the tables that CARRY a branch are filtered (invoices, jobs,
+   * inventory — see migrations 104/158). Timesheets have no location of their
+   * own and inherit the job's, so they are filtered below against the jobs
+   * that survived. Clients and employees are many-to-many and shared by
+   * default, so scoping them here would drop people who legitimately work
+   * across branches — their totals stay business-wide, and the metrics that
+   * matter per branch (revenue, jobs, hours) come from the filtered sets.
+   */
+  locationId?: string | null,
 ): Promise<ReportsData> {
+  const atBranch = <T,>(q: T): T =>
+    (locationId ? (q as unknown as { eq: (c: string, v: string) => T }).eq('location_id', locationId) : q);
   // Keyset by id: order by id asc, cursor via .gt('id', afterId). Matches the
   // web reports page. Aggregations don't care about row order, so ordering by id
   // is fine.
   const [invoices, jobs, clients, timesheets, employees, inventory, locations] = await Promise.all([
     fetchAllById<ReportInvoice>((afterId, pageSize) => {
-      let q = supabase.from('invoices').select('id, status, total_amount, paid_at, created_at, issue_date, line_items').eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+      let q = atBranch(supabase.from('invoices').select('id, status, total_amount, paid_at, created_at, issue_date, line_items').eq('business_id', businessId)).order('id', { ascending: true }).limit(pageSize);
       if (afterId) q = q.gt('id', afterId);
       return q;
     }),
     fetchAllById<ReportJob>((afterId, pageSize) => {
-      let q = supabase.from('jobs').select('id, status, total_amount, created_at, client_id, location_id, scheduled_date, total_hours, driver_employee_ids, driver_hours, custom_fields, job_assignments(employee_id, crew)').eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+      let q = atBranch(supabase.from('jobs').select('id, status, total_amount, created_at, client_id, location_id, scheduled_date, total_hours, driver_employee_ids, driver_hours, custom_fields, job_assignments(employee_id, crew)').eq('business_id', businessId)).order('id', { ascending: true }).limit(pageSize);
       if (afterId) q = q.gt('id', afterId);
       return q;
     }),
@@ -124,7 +139,7 @@ export async function fetchReportsData(
     }),
     inventoryEnabled
       ? fetchAllById<ReportInventoryItem>((afterId, pageSize) => {
-          let q = supabase.from('inventory_items').select('id, quantity, unit_cost').eq('business_id', businessId).order('id', { ascending: true }).limit(pageSize);
+          let q = atBranch(supabase.from('inventory_items').select('id, quantity, unit_cost').eq('business_id', businessId)).order('id', { ascending: true }).limit(pageSize);
           if (afterId) q = q.gt('id', afterId);
           return q;
         })
@@ -135,7 +150,23 @@ export async function fetchReportsData(
       return q;
     }),
   ]);
-  return { invoices, jobs, clients, timesheets, employees, inventory, locations };
+  // Timesheets carry NO link to a job (only a free-text description) and no
+  // location of their own, so the only branch they can be attributed to is the
+  // WORKER's — employee_locations, the same basis payroll uses.
+  const scopedTimesheets = locationId
+    ? await (async () => {
+        try {
+          const links = await fetchEmployeeLocations(supabase as never, businessId);
+          const ids = employeeIdsAtLocation(links, locationId);
+          return timesheets.filter(ts => (ts.employee_id ? ids.has(ts.employee_id) : false));
+        } catch {
+          // Fail open: business-wide hours beat reporting zero for a branch
+          // that plainly has some.
+          return timesheets;
+        }
+      })()
+    : timesheets;
+  return { invoices, jobs, clients, timesheets: scopedTimesheets, employees, inventory, locations };
 }
 
 export interface ReportsMetrics {
@@ -428,6 +459,8 @@ export async function fetchReportsMetricsServer(opts: {
   unassignedLocationLabel?: string;
   payrollConfig?: unknown;
   inventoryEnabled: boolean;
+  /** Scope every figure to one branch. Null/undefined = the whole business. */
+  locationId?: string | null;
 }): Promise<ReportsMetrics> {
   const { supabase, businessId, range, dateLocale, custom, payrollConfig } = opts;
   const unassignedLocationLabel = opts.unassignedLocationLabel ?? 'Sin ubicación';
@@ -445,6 +478,7 @@ export async function fetchReportsMetricsServer(opts: {
       p_bucket_months: months,
       p_tz: tz,
       p_include_inventory: opts.inventoryEnabled,
+      p_location_id: opts.locationId ?? null,
     }),
     supabase.rpc('payroll_period_inputs', {
       p_business_id: businessId,

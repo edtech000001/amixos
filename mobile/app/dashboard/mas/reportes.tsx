@@ -4,6 +4,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { LocationSwitcher } from '@/components/LocationSwitcher';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 import { ReportsScreen } from '@amixos/shared/screens/dashboard/ReportsScreen';
 import { REPORT_RANGE_KEYS,
@@ -17,7 +18,7 @@ import { useDataFingerprint } from '@amixos/shared/lib/dataFingerprint';
 export default function ReportesRoute() {
   const supabase = createSupabaseClient();
   const router = useRouter();
-  const { business } = useApp();
+  const { business, activeLocationId } = useApp();
   const { t } = useLang();
   const dateLocale = t.dashboard.dateLocale;
   const manualWorker = t.dashboard.reports.employees.manualWorker;
@@ -67,7 +68,9 @@ export default function ReportesRoute() {
   // The range is part of the identity: a cached "this year" payload must never
   // be served under the "this month" chip.
   const rangeKey = customFrom || customTo ? `custom_${customFrom ?? ''}_${customTo ?? ''}` : range;
-  const reportsKey = business ? `reports_${business.id}_${rangeKey}_${inventoryEnabled ? 'inv' : 'noinv'}` : null;
+  // Branch joins range in the cache identity — a cached "all branches"
+  // payload must never be shown as one branch's numbers.
+  const reportsKey = business ? `reports_${business.id}_${activeLocationId ?? 'all'}_${rangeKey}_${inventoryEnabled ? 'inv' : 'noinv'}` : null;
   const reportsQuery = useSwr<ReportsMetrics>(
     reportsKey,
     () => fetchReportsMetricsServer({
@@ -79,6 +82,7 @@ export default function ReportesRoute() {
       unassignedLocationLabel: unassignedLocation,
       payrollConfig: business!.payroll_config,
       inventoryEnabled,
+      locationId: activeLocationId,
     }),
     {
       cacheKey: reportsKey,
@@ -95,6 +99,7 @@ export default function ReportesRoute() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+      <LocationSwitcher />
       <ReportsScreen
         loading={loading}
         range={range}

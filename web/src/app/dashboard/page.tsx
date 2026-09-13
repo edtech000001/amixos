@@ -337,7 +337,7 @@ function SortableWidget({
 export default function DashboardPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
-  const { business, user, currentRole, loading: appLoading, refetchBusiness } = useApp();
+  const { business, user, currentRole, activeLocationId, loading: appLoading, refetchBusiness } = useApp();
   // Dashboard layout is scoped PER-USER-PER-BUSINESS
   // (user_dashboard_layouts) — not a business setting — so one member's
   // customization never changes another's, and each person can arrange each
@@ -413,7 +413,9 @@ export default function DashboardPage() {
     topClients: { id: string; name: string; company: string | null; total: number; invoices: number }[];
     newClientsThisMonth: number;
   };
-  const dashKey = business ? `dashboard_home_${business.id}` : null;
+  // Branch is part of the cache identity: without it a switch would paint
+  // the previous branch's numbers from cache and never correct them.
+  const dashKey = business ? `dashboard_home_${business.id}_${activeLocationId ?? 'all'}` : null;
   const dash = useSwr<DashPayload>(
     dashKey,
     async () => {
@@ -422,25 +424,32 @@ export default function DashboardPage() {
       const startYear = new Date(now.getFullYear(), 0, 1).toISOString();
       const today = now.toISOString().split('T')[0];
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+      // Branch scope for the bounded list queries. Rows with a NULL
+      // location belong to no branch, so a branch view excludes them —
+      // counting them everywhere would make the branches sum to more
+      // than the business.
+      const atBranch = <T,>(q: T): T =>
+        (activeLocationId ? (q as any).eq('location_id', activeLocationId) : q) as T;
       const [statsRes, recentInv, pendingInv, overdueInv, topCl, upcomingJobs, recentCl, newClientCount] = await Promise.all([
         supabase.rpc('dashboard_stats', {
           p_business_id: business!.id, p_start_month: startMonth, p_start_year: startYear, p_tz: tz,
+          p_location_id: activeLocationId,
         }),
-        supabase.from('invoices').select('id, invoice_number, total_amount, status, due_date, clients(first_name, last_name)').eq('business_id', business!.id).order('created_at', { ascending: false }).limit(LIST_ROWS.lg),
+        atBranch(supabase.from('invoices').select('id, invoice_number, total_amount, status, due_date, clients(first_name, last_name)').eq('business_id', business!.id).order('created_at', { ascending: false }).limit(LIST_ROWS.lg)),
         // Pending invoices for the pending tile, DUE SOONEST first. Filtering
         // the recent list above would show nothing whenever the newest invoices
         // happen to be paid, and "recent" is the wrong order anyway — what
         // matters about an unpaid invoice is how close its due date is.
         // Bounded, so no pagination loop needed.
-        supabase.from('invoices').select('id, invoice_number, total_amount, due_date, clients(first_name, last_name)').eq('business_id', business!.id).eq('status', 'sent').order('due_date', { ascending: true, nullsFirst: false }).limit(8),
+        atBranch(supabase.from('invoices').select('id, invoice_number, total_amount, due_date, clients(first_name, last_name)').eq('business_id', business!.id).eq('status', 'sent').order('due_date', { ascending: true, nullsFirst: false }).limit(8)),
         // Overdue, OLDEST first — the further past due, the more it needs
         // chasing. Same bounded shape as the pending query above.
-        supabase.from('invoices').select('id, invoice_number, total_amount, due_date, clients(first_name, last_name)').eq('business_id', business!.id).eq('status', 'overdue').order('due_date', { ascending: true, nullsFirst: false }).limit(8),
+        atBranch(supabase.from('invoices').select('id, invoice_number, total_amount, due_date, clients(first_name, last_name)').eq('business_id', business!.id).eq('status', 'overdue').order('due_date', { ascending: true, nullsFirst: false }).limit(8)),
         // Top clients by paid revenue this year (migration 224). A GROUP BY,
         // so it has to be an RPC — summing client-side would truncate at 1000
         // invoices and quietly rank the wrong people.
-        supabase.rpc('dashboard_top_clients', { p_business_id: business!.id, p_start: startYear, p_limit: 8 }),
-        supabase.from('jobs').select('id, title, status, scheduled_date, clients(first_name, last_name)').eq('business_id', business!.id).in('status', ['scheduled', 'in_progress']).gte('scheduled_date', today).order('scheduled_date', { ascending: true }).limit(LIST_ROWS.lg),
+        supabase.rpc('dashboard_top_clients', { p_business_id: business!.id, p_start: startYear, p_limit: 8, p_location_id: activeLocationId }),
+        atBranch(supabase.from('jobs').select('id, title, status, scheduled_date, clients(first_name, last_name)').eq('business_id', business!.id).in('status', ['scheduled', 'in_progress']).gte('scheduled_date', today).order('scheduled_date', { ascending: true }).limit(LIST_ROWS.lg)),
         // Both bounded — a .limit(4) peek and a count-only query, so neither
         // needs the pagination loop the "load every row" reads do.
         supabase.from('clients').select('id, first_name, last_name, company').eq('business_id', business!.id).order('created_at', { ascending: false }).limit(6),
@@ -515,14 +524,14 @@ export default function DashboardPage() {
         })),
       };
     },
-    { cacheKey: dashKey, resetKey: business?.id ?? '' },
+    { cacheKey: dashKey, resetKey: `${business?.id ?? ''}_${activeLocationId ?? 'all'}` },
   );
   // Payroll rides its OWN cache entry rather than the dashboard payload: it is
   // a different RPC with a different cost, and a slow or failing payroll query
   // must not hold up (or invalidate) the rest of the dashboard. Keyed to null
   // for roles without access, so the RPC is never even issued for them.
   const payrollKey = business && can.seeReports(currentRole)
-    ? `dashboard_payroll_${business.id}`
+    ? `dashboard_payroll_${business.id}_${activeLocationId ?? 'all'}`
     : null;
   const payrollSwr = useSwr<{
       total: number; hours: number; workers: number;
@@ -531,14 +540,14 @@ export default function DashboardPage() {
     }>(
     payrollKey,
     async () => {
-      const r = await fetchPayrollPeriodSummary(supabase, business!);
+      const r = await fetchPayrollPeriodSummary(supabase, business!, activeLocationId);
       // Only the three primitives — the full result carries Date objects,
       // which would come back from the JSON cache as strings.
       // Cap the list here, not at render: the whole roster would bloat the
       // cached payload for rows no size ever shows.
       return { total: r.total, hours: r.hours, workers: r.workers, top: r.top.slice(0, 8), previousTotal: r.previousTotal };
     },
-    { cacheKey: payrollKey, resetKey: business?.id ?? '' },
+    { cacheKey: payrollKey, resetKey: `${business?.id ?? ''}_${activeLocationId ?? 'all'}` },
   );
   const payroll = payrollSwr.data ?? null;
 

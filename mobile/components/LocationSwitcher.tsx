@@ -10,7 +10,14 @@ import { can } from '@amixos/shared/lib/permissions';
 // day-to-day lists to one location or "All" — much lighter than a full-width
 // dropdown bar. Renders nothing for single-location businesses, and is hidden
 // for assigned-only roles (field crew) locked to their home branch.
-export function LocationSwitcher({ className }: { className?: string }) {
+export function LocationSwitcher({
+  className,
+  /** Horizontal placement of the pill. Default 'start' — the standalone bar
+   *  on list screens hugs the left. The dashboard header centres it under the
+   *  business switcher. A prop rather than a parent style because the pill
+   *  sets its own alignSelf, which a parent's alignItems can't override. */
+  align = 'start',
+}: { className?: string; align?: 'start' | 'center' }) {
   const { locations, activeLocationId, setActiveLocation, currentRole } = useApp();
   const { locale } = useLang();
   const c = useThemeColors();
@@ -47,7 +54,7 @@ export function LocationSwitcher({ className }: { className?: string }) {
     <View className={className ?? 'px-5 pt-3'}>
       <Pressable
         onPress={() => setOpen(true)}
-        className="self-start flex-row items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 active:opacity-80"
+        className={`${align === 'center' ? 'self-center' : 'self-start'} flex-row items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 active:opacity-80`}
       >
         <MapPin size={14} color={c.faint} />
         <Text className="text-sm font-medium text-ink" numberOfLines={1}>{current}</Text>

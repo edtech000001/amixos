@@ -22,6 +22,7 @@ import {
   type PayrollPeriod,
 } from './payroll';
 import { formulaJobFieldRefs } from './payrollFormula';
+import { employeeIdsAtLocation, fetchEmployeeLocations } from './locations';
 
 // PromiseLike, not Promise: supabase-js returns a thenable query builder from
 // rpc(), which awaits identically but is not a Promise instance.
@@ -107,6 +108,14 @@ function toAggregates(rows: RawInput[]) {
 export async function fetchPayrollPeriodSummary(
   supabase: Supa,
   business: PayrollSummaryBusiness,
+  /**
+   * Scope to one branch. Null = the whole business.
+   *
+   * Filtered by the WORKER's branch membership (employee_locations), which is
+   * how the payroll screen scopes — a person can be shared across branches, so
+   * there is no location column on the pay data itself to filter instead.
+   */
+  locationId?: string | null,
 ): Promise<PayrollPeriodSummary> {
   const period = currentPayrollPeriod(business);
   const empty: PayrollPeriodSummary = { total: 0, hours: 0, workers: 0, top: [], previousTotal: null, period };
@@ -131,12 +140,27 @@ export async function fetchPayrollPeriodSummary(
     });
     if (error || !data) return null;
     return computePayrollRowsFromAggregates({
-      aggregates: toAggregates(data as RawInput[]),
+      aggregates: scopeToBranch(toAggregates(data as RawInput[])),
       period: per,
       includeZero: false,
       config,
     });
   };
+
+  // Branch membership, fetched once and applied to both periods so the
+  // comparison is like-for-like. Failure leaves the scope open rather than
+  // reporting zero payroll for a branch that clearly has some.
+  let branchEmployeeIds: Set<string> | null = null;
+  if (locationId) {
+    try {
+      const links = await fetchEmployeeLocations(supabase as never, business.id);
+      branchEmployeeIds = employeeIdsAtLocation(links, locationId);
+    } catch {
+      branchEmployeeIds = null;
+    }
+  }
+  const scopeToBranch = <T extends { employee: { id: string } }>(rows: T[]): T[] =>
+    branchEmployeeIds ? rows.filter(r => branchEmployeeIds!.has(r.employee.id)) : rows;
 
   const { data, error } = await supabase.rpc('payroll_period_inputs', {
     p_business_id: business.id,
@@ -146,7 +170,7 @@ export async function fetchPayrollPeriodSummary(
   });
   if (error || !data) return empty;
 
-  const aggregates = toAggregates(data as RawInput[]);
+  const aggregates = scopeToBranch(toAggregates(data as RawInput[]));
 
   // includeZero: false — a worker with no hours contributes nothing to the
   // total, and counting them would make "3 workers" mean "3 on the roster"

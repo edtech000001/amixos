@@ -11,6 +11,7 @@ import {
   type ClientListItem,
 } from '@amixos/shared/screens/dashboard/ClientsListScreen';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { LocationSwitcher } from '@/components/LocationSwitcher';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { triggerGoogleSyncOrThrow, googleSyncErrorMessage } from '@amixos/shared/lib/googleSync';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
@@ -344,6 +345,7 @@ export default function ClientesTab() {
 
   return (
     <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
+      <LocationSwitcher />
       <ClientsListScreen
         loading={loading}
         clients={items}

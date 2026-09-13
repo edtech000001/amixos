@@ -142,7 +142,7 @@ function ChartTooltip({ active, payload, label }: any) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ReportesPage() {
   const supabase = createSupabaseClient();
-  const { business, locations } = useApp();
+  const { business, locations, activeLocationId } = useApp();
   const { t: full, locale } = useLang();
   const t = full.dashboard.reports;
   const tc = full.common;
@@ -200,7 +200,9 @@ export default function ReportesPage() {
   // The range is part of the identity: a cached "this year" payload must never
   // be served under the "this month" chip.
   const rangeKey = customActive ? `custom_${customFrom}_${customTo}` : range;
-  const reportsKey = business ? `reports_${business.id}_${rangeKey}_${inventoryEnabled ? 'inv' : 'noinv'}` : null;
+  // Branch joins range in the cache identity — a cached "all branches"
+  // payload must never be shown as one branch's numbers.
+  const reportsKey = business ? `reports_${business.id}_${activeLocationId ?? 'all'}_${rangeKey}_${inventoryEnabled ? 'inv' : 'noinv'}` : null;
   const reportsQuery = useSwr<ReportsMetrics>(
     reportsKey,
     () => fetchReportsMetricsServer({
@@ -212,6 +214,7 @@ export default function ReportesPage() {
       unassignedLocationLabel: locale === 'es' ? 'Sin ubicación' : 'No location',
       payrollConfig: business!.payroll_config,
       inventoryEnabled,
+      locationId: activeLocationId,
     }),
     {
       cacheKey: reportsKey,

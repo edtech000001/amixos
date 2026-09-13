@@ -1658,7 +1658,11 @@ export function DashboardHomeScreen({
       {editing ? (
         <Text className="text-sm text-primary mt-1">{t.home.customize.dragHint}</Text>
       ) : businessSlot ? (
-        <View className="mt-2 self-start">{businessSlot}</View>
+        // self-stretch, not self-start: with two stacked switchers a
+        // shrink-to-fit wrapper collapsed to the narrower one and wrapped the
+        // business name onto three lines. Each pill is self-start internally,
+        // so they still hug their own content and left-align.
+        <View className="mt-2 self-stretch">{businessSlot}</View>
       ) : businessName ? (
         <Text className="text-sm text-muted mt-1">{businessName}</Text>
       ) : null}

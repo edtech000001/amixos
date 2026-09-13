@@ -59,6 +59,7 @@ import { hasClipboardImage, readClipboardImageToFile, type PhotoSource } from '@
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
+import { LocationSwitcher } from '@/components/LocationSwitcher';
 import { createSupabaseClient } from '@/lib/supabase';
 import { writeCached } from '@/lib/offline/cache';
 import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
@@ -1007,6 +1008,7 @@ export default function EquipmentScreen() {
           <Layers size={18} color={groupBy !== 'none' || quickFilter !== 'all' ? c.primary : c.muted} />
         </Pressable>
       </View>
+      <LocationSwitcher />
 
       {/* Search */}
       <View className="px-4 pt-3">

@@ -27,6 +27,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useApp } from '@/lib/AppContext';
 import { useThemeColors } from '@/lib/ThemeProvider';
+import { LocationSwitcher } from '@/components/LocationSwitcher';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { Input, Toggle, Button, Fab } from '@amixos/shared/ui';
 import { can } from '@amixos/shared/lib/permissions';
@@ -385,6 +386,7 @@ export default function ArchivosScreen() {
           {viewMode === 'grid' ? <ListIcon size={19} color={c.muted} /> : <LayoutGrid size={19} color={c.muted} />}
         </Pressable>
       </View>
+      <LocationSwitcher />
 
       {/* Breadcrumb (depth > 1). A plain flex-row View — NOT a horizontal
          ScrollView, which stretches vertically in a flex column and left a
