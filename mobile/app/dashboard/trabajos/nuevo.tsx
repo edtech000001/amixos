@@ -2029,6 +2029,18 @@ export default function NuevoTrabajoRoute() {
       // offline — the client-generated job id makes both paths safe.
       if (!editId && pendingPhotos.length) await queuePendingPhotos(jobId);
 
+      // Dismiss every picker before navigating. Leaving an RNModal presented
+      // while the screen under it is replaced can leave iOS showing the modal
+      // host with nothing in it — a black screen with no way back. Same
+      // presentation hazard as the "no second modal while one is visible" rule
+      // in CLAUDE.md.
+      setClientPickerOpen(false);
+      setQuickAddOpen(false);
+      setLeadPickerOpen(false);
+      setCrewPickerOpen(false);
+      setDriverPickerOpen(false);
+      setCrewFinderOpen(false);
+
       if (jobQueued && optimisticJobRow) {
         // Offline create: seed caches so the job shows in the list + opens, then
         // go to the list (the detail's joined client data isn't available yet).

@@ -14,6 +14,7 @@ import { LangProvider } from '@/lib/i18n/LangProvider';
 import { ThemeProvider, useTheme } from '@/lib/ThemeProvider';
 import { useProtectedRoute } from '@/lib/auth/gate';
 import { UpdateBanner } from '@/components/UpdateBanner';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 // Importing the auth store at module load wires up the single
 // onAuthStateChange listener and the safety timeout.
 import '@/lib/auth/store';
@@ -86,12 +87,17 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
+        {/* Outside the theme/i18n providers on purpose: if one of THEM throws,
+            a boundary nested inside would never mount and we would be back to a
+            black screen. It renders with plain styles for the same reason. */}
+        <ErrorBoundary>
         <ThemeProvider>
           <LangProvider>
             <ThemedStatusBar />
             <AuthAwareApp />
           </LangProvider>
         </ThemeProvider>
+        </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
