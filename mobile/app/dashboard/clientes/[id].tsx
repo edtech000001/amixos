@@ -438,7 +438,7 @@ export default function ClienteDetailRoute() {
         company: client.company,
         addressLines: [
           [client.address, client.address_line2].filter(Boolean).join(', '),
-          [client.city, client.state, client.zip_code].filter(Boolean).join(', '),
+          [[client.city, client.state].filter(Boolean).join(', '), client.zip_code].filter(Boolean).join(' '),
         ].filter(Boolean),
         phone: client.phone_cell || client.phone_office,
         email: client.email_office || client.email_home,
@@ -710,11 +710,11 @@ export default function ClienteDetailRoute() {
     return (flagged.length ? flagged : [(primaryEmail ?? '').trim()].filter(Boolean)).join(',');
   })();
   const homeEmail = client.email_home;
+  // US style: ZIP sits on the city line after the state — "Colby, KS 67701".
   const fullAddress = [
     client.address,
     client.address_line2,
-    [client.city, client.state].filter(Boolean).join(', '),
-    client.zip_code,
+    [[client.city, client.state].filter(Boolean).join(', '), client.zip_code].filter(Boolean).join(' '),
   ]
     .filter(Boolean)
     .join('\n');
