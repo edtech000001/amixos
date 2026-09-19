@@ -16,6 +16,7 @@ import {
   fetchAllInvoicesMatching,
   statusGroupIndex,
   INVOICE_LAZY_GROUP_DIMS,
+  INVOICE_REMINDER_COLUMNS,
   type InvoicesCursor,
   type InvoicesQueryParams,
   type InvoiceGroup,
@@ -38,6 +39,9 @@ interface RawInvoice {
   issue_date: string | null;
   created_at: string;
   sent_at: string | null;
+  /** Migration 228 summary — absent until the migration runs. */
+  reminder_count?: number | null;
+  last_reminded_on?: string | null;
   clients: InvoiceClient | null;
   invoice_clients: { clients: InvoiceClient | null }[];
 }
@@ -45,7 +49,7 @@ interface RawInvoice {
 // Only the columns the list renders/searches — `*` hauled every field for every
 // row. created_at is required for the keyset cursor.
 const INVOICE_LIST_SELECT =
-  'id, invoice_number, status, total_amount, due_date, issue_date, created_at, sent_at, line_items, clients(first_name, last_name, company, state), invoice_clients(clients(first_name, last_name, company, state)), jobs(external_ref, title)';
+  `id, invoice_number, status, total_amount, due_date, issue_date, created_at, sent_at, line_items, clients(first_name, last_name, company, state), invoice_clients(clients(first_name, last_name, company, state)), jobs(external_ref, title), ${INVOICE_REMINDER_COLUMNS}`;
 
 // Primary client for company/state — the single `clients` relation if present,
 // else the first of the multi-client list.
@@ -346,6 +350,8 @@ export default function FacturasPage() {
       totalAmount: inv.total_amount,
       dueDate: inv.due_date,
       sentAt: inv.sent_at,
+      reminderCount: inv.reminder_count ?? 0,
+      lastRemindedOn: inv.last_reminded_on ?? null,
       clientNames: mapClientNames(inv),
       company: pc?.company ?? null,
       state: pc?.state ?? null,

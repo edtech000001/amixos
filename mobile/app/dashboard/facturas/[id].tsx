@@ -36,6 +36,7 @@ import { sortInvoiceLinesByDate, detectLineSortDirection, setLineItemExcluded, r
 import { applicableRate, rowToPriceSheetItem, groupPriceItemsByCategory, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
+import { InvoiceRemindersCard } from '@amixos/shared/screens/dashboard/InvoiceRemindersCard';
 import { formatDateLong, formatMoneyInput, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { can } from '@amixos/shared/lib/permissions';
 import {
@@ -1057,9 +1058,15 @@ export default function FacturaDetailRoute() {
       ? resolveConfig(null, business?.invoice_template ?? null)
       : templateConfig;
 
+  // Document data for the PDF: carries the linked jobs' current titles so a
+  // single-line job prints under its job name, exactly as the screen shows it.
+  const docData = () =>
+    invoice ? { ...invoice, jobTitles: Object.fromEntries(attachedJobs.map(j => [j.id, j.title])) } : null;
+
   const exportPdf = async () => {
-    if (!invoice) return;
-    const vm = buildInvoiceViewModel(pdfConfig(), invoice, branding);
+    const data = docData();
+    if (!invoice || !data) return;
+    const vm = buildInvoiceViewModel(pdfConfig(), data, branding);
     const uri = await renderInvoicePdf(buildInvoiceHtml(vm), invoice.invoiceNumber);
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf' });
@@ -1146,7 +1153,7 @@ export default function FacturaDetailRoute() {
         // renderer as the "Export PDF" action). Link-only skips PDF generation.
         let attachments: string[] = [];
         if (includePdf) {
-          const vm = buildInvoiceViewModel(pdfConfig(), invoice, branding);
+          const vm = buildInvoiceViewModel(pdfConfig(), docData() ?? invoice, branding);
           const uri = await renderInvoicePdf(buildInvoiceHtml(vm), invoice.invoiceNumber);
           attachments = [uri];
         }
@@ -1232,6 +1239,9 @@ export default function FacturaDetailRoute() {
         jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
         jobStates={Object.fromEntries(attachedJobs.filter(j => j.job_state).map(j => [j.id, j.job_state as string]))}
         jobDates={Object.fromEntries(attachedJobs.filter(j => j.scheduled_date).map(j => [j.id, j.scheduled_date as string]))}
+        remindersSlot={business && invoice ? (
+          <InvoiceRemindersCard supabase={supabase} businessId={business.id} invoiceId={id} canEdit={canEdit} nameById={nameById} />
+        ) : null}
       />
 
       <JobPreviewSheet

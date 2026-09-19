@@ -139,6 +139,11 @@ function applyBaseFilters(q: any, params: InvoicesQueryParams): any {
   return q;
 }
 
+/** Reminder summary columns on invoices (migration 228) — append to a list
+ *  select as `, ${INVOICE_REMINDER_COLUMNS}`; fetchInvoicesPage drops them
+ *  automatically on a database that hasn't run the migration yet. */
+export const INVOICE_REMINDER_COLUMNS = 'reminder_count, last_reminded_on';
+
 /**
  * Fetch one page of invoices for the given filters. `select` is the caller's
  * column list — it MUST include `id, created_at, status` for pagination and
@@ -151,21 +156,25 @@ export async function fetchInvoicesPage<T extends { id: string; created_at?: str
 ): Promise<InvoicesPage<T>> {
   const pageSize = params.pageSize ?? 50;
   const term = params.search?.trim() ?? '';
-
-  let q = supabase.from('invoices').select(select).eq('business_id', params.businessId);
-  q = applyBaseFilters(q, params);
-
   const searchOr = await searchOrClause(supabase, params.businessId, term);
-  if (searchOr) q = q.or(searchOr);
 
-  if (params.cursor) {
-    const c = params.cursor;
-    q = q.or(`created_at.lt.${c.createdAt},and(created_at.eq.${c.createdAt},id.lt.${c.id})`);
+  const run = (sel: string) => {
+    let q = supabase.from('invoices').select(sel).eq('business_id', params.businessId);
+    q = applyBaseFilters(q, params);
+    if (searchOr) q = q.or(searchOr);
+    if (params.cursor) {
+      const c = params.cursor;
+      q = q.or(`created_at.lt.${c.createdAt},and(created_at.eq.${c.createdAt},id.lt.${c.id})`);
+    }
+    return q.order('created_at', { ascending: false }).order('id', { ascending: false }).limit(pageSize);
+  };
+
+  let { data, error } = await run(select);
+  // Reminder summary columns (migration 228) not there yet → load the list
+  // without them rather than failing the whole screen. 42703 = undefined column.
+  if (error?.code === '42703' && select.includes(INVOICE_REMINDER_COLUMNS)) {
+    ({ data, error } = await run(select.replace(`, ${INVOICE_REMINDER_COLUMNS}`, '').replace(INVOICE_REMINDER_COLUMNS, '')));
   }
-
-  q = q.order('created_at', { ascending: false }).order('id', { ascending: false }).limit(pageSize);
-
-  const { data, error } = await q;
   if (error) throw new Error(error.message);
   const invoices = (data ?? []) as T[];
   const last = invoices[invoices.length - 1] as any;

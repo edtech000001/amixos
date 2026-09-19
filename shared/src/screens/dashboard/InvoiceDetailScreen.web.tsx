@@ -4,7 +4,7 @@
 // InvoiceDetailScreen.tsx so the web page wrapper is untouched and the bundler
 // resolves this .web.tsx variant automatically.
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { SkeletonCard, SkeletonDetail } from '../../ui/Skeleton';
 import {
   ArrowLeft,
@@ -35,6 +35,7 @@ import { Tooltip } from '../../ui/Tooltip';
 import {
   type InvoiceBranding,
   type InvoiceTemplateConfig,
+  resolveLineDescriptions,
 } from '../../lib/invoiceTemplate';
 
 export interface InvoiceDetailClient {
@@ -198,6 +199,9 @@ export interface InvoiceDetailScreenProps {
   /** jobId → the job's date (scheduled/performed) — shown inline on
    *  job-backed lines, read-only (the job owns its date). */
   jobDates?: Record<string, string>;
+  /** Payment-reminder log card (InvoiceRemindersCard) — rendered under the
+   *  dates while the invoice is open (sent / overdue). Platform-owned. */
+  remindersSlot?: ReactNode;
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
@@ -260,6 +264,7 @@ export function InvoiceDetailScreen({
   jobTitles,
   jobStates,
   jobDates,
+  remindersSlot,
 }: InvoiceDetailScreenProps) {
   const { t: ui, locale } = useLang();
   const tInv = ui.dashboard.invoices;
@@ -465,6 +470,9 @@ export function InvoiceDetailScreen({
           </div>
         </div>
 
+        {/* Payment reminders — only while the invoice is still open. */}
+        {sentLike ? remindersSlot : null}
+
         {/* Notes */}
         {invoice.notes ? (
           <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
@@ -557,14 +565,9 @@ export function InvoiceDetailScreen({
         <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
           {(() => {
             const seen = new Set<string>();
-            // Jobs contributing exactly one non-add-on line to this invoice.
-            const jobLineCount = new Map<string, number>();
-            for (const li of invoice.lineItems) {
-              if (li.job_id && !li.addon) jobLineCount.set(li.job_id, (jobLineCount.get(li.job_id) ?? 0) + 1);
-            }
-            const singleLineJobs = new Set(
-              Array.from(jobLineCount.entries()).filter(([, n]) => n === 1).map(([id]) => id),
-            );
+            // Display names — the SAME rule the printed document uses, so the
+            // screen and the printout/public link always agree.
+            const lineNames = resolveLineDescriptions(invoice.lineItems, jobTitles);
             return invoice.lineItems.map((li, idx) => {
               const q = Number(li.qty) || 0;
               const r = Number(li.rate) || 0;
@@ -577,7 +580,7 @@ export function InvoiceDetailScreen({
               // job must show each line's own description — otherwise every
               // row repeats the job name and "4 Tower Assembly" / "Travel Fee"
               // are nowhere to be seen.
-              const title = (jid && !isAddon && singleLineJobs.has(jid) && jobTitles?.[jid]) || li.description;
+              const title = lineNames[idx];
               const showActions = editable && canEdit && !!jid && !isAddon && !!onRemoveJob && !seen.has(jid);
               if (jid) seen.add(jid);
               return (

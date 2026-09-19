@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, Pressable, ScrollView, SectionList, Modal as RNModal } from 'react-native';
-import { FileText, Search, Calendar, Layers, XCircle, List, Building2, MapPin, Check, ListChecks, Trash2, X, DollarSign } from 'lucide-react-native';
+import { FileText, Search, Calendar, Layers, XCircle, List, Building2, MapPin, Check, ListChecks, Trash2, X, DollarSign, Bell, BellRing } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
@@ -14,6 +14,7 @@ import { SkeletonList, SkeletonRow } from '../../ui/Skeleton';
 import { ChipScroll } from '../../ui/ChipScroll';
 import { INVOICES_FILTERS_KEY, parseInvoicesFilters } from '../../lib/invoicesFilters';
 import { useThemeColors } from '../../theme';
+import { reminderBadge } from '../../lib/invoiceReminders';
 
 export interface InvoiceListItem {
   id: string;
@@ -23,6 +24,9 @@ export interface InvoiceListItem {
   dueDate: string | null;
   /** When the invoice was sent (ISO timestamp) — drives "sent N days ago". */
   sentAt: string | null;
+  /** Payment-reminder summary (migration 228) — drives the reminder pill. */
+  reminderCount?: number;
+  lastRemindedOn?: string | null;
   clientNames: string | null;
   /** Primary client's company + state (for the company/state filters). */
   company: string | null;
@@ -495,6 +499,8 @@ export function InvoicesListScreen({
           const overdueAgo = inv.status === 'overdue' && daysOverdue(inv.dueDate) > 0
             ? t.overdueAgo.replace('{{n}}', String(daysOverdue(inv.dueDate)))
             : null;
+          // "Reminded 3d ago" / "Not reminded" — has this client been chased?
+          const reminder = reminderBadge(inv, t.reminders);
           return (
             <Pressable
               onPress={() => (selectMode ? toggleSelect(inv.id) : onInvoicePress(inv.id))}
@@ -516,6 +522,14 @@ export function InvoicesListScreen({
                     <Text className={`text-xs font-medium ${pillText}`}>{statusLabel}</Text>
                   </View>
                 </View>
+                {/* Own line, always — inline it only fit beside short invoice
+                    numbers, so rows alternated between one and two lines. */}
+                {reminder ? (
+                  <View className={`self-start flex-row items-center gap-1 px-2 py-0.5 mt-1 rounded-full ${reminder.reminded ? 'bg-primary/10' : 'bg-amber-500/10'}`}>
+                    {reminder.reminded ? <BellRing size={11} color={c.primary} /> : <Bell size={11} color="#d97706" />}
+                    <Text className={`text-[11px] font-medium ${reminder.reminded ? 'text-primary' : 'text-amber-600'}`}>{reminder.label}</Text>
+                  </View>
+                ) : null}
                 <Text className="text-xs text-faint mt-0.5">
                   {client}
                   {inv.company ? ` · ${inv.company}` : ''}

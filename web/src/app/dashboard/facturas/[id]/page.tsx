@@ -31,6 +31,7 @@ import { sortInvoiceLinesByDate, detectLineSortDirection, setLineItemExcluded, r
 import { applicableRate, rowToPriceSheetItem, groupPriceItemsByCategory, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
+import { InvoiceRemindersCard } from '@amixos/shared/screens/dashboard/InvoiceRemindersCard';
 import { formatDateLong, formatNumberGrouped, formatMoneyInput } from '@amixos/shared/lib/format';
 import { usePasteImage } from '@/lib/usePasteImage';
 import { PasteHint } from '@/components/ui/PasteHint';
@@ -1098,6 +1099,9 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
         jobStates={Object.fromEntries(attachedJobs.filter(j => j.job_state).map(j => [j.id, j.job_state as string]))}
         jobDates={Object.fromEntries(attachedJobs.filter(j => j.scheduled_date).map(j => [j.id, j.scheduled_date as string]))}
+        remindersSlot={business && invoice ? (
+          <InvoiceRemindersCard supabase={supabase} businessId={business.id} invoiceId={id} canEdit={canEdit} nameById={nameById} />
+        ) : null}
       />
 
       <JobPreviewSheet

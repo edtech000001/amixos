@@ -48,7 +48,9 @@ interface RawInvoice {
   status: string;
   issue_date: string;
   due_date: string | null;
-  line_items: { description: string; qty: number; rate: number }[];
+  line_items: { description: string; qty: number; rate: number; job_id?: string | null; addon?: boolean }[];
+  /** jobId → current title (migration 229); absent before it runs. */
+  job_titles?: Record<string, string> | null;
   subtotal_amount: number;
   tax_rate: number;
   tax_amount: number;
@@ -173,6 +175,8 @@ export default function PublicInvoicePage({ params }: { params: { token: string 
       zip: c.zip_code,
     })),
     customFields,
+    // Single-line jobs print under the job's current name, matching the app.
+    jobTitles: raw.job_titles ?? null,
   };
 
   const b = raw.businesses;

@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SkeletonRow } from '../../ui/Skeleton';
-import { Plus, FileText, Search, X, Calendar, XCircle, List, Layers, Building2, MapPin, Check, ListChecks, Trash2, DollarSign } from 'lucide-react';
+import { Plus, FileText, Search, X, Calendar, XCircle, List, Layers, Building2, MapPin, Check, ListChecks, Trash2, DollarSign, Bell, BellRing } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { formatDateLong, daysOverdue, daysSince } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
@@ -14,6 +14,7 @@ import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { INVOICES_FILTERS_KEY, parseInvoicesFilters } from '../../lib/invoicesFilters';
 import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
 import { Tooltip } from '../../ui/Tooltip';
+import { reminderBadge } from '../../lib/invoiceReminders';
 
 export interface InvoiceListItem {
   id: string;
@@ -29,6 +30,9 @@ export interface InvoiceListItem {
   issueDate: string | null;
   /** When the invoice was sent (drives the "sent Nd ago" label). */
   sentAt?: string | null;
+  /** Payment-reminder summary (migration 228) — drives the reminder pill. */
+  reminderCount?: number;
+  lastRemindedOn?: string | null;
   /** Extra search text: line-item names + linked jobs' Project IDs. */
   searchExtra?: string;
 }
@@ -605,6 +609,16 @@ export function InvoicesListScreen({
                   const overdueAgo = inv.status === 'overdue' && daysOverdue(inv.dueDate) > 0
                     ? t.overdueAgo.replace('{{n}}', String(daysOverdue(inv.dueDate)))
                     : null;
+                  // "Reminded 3d ago" / "Not reminded" — has this client been chased?
+                  const reminder = reminderBadge(inv, t.reminders);
+                  const reminderPill = reminder ? (
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap ${
+                      reminder.reminded ? 'bg-primary/10 text-primary' : 'bg-amber-500/10 text-amber-600'
+                    }`}>
+                      {reminder.reminded ? <BellRing size={11} /> : <Bell size={11} />}
+                      {reminder.label}
+                    </span>
+                  ) : null;
                   return (
                     <button
                       key={inv.id}
@@ -631,6 +645,8 @@ export function InvoicesListScreen({
                         <span className="md:hidden flex items-center gap-2 flex-wrap mt-0.5">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pill}`}>{pillLabel}</span>
                         </span>
+                        {/* Own line on narrow widths, matching mobile. */}
+                        {reminderPill ? <span className="md:hidden flex mt-1">{reminderPill}</span> : null}
                         <span className="md:hidden block text-xs text-faint mt-0.5 truncate">
                           {client}
                           {inv.company ? ` · ${inv.company}` : ''}
@@ -639,8 +655,9 @@ export function InvoicesListScreen({
                           {overdueAgo ? ` · ${overdueAgo}` : ''}
                         </span>
                       </div>
-                      <span className="hidden md:flex w-36 shrink-0">
+                      <span className="hidden md:flex w-36 shrink-0 flex-col items-start gap-1">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pill}`}>{pillLabel}</span>
+                        {reminderPill}
                       </span>
                       <span className="hidden md:block flex-1 min-w-0 truncate">
                         <span className="text-sm text-muted">{client}</span>

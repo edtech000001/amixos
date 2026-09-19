@@ -781,7 +781,35 @@ export interface InvoiceDocLineItem {
   /** Date the work was performed (manual lines) — appended to the printed
    *  description as "· <date>". Snake case: raw line_items jsonb flows here. */
   service_date?: string | null;
+  /** Linked job (raw line_items jsonb) — lets `jobTitles` name the line. */
+  job_id?: string | null;
+  /** Split-off add-on line (e.g. a loading fee) — always keeps its own name. */
+  addon?: boolean;
 }
+
+/**
+ * The name each line prints under. A job that bills as exactly ONE non-add-on
+ * line is named after the job's CURRENT title (that line IS the job); every
+ * other line — itemized job lines, add-ons, manual lines — keeps its stored
+ * description. Same rule the invoice detail screen displays, so the printout
+ * matches the screen; it also papers over imported lines whose stored text
+ * glued a description, the job name and a price note together.
+ */
+export function resolveLineDescriptions(
+  lineItems: InvoiceDocLineItem[],
+  jobTitles?: Record<string, string> | null,
+): string[] {
+  if (!jobTitles || Object.keys(jobTitles).length === 0) return lineItems.map(l => l.description);
+  const jobLineCount = new Map<string, number>();
+  for (const l of lineItems) {
+    if (l.job_id && !l.addon) jobLineCount.set(l.job_id, (jobLineCount.get(l.job_id) ?? 0) + 1);
+  }
+  return lineItems.map(l => {
+    const title = l.job_id && !l.addon && jobLineCount.get(l.job_id) === 1 ? jobTitles[l.job_id]?.trim() : '';
+    return title || l.description;
+  });
+}
+
 export interface InvoiceDocData {
   invoiceNumber: string;
   status: string;
@@ -796,6 +824,9 @@ export interface InvoiceDocData {
   language: InvoiceLang;
   clients: InvoiceDocClient[];
   customFields?: { label: string; value: string; key?: string }[];
+  /** jobId → current job title. Single-line jobs print under this name (see
+   *  resolveLineDescriptions). Omit to print stored descriptions as-is. */
+  jobTitles?: Record<string, string> | null;
   /** 'estimate' renders a proposal through the invoice theme engine. In that
    *  mode the title becomes "Estimate", `dueDate` is treated as the "valid
    *  until" date, and the estimate-only fields below are shown. */
@@ -935,12 +966,16 @@ export function buildInvoiceViewModel(
     };
   });
 
+  // Names resolved over ALL lines (excluded included) so a job's line count —
+  // and so whether its title applies — matches the detail screen exactly.
+  const names = resolveLineDescriptions(invoice.lineItems, invoice.jobTitles);
   // Temporarily-excluded lines never reach the document (any renderer).
-  const items = invoice.lineItems.filter(l => !(l as { excluded?: boolean }).excluded).map(l => {
+  const items = invoice.lineItems.map((l, i) => ({ l, name: names[i] }))
+    .filter(({ l }) => !(l as { excluded?: boolean }).excluded).map(({ l, name }) => {
     const qty = Number(l.qty) || 0;
     const rate = Number(l.rate) || 0;
     return {
-      description: l.service_date ? `${l.description} · ${fmtDate(l.service_date)}` : l.description,
+      description: l.service_date ? `${name} · ${fmtDate(l.service_date)}` : name,
       qty: String(qty),
       rate: fmtMoney(rate),
       total: fmtMoney(qty * rate),

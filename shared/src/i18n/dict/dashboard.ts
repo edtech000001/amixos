@@ -314,6 +314,29 @@ export type DashboardDict = {
       photoLabel: string;
       methods: { cash: string; check: string; card: string; transfer: string; zelle: string; cashapp: string; venmo: string; paypal: string; moneyOrder: string; other: string };
     };
+    /** Payment-reminder log (migration 228). */
+    reminders: {
+      title: string;
+      none: string;
+      summary: string;
+      summaryToday: string;
+      markBtn: string;
+      methodLabel: string;
+      dateLabel: string;
+      noteLabel: string;
+      notePlaceholder: string;
+      save: string;
+      cancel: string;
+      deleteConfirm: string;
+      deleteBtn: string;
+      byUser: string;
+      listReminded: string;
+      listRemindedToday: string;
+      listNotReminded: string;
+      showAll: string;
+      showLess: string;
+      methods: { email: string; text: string; call: string; in_person: string; other: string };
+    };
     sendInvoice: string;
     emailSubject: string;
     emailBody: string;
@@ -3459,6 +3482,28 @@ export const dashboard: Record<Locale, DashboardDict> = {
         photoLabel: 'Foto del pago',
         methods: { cash: 'Efectivo', check: 'Cheque', card: 'Tarjeta', transfer: 'Transferencia', zelle: 'Zelle', cashapp: 'Cash App', venmo: 'Venmo', paypal: 'PayPal', moneyOrder: 'Giro postal (money order)', other: 'Otro' },
       },
+      reminders: {
+        title: 'Recordatorios de pago',
+        none: 'Aún no le has recordado al cliente.',
+        summary: 'Recordado {{count}}× · último hace {{n}} d',
+        summaryToday: 'Recordado {{count}}× · último hoy',
+        markBtn: 'Marcar como recordado',
+        methodLabel: '¿Cómo le recordaste?',
+        dateLabel: 'Fecha',
+        noteLabel: 'Nota (opcional)',
+        notePlaceholder: 'Ej. Dijo que paga el viernes',
+        save: 'Guardar recordatorio',
+        cancel: 'Cancelar',
+        deleteConfirm: '¿Eliminar este recordatorio?',
+        deleteBtn: 'Eliminar',
+        byUser: 'por {{name}}',
+        listReminded: 'Recordado hace {{n}} d',
+        listRemindedToday: 'Recordado hoy',
+        listNotReminded: 'Sin recordatorio',
+        showAll: 'Ver todos ({{n}})',
+        showLess: 'Ver menos',
+        methods: { email: 'Correo', text: 'Mensaje', call: 'Llamada', in_person: 'En persona', other: 'Otro' },
+      },
       sendInvoice: 'Enviar factura',
       emailSubject: 'Factura {{number}}',
       emailBody: 'Hola,\n\nAdjunto encontrarás tu factura.\nPuedes verla aquí: {{link}}\n\nGracias por tu preferencia.',
@@ -6603,6 +6648,28 @@ export const dashboard: Record<Locale, DashboardDict> = {
         removePhoto: 'Remove photo',
         photoLabel: 'Payment photo',
         methods: { cash: 'Cash', check: 'Check', card: 'Card', transfer: 'Bank transfer', zelle: 'Zelle', cashapp: 'Cash App', venmo: 'Venmo', paypal: 'PayPal', moneyOrder: 'Money order', other: 'Other' },
+      },
+      reminders: {
+        title: 'Payment reminders',
+        none: "You haven't reminded the client yet.",
+        summary: 'Reminded {{count}}× · last {{n}}d ago',
+        summaryToday: 'Reminded {{count}}× · last today',
+        markBtn: 'Mark as reminded',
+        methodLabel: 'How did you remind them?',
+        dateLabel: 'Date',
+        noteLabel: 'Note (optional)',
+        notePlaceholder: 'e.g. Said they will pay Friday',
+        save: 'Save reminder',
+        cancel: 'Cancel',
+        deleteConfirm: 'Delete this reminder?',
+        deleteBtn: 'Delete',
+        byUser: 'by {{name}}',
+        listReminded: 'Reminded {{n}}d ago',
+        listRemindedToday: 'Reminded today',
+        listNotReminded: 'Not reminded',
+        showAll: 'Show all ({{n}})',
+        showLess: 'Show less',
+        methods: { email: 'Email', text: 'Text', call: 'Call', in_person: 'In person', other: 'Other' },
       },
       sendInvoice: 'Send invoice',
       emailSubject: 'Invoice {{number}}',
