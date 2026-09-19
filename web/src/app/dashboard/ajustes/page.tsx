@@ -3323,14 +3323,27 @@ export default function AjustesPage() {
                       )}
                     </div>
                     {action === 'manage' ? (
-                      <Button
-                        variant="secondary"
-                        onClick={openBillingPortal}
-                        loading={portalLoading}
-                        className="shrink-0 flex items-center gap-1.5"
-                      >
-                        {es ? 'Administrar suscripción' : 'Manage subscription'}
-                      </Button>
+                      // Subscribed accounts can still browse the catalog — the
+                      // modal marks their plan and routes switches through the
+                      // portal instead of a second checkout.
+                      <div className="shrink-0 flex flex-wrap items-center justify-end gap-2">
+                        <Button
+                          variant="secondary"
+                          onClick={() => setPricingOpen(true)}
+                          className="flex items-center gap-1.5"
+                        >
+                          <Sparkles size={16} />
+                          {es ? 'Ver planes' : 'View plans'}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          onClick={openBillingPortal}
+                          loading={portalLoading}
+                          className="flex items-center gap-1.5"
+                        >
+                          {es ? 'Administrar suscripción' : 'Manage subscription'}
+                        </Button>
+                      </div>
                     ) : (
                       <Button
                         variant="primary"

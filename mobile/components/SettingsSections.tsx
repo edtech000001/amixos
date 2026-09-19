@@ -3659,20 +3659,22 @@ export function AccountSection() {
             ) : null}
           </View>
 
-          {subState.action === 'plans' ? (
-            <Pressable
-              onPress={() => setPricingOpen(true)}
-              className="flex-row items-center gap-3 px-4 py-3 rounded-xl border border-primary/20 bg-primary/5 active:opacity-70"
-            >
-              <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center shrink-0">
-                <Sparkles size={16} color={c.primary} />
-              </View>
-              <Text className="flex-1 text-sm font-semibold text-primary">
-                {locale === 'en' ? 'See plans' : 'Ver planes'}
-              </Text>
-              <ChevronRight size={18} color={c.faint} />
-            </Pressable>
-          ) : Platform.OS === 'ios' ? (
+          {/* Always available — a subscribed account can still browse the
+              catalog (the sheet marks its current plan). */}
+          <Pressable
+            onPress={() => setPricingOpen(true)}
+            className="flex-row items-center gap-3 px-4 py-3 rounded-xl border border-primary/20 bg-primary/5 active:opacity-70"
+          >
+            <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center shrink-0">
+              <Sparkles size={16} color={c.primary} />
+            </View>
+            <Text className="flex-1 text-sm font-semibold text-primary">
+              {locale === 'en' ? 'See plans' : 'Ver planes'}
+            </Text>
+            <ChevronRight size={18} color={c.faint} />
+          </Pressable>
+
+          {subState.action === 'plans' ? null : Platform.OS === 'ios' ? (
             // App Store guideline 3.1.1: no in-app link to an external (non-IAP)
             // purchase/management flow for digital subs. iOS shows a neutral,
             // non-tappable note instead of the "Manage on the web" link.

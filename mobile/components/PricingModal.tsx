@@ -28,6 +28,7 @@ import {
   type BillingPeriod,
   type PlanKey,
 } from '@amixos/shared/lib/plans';
+import { activePlanKey } from '@amixos/shared/lib/subscription';
 
 // Pricing / plans bottom sheet (UI only — no billing/Stripe yet). One-handed:
 // a slide-up sheet, not a centered dialog. Mirrors the LogJobSheet structure
@@ -51,6 +52,20 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
 
   const user = useAuthStore((s) => s.user);
   const business = useAuthStore((s) => s.business);
+
+  // A business already on a paid plan can browse the catalog too: its plan
+  // is marked, and other plans say "change" rather than "subscribe" (switching
+  // happens on the existing subscription via the web billing portal).
+  const currentPlanKey =
+    business &&
+    (business.subscription_status === 'active' || business.subscription_status === 'past_due')
+      ? activePlanKey({
+          plan: business.plan,
+          subscription_status: business.subscription_status,
+          trial_ends_at: business.trial_ends_at,
+          current_period_end: business.current_period_end,
+        })
+      : null;
 
   const [period, setPeriod] = useState<BillingPeriod>('monthly');
   const [view, setView] = useState<'plans' | 'contact'>('plans');
@@ -217,7 +232,13 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                 >
                   <Globe size={18} color={c.primary} />
                   <Text className="flex-1 text-sm font-semibold text-primary">
-                    {en ? 'Subscribe at amixos.com' : 'Suscríbete en amixos.com'}
+                    {currentPlanKey
+                      ? en
+                        ? 'Change your plan at amixos.com'
+                        : 'Cambia tu plan en amixos.com'
+                      : en
+                        ? 'Subscribe at amixos.com'
+                        : 'Suscríbete en amixos.com'}
                   </Text>
                   <ExternalLink size={16} color={c.primary} />
                 </Pressable>
@@ -227,7 +248,10 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                 <View className="gap-3">
                   {PLANS.map((plan) => {
                     const copy = plan.copy[locale];
-                    const recommended = !!plan.recommended;
+                    const isCurrent = plan.key === currentPlanKey;
+                    // Once they're on a plan, the border follows THEIR plan,
+                    // not the marketing pick.
+                    const recommended = currentPlanKey ? false : !!plan.recommended;
                     const custom = !!plan.custom;
                     // NOT rounded to whole dollars — prices are $49.99 etc., and
                     // showing "$50" while Stripe charges $49.99 is the mismatch
@@ -237,10 +261,17 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                       <View
                         key={plan.key}
                         className={`rounded-2xl border p-4 ${
-                          recommended ? 'border-primary' : 'border-border'
+                          recommended || isCurrent ? 'border-primary' : 'border-border'
                         }`}
                       >
-                        {recommended ? (
+                        {isCurrent ? (
+                          <View className="flex-row items-center self-start gap-1 bg-primary/10 rounded-full px-2.5 py-1 mb-2">
+                            <Check size={12} color={c.primary} />
+                            <Text className="text-xs font-semibold text-primary">
+                              {en ? 'Your plan' : 'Tu plan'}
+                            </Text>
+                          </View>
+                        ) : recommended ? (
                           <View className="flex-row items-center self-start gap-1 bg-primary/10 rounded-full px-2.5 py-1 mb-2">
                             <Sparkles size={12} color={c.primary} />
                             <Text className="text-xs font-semibold text-primary">
@@ -307,6 +338,12 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                               {en ? 'Contact us' : 'Contáctanos'}
                             </Text>
                           </Pressable>
+                        ) : isCurrent ? (
+                          <View className="mt-4 py-3 rounded-2xl items-center border border-border">
+                            <Text className="text-base font-semibold text-muted">
+                              {en ? 'Current plan' : 'Plan actual'}
+                            </Text>
+                          </View>
                         ) : Platform.OS === 'ios' ? (
                           // App Store guideline 3.1.1: no in-app button/link to an
                           // external (non-IAP) purchase flow for digital subs. On
@@ -326,7 +363,13 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                             className="mt-4 py-3 rounded-2xl items-center bg-primary active:opacity-90"
                           >
                             <Text className="text-base font-semibold text-white">
-                              {en ? 'Subscribe on the web' : 'Suscribirse en la web'}
+                              {currentPlanKey
+                                ? en
+                                  ? 'Change on the web'
+                                  : 'Cambiar en la web'
+                                : en
+                                  ? 'Subscribe on the web'
+                                  : 'Suscribirse en la web'}
                             </Text>
                           </Pressable>
                         )}
@@ -335,12 +378,14 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                   })}
                 </View>
 
-                {/* Footer */}
-                <Text className="text-xs text-faint text-center mt-4">
-                  {en
-                    ? '14-day free trial · no credit card'
-                    : '14 días gratis · sin tarjeta de crédito'}
-                </Text>
+                {/* Footer — the trial pitch means nothing to a paying account. */}
+                {currentPlanKey ? null : (
+                  <Text className="text-xs text-faint text-center mt-4">
+                    {en
+                      ? '14-day free trial · no credit card'
+                      : '14 días gratis · sin tarjeta de crédito'}
+                  </Text>
+                )}
               </ScrollView>
             </>
           ) : (

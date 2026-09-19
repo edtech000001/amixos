@@ -12,7 +12,7 @@ import {
   type BillingPeriod,
   type PlanKey,
 } from '@amixos/shared/lib/plans';
-import { isInTrial, trialDaysLeft } from '@amixos/shared/lib/subscription';
+import { activePlanKey, isInTrial, trialDaysLeft } from '@amixos/shared/lib/subscription';
 import { useLang } from '@/i18n/LangProvider';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
@@ -51,6 +51,17 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
     : null;
   const daysLeft = sub && isInTrial(sub) ? trialDaysLeft(sub) : null;
 
+  // A business already paying for a plan can still browse the catalog, but
+  // must NOT go through Checkout again — that would open a second Stripe
+  // subscription alongside the first (double billing). Its current plan is
+  // marked, and every other plan hands off to the Billing Portal, which swaps
+  // the plan on the existing subscription.
+  const currentPlanKey =
+    sub && (sub.subscription_status === 'active' || sub.subscription_status === 'past_due')
+      ? activePlanKey(sub)
+      : null;
+  const [portalLoading, setPortalLoading] = useState(false);
+
   // ── Plan carousel ────────────────────────────────────────────────────────
   // Five plans across one row read as a wall and dilute the entry tiers, which
   // are the ones most people should be choosing. Show a page at a time —
@@ -81,9 +92,39 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
     if (open) {
       setView('plans');
       setSubscribeError(null);
+      setPortalLoading(false);
       setPage(0);
     }
   }, [open]);
+
+  async function openBillingPortal() {
+    if (!business) return;
+    setPortalLoading(true);
+    setSubscribeError(null);
+    try {
+      const { data: { session } } = await createSupabaseClient().auth.getSession();
+      const res = await fetch('/api/billing/portal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ businessId: business.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.url) {
+        throw new Error(
+          data?.error || (es ? 'No se pudo abrir el portal.' : 'Could not open the portal.'),
+        );
+      }
+      window.location.href = data.url;
+    } catch (err) {
+      setSubscribeError(
+        err instanceof Error ? err.message : es ? 'Ocurrió un error.' : 'Something went wrong.',
+      );
+      setPortalLoading(false);
+    }
+  }
 
   async function handleSubscribe(plan: PlanKey) {
     if (!business) return;
@@ -196,7 +237,10 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
               // is meant to avoid.
               const perMonth = formatPlanPrice(planMonthlyEquivalent(plan, period));
               const savings = formatPlanPrice(planAnnualSavings(plan));
-              const highlighted = plan.recommended;
+              const isCurrent = plan.key === currentPlanKey;
+              // Once they're on a plan, the ring follows THEIR plan, not the
+              // marketing pick.
+              const highlighted = currentPlanKey ? isCurrent : plan.recommended;
               const isCustom = plan.custom;
 
               return (
@@ -210,12 +254,17 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
                     highlighted ? 'border-primary ring-2 ring-primary/30' : 'border-border-soft'
                   )}
                 >
-                  {highlighted && (
+                  {isCurrent ? (
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-white shadow-sm">
+                      <Check size={12} />
+                      {es ? 'Tu plan' : 'Your plan'}
+                    </span>
+                  ) : highlighted ? (
                     <span className="absolute -top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-white shadow-sm">
                       <Sparkles size={12} />
                       {es ? 'Más popular' : 'Most popular'}
                     </span>
-                  )}
+                  ) : null}
 
                   <h3 className="text-lg font-bold text-ink">{copy.name}</h3>
                   <p className="mt-0.5 text-xs text-muted">{copy.tagline}</p>
@@ -266,6 +315,21 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
                       onClick={() => setView('contact')}
                     >
                       {es ? 'Contáctanos' : 'Contact us'}
+                    </Button>
+                  ) : isCurrent ? (
+                    <Button variant="secondary" fullWidth className="mt-5" disabled>
+                      {es ? 'Plan actual' : 'Current plan'}
+                    </Button>
+                  ) : currentPlanKey ? (
+                    <Button
+                      variant="secondary"
+                      fullWidth
+                      className="mt-5"
+                      loading={portalLoading}
+                      disabled={!business || portalLoading}
+                      onClick={openBillingPortal}
+                    >
+                      {es ? 'Cambiar a este plan' : 'Switch to this plan'}
                     </Button>
                   ) : (
                     <Button
