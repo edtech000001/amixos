@@ -1,6 +1,8 @@
-import { Pressable, ScrollView, Text, View, type TextInputProps } from 'react-native';
+import { Pressable, ScrollView, Text, View, type TextInput, type TextInputProps } from 'react-native';
 import { useState, useRef } from 'react';
+import { Check, ChevronDown } from 'lucide-react-native';
 import { Input } from './Input';
+import { useThemeColors } from '../theme';
 
 interface AutocompleteInputProps extends Omit<TextInputProps, 'value' | 'onChangeText'> {
   label?: string;
@@ -9,6 +11,11 @@ interface AutocompleteInputProps extends Omit<TextInputProps, 'value' | 'onChang
   suggestions: string[];
   placeholder?: string;
   maxSuggestions?: number;
+  /** Dropdown mode: a chevron marks the field as pickable, focusing lists
+   *  EVERY suggestion (the current value checked) until the user types —
+   *  then it filters. Free text is still accepted. */
+  browse?: boolean;
+  hint?: string;
 }
 
 /**
@@ -28,20 +35,28 @@ export function AutocompleteInput({
   onChangeText,
   suggestions,
   placeholder,
-  maxSuggestions = 6,
+  maxSuggestions,
+  browse = false,
+  hint,
   ...rest
 }: AutocompleteInputProps) {
+  const c = useThemeColors();
   const [focused, setFocused] = useState(false);
+  // Browse mode: false until the user types after focusing — until then the
+  // full list shows, so an already-filled field still offers every option.
+  const [typed, setTyped] = useState(false);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<TextInput>(null);
+  const limit = maxSuggestions ?? (browse ? Infinity : 6);
 
   const norm = (s: string) => s.toLowerCase().trim();
+  const q = norm(value);
   const filtered = (() => {
     if (suggestions.length === 0) return [];
-    const q = norm(value);
-    if (!q) return suggestions.slice(0, maxSuggestions);
+    if (!q || (browse && !typed)) return suggestions.slice(0, limit);
     return suggestions
       .filter(s => norm(s) !== q && norm(s).includes(q))
-      .slice(0, maxSuggestions);
+      .slice(0, limit);
   })();
 
   const showDropdown = focused && filtered.length > 0;
@@ -49,15 +64,32 @@ export function AutocompleteInput({
   return (
     <View>
       <Input
+        ref={inputRef}
         label={label}
+        hint={showDropdown ? undefined : hint}
         value={value}
-        onChangeText={onChangeText}
+        onChangeText={v => {
+          setTyped(true);
+          onChangeText(v);
+        }}
         placeholder={placeholder}
+        rightIcon={
+          browse && suggestions.length > 0 ? (
+            <Pressable
+              hitSlop={10}
+              onPress={() => (focused ? inputRef.current?.blur() : inputRef.current?.focus())}
+              accessibilityRole="button"
+            >
+              <ChevronDown size={18} color={c.faint} />
+            </Pressable>
+          ) : undefined
+        }
         onFocus={() => {
           if (blurTimer.current) {
             clearTimeout(blurTimer.current);
             blurTimer.current = null;
           }
+          setTyped(false);
           setFocused(true);
         }}
         onBlur={() => {
@@ -76,25 +108,30 @@ export function AutocompleteInput({
             elevation: 4,
           }}
         >
-          <ScrollView keyboardShouldPersistTaps="always" style={{ maxHeight: 200 }}>
-            {filtered.map((s, i) => (
-              <Pressable
-                key={s}
-                onPress={() => {
-                  onChangeText(s);
-                  if (blurTimer.current) {
-                    clearTimeout(blurTimer.current);
-                    blurTimer.current = null;
-                  }
-                  setFocused(false);
-                }}
-                className={`px-4 py-2.5 active:bg-surface ${
-                  i < filtered.length - 1 ? 'border-b border-border-soft' : ''
-                }`}
-              >
-                <Text className="text-sm text-ink">{s}</Text>
-              </Pressable>
-            ))}
+          <ScrollView keyboardShouldPersistTaps="always" nestedScrollEnabled style={{ maxHeight: 200 }}>
+            {filtered.map((s, i) => {
+              const selected = browse && norm(s) === q;
+              return (
+                <Pressable
+                  key={s}
+                  onPress={() => {
+                    onChangeText(s);
+                    if (blurTimer.current) {
+                      clearTimeout(blurTimer.current);
+                      blurTimer.current = null;
+                    }
+                    setFocused(false);
+                    if (browse) inputRef.current?.blur();
+                  }}
+                  className={`flex-row items-center px-4 py-2.5 active:bg-surface ${
+                    i < filtered.length - 1 ? 'border-b border-border-soft' : ''
+                  }`}
+                >
+                  <Text className={`flex-1 text-sm ${selected ? 'font-semibold text-primary' : 'text-ink'}`}>{s}</Text>
+                  {selected ? <Check size={16} color={c.primary} /> : null}
+                </Pressable>
+              );
+            })}
           </ScrollView>
         </View>
       ) : null}

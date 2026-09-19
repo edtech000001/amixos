@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { loadCachedThenFresh, writeCacheAndStamp } from '../../lib/swrCache';
 import { useDataFingerprint } from '../../lib/dataFingerprint';
 import { SkeletonList } from '../../ui/Skeleton';
-import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Modal as RNModal, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Modal as RNModal, KeyboardAvoidingView, Keyboard, Platform } from 'react-native';
 import { Plus, X, Trash2, Pencil, Copy, DollarSign, Search, ChevronDown, Check, ArrowUpDown, GripVertical } from 'lucide-react-native';
 // Native-only screen (PriceSheetScreen.web.tsx is the web variant), so a
 // React-Native-only package is safe to import here.
@@ -20,6 +20,7 @@ import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { fetchAllById } from '../../lib/supabaseFetch';
 import { usStateName } from '../../lib/usStates';
 import { Select } from '../../ui/Select';
+import { AutocompleteInput } from '../../ui/AutocompleteInput';
 import {
   type PriceSheetItem,
   type PriceSheetRow,
@@ -27,6 +28,8 @@ import {
   rowToPriceSheetItem,
   groupPriceItemsByCategory,
   priceItemLabel,
+  priceUnitSuggestions,
+  priceCategorySuggestions,
 } from '../../lib/priceSheet';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -149,6 +152,10 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
     return () => { cancelled = true; };
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [businessId]);
+
+  // Pick-or-type dropdowns in the add/edit sheet.
+  const unitSuggestions = useMemo(() => priceUnitSuggestions(items, locale), [items, locale]);
+  const categorySuggestions = useMemo(() => priceCategorySuggestions(items), [items]);
 
   const visibleItems = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -473,14 +480,23 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
               <Pressable onPress={() => setDraft(null)} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft"><X size={20} color={c.faint} /></Pressable>
             </View>
             {draft ? (
-              <ScrollView keyboardShouldPersistTaps="handled">
+              <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }}>
+                {/* Tap on blank space = unfocus the field, which closes an open
+                    unit/category dropdown. The ScrollView only does this itself
+                    while the soft keyboard is up (not with a hardware keyboard,
+                    or once it's been hidden). Controls inside still handle their
+                    own taps — the deepest Pressable wins — and scrolling is
+                    unaffected, since the Pressable sits INSIDE the ScrollView. */}
+                <Pressable onPress={Keyboard.dismiss} accessible={false} className="flex-1">
                 <Text className="text-sm font-semibold text-ink mb-1">{t.nameLabel}</Text>
                 <TextInput value={draft.name} onChangeText={v => setDraftKey('name', v)} placeholder={t.namePlaceholder} placeholderTextColor={c.faint}
                   className="mb-3 rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
 
-                <Text className="text-sm font-semibold text-ink mb-1">{t.categoryLabel}</Text>
-                <TextInput value={draft.category} onChangeText={v => setDraftKey('category', v)} placeholder={t.categoryPlaceholder} placeholderTextColor={c.faint}
-                  className="mb-3 rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
+                <View className="mb-3">
+                  <AutocompleteInput browse label={t.categoryLabel} value={draft.category}
+                    onChangeText={v => setDraftKey('category', v)} placeholder={t.categoryPlaceholder}
+                    suggestions={categorySuggestions} autoCapitalize="words" />
+                </View>
 
                 <Text className="text-sm font-semibold text-ink mb-1">{t.modeLabel}</Text>
                 <View className="flex-row gap-2 mb-3">
@@ -494,10 +510,11 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
 
                 {draft.pricingMode === 'per_unit' ? (
                   <>
-                    <Text className="text-sm font-semibold text-ink mb-1">{t.unitLabel}</Text>
-                    <TextInput value={draft.unitLabel} onChangeText={v => setDraftKey('unitLabel', v)} placeholder={t.unitPlaceholder} placeholderTextColor={c.faint}
-                      className="rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
-                    <Text className="text-[11px] text-faint mt-1 mb-3">{t.unitHint}</Text>
+                    <View className="mb-3">
+                      <AutocompleteInput browse label={t.unitLabel} value={draft.unitLabel}
+                        onChangeText={v => setDraftKey('unitLabel', v)} placeholder={t.unitPlaceholder}
+                        suggestions={unitSuggestions} hint={t.unitHint} autoCapitalize="none" autoCorrect={false} />
+                    </View>
                   </>
                 ) : null}
 
@@ -605,6 +622,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
                 <Pressable onPress={save} disabled={saving || !draft.name.trim()}
                   className={`py-3.5 rounded-2xl items-center ${saving || !draft.name.trim() ? 'bg-primary/50' : 'bg-primary active:opacity-90'}`}>
                   <Text className="text-sm font-semibold text-white">{t.saveBtn}</Text>
+                </Pressable>
                 </Pressable>
               </ScrollView>
             ) : null}

@@ -7,6 +7,7 @@
 //   'flat'     → amount = rate             (corner, loading fee; qty forced 1)
 
 import { US_STATE_NAME_TO_ABBR } from './usStates';
+import type { Locale } from '../i18n/locales';
 
 export type PricingMode = 'per_unit' | 'flat';
 
@@ -460,4 +461,44 @@ export function groupPriceItemsByCategory<T extends { category: string | null }>
       return a[0].localeCompare(b[0]);
     })
     .map(([category, list]) => ({ category, items: list }));
+}
+
+// ── Form suggestions ─────────────────────────────────────────────────────────
+// Common units offered in the price form's unit dropdown. Free text is still
+// allowed — these only speed up entry. Short, invoice-friendly labels.
+const PRICE_UNIT_PRESETS: Record<Locale, string[]> = {
+  en: ['ft', 'sq ft', 'lin ft', 'yd', 'sq yd', 'cu yd', 'in', 'hr', 'day', 'item', 'cut', 'visit', 'load', 'lb', 'ton', 'gal'],
+  es: ['pie', 'pie²', 'pie lineal', 'yd', 'yd²', 'yd³', 'pulg', 'hora', 'día', 'pieza', 'corte', 'visita', 'carga', 'lb', 'ton', 'gal'],
+};
+
+/** Case-insensitive de-dupe that keeps the first spelling seen. */
+function uniqueLabels(values: (string | null | undefined)[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const v of values) {
+    const s = (v ?? '').trim();
+    const k = s.toLowerCase();
+    if (!s || seen.has(k)) continue;
+    seen.add(k);
+    out.push(s);
+  }
+  return out;
+}
+
+/** Unit dropdown: units this business already uses (most-used first), then
+ *  the locale's presets. */
+export function priceUnitSuggestions(items: PriceSheetItem[], locale: Locale): string[] {
+  const counts = new Map<string, number>();
+  for (const i of items) {
+    const u = (i.unitLabel ?? '').trim();
+    if (u) counts.set(u, (counts.get(u) ?? 0) + 1);
+  }
+  const used = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([u]) => u);
+  return uniqueLabels([...used, ...PRICE_UNIT_PRESETS[locale]]);
+}
+
+/** Category dropdown: the categories already on the sheet, alphabetical. */
+export function priceCategorySuggestions(items: PriceSheetItem[]): string[] {
+  return uniqueLabels(items.map(i => i.category)).sort((a, b) =>
+    a.localeCompare(b, 'es', { sensitivity: 'base' }));
 }

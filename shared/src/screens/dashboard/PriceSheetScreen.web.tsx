@@ -6,11 +6,11 @@
 // optional unit (blank = flat price), and optional per-state / per-client
 // overrides that autoprice reads via applicableRate().
 
-import { useEffect, useMemo, useState, type HTMLAttributes } from 'react';
+import { useEffect, useMemo, useRef, useState, type HTMLAttributes } from 'react';
 import { loadCachedThenFresh, writeCacheAndStamp } from '../../lib/swrCache';
 import { useDataFingerprint } from '../../lib/dataFingerprint';
 import { SkeletonList } from '../../ui/Skeleton';
-import { Plus, X, Trash2, Pencil, Copy, DollarSign, FileText, Search, ArrowUpDown, GripVertical } from 'lucide-react';
+import { Plus, X, Trash2, Pencil, Copy, DollarSign, FileText, Search, ArrowUpDown, GripVertical, ChevronDown, Check } from 'lucide-react';
 import { SortableList } from '../../ui/SortableList';
 import { useLang } from '../../i18n';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
@@ -24,6 +24,8 @@ import {
   rowToPriceSheetItem,
   priceItemLabel,
   groupPriceItemsByCategory,
+  priceUnitSuggestions,
+  priceCategorySuggestions,
 } from '../../lib/priceSheet';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -142,6 +144,10 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate, 
   }, [businessId]);
 
   // Search filter across name, category, and match terms.
+  // Pick-or-type dropdowns in the add/edit modal.
+  const unitSuggestions = useMemo(() => priceUnitSuggestions(items, locale), [items, locale]);
+  const categorySuggestions = useMemo(() => priceCategorySuggestions(items), [items]);
+
   const visibleItems = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return items;
@@ -459,10 +465,10 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate, 
               className="w-full mb-3 rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
 
             <label className="block text-sm font-semibold text-ink mb-1">{t.categoryLabel}</label>
-            <input value={draft.category} onChange={e => setDraft({ ...draft, category: e.target.value })} placeholder={t.categoryPlaceholder}
-              list="price-categories"
-              className="w-full mb-3 rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-            <datalist id="price-categories">{Array.from(new Set(items.map(i => i.category).filter(Boolean))).map(c => <option key={c} value={c!} />)}</datalist>
+            <div className="mb-3">
+              <ComboInput value={draft.category} onChange={v => setDraft({ ...draft, category: v })}
+                placeholder={t.categoryPlaceholder} options={categorySuggestions} />
+            </div>
 
             <label className="block text-sm font-semibold text-ink mb-1">{t.modeLabel}</label>
             <div className="flex gap-2 mb-3">
@@ -477,8 +483,8 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate, 
             {draft.pricingMode === 'per_unit' ? (
               <>
                 <label className="block text-sm font-semibold text-ink mb-1">{t.unitLabel}</label>
-                <input value={draft.unitLabel} onChange={e => setDraft({ ...draft, unitLabel: e.target.value })} placeholder={t.unitPlaceholder}
-                  className="w-full rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                <ComboInput value={draft.unitLabel} onChange={v => setDraft({ ...draft, unitLabel: v })}
+                  placeholder={t.unitPlaceholder} options={unitSuggestions} />
                 <p className="text-[11px] text-faint mt-1 mb-3">{t.unitHint}</p>
               </>
             ) : null}
@@ -585,6 +591,93 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate, 
               className="w-full py-3 rounded-2xl bg-primary text-white font-semibold hover:opacity-90 disabled:opacity-50">{t.saveBtn}</button>
           </div>
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+// Pick-or-type field: a text input with a dropdown of known values. Focusing
+// (or the chevron) lists every option with the current one checked; typing
+// filters. Anything typed is kept as-is — the list only speeds entry up.
+// Replaces a <datalist>, which Safari barely renders and can't show "all".
+function ComboInput({ value, onChange, placeholder, options }: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  options: string[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState(false);
+  const [active, setActive] = useState(-1);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const q = value.trim().toLowerCase();
+  const shown = !q || !typed ? options : options.filter(o => o.toLowerCase().includes(q));
+  const visible = open && shown.length > 0;
+
+  const pick = (v: string) => {
+    onChange(v);
+    setOpen(false);
+    setActive(-1);
+  };
+
+  return (
+    <div className="relative">
+      <input
+        ref={inputRef}
+        value={value}
+        placeholder={placeholder}
+        onChange={e => { onChange(e.target.value); setTyped(true); setOpen(true); setActive(-1); }}
+        onFocus={() => { setTyped(false); setOpen(true); }}
+        // Delay so a click on an option lands before the list unmounts.
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        onKeyDown={e => {
+          if (!visible) return;
+          if (e.key === 'ArrowDown') { e.preventDefault(); setActive(a => Math.min(shown.length - 1, a + 1)); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(a => Math.max(0, a - 1)); }
+          else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); pick(shown[active]); }
+          else if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); }
+        }}
+        role="combobox"
+        aria-expanded={visible}
+        aria-autocomplete="list"
+        className="w-full rounded-xl border border-border bg-card px-3 py-2 pr-9 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
+      />
+      {options.length > 0 ? (
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label="Mostrar opciones"
+          onMouseDown={e => {
+            // Keep focus in the input; toggle the list.
+            e.preventDefault();
+            if (visible) setOpen(false);
+            else { setTyped(false); setOpen(true); inputRef.current?.focus(); }
+          }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-faint hover:text-ink"
+        >
+          <ChevronDown size={16} />
+        </button>
+      ) : null}
+      {visible ? (
+        <ul role="listbox" className="absolute z-10 mt-1 w-full max-h-52 overflow-y-auto rounded-xl border border-border bg-card py-1 shadow-lg">
+          {shown.map((o, i) => {
+            const selected = o.toLowerCase() === q;
+            return (
+              <li key={o} role="option" aria-selected={selected}>
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onMouseDown={e => { e.preventDefault(); pick(o); }}
+                  onMouseEnter={() => setActive(i)}
+                  className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${i === active ? 'bg-surface' : ''} ${selected ? 'font-semibold text-primary' : 'text-ink'}`}
+                >
+                  <span className="truncate">{o}</span>
+                  {selected ? <Check size={14} className="shrink-0" /> : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       ) : null}
     </div>
   );
