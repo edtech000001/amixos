@@ -1377,6 +1377,24 @@ export default function RentalsScreen() {
     if (detail) await reloadDetail(detail.id);
   };
 
+  const unmarkAllPaid = async (l: RentalLease) => {
+    if (!business) return;
+    const lPays = propPayments.filter(p => p.lease_id === l.id);
+    if (lPays.length === 0) return;
+    const total = lPays.reduce((s2, p) => s2 + p.amount, 0);
+    const ok = await confirm({
+      title: t.ledger.unmarkAllConfirmTitle,
+      message: t.ledger.unmarkAllConfirmBody
+        .replace('{{count}}', String(lPays.length))
+        .replace('{{total}}', fmtMoney(total)),
+      destructive: true,
+    });
+    if (!ok) return;
+    await supabase.from('rental_payments').delete().eq('lease_id', l.id);
+    void logAudit(supabase, business.id, 'rental_payment.deleted', 'rental_payment', l.id, { bulk: lPays.length, total });
+    if (detail) await reloadDetail(detail.id);
+  };
+
   const deletePropertyPhoto = async (p: RentalPropertyPhoto) => {
     if (!detail) return;
     if (!(await confirm({ message: t.photos.deleteConfirm, destructive: true }))) return;
@@ -1934,6 +1952,12 @@ export default function RentalsScreen() {
                           <Pressable onPress={() => void markAllPaid(l)}
                             className="px-3 py-1.5 rounded-full bg-emerald-500/10 active:opacity-70">
                             <Text className="text-xs font-semibold text-emerald-700">{t.ledger.markAllPaidBtn}</Text>
+                          </Pressable>
+                        ) : null}
+                        {canCreate && lPays.length > 0 ? (
+                          <Pressable onPress={() => void unmarkAllPaid(l)}
+                            className="px-3 py-1.5 rounded-full bg-red-500/10 active:opacity-70">
+                            <Text className="text-xs font-semibold text-red-700">{t.ledger.unmarkAllPaidBtn}</Text>
                           </Pressable>
                         ) : null}
                       </View>

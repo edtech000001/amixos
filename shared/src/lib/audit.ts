@@ -65,7 +65,8 @@ export type AuditAction =
   | 'rental_lease.created'
   | 'rental_lease.updated'
   | 'rental_lease.deleted'
-  | 'rental_payment.recorded';
+  | 'rental_payment.recorded'
+  | 'rental_payment.deleted';
 
 export type EntityType =
   | 'import'
@@ -167,4 +168,5 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, { es: string; en: string }>
   'rental_lease.updated':    { es: 'Contrato de renta actualizado',  en: 'Lease updated' },
   'rental_lease.deleted':    { es: 'Contrato de renta eliminado',    en: 'Lease deleted' },
   'rental_payment.recorded': { es: 'Pago de renta registrado',       en: 'Rent payment recorded' },
+  'rental_payment.deleted':  { es: 'Pagos de renta eliminados',      en: 'Rent payments removed' },
 };

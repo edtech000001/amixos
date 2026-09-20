@@ -1090,6 +1090,24 @@ export function PropertyDetail({
     await reload();
   };
 
+  const unmarkAllPaid = async (l: RentalLease) => {
+    if (!business) return;
+    const lPays = payments.filter(p => p.lease_id === l.id);
+    if (lPays.length === 0) return;
+    const total = lPays.reduce((s2, p) => s2 + p.amount, 0);
+    const ok = await confirm({
+      title: t.ledger.unmarkAllConfirmTitle,
+      message: t.ledger.unmarkAllConfirmBody
+        .replace('{{count}}', String(lPays.length))
+        .replace('{{total}}', fmtMoney(total)),
+      destructive: true,
+    });
+    if (!ok) return;
+    await supabase.from('rental_payments').delete().eq('lease_id', l.id);
+    void logAudit(supabase, business.id, 'rental_payment.deleted', 'rental_payment', l.id, { bulk: lPays.length, total });
+    await reload();
+  };
+
   // ── Lease e-signing ───────────────────────────────────────────────────────
   const [copiedLeaseId, setCopiedLeaseId] = useState<string | null>(null);
   const [signatureView, setSignatureView] = useState<RentalLease | null>(null);
@@ -1246,6 +1264,11 @@ export function PropertyDetail({
             {canCreate && balance > PAY_TOLERANCE ? (
               <Button variant="secondary" size="sm" onClick={() => void markAllPaid(l)}>
                 {t.ledger.markAllPaidBtn}
+              </Button>
+            ) : null}
+            {canCreate && lPayments.length > 0 ? (
+              <Button variant="secondary" size="sm" onClick={() => void unmarkAllPaid(l)}>
+                {t.ledger.unmarkAllPaidBtn}
               </Button>
             ) : null}
             <p className={`text-sm font-bold ${balance > PAY_TOLERANCE ? 'text-red-600' : 'text-emerald-600'}`}>

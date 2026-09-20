@@ -2660,6 +2660,9 @@ export type DashboardDict = {
         markAllPaidBtn: string;
         markAllConfirmTitle: string;
         markAllConfirmBody: string;
+        unmarkAllPaidBtn: string;
+        unmarkAllConfirmTitle: string;
+        unmarkAllConfirmBody: string;
         depositLabel: string;
         statusPaid: string;
         statusPartial: string;
@@ -5793,6 +5796,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
           markAllPaidBtn: 'Marcar todo pagado',
           markAllConfirmTitle: 'Marcar todo pagado',
           markAllConfirmBody: 'Se registrará el pago completo de {{count}} meses por {{total}}, con fecha de vencimiento de cada mes. ¿Continuar?',
+          unmarkAllPaidBtn: 'Desmarcar todo',
+          unmarkAllConfirmTitle: 'Desmarcar pagos',
+          unmarkAllConfirmBody: 'Se eliminarán {{count}} pagos por un total de {{total}}. ¿Continuar?',
           depositLabel: 'Depósito',
           statusPaid: 'Pagado',
           statusPartial: 'Parcial',
@@ -8960,6 +8966,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
           markAllPaidBtn: 'Mark all paid',
           markAllConfirmTitle: 'Mark all paid',
           markAllConfirmBody: 'This will record full payment for {{count}} months totaling {{total}}, dated each month\'s due date. Continue?',
+          unmarkAllPaidBtn: 'Unmark all',
+          unmarkAllConfirmTitle: 'Remove payments',
+          unmarkAllConfirmBody: 'This will remove {{count}} payments totaling {{total}}. Continue?',
           depositLabel: 'Deposit',
           statusPaid: 'Paid',
           statusPartial: 'Partial',
