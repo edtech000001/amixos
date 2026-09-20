@@ -288,6 +288,25 @@ export default function TrabajosPage() {
     }
   };
 
+  // Groups load one per "load more", which works once the list is long enough
+  // to scroll — but when the first group is short the screen never fills,
+  // onEndReached / the sentinel never fire, and every other status looks
+  // missing until the user nudges the list. Keep pulling groups until the
+  // loaded ones hold enough rows to fill a screen.
+  const GROUP_FILL_ROWS = 20;
+  const loadGroupsToFill = async () => {
+    for (;;) {
+      const loadedRows = groupIndexRef.current
+        .slice(0, loadedGroupsRef.current)
+        .reduce((sum, g) => sum + (g.count ?? 0), 0);
+      if (loadedRows >= GROUP_FILL_ROWS) return;
+      if (loadedGroupsRef.current >= groupIndexRef.current.length) return;
+      const before = loadedGroupsRef.current;
+      await loadNextGroup();
+      if (loadedGroupsRef.current === before) return; // cancelled or failed
+    }
+  };
+
   const loadMore = async () => {
     if (loadingMore || !paramsRef.current) return;
     if (modeRef.current === 'group') { void loadNextGroup(); return; }
@@ -354,7 +373,7 @@ export default function TrabajosPage() {
       groupIndexRef.current = orderGroups(index, groupBy);
       loadedGroupsRef.current = 0;
       setRawJobs([]);
-      await loadNextGroup();
+      await loadGroupsToFill();
     } catch (e) {
       console.error('Group index failed', e);
     } finally {
