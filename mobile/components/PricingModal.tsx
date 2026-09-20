@@ -178,6 +178,15 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
 
           {view === 'plans' ? (
             <>
+              {/* Which business this purchase activates — a user with several
+                  businesses otherwise can't tell from inside the sheet. */}
+              {business?.name ? (
+                <Text className="text-sm text-muted mb-2">
+                  {en ? 'For ' : 'Para '}
+                  <Text className="font-semibold text-ink">{business.name}</Text>
+                </Text>
+              ) : null}
+
               {/* Monthly / annual segmented toggle */}
               <View className="flex-row items-center self-start bg-border-soft rounded-full p-1 mb-2">
                 {(['monthly', 'annual'] as BillingPeriod[]).map((p) => {

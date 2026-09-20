@@ -178,6 +178,15 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
         />
       ) : (
         <>
+          {/* Which business this purchase activates — a user with several
+              businesses otherwise can't tell from inside the modal. */}
+          {business?.name ? (
+            <p className="mb-3 text-center text-sm text-muted">
+              {es ? 'Para ' : 'For '}
+              <span className="font-semibold text-ink">{business.name}</span>
+            </p>
+          ) : null}
+
           {/* Monthly / annual toggle */}
           <div className="flex flex-col items-center gap-2.5">
             <div className="inline-flex items-center rounded-xl bg-border-soft p-1">

@@ -74,10 +74,13 @@ export function BillingGate() {
 
   const isAdmin = currentRole === 'owner' || currentRole === 'admin';
 
-  // Other businesses the user can switch to that still have access.
-  const otherActive = businesses.filter(
-    (b) => b.id !== business.id && hasActiveAccess(buildSubInfo(b)),
-  );
+  // EVERY other business, not just the ones with access: with two unpaid
+  // businesses the list used to be empty, leaving no way out of the gate but
+  // signing out. Ones that also need a plan are labelled as such.
+  const others = businesses
+    .filter((b) => b.id !== business.id)
+    .map((b) => ({ ...b, active: hasActiveAccess(buildSubInfo(b)) }))
+    .sort((a, b) => Number(b.active) - Number(a.active));
 
   return (
     <View
@@ -96,6 +99,13 @@ export function BillingGate() {
         <Text className="text-xl font-bold text-ink text-center">
           {heading}
         </Text>
+        {/* WHICH business this gate is for. Without it, a user with two
+            businesses can't tell the paywall apart from the one they just
+            switched away from — and the switch list below (which names the
+            OTHER business) reads as "you're still on that one". */}
+        <Text className="text-base font-semibold text-primary text-center mt-1">
+          {business.name}
+        </Text>
         <Text className="text-base text-muted text-center mt-2">{body}</Text>
 
         {isAdmin ? (
@@ -104,7 +114,7 @@ export function BillingGate() {
             className="mt-6 w-full py-3 rounded-2xl items-center bg-primary active:opacity-90"
           >
             <Text className="text-base font-semibold text-white">
-              {en ? 'View plans' : 'Ver planes'}
+              {en ? `View plans for ${business.name}` : `Ver planes para ${business.name}`}
             </Text>
           </Pressable>
         ) : (
@@ -115,13 +125,13 @@ export function BillingGate() {
           </Text>
         )}
 
-        {otherActive.length > 0 ? (
+        {others.length > 0 ? (
           <View className="mt-6 w-full">
             <Text className="text-xs font-semibold text-muted uppercase mb-2">
-              {en ? 'Switch business' : 'Cambiar de negocio'}
+              {en ? 'Switch to another business' : 'Cambiar a otro negocio'}
             </Text>
             <View className="gap-2">
-              {otherActive.map((b) => (
+              {others.map((b) => (
                 <Pressable
                   key={b.id}
                   onPress={() => setActiveBusiness(b.id)}
@@ -130,6 +140,11 @@ export function BillingGate() {
                   <Text className="text-base font-medium text-ink">
                     {b.name}
                   </Text>
+                  {!b.active ? (
+                    <Text className="text-xs text-faint mt-0.5">
+                      {en ? 'Also needs a plan' : 'También necesita un plan'}
+                    </Text>
+                  ) : null}
                 </Pressable>
               ))}
             </View>

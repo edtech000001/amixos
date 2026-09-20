@@ -58,9 +58,13 @@ export function BillingGate() {
     body = '';
   }
 
-  const otherActive = businesses.filter(
-    (b) => b.id !== business.id && hasActiveAccess(subInfoOf(b)),
-  );
+  // EVERY other business, not just the ones with access: with two unpaid
+  // businesses the list used to be empty, leaving no way out of the gate but
+  // signing out. Ones that also need a plan are labelled as such.
+  const others = businesses
+    .filter((b) => b.id !== business.id)
+    .map((b) => ({ ...b, active: hasActiveAccess(subInfoOf(b)) }))
+    .sort((a, b) => Number(b.active) - Number(a.active));
 
   async function handleSignOut() {
     const supabase = createSupabaseClient();
@@ -72,11 +76,16 @@ export function BillingGate() {
     <div className="fixed inset-0 z-[100] bg-surface flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-card rounded-2xl border border-border-soft shadow-sm p-8 text-center">
         <h1 className="text-xl font-bold text-ink">{heading}</h1>
+        {/* WHICH business this gate is for. Without it, a user with two
+            businesses can't tell the paywall apart from the one they just
+            switched away from — and the switch list below (which names the
+            OTHER business) reads as "you're still on that one". */}
+        <p className="mt-1 text-base font-semibold text-primary">{business.name}</p>
         {body && <p className="mt-2 text-sm text-muted">{body}</p>}
 
         {canManage ? (
           <Button variant="primary" fullWidth className="mt-6" onClick={() => setOpen(true)}>
-            {es ? 'Ver planes' : 'View plans'}
+            {es ? `Ver planes para ${business.name}` : `View plans for ${business.name}`}
           </Button>
         ) : (
           <p className="mt-6 text-sm text-muted">
@@ -86,19 +95,24 @@ export function BillingGate() {
           </p>
         )}
 
-        {otherActive.length > 0 && (
+        {others.length > 0 && (
           <div className="mt-6 border-t border-border-soft pt-6 text-left">
             <p className="text-xs font-semibold uppercase tracking-wide text-faint">
-              {es ? 'Cambiar de negocio' : 'Switch business'}
+              {es ? 'Cambiar a otro negocio' : 'Switch to another business'}
             </p>
             <div className="mt-3 flex flex-col gap-2">
-              {otherActive.map((b) => (
+              {others.map((b) => (
                 <button
                   key={b.id}
                   onClick={() => setActiveBusiness(b.id)}
-                  className="w-full rounded-xl border border-border px-4 py-2.5 text-left text-sm font-medium text-ink transition-colors hover:bg-surface"
+                  className="w-full rounded-xl border border-border px-4 py-2.5 text-left transition-colors hover:bg-surface"
                 >
-                  {b.name}
+                  <span className="block text-sm font-medium text-ink">{b.name}</span>
+                  {!b.active && (
+                    <span className="block text-xs text-faint">
+                      {es ? 'También necesita un plan' : 'Also needs a plan'}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
