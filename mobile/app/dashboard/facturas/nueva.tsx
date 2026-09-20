@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SkeletonBlock, SkeletonCard } from '@amixos/shared/ui/Skeleton';
 import { formatMoneyInput, formatNumberGrouped } from '@amixos/shared/lib/format';
 import {
@@ -26,7 +26,7 @@ import {
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
-import { insertInvoiceUnique } from '@amixos/shared/lib/invoicing';
+import { insertInvoiceUnique, previewInvoiceNumber } from '@amixos/shared/lib/invoicing';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
@@ -200,10 +200,26 @@ export default function NuevaFacturaRoute() {
   // Keep the auto invoice number in sync with language (INV-/FAC-) and the
   // business's starting number, until the user types their own. Waits for the
   // invoice count to load so the sequence is correct.
-  useEffect(() => {
-    if (editId || numberEditedRef.current || invoiceCountRef.current === null) return;
-    setInvoiceNumber(nextInvoiceNumber(language, business?.invoice_start_number, invoiceCountRef.current));
-  }, [language, editId, business]);
+  //
+  // previewInvoiceNumber, not nextInvoiceNumber: the count-based number can
+  // already be taken (a deleted invoice, or an import running past
+  // start+count), and the save then walks forward — so the form showed one
+  // number and filed another. seq guards against a slow lookup landing after
+  // a newer one (e.g. the language flipped meanwhile).
+  const numberSeqRef = useRef(0);
+  const refreshNumber = useCallback(async () => {
+    if (editId || numberEditedRef.current || invoiceCountRef.current === null || !business) return;
+    const seq = ++numberSeqRef.current;
+    const n = await previewInvoiceNumber(supabase, {
+      businessId: business.id,
+      lang: language,
+      startNumber: business.invoice_start_number,
+      count: invoiceCountRef.current,
+    });
+    if (seq === numberSeqRef.current && !numberEditedRef.current) setInvoiceNumber(n);
+  }, [editId, business, language]);
+
+  useEffect(() => { void refreshNumber(); }, [refreshNumber]);
 
   // Load clients + optionally the invoice being edited.
   useEffect(() => {
@@ -247,8 +263,11 @@ export default function NuevaFacturaRoute() {
           .eq('business_id', business.id);
         if (cancelled) return;
         invoiceCountRef.current = count ?? 0;
+        // Paint the count-based guess immediately, then correct it to the
+        // first FREE number once the lookup returns.
         if (!numberEditedRef.current) {
           setInvoiceNumber(nextInvoiceNumber(language, business.invoice_start_number, invoiceCountRef.current));
+          void refreshNumber();
         }
       }
 

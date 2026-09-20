@@ -12,6 +12,7 @@
 // the same PostgREST query builder, so one implementation serves both.
 
 import { invoiceDefaultLanguage, nextInvoiceNumber } from './invoiceTemplate';
+import type { InvoiceLang } from '../i18n/invoice';
 import { type PriceSheetItem, suggestPriceItemDetailed, extractQuantity, autopriceLine, matchingAddons, diagnosePriceMatches } from './priceSheet';
 import { US_STATE_NAME_TO_ABBR } from './usStates';
 
@@ -1060,3 +1061,43 @@ export async function insertInvoiceUnique(
   return { data: null, error: { message: 'invoice_number_exhausted' } };
 }
 
+
+/**
+ * The number a NEW invoice will actually get. `nextInvoiceNumber()` is
+ * count-based (start + how many invoices exist), so any deleted invoice — or
+ * an import whose numbers run past start+count — makes it land on a number
+ * that is already taken. insertInvoiceUnique() then walks forward on the
+ * 23505, which is why the form used to SHOW one number and save another.
+ *
+ * This resolves the same walk up front: it asks which of the next 50
+ * candidates already exist (one query) and returns the first free one,
+ * repeating if a whole batch is taken. On any error it returns the plain
+ * count-based number, i.e. exactly the old behaviour — the save still
+ * guarantees uniqueness either way.
+ */
+export async function previewInvoiceNumber(
+  supabase: Supa,
+  opts: { businessId: string; lang: InvoiceLang; startNumber: number | null | undefined; count: number },
+): Promise<string> {
+  const BATCH = 50;
+  let candidate = nextInvoiceNumber(opts.lang, opts.startNumber, opts.count);
+  for (let round = 0; round < 20; round++) {
+    const batch: string[] = [];
+    let n = candidate;
+    for (let i = 0; i < BATCH; i++) {
+      batch.push(n);
+      n = bumpInvoiceNumber(n);
+    }
+    const { data, error } = await supabase
+      .from('invoices')
+      .select('invoice_number')
+      .eq('business_id', opts.businessId)
+      .in('invoice_number', batch);
+    if (error) return candidate;
+    const taken = new Set(((data ?? []) as { invoice_number: string }[]).map(r => r.invoice_number));
+    const free = batch.find(b => !taken.has(b));
+    if (free) return free;
+    candidate = n; // every candidate in this batch is taken — continue past it
+  }
+  return candidate;
+}
