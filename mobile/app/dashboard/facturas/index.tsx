@@ -89,6 +89,9 @@ export default function FacturasTab() {
   const [serverTotal, setServerTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  // A failed fetch used to be swallowed entirely (`catch {}`), so a broken
+  // query looked like "no results". The list shows a retry strip instead.
+  const [loadError, setLoadError] = useState(false);
   const loadSeqRef = useRef(0);
   const cursorRef = useRef<InvoicesCursor | null>(null);
   const paramsRef = useRef<InvoicesQueryParams | null>(null);
@@ -119,6 +122,7 @@ export default function FacturasTab() {
     loadAllRef.current = loadAll;
     modeRef.current = loadAll ? 'all' : 'page';
     setLoading(true);
+    setLoadError(false);
     cursorRef.current = null;
     setHasMore(false);
     try {
@@ -153,7 +157,7 @@ export default function FacturasTab() {
         setServerCounts(counts);
         setServerTotal(totalFor(counts, params.statuses));
       }
-    } catch { /* offline / error — keep whatever's on screen */ }
+    } catch { setLoadError(true); }
     finally { if (seq === loadSeqRef.current) setLoading(false); }
   };
 
@@ -209,7 +213,7 @@ export default function FacturasTab() {
       setRawInvoices(prev => [...prev, ...rows]);
       loadedGroupsRef.current = idx + 1;
       setHasMore(loadedGroupsRef.current < groupIndexRef.current.length);
-    } catch { /* offline / error — keep what's loaded */ }
+    } catch { setLoadError(true); }
     finally { setLoadingMore(false); }
   };
 
@@ -244,7 +248,7 @@ export default function FacturasTab() {
       setRawInvoices(prev => [...prev, ...page.invoices]);
       cursorRef.current = page.nextCursor;
       setHasMore(!!page.nextCursor);
-    } catch { /* offline / error — keep what's loaded */ }
+    } catch { setLoadError(true); }
     finally { setLoadingMore(false); }
   };
 
@@ -272,7 +276,7 @@ export default function FacturasTab() {
       loadedGroupsRef.current = 0;
       setRawInvoices([]);
       await loadGroupsToFill();
-    } catch { /* offline / error */ }
+    } catch { setLoadError(true); }
     finally { if (seq === loadSeqRef.current) setLoading(false); }
   };
 
@@ -361,6 +365,8 @@ export default function FacturasTab() {
         onUpdateStatus={updateStatus}
         businessId={business?.id}
         serverMode
+        loadError={loadError}
+        onRetryLoad={reload}
         serverCounts={serverCounts}
         serverTotal={serverTotal}
         hasMore={hasMore}

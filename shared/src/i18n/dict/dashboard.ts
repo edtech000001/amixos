@@ -337,6 +337,8 @@ export type DashboardDict = {
       showLess: string;
       methods: { email: string; text: string; call: string; in_person: string; other: string };
     };
+    /** Inline strip when a list fetch fails — replaces a silent catch. */
+    loadFailed: string;
     sendInvoice: string;
     /** Re-send an already-sent invoice without touching its sent date. */
     resendInvoice: string;
@@ -3517,6 +3519,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         showLess: 'Ver menos',
         methods: { email: 'Correo', text: 'Mensaje', call: 'Llamada', in_person: 'En persona', other: 'Otro' },
       },
+      loadFailed: 'No se pudieron cargar las facturas.',
       sendInvoice: 'Enviar factura',
       resendInvoice: 'Reenviar por correo',
       resendHint: 'Vuelve a enviar el correo sin cambiar la fecha de envío.',
@@ -6695,6 +6698,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         showLess: 'Show less',
         methods: { email: 'Email', text: 'Text', call: 'Call', in_person: 'In person', other: 'Other' },
       },
+      loadFailed: "Couldn't load the invoices.",
       sendInvoice: 'Send invoice',
       resendInvoice: 'Email again',
       resendHint: 'Re-sends the email without changing the sent date.',

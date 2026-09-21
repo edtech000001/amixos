@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, Pressable, ScrollView, SectionList, Modal as RNModal } from 'react-native';
-import { FileText, Search, Calendar, Layers, XCircle, List, Building2, MapPin, Check, ListChecks, Trash2, X, DollarSign, Bell, BellRing } from 'lucide-react-native';
+import { FileText, Search, Calendar, Layers, XCircle, List, Building2, MapPin, Check, ListChecks, Trash2, X, DollarSign, Bell, BellRing, AlertTriangle } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
@@ -70,6 +70,11 @@ export interface InvoicesListScreenProps {
   hasMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
+  /** Set when the last fetch failed. Rendered as an inline strip with a retry
+   *  — the wrappers used to swallow these, so a broken query (a not-yet-run
+   *  migration, an offline device) looked like "the search found nothing". */
+  loadError?: boolean;
+  onRetryLoad?: () => void;
   onFiltersChange?: (f: {
     search: string;
     statuses: string[];
@@ -122,6 +127,8 @@ export function InvoicesListScreen({
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  loadError = false,
+  onRetryLoad,
   onFiltersChange,
 }: InvoicesListScreenProps) {
   const { t: full, locale } = useLang();
@@ -393,6 +400,19 @@ export function InvoicesListScreen({
           </Pressable>
         </View>
       </View>
+
+      {/* Fetch failed — say so instead of showing stale rows silently. */}
+      {loadError ? (
+        <View className="flex-row items-center gap-3 mb-3 px-4 py-3 rounded-2xl border border-amber-500/30 bg-amber-500/10">
+          <AlertTriangle size={16} color="#f59e0b" />
+          <Text className="flex-1 text-xs text-ink">{t.loadFailed}</Text>
+          {onRetryLoad ? (
+            <Pressable onPress={onRetryLoad} hitSlop={8}>
+              <Text className="text-xs font-semibold text-primary">{full.common.loadError.retry}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
 
       {/* Search — full width. */}
       <View className="mb-3">

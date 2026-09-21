@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SkeletonRow } from '../../ui/Skeleton';
-import { Plus, FileText, Search, X, Calendar, XCircle, List, Layers, Building2, MapPin, Check, ListChecks, Trash2, DollarSign, Bell, BellRing } from 'lucide-react';
+import { Plus, FileText, Search, X, Calendar, XCircle, List, Layers, Building2, MapPin, Check, ListChecks, Trash2, DollarSign, Bell, BellRing, AlertTriangle } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { formatDateLong, daysOverdue, daysSince } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
@@ -70,6 +70,11 @@ export interface InvoicesListScreenProps {
   hasMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
+  /** Set when the last fetch failed. Rendered as an inline strip with a retry
+   *  — the wrappers used to swallow these, so a broken query (a not-yet-run
+   *  migration, an offline device) looked like "the search found nothing". */
+  loadError?: boolean;
+  onRetryLoad?: () => void;
   onFiltersChange?: (f: {
     search: string;
     statuses: string[];
@@ -114,6 +119,8 @@ export function InvoicesListScreen({
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  loadError = false,
+  onRetryLoad,
   onFiltersChange,
 }: InvoicesListScreenProps) {
   const { t: full, locale } = useLang();
@@ -360,6 +367,19 @@ export function InvoicesListScreen({
           ) : null}
         </div>
       </div>
+
+      {/* Fetch failed — say so instead of showing stale rows silently. */}
+      {loadError ? (
+        <div className="flex items-center gap-3 mb-4 px-4 py-3 rounded-2xl border border-amber-500/30 bg-amber-500/10">
+          <AlertTriangle size={16} className="text-amber-500 shrink-0" />
+          <p className="flex-1 text-xs text-ink">{t.loadFailed}</p>
+          {onRetryLoad ? (
+            <button onClick={onRetryLoad} className="text-xs font-semibold text-primary hover:underline">
+              {full.common.loadError.retry}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Search + filter controls */}
       <div className="flex items-center gap-2 mb-4">

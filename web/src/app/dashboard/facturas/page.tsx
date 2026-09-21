@@ -111,6 +111,9 @@ export default function FacturasPage() {
   const [serverTotal, setServerTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  // A failed fetch used to be swallowed entirely (`catch {}`), so a broken
+  // query looked like "no results". The list shows a retry strip instead.
+  const [loadError, setLoadError] = useState(false);
   // Guards a stale slow load from overwriting a newer one (e.g. branch switch).
   const loadSeqRef = useRef(0);
   const cursorRef = useRef<InvoicesCursor | null>(null);
@@ -144,6 +147,7 @@ export default function FacturasPage() {
     loadAllRef.current = loadAll;
     modeRef.current = loadAll ? 'all' : 'page';
     setLoading(true);
+    setLoadError(false);
     cursorRef.current = null;
     setHasMore(false);
     try {
@@ -182,6 +186,7 @@ export default function FacturasPage() {
       }
     } catch (e) {
       console.error('Invoices query failed', e);
+      setLoadError(true);
     } finally {
       if (seq === loadSeqRef.current) setLoading(false);
     }
@@ -241,6 +246,7 @@ export default function FacturasPage() {
       setHasMore(loadedGroupsRef.current < groupIndexRef.current.length);
     } catch (e) {
       console.error('Invoice group load failed', e);
+      setLoadError(true);
     } finally {
       setLoadingMore(false);
     }
@@ -279,6 +285,7 @@ export default function FacturasPage() {
       setHasMore(!!page.nextCursor);
     } catch (e) {
       console.error('Invoices load-more failed', e);
+      setLoadError(true);
     } finally {
       setLoadingMore(false);
     }
@@ -311,6 +318,7 @@ export default function FacturasPage() {
       await loadGroupsToFill();
     } catch (e) {
       console.error('Invoice status-group failed', e);
+      setLoadError(true);
     } finally {
       if (seq === loadSeqRef.current) setLoading(false);
     }
@@ -407,6 +415,8 @@ export default function FacturasPage() {
       onUpdateStatus={updateStatus}
       businessId={business?.id}
       serverMode
+      loadError={loadError}
+      onRetryLoad={reload}
       serverCounts={serverCounts}
       serverTotal={serverTotal}
       hasMore={hasMore}

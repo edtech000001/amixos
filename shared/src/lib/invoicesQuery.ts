@@ -102,11 +102,14 @@ async function resolveSearchIds(
   };
 }
 
-/** The OR clause matching a search term across invoice fields + joined names. */
+/** The OR clause matching a search term across invoice fields + joined names.
+ *  `withCustomFields` false drops the migration-218 column so a database that
+ *  hasn't run it can still search (see fetchInvoicesPage's 42703 retry). */
 async function searchOrClause(
   supabase: AnySupabase,
   businessId: string,
   term: string,
+  withCustomFields = true,
 ): Promise<string | null> {
   if (!term) return null;
   const { clientIds, invoiceIds } = await resolveSearchIds(supabase, businessId, term);
@@ -116,7 +119,7 @@ async function searchOrClause(
     // Values of the business's own custom fields (migration 218). Matched via a
     // generated column because a PostgREST .or() cannot express a JSONB
     // traversal — and values only, so "type" doesn't match the KEY on every row.
-    `custom_fields_text.ilike.${like}`,
+    ...(withCustomFields ? [`custom_fields_text.ilike.${like}`] : []),
   ];
   // Amount search: a bare number matches the total exactly (the client list also
   // does a substring match on the formatted total, which can't be pushed to SQL —
@@ -158,10 +161,10 @@ export async function fetchInvoicesPage<T extends { id: string; created_at?: str
   const term = params.search?.trim() ?? '';
   const searchOr = await searchOrClause(supabase, params.businessId, term);
 
-  const run = (sel: string) => {
+  const run = (sel: string, or: string | null) => {
     let q = supabase.from('invoices').select(sel).eq('business_id', params.businessId);
     q = applyBaseFilters(q, params);
-    if (searchOr) q = q.or(searchOr);
+    if (or) q = q.or(or);
     if (params.cursor) {
       const c = params.cursor;
       q = q.or(`created_at.lt.${c.createdAt},and(created_at.eq.${c.createdAt},id.lt.${c.id})`);
@@ -169,11 +172,18 @@ export async function fetchInvoicesPage<T extends { id: string; created_at?: str
     return q.order('created_at', { ascending: false }).order('id', { ascending: false }).limit(pageSize);
   };
 
-  let { data, error } = await run(select);
-  // Reminder summary columns (migration 228) not there yet → load the list
-  // without them rather than failing the whole screen. 42703 = undefined column.
-  if (error?.code === '42703' && select.includes(INVOICE_REMINDER_COLUMNS)) {
-    ({ data, error } = await run(select.replace(`, ${INVOICE_REMINDER_COLUMNS}`, '').replace(INVOICE_REMINDER_COLUMNS, '')));
+  let { data, error } = await run(select, searchOr);
+  // 42703 = undefined column. Two migrations can be missing here and both used
+  // to take the WHOLE list down (the caller swallowed the throw, so the screen
+  // just never updated and search looked broken): the reminder summary columns
+  // (228) in the select, and custom_fields_text (218) in the search clause.
+  // Retry once without whichever the database doesn't have yet.
+  if (error?.code === '42703') {
+    const leanSelect = select.includes(INVOICE_REMINDER_COLUMNS)
+      ? select.replace(`, ${INVOICE_REMINDER_COLUMNS}`, '').replace(INVOICE_REMINDER_COLUMNS, '')
+      : select;
+    const leanOr = term ? await searchOrClause(supabase, params.businessId, term, false) : searchOr;
+    ({ data, error } = await run(leanSelect, leanOr));
   }
   if (error) throw new Error(error.message);
   const invoices = (data ?? []) as T[];
@@ -225,7 +235,10 @@ export async function fetchInvoiceStatusCounts(
     p_client_ids: ids?.clientIds?.length ? ids.clientIds : null,
     p_invoice_ids: ids?.invoiceIds?.length ? ids.invoiceIds : null,
   });
-  if (error) throw new Error(error.message);
+  // A counts failure must NOT take the rows down with it: the caller runs this
+  // in the same Promise.all as the page fetch, so a throw here used to mean an
+  // empty screen. Badges degrade to zero instead.
+  if (error) return {};
   const out: Record<string, number> = {};
   for (const row of (data ?? []) as { tab: string; cnt: number | string }[]) {
     out[row.tab] = Number(row.cnt);
