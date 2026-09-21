@@ -10,6 +10,8 @@ interface Props {
   to: string | null;
   onChange: (next: { from: string | null; to: string | null }) => void;
   title: string;
+  /** Optional caption under the title — e.g. WHICH date the filter matches. */
+  subtitle?: string;
   fromLabel: string;
   toLabel: string;
   clearLabel: string;
@@ -37,6 +39,7 @@ export function DateRangeSheet({
   to,
   onChange,
   title,
+  subtitle,
   fromLabel,
   toLabel,
   clearLabel,
@@ -57,8 +60,10 @@ export function DateRangeSheet({
         <View className="items-center mb-3">
           <View className="w-10 h-1 rounded-full bg-border" />
         </View>
-        <View className="flex-row items-center justify-between mb-4">
-          <Text className="text-lg font-bold text-ink">{title}</Text>
+        <View className="flex-row items-center justify-between mb-1">
+          <View className="flex-1 pr-3">
+            <Text className="text-lg font-bold text-ink">{title}</Text>
+          </View>
           {/* Clear sits where Done used to be; disabled when nothing is set. */}
           <Pressable onPress={() => onChange({ from: null, to: null })} disabled={!active} hitSlop={8}>
             <Text className={`text-sm font-semibold ${active ? 'text-red-500' : 'text-faint'}`}>
@@ -66,6 +71,7 @@ export function DateRangeSheet({
             </Text>
           </Pressable>
         </View>
+        {subtitle ? <Text className="text-xs text-faint mb-3">{subtitle}</Text> : <View className="mb-3" />}
 
         {/* Quick presets — own row above the pickers (mirrors the web modal).
            The chip matching the current range renders selected. */}

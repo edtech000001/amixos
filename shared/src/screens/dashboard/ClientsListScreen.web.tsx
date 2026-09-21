@@ -7,7 +7,9 @@
 
 import { Fragment, memo, useEffect, useMemo, useState, type ReactNode, useRef } from 'react';
 import { SkeletonRow } from '../../ui/Skeleton';
-import { Plus, Search, Upload, Trash2, Phone, Mail, MapPin, Pencil, User, Users, X, Layers, Check, ListChecks } from 'lucide-react';
+import { Plus, Search, Upload, Trash2, Phone, Mail, MapPin, Pencil, User, Users, X, Layers, Check, ListChecks,
+  AlertTriangle,
+} from 'lucide-react';
 import { useLang } from '../../i18n';
 import { clientMatchesSearch, matchingContacts } from '../../lib/clientSearch';
 import { groupClients, parseClientGroupKey, CLIENTS_GROUP_KEY, type ClientGroupKey } from '../../lib/clientSections';
@@ -66,6 +68,11 @@ export interface ClientsListScreenProps {
   hasMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
+  /** Set when the last fetch failed — rendered as an inline strip with a
+   *  retry. The wrappers used to swallow these, so a broken query looked
+   *  like "no results". */
+  loadError?: boolean;
+  onRetryLoad?: () => void;
   onFiltersChange?: (f: { search: string; groupBy: ClientGroupKey }) => void;
 }
 
@@ -94,6 +101,8 @@ export function ClientsListScreen({
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  loadError = false,
+  onRetryLoad,
   onFiltersChange,
 }: ClientsListScreenProps) {
   const { t: full, locale } = useLang();
@@ -238,6 +247,19 @@ export function ClientsListScreen({
           ) : null}
         </div>
       </div>
+
+      {/* Fetch failed — say so instead of showing stale rows silently. */}
+      {loadError ? (
+        <div className="flex items-center gap-3 mb-4 px-4 py-3 rounded-2xl border border-amber-500/30 bg-amber-500/10">
+          <AlertTriangle size={16} className="text-amber-500 shrink-0" />
+          <p className="flex-1 text-xs text-ink">{full.common.listLoadFailed}</p>
+          {onRetryLoad ? (
+            <button onClick={onRetryLoad} className="text-xs font-semibold text-primary hover:underline">
+              {full.common.loadError.retry}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Search + view controls (jobs-layout pattern: controls beside the bar) */}
       <div className="flex items-start gap-2 mb-4">

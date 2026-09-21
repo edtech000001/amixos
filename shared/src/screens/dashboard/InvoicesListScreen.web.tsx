@@ -441,7 +441,8 @@ export function InvoicesListScreen({
             <>
               <div className="fixed inset-0 z-10" onClick={() => setDateOpen(false)} />
               <div className="absolute right-0 top-full mt-2 z-20 w-72 bg-card rounded-2xl border border-border-soft shadow-lg p-4">
-                <p className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-2">{tdate.title}</p>
+                <p className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-1">{tdate.title}</p>
+                <p className="text-[11px] text-faint mb-2">{t.dateFilterBasis}</p>
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {dateRangePresets.map(pr => {
                     const active = dateFrom === pr.from && dateTo === pr.to;

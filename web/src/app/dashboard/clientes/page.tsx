@@ -117,6 +117,9 @@ export default function ClientesPage() {
   const [serverTotal, setServerTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  // A failed fetch used to be swallowed (`catch {}`), so a broken query
+  // looked like "no results". The list shows a retry strip instead.
+  const [loadError, setLoadError] = useState(false);
   const loadSeqRef = useRef(0);
   const cursorRef = useRef<ClientsCursor | null>(null);
   // The last base params (search) so a re-run (branch switch, mutation) reuses
@@ -158,6 +161,7 @@ export default function ClientesPage() {
     paramsRef.current = base;
     loadAllRef.current = loadAll;
     setLoading(true);
+    setLoadError(false);
     cursorRef.current = null;
     setHasMore(false);
     const params = { ...base, excludeIds: excludeIdsRef.current };
@@ -190,6 +194,7 @@ export default function ClientesPage() {
       }
     } catch (e) {
       console.error('Clients query failed', e);
+      setLoadError(true);
     } finally {
       if (seq === loadSeqRef.current) setLoading(false);
     }
@@ -241,6 +246,7 @@ export default function ClientesPage() {
       setHasMore(!!page.nextCursor);
     } catch (e) {
       console.error('Clients load-more failed', e);
+      setLoadError(true);
     } finally {
       setLoadingMore(false);
     }
@@ -567,6 +573,8 @@ export default function ClientesPage() {
       bottomSlot={modals}
       businessId={business?.id}
       serverMode
+      loadError={loadError}
+      onRetryLoad={reRun}
       serverTotal={serverTotal}
       hasMore={hasMore}
       loadingMore={loadingMore}

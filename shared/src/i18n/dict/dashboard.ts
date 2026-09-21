@@ -339,6 +339,9 @@ export type DashboardDict = {
     };
     /** Inline strip when a list fetch fails — replaces a silent catch. */
     loadFailed: string;
+    /** Caption in the date popover: the filter matches issue_date, while the
+     *  rows show the DUE date, which reads like the filter is being ignored. */
+    dateFilterBasis: string;
     sendInvoice: string;
     /** Re-send an already-sent invoice without touching its sent date. */
     resendInvoice: string;
@@ -3520,6 +3523,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         methods: { email: 'Correo', text: 'Mensaje', call: 'Llamada', in_person: 'En persona', other: 'Otro' },
       },
       loadFailed: 'No se pudieron cargar las facturas.',
+      dateFilterBasis: 'Filtra por fecha de emisión (las filas muestran el vencimiento).',
       sendInvoice: 'Enviar factura',
       resendInvoice: 'Reenviar por correo',
       resendHint: 'Vuelve a enviar el correo sin cambiar la fecha de envío.',
@@ -6699,6 +6703,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         methods: { email: 'Email', text: 'Text', call: 'Call', in_person: 'In person', other: 'Other' },
       },
       loadFailed: "Couldn't load the invoices.",
+      dateFilterBasis: 'Filters by issue date (rows show the due date).',
       sendInvoice: 'Send invoice',
       resendInvoice: 'Email again',
       resendHint: 'Re-sends the email without changing the sent date.',

@@ -671,6 +671,7 @@ export function InvoicesListScreen({
       to={dateTo}
       onChange={({ from, to }) => { setDateFrom(from); setDateTo(to); }}
       title={tdate.title}
+      subtitle={t.dateFilterBasis}
       fromLabel={tdate.from}
       toLabel={tdate.to}
       clearLabel={tdate.clear}

@@ -206,6 +206,11 @@ export interface JobsListScreenProps {
   hasMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
+  /** Set when the last fetch failed — rendered as an inline strip with a
+   *  retry. The wrappers used to swallow these, so a broken query looked
+   *  like "no results". */
+  loadError?: boolean;
+  onRetryLoad?: () => void;
   onFiltersChange?: (f: {
     search: string; tabs: string[]; sortBy: JobSortKey; groupBy: JobGroupKey;
     dateFrom: string | null; dateTo: string | null;
@@ -286,6 +291,8 @@ export function JobsListScreen({
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  loadError = false,
+  onRetryLoad,
   onFiltersChange,
   payPeriod,
   refreshing = false,
@@ -818,6 +825,19 @@ export function JobsListScreen({
           ) : null}
         </div>
       </div>
+
+      {/* Fetch failed — say so instead of showing stale rows silently. */}
+      {loadError ? (
+        <div className="flex items-center gap-3 mb-4 px-4 py-3 rounded-2xl border border-amber-500/30 bg-amber-500/10">
+          <AlertTriangle size={16} className="text-amber-500 shrink-0" />
+          <p className="flex-1 text-xs text-ink">{full.common.listLoadFailed}</p>
+          {onRetryLoad ? (
+            <button onClick={onRetryLoad} className="text-xs font-semibold text-primary hover:underline">
+              {full.common.loadError.retry}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Search + sort */}
       <div className="flex items-center gap-2 mb-3">

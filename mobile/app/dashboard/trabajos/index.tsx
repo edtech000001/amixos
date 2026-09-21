@@ -101,6 +101,9 @@ export default function TrabajosTab() {
   const [movingClient, setMovingClient] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  // A failed fetch used to be swallowed (`catch {}`), so a broken query
+  // looked like "no results". The list shows a retry strip instead.
+  const [loadError, setLoadError] = useState(false);
   const cursorRef = useRef<JobsCursor | null>(null);
   const paramsRef = useRef<JobsQueryParams | null>(null);
   // 'page' = recent-order keyset paging; 'sorted' = server-side sort via the
@@ -167,6 +170,7 @@ export default function TrabajosTab() {
     paramsRef.current = params;
     modeRef.current = 'page';
     setLoading(true);
+    setLoadError(false);
     cursorRef.current = null;
     setHasMore(false);
     try {
@@ -182,7 +186,7 @@ export default function TrabajosTab() {
       cursorRef.current = page.nextCursor;
       setHasMore(!!page.nextCursor);
       setServerCounts(counts);
-    } catch { /* offline / error — keep whatever's on screen */ }
+    } catch { setLoadError(true); }
     finally { if (seq === loadSeqRef.current) setLoading(false); }
   };
 
@@ -211,7 +215,7 @@ export default function TrabajosTab() {
       setRawJobs(pageRes.jobs);
       sortOffsetRef.current = pageRes.jobs.length;
       setHasMore(pageRes.hasMore);
-    } catch { /* offline / error — keep whatever's on screen */ }
+    } catch { setLoadError(true); }
     finally { if (seq === loadSeqRef.current) setLoading(false); }
   };
 
@@ -238,7 +242,7 @@ export default function TrabajosTab() {
       setRawJobs(prev => [...prev, ...groupJobsData]);
       loadedGroupsRef.current = idx + 1;
       setHasMore(loadedGroupsRef.current < groupIndexRef.current.length);
-    } catch { /* offline / error — keep what's loaded */ }
+    } catch { setLoadError(true); }
     finally { setLoadingMore(false); }
   };
 
@@ -277,7 +281,7 @@ export default function TrabajosTab() {
         setRawJobs(prev => [...prev, ...pageRes.jobs]);
         sortOffsetRef.current += pageRes.jobs.length;
         setHasMore(pageRes.hasMore);
-      } catch { /* offline / error — keep what's loaded */ }
+      } catch { setLoadError(true); }
       finally { setLoadingMore(false); }
       return;
     }
@@ -289,7 +293,7 @@ export default function TrabajosTab() {
       setRawJobs(prev => [...prev, ...page.jobs]);
       cursorRef.current = page.nextCursor;
       setHasMore(!!page.nextCursor);
-    } catch { /* offline / error — keep what's loaded */ }
+    } catch { setLoadError(true); }
     finally { setLoadingMore(false); }
   };
 
@@ -321,7 +325,7 @@ export default function TrabajosTab() {
       loadedGroupsRef.current = 0;
       setRawJobs([]);
       await loadGroupsToFill();
-    } catch { /* offline / error */ }
+    } catch { setLoadError(true); }
     finally { if (seq === loadSeqRef.current) setLoading(false); }
   };
 
@@ -577,6 +581,8 @@ export default function TrabajosTab() {
         alertThresholds={alertThresholds}
         businessId={business?.id}
         serverMode
+        loadError={loadError}
+        onRetryLoad={reload}
         serverCounts={serverCounts}
         hasMore={hasMore}
         loadingMore={loadingMore}

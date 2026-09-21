@@ -79,6 +79,9 @@ export default function ClientesTab() {
   const [serverTotal, setServerTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  // A failed fetch used to be swallowed (`catch {}`), so a broken query
+  // looked like "no results". The list shows a retry strip instead.
+  const [loadError, setLoadError] = useState(false);
   const loadSeqRef = useRef(0);
   const cursorRef = useRef<ClientsCursor | null>(null);
   const paramsRef = useRef<{ businessId: string; search: string } | null>(null);
@@ -108,7 +111,7 @@ export default function ClientesTab() {
         .eq('business_id', business.id)
         .order('sort_order');
       setTemplates(localizeTemplates((tplRes.data as { field_key: string; field_label: string }[] | null) ?? [], locale));
-    } catch { /* offline — no templates */ }
+    } catch { setLoadError(true); }
     void fetchClientLocations(supabase, business.id).then(setClientLocations).catch(() => {});
   };
 
@@ -117,6 +120,7 @@ export default function ClientesTab() {
     paramsRef.current = base;
     loadAllRef.current = loadAll;
     setLoading(true);
+    setLoadError(false);
     cursorRef.current = null;
     setHasMore(false);
     const params = { ...base, excludeIds: excludeIdsRef.current };
@@ -128,7 +132,7 @@ export default function ClientesTab() {
         if (seq !== loadSeqRef.current) return;
         setRawClients(rows);
         setServerTotal(total);
-      } catch { /* offline / error */ }
+      } catch { setLoadError(true); }
       finally { if (seq === loadSeqRef.current) setLoading(false); }
       return;
     }
@@ -142,7 +146,7 @@ export default function ClientesTab() {
       cursorRef.current = page.nextCursor;
       setHasMore(!!page.nextCursor);
       setServerTotal(total);
-    } catch { /* offline / error — keep whatever's on screen */ }
+    } catch { setLoadError(true); }
     finally { if (seq === loadSeqRef.current) setLoading(false); }
   };
 
@@ -190,7 +194,7 @@ export default function ClientesTab() {
       setRawClients(prev => [...prev, ...page.clients]);
       cursorRef.current = page.nextCursor;
       setHasMore(!!page.nextCursor);
-    } catch { /* offline / error — keep what's loaded */ }
+    } catch { setLoadError(true); }
     finally { setLoadingMore(false); }
   };
 
@@ -367,6 +371,8 @@ export default function ClientesTab() {
         bulkDeleting={bulkDeleting}
         businessId={business?.id}
         serverMode
+        loadError={loadError}
+        onRetryLoad={reRun}
         serverTotal={serverTotal}
         hasMore={hasMore}
         loadingMore={loadingMore}

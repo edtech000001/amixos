@@ -23,6 +23,7 @@ import {
   Layers,
   Check,
   ListChecks,
+  AlertTriangle,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
@@ -86,6 +87,11 @@ export interface ClientsListScreenProps {
   hasMore?: boolean;
   loadingMore?: boolean;
   onLoadMore?: () => void;
+  /** Set when the last fetch failed — rendered as an inline strip with a
+   *  retry. The wrappers used to swallow these, so a broken query looked
+   *  like "no results". */
+  loadError?: boolean;
+  onRetryLoad?: () => void;
   onFiltersChange?: (f: { search: string; groupBy: ClientGroupKey }) => void;
 }
 
@@ -125,6 +131,8 @@ export function ClientsListScreen({
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  loadError = false,
+  onRetryLoad,
   onFiltersChange,
 }: ClientsListScreenProps) {
   const { t: full, locale } = useLang();
@@ -380,6 +388,19 @@ export function ClientsListScreen({
           ) : null}
         </View>
       </View>
+
+      {/* Fetch failed — say so instead of showing stale rows silently. */}
+      {loadError ? (
+        <View className="flex-row items-center gap-3 mb-3 px-4 py-3 rounded-2xl border border-amber-500/30 bg-amber-500/10">
+          <AlertTriangle size={16} color="#f59e0b" />
+          <Text className="flex-1 text-xs text-ink">{full.common.listLoadFailed}</Text>
+          {onRetryLoad ? (
+            <Pressable onPress={onRetryLoad} hitSlop={8}>
+              <Text className="text-xs font-semibold text-primary">{full.common.loadError.retry}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
 
       <View className="mb-4">
         <Input

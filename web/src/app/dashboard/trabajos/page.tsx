@@ -138,6 +138,9 @@ export default function TrabajosPage() {
   const [serverCounts, setServerCounts] = useState<Record<string, number>>({});
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  // A failed fetch used to be swallowed (`catch {}`), so a broken query
+  // looked like "no results". The list shows a retry strip instead.
+  const [loadError, setLoadError] = useState(false);
   const cursorRef = useRef<JobsCursor | null>(null);
   const paramsRef = useRef<JobsQueryParams | null>(null);
   // 'page' = recent-order keyset paging; 'sorted' = server-side sort via the
@@ -203,6 +206,7 @@ export default function TrabajosPage() {
     paramsRef.current = params;
     modeRef.current = 'page';
     setLoading(true);
+    setLoadError(false);
     cursorRef.current = null;
     setHasMore(false);
     try {
@@ -220,6 +224,7 @@ export default function TrabajosPage() {
       setServerCounts(counts);
     } catch (e) {
       console.error('Jobs query failed', e);
+      setLoadError(true);
     } finally {
       if (seq === loadSeqRef.current) setLoading(false);
     }
@@ -252,6 +257,7 @@ export default function TrabajosPage() {
       setHasMore(pageRes.hasMore);
     } catch (e) {
       console.error('Jobs sorted query failed', e);
+      setLoadError(true);
     } finally {
       if (seq === loadSeqRef.current) setLoading(false);
     }
@@ -283,6 +289,7 @@ export default function TrabajosPage() {
       setHasMore(loadedGroupsRef.current < groupIndexRef.current.length);
     } catch (e) {
       console.error('Group load failed', e);
+      setLoadError(true);
     } finally {
       setLoadingMore(false);
     }
@@ -325,6 +332,7 @@ export default function TrabajosPage() {
         setHasMore(pageRes.hasMore);
       } catch (e) {
         console.error('Jobs sorted load-more failed', e);
+      setLoadError(true);
       } finally {
         setLoadingMore(false);
       }
@@ -340,6 +348,7 @@ export default function TrabajosPage() {
       setHasMore(!!page.nextCursor);
     } catch (e) {
       console.error('Jobs load-more failed', e);
+      setLoadError(true);
     } finally {
       setLoadingMore(false);
     }
@@ -376,6 +385,7 @@ export default function TrabajosPage() {
       await loadGroupsToFill();
     } catch (e) {
       console.error('Group index failed', e);
+      setLoadError(true);
     } finally {
       if (seq === loadSeqRef.current) setLoading(false);
     }
@@ -621,6 +631,8 @@ export default function TrabajosPage() {
       alertThresholds={alertThresholds}
       businessId={business?.id}
       serverMode
+      loadError={loadError}
+      onRetryLoad={reload}
       serverCounts={serverCounts}
       hasMore={hasMore}
       loadingMore={loadingMore}
