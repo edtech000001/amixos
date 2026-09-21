@@ -114,6 +114,7 @@ export type CommonDict = {
     // Jobs / invoices
     autoprice: string;
     sendInvoice: string;
+    resendInvoice: string;
     createInvoice: string;
     emailProposal: string;
     downloadProposal: string;
@@ -230,6 +231,7 @@ export const common: Record<Locale, CommonDict> = {
       loans: 'Préstamos y descuentos',
       autoprice: 'Poner los precios desde tu lista de precios',
       sendInvoice: 'Enviar la factura al cliente por correo',
+      resendInvoice: 'Reenviar el correo de la factura, sin cambiar la fecha de envío',
       createInvoice: 'Crear una factura con los trabajos seleccionados',
       emailProposal: 'Enviar la propuesta por correo',
       downloadProposal: 'Descargar el PDF',
@@ -341,6 +343,7 @@ export const common: Record<Locale, CommonDict> = {
       loans: 'Loans and deductions',
       autoprice: 'Fill the prices from your price sheet',
       sendInvoice: 'Email the invoice to the client',
+      resendInvoice: 'Re-send the invoice email, keeping the original sent date',
       createInvoice: 'Create one invoice from the selected jobs',
       emailProposal: 'Email the proposal',
       downloadProposal: 'Download the PDF',

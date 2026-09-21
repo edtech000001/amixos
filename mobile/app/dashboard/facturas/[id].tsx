@@ -37,7 +37,8 @@ import { applicableRate, rowToPriceSheetItem, groupPriceItemsByCategory, type Pr
 import { resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { InvoiceRemindersCard } from '@amixos/shared/screens/dashboard/InvoiceRemindersCard';
-import { formatDateLong, formatMoneyInput, formatNumberGrouped } from '@amixos/shared/lib/format';
+import { addInvoiceReminder } from '@amixos/shared/lib/invoiceReminders';
+import { formatDateLong, formatMoneyInput, formatNumberGrouped, todayLocalISO } from '@amixos/shared/lib/format';
 import { can } from '@amixos/shared/lib/permissions';
 import {
   resolveConfig,
@@ -1084,7 +1085,32 @@ export default function FacturaDetailRoute() {
   // address, subject/body, AND the invoice PDF attached, then mark sent.
   // Falls back to a mailto link (body only — mailto can't carry attachments)
   // when the native mail composer isn't available.
-  const sendInvoice = async () => {
+  // A resend of an open invoice IS chasing the client, so it lands in the
+  // reminder log (same card as "Mark as reminded"). Best-effort: on a database
+  // without migration 228 the insert just fails and the resend still stands.
+  const [remindersToken, setRemindersToken] = useState(0);
+  const afterResend = async () => {
+    if (!business || !invoice) return;
+    if (invoice.status === 'sent' || invoice.status === 'overdue') {
+      try {
+        await addInvoiceReminder(supabase, {
+          businessId: business.id,
+          invoiceId: id,
+          remindedOn: todayLocalISO(),
+          method: 'email',
+        });
+        setRemindersToken(t => t + 1);
+      } catch { /* migration not run / offline — the email still went out */ }
+    }
+    void logAudit(supabase, business.id, 'invoice.sent', 'invoice', id, {
+      invoice_number: invoice.invoiceNumber, resend: true,
+    });
+  };
+
+  // resend = email an already-sent invoice again. Status and sent_at stay
+  // exactly as they are (Undo sent → Send used to be the only way, and that
+  // wipes sent_at); instead the resend is logged as an email reminder.
+  const sendInvoice = async (opts?: { resend?: boolean }) => {
     if (!invoice) return;
     const email = invoice.clients[0]?.email ?? '';
     // Resolve recipients BEFORE deciding there is nobody to send to: a client
@@ -1164,9 +1190,10 @@ export default function FacturaDetailRoute() {
           body,
           attachments,
         });
-        // Cancelled → don't flip status (nothing was sent).
+        // Cancelled → nothing was sent, so change nothing.
         if (result.status !== MailComposer.MailComposerStatus?.CANCELLED) {
-          await updateStatus('sent');
+          if (opts?.resend) await afterResend();
+          else await updateStatus('sent');
         }
         return;
       } catch {
@@ -1179,9 +1206,10 @@ export default function FacturaDetailRoute() {
     const mailto = `mailto:${encodeURIComponent(joinRecipients(toList))}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}${ccParam}`;
     try {
       await Linking.openURL(mailto);
-      // Only mark sent when a mail composer actually opened — previously a
-      // device with no mail app flipped the status with nothing sent.
-      await updateStatus('sent');
+      // Only act when a mail composer actually opened — previously a device
+      // with no mail app flipped the status with nothing sent.
+      if (opts?.resend) await afterResend();
+      else await updateStatus('sent');
     } catch {
       Alert.alert('', full.dashboard.settings.support.noMailApp.replace('{{email}}', email));
     }
@@ -1228,7 +1256,8 @@ export default function FacturaDetailRoute() {
         sortLinesDir={sortLinesDir}
         onJobPress={(jobId) => setPreviewJobId(jobId)}
         jobBusy={jobBusy}
-        onSendInvoice={canEdit ? sendInvoice : undefined}
+        onSendInvoice={canEdit ? () => void sendInvoice() : undefined}
+        onResendInvoice={canEdit && invoice && invoice.status !== 'draft' ? () => void sendInvoice({ resend: true }) : undefined}
         payments={payments}
         onRecordPayment={canEdit ? openRecordPayment : undefined}
         onEditPayment={canEdit ? openEditPayment : undefined}
@@ -1240,7 +1269,7 @@ export default function FacturaDetailRoute() {
         jobStates={Object.fromEntries(attachedJobs.filter(j => j.job_state).map(j => [j.id, j.job_state as string]))}
         jobDates={Object.fromEntries(attachedJobs.filter(j => j.scheduled_date).map(j => [j.id, j.scheduled_date as string]))}
         remindersSlot={business && invoice ? (
-          <InvoiceRemindersCard supabase={supabase} businessId={business.id} invoiceId={id} canEdit={canEdit} nameById={nameById} />
+          <InvoiceRemindersCard supabase={supabase} businessId={business.id} invoiceId={id} canEdit={canEdit} nameById={nameById} refreshToken={remindersToken} />
         ) : null}
       />
 

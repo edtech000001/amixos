@@ -338,6 +338,9 @@ export type DashboardDict = {
       methods: { email: string; text: string; call: string; in_person: string; other: string };
     };
     sendInvoice: string;
+    /** Re-send an already-sent invoice without touching its sent date. */
+    resendInvoice: string;
+    resendHint: string;
     emailSubject: string;
     emailBody: string;
     sendNoEmail: string;
@@ -3508,6 +3511,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         methods: { email: 'Correo', text: 'Mensaje', call: 'Llamada', in_person: 'En persona', other: 'Otro' },
       },
       sendInvoice: 'Enviar factura',
+      resendInvoice: 'Reenviar por correo',
+      resendHint: 'Vuelve a enviar el correo sin cambiar la fecha de envío.',
       emailSubject: 'Factura {{number}}',
       emailBody: 'Hola,\n\nAdjunto encontrarás tu factura.\nPuedes verla aquí: {{link}}\n\nGracias por tu preferencia.',
       sendNoEmail: 'Este cliente no tiene un correo guardado.',
@@ -6678,6 +6683,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         methods: { email: 'Email', text: 'Text', call: 'Call', in_person: 'In person', other: 'Other' },
       },
       sendInvoice: 'Send invoice',
+      resendInvoice: 'Email again',
+      resendHint: 'Re-sends the email without changing the sent date.',
       emailSubject: 'Invoice {{number}}',
       emailBody: 'Hi,\n\nPlease find your invoice attached.\nYou can view it here: {{link}}\n\nThank you for your business.',
       sendNoEmail: 'This client has no email on file.',

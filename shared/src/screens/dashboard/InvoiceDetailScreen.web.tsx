@@ -175,6 +175,10 @@ export interface InvoiceDetailScreenProps {
   jobBusy?: boolean;
   /** Email the invoice out (draft → opens the mail client + marks sent). */
   onSendInvoice?: () => void;
+  /** Re-send an ALREADY-sent invoice: same email, but the status and the
+   *  original sent date stay put. Without it the only way to email again was
+   *  Undo sent → Send, which wipes sent_at (the "sent 31d ago" history). */
+  onResendInvoice?: () => void;
   /** Recorded payments (partial or full). Rendered under the totals. */
   payments?: InvoicePaymentRow[];
   /** Open the record-payment dialog. Falls back to onUpdateStatus('paid'). */
@@ -254,6 +258,7 @@ export function InvoiceDetailScreen({
   onJobPress,
   jobBusy,
   onSendInvoice,
+  onResendInvoice,
   payments = [],
   onRecordPayment,
   onEditPayment,
@@ -737,6 +742,13 @@ export function InvoiceDetailScreen({
                 <CheckCircle size={16} /> {paidSoFar > 0 ? tInv.payments.recordBtn : tInv.markPaid}
               </button>
             ) : null}
+            {canEdit && onResendInvoice ? (
+              <Tooltip tip="resendInvoice" labelled>
+                <button onClick={onResendInvoice} disabled={updating} className="w-full flex items-center justify-center gap-2 border border-border bg-card text-ink py-3 rounded-2xl font-semibold hover:bg-surface disabled:opacity-60">
+                  <Send size={16} /> {tInv.resendInvoice}
+                </button>
+              </Tooltip>
+            ) : null}
             {canEdit ? (
               <button onClick={() => onUpdateStatus('draft')} disabled={updating} className="flex items-center justify-center gap-2 border border-border bg-card text-muted py-3 rounded-2xl font-semibold hover:bg-surface disabled:opacity-60">
                 <Undo2 size={16} /> {tInv.undoSent}
@@ -753,6 +765,11 @@ export function InvoiceDetailScreen({
         {invoice.status === 'total_loss' && canWriteOff ? (
           <button onClick={() => onUpdateStatus('sent')} disabled={updating} className="w-full flex items-center justify-center gap-2 border border-border bg-card text-muted py-3 rounded-2xl font-semibold hover:bg-surface disabled:opacity-60">
             <Undo2 size={16} /> {tInv.reinstateInvoice}
+          </button>
+        ) : null}
+        {invoice.status === 'paid' && canEdit && onResendInvoice ? (
+          <button onClick={onResendInvoice} disabled={updating} className="w-full flex items-center justify-center gap-2 border border-border bg-card text-ink py-3 rounded-2xl font-semibold hover:bg-surface disabled:opacity-60">
+            <Send size={16} /> {tInv.resendInvoice}
           </button>
         ) : null}
         {invoice.status === 'paid' && onUndoPaid && canEdit ? (

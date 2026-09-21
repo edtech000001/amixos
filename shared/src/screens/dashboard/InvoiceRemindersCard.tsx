@@ -34,6 +34,8 @@ export interface InvoiceRemindersCardProps {
   nameById?: Record<string, string>;
   /** Called after a reminder is added or removed (e.g. to refresh caches). */
   onChanged?: () => void;
+  /** Bump to force a reload — e.g. after a resend logs an email reminder. */
+  refreshToken?: number;
 }
 
 const METHOD_ICON: Record<ReminderMethod, typeof Mail> = {
@@ -47,7 +49,7 @@ const METHOD_ICON: Record<ReminderMethod, typeof Mail> = {
 // Collapsed history shows the latest few; the rest behind "show all".
 const COLLAPSED = 3;
 
-export function InvoiceRemindersCard({ supabase, businessId, invoiceId, canEdit, nameById, onChanged }: InvoiceRemindersCardProps) {
+export function InvoiceRemindersCard({ supabase, businessId, invoiceId, canEdit, nameById, onChanged, refreshToken }: InvoiceRemindersCardProps) {
   const { t: ui, locale } = useLang();
   const t = ui.dashboard.invoices.reminders;
   const c = useThemeColors();
@@ -83,7 +85,7 @@ export function InvoiceRemindersCard({ supabase, businessId, invoiceId, canEdit,
     setShowAll(false);
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [invoiceId]);
+  }, [invoiceId, refreshToken]);
 
   const openForm = () => {
     setMethod('call');

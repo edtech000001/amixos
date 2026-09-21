@@ -32,7 +32,8 @@ import { applicableRate, rowToPriceSheetItem, groupPriceItemsByCategory, type Pr
 import { resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { InvoiceRemindersCard } from '@amixos/shared/screens/dashboard/InvoiceRemindersCard';
-import { formatDateLong, formatNumberGrouped, formatMoneyInput } from '@amixos/shared/lib/format';
+import { addInvoiceReminder } from '@amixos/shared/lib/invoiceReminders';
+import { formatDateLong, formatNumberGrouped, formatMoneyInput, todayLocalISO } from '@amixos/shared/lib/format';
 import { usePasteImage } from '@/lib/usePasteImage';
 import { PasteHint } from '@/components/ui/PasteHint';
 import { secureShareToken } from '@amixos/shared/lib/shareToken';
@@ -949,7 +950,32 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
 
   // Email the invoice: open the mail client pre-filled with the client's
   // address + public link, then mark sent.
-  const sendInvoice = async () => {
+  // A resend of an open invoice IS chasing the client, so it lands in the
+  // reminder log (same card as "Mark as reminded"). Best-effort: on a database
+  // without migration 228 the insert just fails and the resend still stands.
+  const [remindersToken, setRemindersToken] = useState(0);
+  const afterResend = async () => {
+    if (!business || !invoice) return;
+    if (invoice.status === 'sent' || invoice.status === 'overdue') {
+      try {
+        await addInvoiceReminder(supabase, {
+          businessId: business.id,
+          invoiceId: id,
+          remindedOn: todayLocalISO(),
+          method: 'email',
+        });
+        setRemindersToken(t => t + 1);
+      } catch { /* migration not run / offline — the email still went out */ }
+    }
+    void logAudit(supabase, business.id, 'invoice.sent', 'invoice', id, {
+      invoice_number: invoice.invoiceNumber, resend: true,
+    });
+  };
+
+  // resend = email an already-sent invoice again. Status and sent_at stay
+  // exactly as they are (Undo sent → Send used to be the only way, and that
+  // wipes sent_at); instead the resend is logged as an email reminder.
+  const sendInvoice = async (opts?: { resend?: boolean }) => {
     if (!invoice) return;
     const email = invoice.clients[0]?.email ?? '';
     // Auto-CC the client's contacts flagged "CC on invoices" (deduped, and
@@ -998,7 +1024,8 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     // the PDF and attach it (mailto can't attach files itself).
     if (includePdf) window.open(`/factura/${token}?print=1`, '_blank');
     window.location.href = `mailto:${encodeURIComponent(toParam)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}${ccParam}`;
-    await updateStatus('sent');
+    if (opts?.resend) await afterResend();
+    else await updateStatus('sent');
   };
 
   const canDelete = can.deleteInvoice(currentRole);
@@ -1088,7 +1115,8 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         sortLinesDir={sortLinesDir}
         onJobPress={(jobId) => setPreviewJobId(jobId)}
         jobBusy={jobBusy}
-        onSendInvoice={canEdit ? sendInvoice : undefined}
+        onSendInvoice={canEdit ? () => void sendInvoice() : undefined}
+        onResendInvoice={canEdit && invoice && invoice.status !== 'draft' ? () => void sendInvoice({ resend: true }) : undefined}
         payments={payments}
         onRecordPayment={canEdit ? openRecordPayment : undefined}
         onEditPayment={canEdit ? openEditPayment : undefined}
@@ -1100,7 +1128,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         jobStates={Object.fromEntries(attachedJobs.filter(j => j.job_state).map(j => [j.id, j.job_state as string]))}
         jobDates={Object.fromEntries(attachedJobs.filter(j => j.scheduled_date).map(j => [j.id, j.scheduled_date as string]))}
         remindersSlot={business && invoice ? (
-          <InvoiceRemindersCard supabase={supabase} businessId={business.id} invoiceId={id} canEdit={canEdit} nameById={nameById} />
+          <InvoiceRemindersCard supabase={supabase} businessId={business.id} invoiceId={id} canEdit={canEdit} nameById={nameById} refreshToken={remindersToken} />
         ) : null}
       />
 

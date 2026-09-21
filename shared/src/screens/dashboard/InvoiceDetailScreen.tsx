@@ -175,6 +175,10 @@ export interface InvoiceDetailScreenProps {
   jobBusy?: boolean;
   /** Email the invoice out (draft → opens the mail client + marks sent). */
   onSendInvoice?: () => void;
+  /** Re-send an ALREADY-sent invoice: same email, but the status and the
+   *  original sent date stay put. Without it the only way to email again was
+   *  Undo sent → Send, which wipes sent_at (the "sent 31d ago" history). */
+  onResendInvoice?: () => void;
   /** Recorded payments (partial or full). Rendered under the totals. */
   payments?: InvoicePaymentRow[];
   /** Open the record-payment sheet. Falls back to onUpdateStatus('paid'). */
@@ -255,6 +259,7 @@ export function InvoiceDetailScreen({
   onJobPress,
   jobBusy,
   onSendInvoice,
+  onResendInvoice,
   payments = [],
   onRecordPayment,
   onEditPayment,
@@ -706,6 +711,12 @@ export function InvoiceDetailScreen({
               <Text className="text-white font-semibold">{paidSoFar > 0 ? tInv.payments.recordBtn : tInv.markPaid}</Text>
             </Pressable>
           ) : null}
+          {canEdit && onResendInvoice ? (
+            <Pressable onPress={onResendInvoice} disabled={updating} className="flex-row items-center justify-center gap-2 border border-border bg-card py-3.5 rounded-2xl active:bg-surface">
+              <Send size={16} color={c.ink} />
+              <Text className="text-ink font-semibold">{tInv.resendInvoice}</Text>
+            </Pressable>
+          ) : null}
           {canEdit ? (
             <Pressable onPress={() => onUpdateStatus('draft')} disabled={updating} className="flex-row items-center justify-center gap-2 border border-border bg-card py-3.5 rounded-2xl active:bg-surface">
               <Undo2 size={16} color={c.muted} />
@@ -725,6 +736,12 @@ export function InvoiceDetailScreen({
         <Pressable onPress={() => onUpdateStatus('sent')} disabled={updating} className="flex-row items-center justify-center gap-2 border border-border bg-card py-3.5 rounded-2xl active:bg-surface mb-4">
           <Undo2 size={16} color={c.muted} />
           <Text className="text-muted font-semibold">{tInv.reinstateInvoice}</Text>
+        </Pressable>
+      ) : null}
+      {invoice.status === 'paid' && canEdit && onResendInvoice ? (
+        <Pressable onPress={onResendInvoice} disabled={updating} className="flex-row items-center justify-center gap-2 border border-border bg-card py-3.5 rounded-2xl active:bg-surface mb-2.5">
+          <Send size={16} color={c.ink} />
+          <Text className="text-ink font-semibold">{tInv.resendInvoice}</Text>
         </Pressable>
       ) : null}
       {invoice.status === 'paid' && onUndoPaid && canEdit ? (
