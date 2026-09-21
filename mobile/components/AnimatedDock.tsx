@@ -187,16 +187,32 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
 
   // Tab changes glide; a width change (rotation) snaps — springing across a
   // resized bar reads as the bubble sliding in from the wrong place.
+  //
+  // A jump of more than one slot snaps too. The bar hides the DESTINATION
+  // slot's icon the moment the route changes, but the bubble was still
+  // travelling — so on a long hop (Clientes → Más, or any fast tapping between
+  // sections) it slid across every icon in between and read as "the dock broke
+  // and the icons overlap". One slot still glides: that's the motion the dock
+  // is for, and it never crosses a third icon.
   const lastWidthRef = useRef(barWidth);
+  const lastIndexRef = useRef(activeIndex);
+  const lastTabsRef = useRef(numTabs);
   useEffect(() => {
     if (!barWidth) return;
-    if (lastWidthRef.current !== barWidth) {
-      lastWidthRef.current = barWidth;
+    const widthChanged = lastWidthRef.current !== barWidth;
+    // Adding/removing a dock app re-slices the bar: every slot centre moves,
+    // so an in-flight spring would land on the OLD geometry.
+    const tabsChanged = lastTabsRef.current !== numTabs;
+    const jumped = Math.abs(activeIndex - lastIndexRef.current) > 1;
+    lastWidthRef.current = barWidth;
+    lastTabsRef.current = numTabs;
+    lastIndexRef.current = activeIndex;
+    if (widthChanged || tabsChanged || jumped) {
       notchX.value = targetX;
       return;
     }
     notchX.value = withSpring(targetX, { damping: 18, stiffness: 200, mass: 0.7 });
-  }, [targetX, barWidth, notchX]);
+  }, [targetX, barWidth, numTabs, activeIndex, notchX]);
 
   const animatedPathProps = useAnimatedProps(() => {
     'worklet';
