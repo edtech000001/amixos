@@ -5,7 +5,7 @@ import { Check, Search } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
-import { MODULE_REGISTRY, type ModuleDef, type ModuleCategory } from '../../modules/registry';
+import { modulesForBusiness, type ModuleDef, type ModuleCategory } from '../../modules/registry';
 import { can, type Role } from '../../lib/permissions';
 
 type CategoryFilter = ModuleCategory | 'all';
@@ -14,6 +14,9 @@ export interface AddonStoreScreenProps {
   // The set of currently-enabled module ids for the active business.
   // Pre-fetched by the wrapper so the screen stays purely presentational.
   enabledIds: Set<string>;
+  /** Active business — resolves pilot-gated modules (registry
+   *  MODULE_PILOT_BUSINESS_IDS): gated-out modules read as "coming soon". */
+  businessId?: string | null;
   // Role-aware: only owner/admin sees interactive controls. Other roles see
   // the catalog as read-only so they still understand what's available.
   currentRole: Role | null;
@@ -30,6 +33,7 @@ export interface AddonStoreScreenProps {
 
 export function AddonStoreScreen({
   enabledIds,
+  businessId,
   currentRole,
   loading,
   onToggle,
@@ -67,7 +71,7 @@ export function AddonStoreScreen({
       if (m.status === 'coming_soon') return 2;
       return enabledIds.has(m.id) ? 0 : 1;
     };
-    const list = MODULE_REGISTRY.filter(m => {
+    const list = modulesForBusiness(businessId).filter(m => {
       if (category !== 'all' && m.category !== category) return false;
       if (!q) return true;
       const { name, description } = labelFor(m);
@@ -79,7 +83,7 @@ export function AddonStoreScreen({
     // labelFor depends on the i18n dict — re-derive when the locale changes
     // by keying on `modulesDict`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, category, enabledIds, modulesDict]);
+  }, [search, category, enabledIds, modulesDict, businessId]);
 
   const CATEGORIES: Array<{ key: CategoryFilter; label: string }> = [
     { key: 'all',      label: t.categoryAll },

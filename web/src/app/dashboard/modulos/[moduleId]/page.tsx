@@ -12,7 +12,8 @@ import { ArrowLeft, Construction } from 'lucide-react';
 // ssr: false because react-google-maps and friends touch window/document
 // during init.
 import type { ComponentType } from 'react';
-import { getModuleById } from '@amixos/shared/modules/registry';
+import { getModuleById, moduleStatusFor } from '@amixos/shared/modules/registry';
+import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 
 const MapModule = nextDynamic(() => import('@/modules/map'), { ssr: false });
@@ -33,6 +34,7 @@ const MODULE_COMPONENTS: Record<string, ComponentType> = {
 
 export default function ModulePage({ params }: { params: { moduleId: string } }) {
   const { t: full } = useLang();
+  const { business } = useApp();
 
   const def = getModuleById(params.moduleId);
   if (!def) {
@@ -49,7 +51,12 @@ export default function ModulePage({ params }: { params: { moduleId: string } })
     );
   }
 
-  const Cmp = MODULE_COMPONENTS[def.id];
+  // Pilot-gated modules (registry MODULE_PILOT_BUSINESS_IDS) fall through to
+  // the Coming Soon placeholder for every other business, so a saved link or
+  // a typed URL can't reach the real screen.
+  const Cmp = moduleStatusFor(def, business?.id ?? null) === 'available'
+    ? MODULE_COMPONENTS[def.id]
+    : undefined;
   if (Cmp) return <Cmp />;
 
   // Coming Soon placeholder. Same UI for every unimplemented module —

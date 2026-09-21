@@ -82,11 +82,38 @@ export const MODULE_REGISTRY: ModuleDef[] = [
   { id: 'fundraising',  icon: HandCoins,  color: '#E11D48', status: 'coming_soon', i18nKey: 'fundraising',  category: 'industry' },
   { id: 'equipment',    icon: Forklift,   color: '#78716C', status: 'available',   i18nKey: 'equipment',    category: 'tools' },
   { id: 'inventory',    icon: Package,    color: '#16A34A', status: 'available',   i18nKey: 'inventory',    category: 'tools' },
-  { id: 'messaging',    icon: MessageSquare, color: '#06B6D4', status: 'available', i18nKey: 'messaging',    category: 'tools' },
+  { id: 'messaging',    icon: MessageSquare, color: '#06B6D4', status: 'coming_soon', i18nKey: 'messaging',    category: 'tools' },
   { id: 'wedding',      icon: PartyPopper,color: '#A855F7', status: 'coming_soon', i18nKey: 'wedding',      category: 'industry' },
   { id: 'dealership',   icon: Car,        color: '#0891B2', status: 'coming_soon', i18nKey: 'dealership',   category: 'industry' },
 ];
 
 export function getModuleById(id: string): ModuleDef | null {
   return MODULE_REGISTRY.find(m => m.id === id) ?? null;
+}
+
+// ── Pilot gate ───────────────────────────────────────────────────────────────
+// A module listed here is 'available' ONLY for the businesses named; every
+// other business sees it as 'coming_soon' — store card disabled, no sidebar /
+// Más entry, and its route refuses to render. Same hard-coded shape as the
+// weather alpha gate (shared/src/lib/weather.ts); swap both for a
+// feature_flags column when there are more than a couple of these.
+export const MODULE_PILOT_BUSINESS_IDS: Readonly<Record<string, ReadonlyArray<string>>> = {
+  rentals: ['47c79845-eb2b-498a-8eb1-94dbac56a5ae'], // Prime Solutions
+};
+
+/** The module's status FOR THIS BUSINESS — the only status the UI should use. */
+export function moduleStatusFor(
+  mod: ModuleDef | string | null | undefined,
+  businessId: string | null | undefined,
+): ModuleStatus {
+  const def = typeof mod === 'string' ? getModuleById(mod) : mod;
+  if (!def) return 'coming_soon';
+  const pilot = MODULE_PILOT_BUSINESS_IDS[def.id];
+  if (!pilot) return def.status;
+  return businessId && pilot.includes(businessId) ? def.status : 'coming_soon';
+}
+
+/** The registry with every status resolved for this business. */
+export function modulesForBusiness(businessId: string | null | undefined): ModuleDef[] {
+  return MODULE_REGISTRY.map(m => ({ ...m, status: moduleStatusFor(m, businessId) }));
 }

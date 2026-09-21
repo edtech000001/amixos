@@ -94,6 +94,7 @@ export default function TiendaPage() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <AddonStoreScreen
         enabledIds={enabledIds}
+        businessId={business?.id ?? null}
         currentRole={currentRole}
         loading={loading}
         onToggle={onToggle}

@@ -5,7 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Construction } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
-import { getModuleById } from '@amixos/shared/modules/registry';
+import { getModuleById, moduleStatusFor } from '@amixos/shared/modules/registry';
+import { useApp } from '@/lib/AppContext';
 import MapScreen from '@/modules/map/MapScreen';
 import InventoryModuleScreen from '@/modules/inventory/InventoryScreen';
 import EquipmentScreen from '@/modules/equipment/EquipmentScreen';
@@ -31,6 +32,7 @@ export default function ModuleRoute() {
   const { moduleId } = useLocalSearchParams<{ moduleId: string }>();
   const { t: full } = useLang();
   const c = useThemeColors();
+  const { business } = useApp();
 
   const def = moduleId ? getModuleById(moduleId) : null;
 
@@ -49,7 +51,12 @@ export default function ModuleRoute() {
     );
   }
 
-  const Cmp = MODULE_COMPONENTS[def.id];
+  // Pilot-gated modules (registry MODULE_PILOT_BUSINESS_IDS) fall through to
+  // the Coming Soon placeholder for every other business, so a saved link or
+  // a deep link can't reach the real screen.
+  const Cmp = moduleStatusFor(def, business?.id ?? null) === 'available'
+    ? MODULE_COMPONENTS[def.id]
+    : undefined;
   if (Cmp) return <Cmp />;
 
   const entry = (full.dashboard.modules.list as unknown as Record<string, { name: string; description: string } | undefined>)[def.i18nKey];

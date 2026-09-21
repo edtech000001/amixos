@@ -11,7 +11,7 @@
 // the app; they're just invisible.
 
 import { useEffect, useState, useCallback } from 'react';
-import { MODULE_REGISTRY, getModuleById, type ModuleDef } from './registry';
+import { MODULE_REGISTRY, getModuleById, moduleStatusFor, type ModuleDef } from './registry';
 
 // Minimal supabase-like shape — same approach as logAudit. Keeps this hook
 // platform-agnostic (works with web + mobile supabase clients).
@@ -59,8 +59,14 @@ export function useEnabledModules(
         .eq('business_id', businessId)
         .eq('is_active', true);
       const keys = ((data ?? []) as Array<{ module_key: string }>).map(r => r.module_key);
-      // Preserve manifest order, drop unknown keys.
-      const enabled = MODULE_REGISTRY.filter(m => keys.includes(m.id));
+      // Preserve manifest order, drop unknown keys, and drop anything this
+      // business may not use yet: a pilot-gated module (registry
+      // MODULE_PILOT_BUSINESS_IDS) or one that has since gone back to
+      // 'coming_soon' can still have a live business_modules row from before
+      // the gate existed — it must not keep its sidebar / Más entry.
+      const enabled = MODULE_REGISTRY.filter(
+        m => keys.includes(m.id) && moduleStatusFor(m, businessId) === 'available',
+      );
       setModules(enabled);
     } catch {
       setModules([]);
@@ -97,5 +103,6 @@ export async function fetchEnabledModules(
   const keys = ((data ?? []) as Array<{ module_key: string }>).map(r => r.module_key);
   return MODULE_REGISTRY
     .map(m => getModuleById(m.id))
-    .filter((m): m is ModuleDef => !!m && keys.includes(m.id));
+    .filter((m): m is ModuleDef =>
+      !!m && keys.includes(m.id) && moduleStatusFor(m, businessId) === 'available');
 }

@@ -102,6 +102,7 @@ export default function TiendaPage() {
       <div className="bg-card rounded-2xl border border-border-soft">
         <AddonStoreScreen
           enabledIds={enabledIds}
+          businessId={business?.id ?? null}
           currentRole={currentRole}
           loading={loading}
           onToggle={onToggle}
