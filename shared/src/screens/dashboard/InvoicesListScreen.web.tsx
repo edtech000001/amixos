@@ -684,7 +684,11 @@ export function InvoicesListScreen({
                         <span className="text-sm text-muted">{client}</span>
                         {inv.company ? <span className="text-xs text-faint"> · {inv.company}</span> : null}
                       </span>
-                      <span className="hidden lg:block w-48 shrink-0 text-xs text-faint truncate">
+                      {/* Sized by its content, not a fixed w-48 that clipped
+                         "overdue by Nd" to "overd…" while the client column
+                         hogged the slack. The client column flexes, so this one
+                         takes exactly what the date needs and no more. */}
+                      <span className="hidden lg:block shrink-0 text-xs text-faint whitespace-nowrap text-right">
                         {due ? t.dueShort.replace('{{date}}', due) : ''}
                         {sentAgo ? `${due ? ' · ' : ''}${sentAgo}` : ''}
                         {overdueAgo ? `${due ? ' · ' : ''}${overdueAgo}` : ''}
