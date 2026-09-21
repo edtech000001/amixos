@@ -2112,6 +2112,13 @@ export type DashboardDict = {
       heading: string;
       body: string;
     };
+    /** Shown when a module's own screen crashes — the rest of the app is fine. */
+    crash: {
+      title: string;
+      body: string;
+      retry: string;
+      details: string;
+    };
     list: {
       map: { name: string; description: string };
       mechanic: { name: string; description: string };
@@ -5269,6 +5276,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
       placeholder: {
         heading: 'Próximamente',
         body: 'Este módulo aún está en desarrollo. Pronto podrás usarlo aquí.',
+      },
+      crash: {
+        title: 'Este módulo no se pudo abrir',
+        body: 'El resto de la app sigue funcionando. Intenta de nuevo o vuelve más tarde.',
+        retry: 'Reintentar',
+        details: 'Ver detalles técnicos',
       },
       list: {
         map:          { name: 'Mapa',         description: 'Visualiza clientes, trabajos y empleados en un mapa' },
@@ -8441,6 +8454,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
       placeholder: {
         heading: 'Coming soon',
         body: "This module is still in development. You'll be able to use it here shortly.",
+      },
+      crash: {
+        title: "This module couldn't open",
+        body: 'The rest of the app is still working. Try again, or come back later.',
+        retry: 'Try again',
+        details: 'Show technical details',
       },
       list: {
         map:          { name: 'Map',          description: 'See clients, jobs, and employees on a map' },

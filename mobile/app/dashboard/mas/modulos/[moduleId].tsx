@@ -7,6 +7,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { getModuleById, moduleStatusFor } from '@amixos/shared/modules/registry';
 import { useApp } from '@/lib/AppContext';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import MapScreen from '@/modules/map/MapScreen';
 import InventoryModuleScreen from '@/modules/inventory/InventoryScreen';
 import EquipmentScreen from '@/modules/equipment/EquipmentScreen';
@@ -57,7 +58,22 @@ export default function ModuleRoute() {
   const Cmp = moduleStatusFor(def, business?.id ?? null) === 'available'
     ? MODULE_COMPONENTS[def.id]
     : undefined;
-  if (Cmp) return <Cmp />;
+  // Per-module boundary: a module that throws during render takes down only
+  // this screen. The root boundary in _layout.tsx would catch it too, but it
+  // unmounts the WHOLE app to its retry screen — here the tab bar stays and
+  // the user can walk away to any other screen. `key` on the boundary is the
+  // module id, so switching modules clears a previous crash.
+  if (Cmp) {
+    const crash = full.dashboard.modules.crash;
+    return (
+      <ErrorBoundary
+        key={def.id}
+        labels={{ title: crash.title, body: crash.body, retry: crash.retry, details: crash.details }}
+      >
+        <Cmp />
+      </ErrorBoundary>
+    );
+  }
 
   const entry = (full.dashboard.modules.list as unknown as Record<string, { name: string; description: string } | undefined>)[def.i18nKey];
   const name = entry?.name ?? def.id;
