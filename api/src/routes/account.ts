@@ -20,6 +20,7 @@
 // must not be assertable by the app.
 
 import { Router } from 'express';
+import crypto from 'crypto';
 import Stripe from 'stripe';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { supabase } from '../config/supabase';
@@ -179,19 +180,24 @@ accountRouter.post('/business/restore', authenticate, async (req: AuthRequest, r
   res.json({ success: true });
 });
 
-// POST /api/v1/account/purge-due — the scheduled half. Authenticated by a
-// shared secret, NOT a user token: it runs from cron, and nothing a logged-in
-// client sends should be able to trigger other people's purges.
+// POST /api/v1/account/purge-due — the scheduled half. Authenticated by the
+// same CRON_SECRET + x-cron-secret header the weather sweep already uses, NOT
+// a user token: it runs from cron, and nothing a logged-in client sends should
+// be able to trigger other people's purges.
 //
 // Storage first: those objects are unreachable from SQL (the DB cascade cannot
 // touch the bucket), so deleting the rows first would strand the files with no
 // way left to find them.
 accountRouter.post('/purge-due', async (req, res) => {
-  const secret = process.env.PURGE_CRON_SECRET || '';
-  const given = req.headers['x-purge-secret'];
-  if (!secret || given !== secret) {
-    return res.status(401).json({ success: false, message: 'unauthorized' });
-  }
+  const expected = process.env.CRON_SECRET;
+  if (!expected) return res.status(500).json({ success: false, message: 'CRON_SECRET not configured' });
+  // Constant-time comparison, same as the weather sweep: a plain !== leaks the
+  // secret one byte at a time through response timing.
+  const got = req.headers['x-cron-secret'];
+  const gotBuf = Buffer.from(typeof got === 'string' ? got : '');
+  const expectedBuf = Buffer.from(expected);
+  const secretOk = gotBuf.length === expectedBuf.length && crypto.timingSafeEqual(gotBuf, expectedBuf);
+  if (!secretOk) return res.status(401).json({ success: false, message: 'invalid cron secret' });
 
   // Businesses about to disappear: the ones scheduled directly, plus those
   // owned by an account whose window has closed.
