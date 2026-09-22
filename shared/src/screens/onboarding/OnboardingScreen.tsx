@@ -30,6 +30,9 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Search,
   LogOut,
   Zap,
   Wind,
@@ -188,11 +191,15 @@ const ICONS: Record<string, typeof Wrench> = {
   other: MoreHorizontal,
 };
 
-// The grid shows the common industries; the rest sit behind "More industries".
-// All of them at once is a wall of tiles on a phone, and the first eight cover
-// most signups — but the long tail is exactly how "Other" stops meaning
-// anything in the data.
-const COMMON_INDUSTRIES = 8;
+// One full 3x3 grid per page. Paging beats one long scroll here: the step is
+// vertically centred with Back/Continue right below it, so a growing list
+// pushed the buttons off screen. Search is the fast path — 33 options is past
+// the point where scanning tiles is quicker than typing three letters.
+const INDUSTRIES_PER_PAGE = 9;
+
+/** Diacritic-insensitive contains, so "jardineria" finds "Jardinería". */
+const normalizeIndustry = (v: string) =>
+  v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 const US_STATES = [
   'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California',
@@ -496,13 +503,22 @@ interface StepServiceTypeProps {
 function StepServiceType({ value, onChange, onNext, onBack }: StepServiceTypeProps) {
   const { t: full } = useLang();
   const t = full.onboarding.serviceType;
-  const [showAll, setShowAll] = useState(false);
-  // Collapsed: the common ones + "Other" (always last, so the escape hatch is
-  // never hidden) + whatever is already selected, so a saved choice from the
-  // long tail doesn't vanish when the user comes back to this step.
-  const visibleOptions = showAll
-    ? t.options
-    : t.options.filter((o, i) => i < COMMON_INDUSTRIES || o.key === 'other' || o.key === value);
+  const [query, setQuery] = useState('');
+  // Land on the page holding the current choice, so stepping back never shows
+  // an empty-looking grid with the selection hidden two pages away.
+  const [page, setPage] = useState(() => {
+    const i = t.options.findIndex(o => o.key === value);
+    return i < 0 ? 0 : Math.floor(i / INDUSTRIES_PER_PAGE);
+  });
+  const q = normalizeIndustry(query.trim());
+  const filtered = q ? t.options.filter(o => normalizeIndustry(o.label).includes(q)) : t.options;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / INDUSTRIES_PER_PAGE));
+  // A shrinking result set can leave the index past the end.
+  const safePage = Math.min(page, pageCount - 1);
+  const visibleOptions = filtered.slice(
+    safePage * INDUSTRIES_PER_PAGE,
+    safePage * INDUSTRIES_PER_PAGE + INDUSTRIES_PER_PAGE,
+  );
   const c = useThemeColors();
   const [error, setError] = useState('');
 
@@ -521,6 +537,16 @@ function StepServiceType({ value, onChange, onNext, onBack }: StepServiceTypePro
         <Text className="text-xl font-bold text-ink">{t.heading}</Text>
         <Text className="text-sm text-muted mt-1">{t.sub}</Text>
       </View>
+
+      <Input
+        placeholder={t.searchPlaceholder}
+        value={query}
+        onChangeText={(v) => { setQuery(v); setPage(0); }}
+        onClear={() => { setQuery(''); setPage(0); }}
+        autoCapitalize="none"
+        autoCorrect={false}
+        leftIcon={<Search size={15} color={c.faint} />}
+      />
 
       <View className="flex-row flex-wrap -m-1.5">
         {visibleOptions.map(({ key, label }) => {
@@ -563,12 +589,32 @@ function StepServiceType({ value, onChange, onNext, onBack }: StepServiceTypePro
         })}
       </View>
 
-      {t.options.length > COMMON_INDUSTRIES + 1 ? (
-        <Pressable onPress={() => setShowAll(v => !v)} hitSlop={6} className="self-center py-1">
-          <Text className="text-sm font-semibold text-primary">
-            {showAll ? t.showLess : t.showMore}
+      {visibleOptions.length === 0 ? (
+        <Text className="text-sm text-muted text-center">{t.noResults}</Text>
+      ) : null}
+
+      {pageCount > 1 ? (
+        <View className="flex-row items-center justify-center gap-4">
+          <Pressable
+            onPress={() => setPage(p => Math.max(0, p - 1))}
+            disabled={safePage === 0}
+            hitSlop={8}
+            className={clsx('p-2 rounded-full border', safePage === 0 ? 'border-border-soft opacity-40' : 'border-border')}
+          >
+            <ChevronLeft size={16} color={c.muted} />
+          </Pressable>
+          <Text className="text-xs font-semibold text-muted">
+            {t.pageOf.replace('{{page}}', String(safePage + 1)).replace('{{total}}', String(pageCount))}
           </Text>
-        </Pressable>
+          <Pressable
+            onPress={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+            disabled={safePage >= pageCount - 1}
+            hitSlop={8}
+            className={clsx('p-2 rounded-full border', safePage >= pageCount - 1 ? 'border-border-soft opacity-40' : 'border-border')}
+          >
+            <ChevronRight size={16} color={c.muted} />
+          </Pressable>
+        </View>
       ) : null}
 
       {error ? <Text className="text-xs text-red-500">{error}</Text> : null}

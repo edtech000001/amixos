@@ -12,6 +12,7 @@ import {
   Zap, Wind, Home, Paintbrush, Fence, Waves, Hammer, Layers, Flame, TreePine,
   Bug, SprayCan, Snowflake, Truck, WashingMachine, CarFront, Car, Scissors,
   Dumbbell, PartyPopper, Camera, ShieldCheck, HandCoins,
+  Search, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import {
@@ -100,9 +101,13 @@ const ICONS: Record<string, LucideIcon> = {
   other: MoreHorizontal,
 };
 
-// Mirrors the native screen: the grid shows the common industries, the long
-// tail sits behind "More industries".
-const COMMON_INDUSTRIES = 8;
+// Mirrors the native screen: one 3x3 page at a time, with search as the fast
+// path. A single long list pushed Back/Continue off the card.
+const INDUSTRIES_PER_PAGE = 9;
+
+/** Diacritic-insensitive contains, so "jardineria" finds "Jardinería". */
+const normalizeIndustry = (v: string) =>
+  v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 const US_STATES = [
   'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California',
@@ -267,12 +272,21 @@ function StepServiceType({ value, onChange, onNext, onBack }: { value: string; o
   const { t: full } = useLang();
   const t = full.onboarding.serviceType;
   const [error, setError] = useState('');
-  const [showAll, setShowAll] = useState(false);
-  // Collapsed keeps "Other" and whatever is already selected visible, so a
-  // saved long-tail choice doesn't disappear when the user comes back.
-  const visibleOptions = showAll
-    ? t.options
-    : t.options.filter((o, i) => i < COMMON_INDUSTRIES || o.key === 'other' || o.key === value);
+  const [query, setQuery] = useState('');
+  // Land on the page holding the current choice, so stepping back never shows
+  // an empty-looking grid with the selection hidden two pages away.
+  const [page, setPage] = useState(() => {
+    const i = t.options.findIndex(o => o.key === value);
+    return i < 0 ? 0 : Math.floor(i / INDUSTRIES_PER_PAGE);
+  });
+  const q = normalizeIndustry(query.trim());
+  const filtered = q ? t.options.filter(o => normalizeIndustry(o.label).includes(q)) : t.options;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / INDUSTRIES_PER_PAGE));
+  const safePage = Math.min(page, pageCount - 1);
+  const visibleOptions = filtered.slice(
+    safePage * INDUSTRIES_PER_PAGE,
+    safePage * INDUSTRIES_PER_PAGE + INDUSTRIES_PER_PAGE,
+  );
   const handleNext = () => {
     if (!value) { setError(t.error); return; }
     setError('');
@@ -284,6 +298,16 @@ function StepServiceType({ value, onChange, onNext, onBack }: { value: string; o
         <h1 className="text-xl font-bold text-gray-900">{t.heading}</h1>
         <p className="text-sm text-gray-500 mt-1">{t.sub}</p>
       </div>
+      <div className="relative">
+        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <input
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setPage(0); }}
+          placeholder={t.searchPlaceholder}
+          className="w-full rounded-xl border border-gray-200 pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+      </div>
+
       <div className="grid grid-cols-3 gap-3">
         {visibleOptions.map(({ key, label }) => {
           const Icon = ICONS[key] ?? MoreHorizontal;
@@ -303,14 +327,34 @@ function StepServiceType({ value, onChange, onNext, onBack }: { value: string; o
           );
         })}
       </div>
-      {t.options.length > COMMON_INDUSTRIES + 1 ? (
-        <button
-          type="button"
-          onClick={() => setShowAll(v => !v)}
-          className="self-center text-sm font-semibold text-primary hover:underline"
-        >
-          {showAll ? t.showLess : t.showMore}
-        </button>
+      {visibleOptions.length === 0 ? (
+        <p className="text-sm text-gray-500 text-center">{t.noResults}</p>
+      ) : null}
+
+      {pageCount > 1 ? (
+        <div className="flex items-center justify-center gap-4">
+          <button
+            type="button"
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={safePage === 0}
+            aria-label="Previous"
+            className="p-2 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span className="text-xs font-semibold text-gray-500">
+            {t.pageOf.replace('{{page}}', String(safePage + 1)).replace('{{total}}', String(pageCount))}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+            disabled={safePage >= pageCount - 1}
+            aria-label="Next"
+            className="p-2 rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
       ) : null}
       {error ? <p className="text-xs text-red-500">{error}</p> : null}
       <div className="flex gap-3">

@@ -28,9 +28,10 @@ export type OnboardingDict = {
     heading: string;
     sub: string;
     options: { key: string; label: string }[];
-    /** Reveals the long tail of industries (the grid shows the common ones). */
-    showMore: string;
-    showLess: string;
+    /** Search + paging over the industry grid (33 options, 9 per page). */
+    searchPlaceholder: string;
+    noResults: string;
+    pageOf: string;
     error: string;
     back: string;
     next: string;
@@ -142,8 +143,9 @@ export const onboarding: Record<Locale, OnboardingDict> = {
         { key: 'nonprofit', label: 'Sin Fines de Lucro' },
         { key: 'other', label: 'Otro' },
       ],
-      showMore: 'Ver más industrias',
-      showLess: 'Ver menos',
+      searchPlaceholder: 'Buscar industria…',
+      noResults: 'Sin resultados. Elige "Otro" si no aparece.',
+      pageOf: '{{page}} de {{total}}',
       error: 'Por favor selecciona un tipo de negocio',
       back: 'Atrás',
       next: 'Continuar',
@@ -253,8 +255,9 @@ export const onboarding: Record<Locale, OnboardingDict> = {
         { key: 'nonprofit', label: 'Nonprofit' },
         { key: 'other', label: 'Other' },
       ],
-      showMore: 'More industries',
-      showLess: 'Show fewer',
+      searchPlaceholder: 'Search industries…',
+      noResults: 'No matches. Pick "Other" if yours is missing.',
+      pageOf: '{{page}} of {{total}}',
       error: 'Please select a business type',
       back: 'Back',
       next: 'Continue',
