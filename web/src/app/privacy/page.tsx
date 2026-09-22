@@ -14,8 +14,10 @@ export const metadata: Metadata = {
   description: 'Cómo Amixos recopila, usa y protege tu información.',
 };
 
-// TODO(legal): replace with the registered company name before launch.
-const ENTITY = '[NOMBRE LEGAL DE LA EMPRESA]';
+// The registered entity behind Amixos. Kept as one constant per page so a
+// future move to a dedicated LLC for the app is a two-line change, not a
+// hunt through prose.
+const ENTITY = 'Prime Solutions LLC';
 const UPDATED_ES = 'Última actualización: 22 de septiembre de 2026';
 const UPDATED_EN = 'Last updated: September 22, 2026';
 
