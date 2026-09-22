@@ -31,6 +31,29 @@ import {
   CheckCircle2,
   ChevronDown,
   LogOut,
+  Zap,
+  Wind,
+  Home,
+  Paintbrush,
+  Fence,
+  Waves,
+  Hammer,
+  Layers,
+  Flame,
+  TreePine,
+  Bug,
+  SprayCan,
+  Snowflake,
+  Truck,
+  WashingMachine,
+  CarFront,
+  Car,
+  Scissors,
+  Dumbbell,
+  PartyPopper,
+  Camera,
+  ShieldCheck,
+  HandCoins,
   type LucideIcon, Trash2 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
@@ -138,8 +161,38 @@ const ICONS: Record<string, typeof Wrench> = {
   phone_repair: Phone,
   plumbing: Droplets,
   retail: ShoppingBag,
+  electrical: Zap,
+  hvac: Wind,
+  roofing: Home,
+  painting: Paintbrush,
+  fencing: Fence,
+  irrigation: Waves,
+  concrete: Hammer,
+  flooring: Layers,
+  welding: Flame,
+  tree_service: TreePine,
+  pest_control: Bug,
+  pressure_washing: SprayCan,
+  snow_removal: Snowflake,
+  moving: Truck,
+  appliance_repair: WashingMachine,
+  auto_detailing: CarFront,
+  dealership: Car,
+  salon: Scissors,
+  trainer: Dumbbell,
+  events: PartyPopper,
+  photography: Camera,
+  security: ShieldCheck,
+  property_rental: Building2,
+  nonprofit: HandCoins,
   other: MoreHorizontal,
 };
+
+// The grid shows the common industries; the rest sit behind "More industries".
+// All of them at once is a wall of tiles on a phone, and the first eight cover
+// most signups — but the long tail is exactly how "Other" stops meaning
+// anything in the data.
+const COMMON_INDUSTRIES = 8;
 
 const US_STATES = [
   'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California',
@@ -443,6 +496,13 @@ interface StepServiceTypeProps {
 function StepServiceType({ value, onChange, onNext, onBack }: StepServiceTypeProps) {
   const { t: full } = useLang();
   const t = full.onboarding.serviceType;
+  const [showAll, setShowAll] = useState(false);
+  // Collapsed: the common ones + "Other" (always last, so the escape hatch is
+  // never hidden) + whatever is already selected, so a saved choice from the
+  // long tail doesn't vanish when the user comes back to this step.
+  const visibleOptions = showAll
+    ? t.options
+    : t.options.filter((o, i) => i < COMMON_INDUSTRIES || o.key === 'other' || o.key === value);
   const c = useThemeColors();
   const [error, setError] = useState('');
 
@@ -463,7 +523,7 @@ function StepServiceType({ value, onChange, onNext, onBack }: StepServiceTypePro
       </View>
 
       <View className="flex-row flex-wrap -m-1.5">
-        {t.options.map(({ key, label }) => {
+        {visibleOptions.map(({ key, label }) => {
           const Icon = ICONS[key] ?? MoreHorizontal;
           const active = value === key;
           return (
@@ -502,6 +562,14 @@ function StepServiceType({ value, onChange, onNext, onBack }: StepServiceTypePro
           );
         })}
       </View>
+
+      {t.options.length > COMMON_INDUSTRIES + 1 ? (
+        <Pressable onPress={() => setShowAll(v => !v)} hitSlop={6} className="self-center py-1">
+          <Text className="text-sm font-semibold text-primary">
+            {showAll ? t.showLess : t.showMore}
+          </Text>
+        </Pressable>
+      ) : null}
 
       {error ? <Text className="text-xs text-red-500">{error}</Text> : null}
 

@@ -9,6 +9,9 @@ import {
   Building2, MapPin, Image as ImageIcon, Upload, X, Package, Phone, Check,
   CheckCircle2, HardHat, Wrench, Trees, Sparkles, Utensils, Droplets, ShoppingBag,
   Forklift, FolderOpen, MoreHorizontal, type LucideIcon,
+  Zap, Wind, Home, Paintbrush, Fence, Waves, Hammer, Layers, Flame, TreePine,
+  Bug, SprayCan, Snowflake, Truck, WashingMachine, CarFront, Car, Scissors,
+  Dumbbell, PartyPopper, Camera, ShieldCheck, HandCoins,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import {
@@ -70,8 +73,36 @@ const ICONS: Record<string, LucideIcon> = {
   phone_repair: Phone,
   plumbing: Droplets,
   retail: ShoppingBag,
+  electrical: Zap,
+  hvac: Wind,
+  roofing: Home,
+  painting: Paintbrush,
+  fencing: Fence,
+  irrigation: Waves,
+  concrete: Hammer,
+  flooring: Layers,
+  welding: Flame,
+  tree_service: TreePine,
+  pest_control: Bug,
+  pressure_washing: SprayCan,
+  snow_removal: Snowflake,
+  moving: Truck,
+  appliance_repair: WashingMachine,
+  auto_detailing: CarFront,
+  dealership: Car,
+  salon: Scissors,
+  trainer: Dumbbell,
+  events: PartyPopper,
+  photography: Camera,
+  security: ShieldCheck,
+  property_rental: Building2,
+  nonprofit: HandCoins,
   other: MoreHorizontal,
 };
+
+// Mirrors the native screen: the grid shows the common industries, the long
+// tail sits behind "More industries".
+const COMMON_INDUSTRIES = 8;
 
 const US_STATES = [
   'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California',
@@ -236,6 +267,12 @@ function StepServiceType({ value, onChange, onNext, onBack }: { value: string; o
   const { t: full } = useLang();
   const t = full.onboarding.serviceType;
   const [error, setError] = useState('');
+  const [showAll, setShowAll] = useState(false);
+  // Collapsed keeps "Other" and whatever is already selected visible, so a
+  // saved long-tail choice doesn't disappear when the user comes back.
+  const visibleOptions = showAll
+    ? t.options
+    : t.options.filter((o, i) => i < COMMON_INDUSTRIES || o.key === 'other' || o.key === value);
   const handleNext = () => {
     if (!value) { setError(t.error); return; }
     setError('');
@@ -248,7 +285,7 @@ function StepServiceType({ value, onChange, onNext, onBack }: { value: string; o
         <p className="text-sm text-gray-500 mt-1">{t.sub}</p>
       </div>
       <div className="grid grid-cols-3 gap-3">
-        {t.options.map(({ key, label }) => {
+        {visibleOptions.map(({ key, label }) => {
           const Icon = ICONS[key] ?? MoreHorizontal;
           const active = value === key;
           return (
@@ -266,6 +303,15 @@ function StepServiceType({ value, onChange, onNext, onBack }: { value: string; o
           );
         })}
       </div>
+      {t.options.length > COMMON_INDUSTRIES + 1 ? (
+        <button
+          type="button"
+          onClick={() => setShowAll(v => !v)}
+          className="self-center text-sm font-semibold text-primary hover:underline"
+        >
+          {showAll ? t.showLess : t.showMore}
+        </button>
+      ) : null}
       {error ? <p className="text-xs text-red-500">{error}</p> : null}
       <div className="flex gap-3">
         <button onClick={onBack} className={secondaryBtn}>{t.back}</button>
