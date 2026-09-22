@@ -2022,6 +2022,13 @@ export type DashboardDict = {
       contactBtn: string;
       emailSubject: string;
       noMailApp: string;
+      /** Legal links, shown with support so there is one place to find them
+       *  from inside the app (App Review looks for exactly this). */
+      legalHeading: string;
+      privacy: string;
+      terms: string;
+      legalHint: string;
+      versionLabel: string;
     };
     google: {
       heading: string;
@@ -5224,6 +5231,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         subtitle: '¿Tienes un problema o una idea? Escríbenos y te ayudamos.',
         contactBtn: 'Enviar correo',
         emailSubject: 'Amixos — Soporte / Comentarios',
+        legalHeading: 'Legal',
+        privacy: 'Aviso de privacidad',
+        terms: 'Términos de servicio',
+        legalHint: 'Se abren en tu navegador.',
+        versionLabel: 'Versión',
         noMailApp: 'No se pudo abrir tu app de correo. Escríbenos a {{email}}.',
       },
       google: {
@@ -8434,6 +8446,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         contactBtn: 'Email us',
         emailSubject: 'Amixos — Support / Feedback',
         noMailApp: "Couldn't open your mail app. Email us at {{email}}.",
+        legalHeading: 'Legal',
+        privacy: 'Privacy policy',
+        terms: 'Terms of service',
+        legalHint: 'These open in your browser.',
+        versionLabel: 'Version',
       },
       google: {
         heading: 'Sync with Google Contacts',

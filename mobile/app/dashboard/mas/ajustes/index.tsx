@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { View, Text, Pressable, ScrollView, Linking, Platform, Alert } from 'react-native';
+import { View, Text, Pressable, ScrollView, Linking } from 'react-native';
 import Animated, { FadeInRight } from 'react-native-reanimated';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -26,7 +26,6 @@ import { useTheme, useThemeColors } from '@/lib/ThemeProvider';
 import { useApp } from '@/lib/AppContext';
 import { useAppUpdate } from '@/lib/updates/useAppUpdate';
 import { can } from '@amixos/shared/lib/permissions';
-import { SUPPORT_EMAIL, buildSupportMailto } from '@amixos/shared/lib/support';
 
 // Build identifier for the footer — app version (app.json) + native build
 // number, PLUS the running OTA update's identity. The app version can't
@@ -75,17 +74,6 @@ export default function AjustesIndex() {
   const t = full.dashboard.settings;
   const es = locale === 'es';
 
-  const contactSupport = async () => {
-    const url = buildSupportMailto({
-      subject: t.support.emailSubject,
-      userEmail: user?.email,
-      businessName: business?.name ?? null,
-      platform: Platform.OS === 'ios' ? 'iOS' : 'Android',
-    });
-    const ok = await Linking.canOpenURL(url).catch(() => false);
-    if (ok) Linking.openURL(url).catch(() => {});
-    else Alert.alert('', t.support.noMailApp.replace('{{email}}', SUPPORT_EMAIL));
-  };
 
   // Business-config sections are admin-only (managers+ down can't change
   // settings — see ROLE_DESCRIPTIONS). Cuenta (own account) + Soporte stay
@@ -171,7 +159,10 @@ export default function AjustesIndex() {
       label: t.support.heading,
       description: t.support.subtitle,
       icon: LifeBuoy,
-      action: contactSupport,
+      // Opens the support SCREEN rather than firing a mailto: it also holds
+      // the privacy policy and terms, which otherwise are only reachable from
+      // the signup screen — a page nobody with an account sees again.
+      path: '/dashboard/mas/ajustes/soporte',
     },
   ];
 

@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, ChevronRight, ChevronLeft, Palette, Sparkles, LogOut, Building2, Eye, EyeOff, X, Contrast, LifeBuoy, ShieldCheck, Upload } from 'lucide-react';
+import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, ChevronRight, ChevronLeft, Palette, Sparkles, LogOut, Building2, Eye, EyeOff, X, Contrast, LifeBuoy, ShieldCheck, Upload, FileText, Shield } from 'lucide-react';
 import { isValidEmail } from '@amixos/shared/lib/validation';
 import { pathFromPublicUrl, PUBLIC_ASSETS_BUCKET } from '@amixos/shared/lib/storageUrls';
 import { SUPPORT_EMAIL, buildSupportMailto } from '@amixos/shared/lib/support';
@@ -3961,6 +3961,32 @@ export default function AjustesPage() {
                     <LifeBuoy size={15} /> {t.support.contactBtn}
                   </a>
                   <p className="text-xs text-faint mt-2">{SUPPORT_EMAIL}</p>
+
+                  {/* The documents linked from signup, reachable here too —
+                      nobody with an account sees that screen again. */}
+                  <div className="mt-6 pt-5 border-t border-border-soft">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-2">
+                      {t.support.legalHeading}
+                    </p>
+                    <div className="flex flex-col gap-1">
+                      <a
+                        href="/privacy"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 py-1.5 text-sm font-medium text-ink hover:text-primary"
+                      >
+                        <Shield size={15} className="text-muted" /> {t.support.privacy}
+                      </a>
+                      <a
+                        href="/terms"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 py-1.5 text-sm font-medium text-ink hover:text-primary"
+                      >
+                        <FileText size={15} className="text-muted" /> {t.support.terms}
+                      </a>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
