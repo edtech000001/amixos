@@ -8,6 +8,7 @@ import { ImpersonationBanner } from '@/components/dashboard/ImpersonationBanner'
 import { TrialBanner } from '@/components/TrialBanner';
 import { BillingGate } from '@/components/BillingGate';
 import { AccountDeletionGate } from '@/components/AccountDeletionGate';
+import { BusinessDeletionBanner } from '@/components/BusinessDeletionBanner';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import ConfirmHost from '@/components/ConfirmHost';
 import { confirm as confirmDialog } from '@amixos/shared/ui/confirmBus';
@@ -97,6 +98,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           <Fragment key={impersonating ? `imp:${impersonating.userId}` : 'self'}>
             {children}
           </Fragment>
+          <BusinessDeletionBanner />
           <AccountDeletionGate />
           <BillingGate />
         </main>

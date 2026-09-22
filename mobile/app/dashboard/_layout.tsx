@@ -16,6 +16,7 @@ import { OfflineSyncBanner } from '@/components/OfflineSyncBanner';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { BillingGate } from '@/components/BillingGate';
 import { AccountDeletionGate } from '@/components/AccountDeletionGate';
+import { BusinessDeletionBanner } from '@/components/BusinessDeletionBanner';
 import { AssistantWidget } from '@/components/assistant/AssistantWidget';
 import { startNetworkMonitor, onReconnect } from '@/lib/offline/network';
 import { prefetchForOffline } from '@/lib/offline/prefetch';
@@ -232,6 +233,7 @@ function DashboardTabs() {
       {/* Full-screen overlay when the active business has no access (expired
          trial / canceled / 'none'). Self-hides otherwise. Sits ABOVE the tab
          bar via its own high zIndex/elevation. */}
+      <BusinessDeletionBanner />
       <AccountDeletionGate />
       <BillingGate />
     </>
