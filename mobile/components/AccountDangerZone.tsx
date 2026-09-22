@@ -148,8 +148,10 @@ export function AccountDangerZone() {
                   </View>
                 ))}
               </View>
+              {/* Nothing was started here — the request was refused — so this
+                  dismisses rather than "cancels". */}
               <Pressable onPress={() => setTarget(null)} className="py-3 rounded-2xl items-center border border-border active:bg-surface">
-                <Text className="text-sm font-semibold text-muted">{t.cancelBtn}</Text>
+                <Text className="text-sm font-semibold text-muted">{t.blockedDismiss}</Text>
               </Pressable>
             </>
           ) : (

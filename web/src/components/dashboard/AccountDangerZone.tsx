@@ -156,8 +156,10 @@ export function AccountDangerZone() {
                 </li>
               ))}
             </ul>
+            {/* Nothing was started here — the request was refused — so this
+                dismisses rather than "cancels". */}
             <div className="mt-5 flex justify-end">
-              <Button variant="secondary" onClick={() => setTarget(null)}>{t.cancelBtn}</Button>
+              <Button variant="secondary" onClick={() => setTarget(null)}>{t.blockedDismiss}</Button>
             </div>
           </div>
         ) : (

@@ -1961,6 +1961,8 @@ export type DashboardDict = {
         blockedTitle: string;
         blockedBody: string;
         blockedMember: string;
+        /** Dismiss on the BLOCKED panel — nothing was started, so not "cancel". */
+        blockedDismiss: string;
         confirmTitle: string;
         confirmBody: string;
         confirmBusinessBody: string;
@@ -5163,6 +5165,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           blockedTitle: 'Primero resuelve tus negocios',
           blockedBody: 'Eres dueño de un negocio con otras personas. Transfiere el negocio a otro administrador o elimínalo antes de borrar tu cuenta.',
           blockedMember: '{{name}} · {{count}} miembro(s) más',
+          blockedDismiss: 'Entendido',
           confirmTitle: '¿Eliminar definitivamente?',
           confirmBody: 'Cancelaremos tu suscripción hoy. Tus datos se eliminan el {{date}} y no se pueden recuperar después.',
           confirmBusinessBody: 'Se eliminarán los datos de {{name}} el {{date}} para todo el equipo. La suscripción se cancela hoy.',
@@ -8371,6 +8374,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           blockedTitle: 'Sort out your businesses first',
           blockedBody: 'You own a business that still has other people in it. Transfer it to another admin, or delete the business, before deleting your account.',
           blockedMember: '{{name}} · {{count}} other member(s)',
+          blockedDismiss: 'Got it',
           confirmTitle: 'Delete for good?',
           confirmBody: "We'll cancel your subscription today. Your data is deleted on {{date}} and can't be recovered after that.",
           confirmBusinessBody: "{{name}}'s data will be deleted on {{date}} for the whole team. The subscription is cancelled today.",
