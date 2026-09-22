@@ -2,21 +2,6 @@
 
 Spanish-first business management SaaS for Latino entrepreneurs / small service businesses in the US. All UI is in Spanish.
 
-## Monorepo Layout
-
-- `web/` — Next.js 14 app (Vercel deploys from `development`)
-- `mobile/` — Expo SDK 51 app (React Native 0.74.5, expo-router, NativeWind, EAS dev client)
-- `api/` — backend service (Prisma)
-- `shared/` — cross-package code + Tailwind preset
-- `supabase/migrations/` — SQL migrations (run manually in Supabase SQL Editor)
-
-## Stack
-
-- **Web:** Next.js 14, Tailwind, Supabase, `@supabase/ssr` (cookie-based sessions)
-- **Mobile:** Expo SDK 51, expo-router, NativeWind, `@supabase/supabase-js`, EAS dev client
-- **DB/Auth:** Supabase with RLS on auth-required tables
-- **Deploy:** Vercel auto-deploys from the `development` branch
-
 ## Git Workflow
 
 - Active branch: `development` | Default base for PRs: `main`
@@ -83,12 +68,6 @@ async function fetchAll<T>(
 
 ## Features Built
 
-- **Trabajos (Jobs):** create, edit, delete, status pipeline, generate invoice
-- **Propuestas (Proposals):** merged into jobs with `estimate_number` + proposal-specific fields
-- **Facturas (Invoices):** create from jobs, detail view, bilingual support
-- **Clientes (Clients):** expandable fields, custom field templates, CSV import
-- **Empleados (Employees):** list, assignments to jobs
-- **Ajustes (Settings):** Negocio, Trabajos (pipeline config), Clientes (required fields + custom fields), Cuenta
 - **Roles:** role editor (Ajustes → Equipo / mobile Roles) supports custom roles — `business_roles` rows with `is_system=false`, key `c_<slug>`, full permissions snapshot (migration 179). Use `roleLabel()`/`getActiveCustomRoles()` from `shared/src/lib/permissions.ts` for labels/pickers; never index `ROLE_LABELS[x]` directly with a member's role.
 
 ## Data Loading — stale-while-revalidate (perf overhaul, migrations 181-183)
