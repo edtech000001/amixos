@@ -427,6 +427,8 @@ export default function ClienteDetailRoute() {
   const policyAgents = parsePolicyAgents(business?.policy_agents);
   const canEmailPolicy = !!agentFor(policyAgents, 'coi');
   const [moreOpen, setMoreOpen] = useState(false);
+  // Which-address picker for the generic Email action (multiple on file).
+  const [emailPickOpen, setEmailPickOpen] = useState(false);
   const sendPolicyEmail = (kind: PolicyDocKind) => {
     if (!client || !business) return;
     const draft = buildPolicyEmail({
@@ -702,14 +704,18 @@ export default function ClienteDetailRoute() {
   // so a hook here runs only once the client resolves and React counts a
   // different number of hooks between renders. Over a handful of contacts the
   // memo bought nothing anyway.
-  const emailTarget = (() => {
-    const flagged = contacts
-      .filter(ct => ct.receives_email)
-      .map(ct => (ct.email ?? '').trim())
-      .filter(Boolean);
-    return (flagged.length ? flagged : [(primaryEmail ?? '').trim()].filter(Boolean)).join(',');
-  })();
   const homeEmail = client.email_home;
+  // Every address this client can be reached at, labelled. The button used to
+  // resolve to email_office alone, so a client with only a PERSONAL email had
+  // it greyed out while the address sat visible in the card below.
+  const emailOptions: { label: string; email: string }[] = [
+    ...contacts
+      .filter(ct => ct.receives_email && (ct.email ?? '').trim())
+      .map(ct => ({ label: ct.name || ct.role || (ct.email ?? '').trim(), email: (ct.email ?? '').trim() })),
+    ...((primaryEmail ?? '').trim() ? [{ label: t.fields.emailOffice, email: (primaryEmail ?? '').trim() }] : []),
+    ...((homeEmail ?? '').trim() ? [{ label: t.fields.emailHome, email: (homeEmail ?? '').trim() }] : []),
+  ].filter((o, i, arr) => arr.findIndex(x => x.email.toLowerCase() === o.email.toLowerCase()) === i);
+  const emailTarget = emailOptions[0]?.email ?? '';
   // US style: ZIP sits on the city line after the state — "Colby, KS 67701".
   const fullAddress = [
     client.address,
@@ -780,6 +786,51 @@ export default function ClienteDetailRoute() {
           </Pressable>
         </View>
       </View>
+
+      {/* Which email? — only opens when the client has more than one address
+         on file. Canonical sheet structure (absolute backdrop first, card as a
+         plain sibling; see CLAUDE.md). */}
+      <RNModal visible={emailPickOpen} transparent animationType="fade" onRequestClose={() => setEmailPickOpen(false)}>
+        <View className="flex-1 justify-end">
+          <Pressable
+            onPress={() => setEmailPickOpen(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+            className="bg-black/40"
+          />
+          <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10">
+            <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
+            <View className="flex-row items-center justify-between mb-2">
+              <Text className="text-base font-bold text-ink">{t.detail.emailPickTitle}</Text>
+              <Pressable onPress={() => setEmailPickOpen(false)} hitSlop={8} className="p-1.5 rounded-lg active:bg-border-soft">
+                <X size={18} color={c.muted} />
+              </Pressable>
+            </View>
+            {emailOptions.map(opt => (
+              <Pressable
+                key={opt.email}
+                onPress={() => {
+                  setEmailPickOpen(false);
+                  fireContact({
+                    type: 'email',
+                    target: `mailto:${opt.email}`,
+                    contactMethod: opt.email,
+                    clientId: client.id,
+                  });
+                }}
+                className="flex-row items-center gap-3 py-3.5 border-b border-border-soft active:opacity-60"
+              >
+                <View className="w-9 h-9 rounded-xl bg-border-soft items-center justify-center">
+                  <Mail size={18} color={c.muted} />
+                </View>
+                <View className="flex-1 min-w-0">
+                  <Text className="text-xs text-faint">{opt.label}</Text>
+                  <Text className="text-base text-ink font-medium" numberOfLines={1}>{opt.email}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </RNModal>
 
       {/* Overflow actions sheet — canonical bottom-sheet structure (absolute
          backdrop first, card as sibling; see CLAUDE.md). */}
@@ -903,15 +954,19 @@ export default function ClienteDetailRoute() {
           </Pressable>
           <Pressable
             disabled={!emailTarget}
-            onPress={() => emailTarget && fireContact({
-              // Generic "email this client". The labelled email ROW below
-              // deliberately does NOT redirect — tapping a visible address must
-              // mail that address.
-              type: 'email',
-              target: `mailto:${emailTarget}`,
-              contactMethod: emailTarget,
-              clientId: client.id,
-            })}
+            onPress={() => {
+              if (!emailTarget) return;
+              // More than one address on file → ask, rather than silently
+              // picking one. The labelled email ROWS below deliberately do NOT
+              // ask: tapping a visible address must mail that address.
+              if (emailOptions.length > 1) { setEmailPickOpen(true); return; }
+              fireContact({
+                type: 'email',
+                target: `mailto:${emailTarget}`,
+                contactMethod: emailTarget,
+                clientId: client.id,
+              });
+            }}
             className={`flex-1 items-center justify-center py-3 rounded-2xl shadow-sm border ${
               emailTarget
                 ? 'bg-card border-border-soft active:bg-surface'

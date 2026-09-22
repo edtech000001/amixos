@@ -632,7 +632,9 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
               {fullAddress && (
                 <ContactRow icon={<MapPin size={15}/>} label={t.fields.addressLine1} value={fullAddress} href={clientMapsUrl || undefined}/>
               )}
-              {!primaryPhone && !primaryEmail && !fullAddress && (
+              {/* Mirrors mobile: a client reachable ONLY by office phone or
+                 personal email is not "no contact info". */}
+              {!primaryPhone && !officePhone && !primaryEmail && !homeEmail && !fullAddress && (
                 <p className="text-xs text-faint">{td.noContactInfo}</p>
               )}
             </div>

@@ -527,6 +527,8 @@ export type DashboardDict = {
       actionCall: string;
       actionText: string;
       actionEmail: string;
+      /** Picker shown when a client has more than one email address. */
+      emailPickTitle: string;
       summary: string;
       totalPaid: string;
       pending: string;
@@ -3738,6 +3740,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         actionCall: 'Llamar',
         actionText: 'Mensaje',
         actionEmail: 'Correo',
+        emailPickTitle: '¿A cuál correo?',
         summary: 'Resumen',
         totalPaid: 'Total pagado',
         pending: 'Pendiente',
@@ -6944,6 +6947,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         actionCall: 'Call',
         actionText: 'Text',
         actionEmail: 'Email',
+        emailPickTitle: 'Which email?',
         summary: 'Summary',
         totalPaid: 'Total paid',
         pending: 'Pending',
