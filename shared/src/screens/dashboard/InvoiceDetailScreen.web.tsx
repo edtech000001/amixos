@@ -44,6 +44,9 @@ export interface InvoiceDetailClient {
   firstName: string;
   lastName: string;
   email: string | null;
+  /** The client's OTHER address. Both are addressed when sending — the send
+   *  used to take email_office alone and silently drop this one. */
+  emailHome?: string | null;
   phoneCell: string | null;
   company: string | null;
   address: string | null;

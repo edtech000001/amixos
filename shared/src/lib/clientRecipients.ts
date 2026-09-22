@@ -41,8 +41,12 @@ function cleanEmails(values: (string | null | undefined)[]): string[] {
 /**
  * Resolve the recipients for one client.
  *
- * @param clientEmail the client's own address — used only when no contact is
- *   flagged as the recipient.
+ * @param clientEmail the client's OWN addresses (office + personal — pass both;
+ *   a single string is still accepted). All of them are addressed, because a
+ *   client who gave you two addresses expects mail at both: sending only to
+ *   the office one quietly dropped the personal address, even when the office
+ *   address was merely a CC contact's. Used only when no contact is flagged as
+ *   the recipient.
  * @param opts.includeInvoiceCc true for invoice sends, which additionally copy
  *   contacts flagged cc_on_invoices. Other sends have no CC concept.
  *
@@ -53,10 +57,11 @@ function cleanEmails(values: (string | null | undefined)[]): string[] {
 export async function resolveClientRecipients(
   supabase: Supa,
   clientId: string | null | undefined,
-  clientEmail: string | null | undefined,
+  clientEmail: string | string[] | null | undefined,
   opts?: { includeInvoiceCc?: boolean },
 ): Promise<ClientRecipients> {
-  const fallback: ClientRecipients = { to: cleanEmails([clientEmail]), cc: [] };
+  const own = Array.isArray(clientEmail) ? clientEmail : [clientEmail];
+  const fallback: ClientRecipients = { to: cleanEmails(own), cc: [] };
   if (!clientId) return fallback;
 
   const { data, error } = await supabase
@@ -72,7 +77,7 @@ export async function resolveClientRecipients(
   // otherwise a half-filled contact would make the client unreachable by
   // suppressing the client's own address and supplying nothing in its place.
   const to = cleanEmails(rows.filter(r => r.receives_email).map(r => r.email));
-  const resolvedTo = to.length ? to : cleanEmails([clientEmail]);
+  const resolvedTo = to.length ? to : cleanEmails(own);
 
   if (!opts?.includeInvoiceCc) return { to: resolvedTo, cc: [] };
 

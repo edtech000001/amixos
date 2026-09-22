@@ -605,6 +605,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         firstName: c.first_name,
         lastName: c.last_name,
         email: c.email_office ?? c.email_home ?? c.email,
+        emailHome: c.email_home ?? null,
         phoneCell: c.phone_cell,
         company: c.company,
         address: c.address,
@@ -988,7 +989,11 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     // receives_email is addressed INSTEAD of the client (migration 220), and CC
     // excludes anyone already in To.
     const clientId = invoice.clients[0]?.id ?? null;
-    const recipients = await resolveClientRecipients(supabase, clientId, email, { includeInvoiceCc: true });
+    // BOTH of the client's own addresses: office and personal. A contact
+    // flagged receives_email still replaces them (migration 220); a CC contact
+    // does not — which is what made an invoice go only to purchasing@.
+    const clientEmails = [email, invoice.clients[0]?.emailHome ?? null];
+    const recipients = await resolveClientRecipients(supabase, clientId, clientEmails, { includeInvoiceCc: true });
     if (!recipients.to.length) { void alertMessage({ message: tInv.sendNoEmail, destructive: true }); return; }
     const toParam = joinRecipients(recipients.to);
     const ccParam = recipients.cc.length ? `&cc=${encodeURIComponent(joinRecipients(recipients.cc))}` : '';

@@ -709,13 +709,19 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     // from before the user just added an email — and fall back to the
     // client's contact people when the client record itself has none.
     let email = '';
+    let emails: string[] = [];
     if (job.client_id) {
       const { data: fresh } = await supabase
         .from('clients')
         .select('email, email_office, email_home')
         .eq('id', job.client_id)
         .maybeSingle();
-      email = fresh?.email || fresh?.email_office || fresh?.email_home || '';
+      // Every address the client has on file — office AND personal. Taking
+      // the first non-empty one silently dropped the other, which is how an
+      // invoice reached purchasing@ but not the owner's own address.
+      emails = [fresh?.email_office, fresh?.email_home, fresh?.email]
+        .map(e => (e ?? '').trim()).filter(Boolean) as string[];
+      email = emails[0] ?? '';
       if (!email) {
         const { data: contacts } = await supabase
           .from('client_contacts')
@@ -725,6 +731,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           .order('is_primary', { ascending: false })
           .limit(1);
         email = contacts?.[0]?.email ?? '';
+        if (email) emails = [email];
       }
     }
     if (!email) { void alertMessage({ message: td.sendNoEmail, destructive: true }); return; }
@@ -754,7 +761,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     });
     // A contact flagged receives_email is addressed instead of the client
     // (migration 220). No CC — that is invoice-only.
-    const proposalTo = await resolveClientRecipients(supabase, job.client_id ?? null, email);
+    const proposalTo = await resolveClientRecipients(supabase, job.client_id ?? null, emails.length ? emails : email);
     window.location.href = `mailto:${encodeURIComponent(joinRecipients(proposalTo.to))}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     if (job.status === 'proposal') void updateStatus('sent');
   };
