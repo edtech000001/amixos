@@ -14,6 +14,9 @@ import { useLang } from '@/i18n/LangProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { normalizeImageFile } from '@/lib/imageFile';
 import { LogoCropper } from '@/components/dashboard/LogoCropper';
+import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
+import { requestAccountDeletion } from '@amixos/shared/lib/accountDeletion';
 
 export default function OnboardingPage() {
   const supabase = createSupabaseClient();
@@ -22,6 +25,30 @@ export default function OnboardingPage() {
   // "Cancel" escape (back to the dashboard) instead of "Sign out".
   const adding = useSearchParams().get('adding');
   const { t: full } = useLang();
+
+  // Account deletion from ONBOARDING (App Store 5.1.1(v)). Someone who just
+  // closed their only business is parked here with no route to Ajustes →
+  // Cuenta, so this is their only way to delete the account. They own no
+  // business in this state, so the blocker can never apply.
+  const deleteAccount = async () => {
+    const d = full.dashboard.settings.account.danger;
+    const ok = await confirm({
+      title: d.deleteAccount,
+      message: d.deleteAccountBody,
+      confirmText: d.confirmBtn,
+      cancelText: d.cancelBtn,
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await requestAccountDeletion({ apiBaseUrl: getApiBaseUrl(), jwt: await getJwt() });
+      await createSupabaseClient().auth.signOut();
+      window.location.href = '/auth/login';
+    } catch {
+      await alertMessage({ message: d.failed });
+    }
+  };
+
   const t = full.onboarding;
 
   // Hidden file input + a promise we resolve when the user picks a file
@@ -216,6 +243,7 @@ export default function OnboardingPage() {
         onPickLogo={handlePickLogo}
         onFinish={handleFinish}
         onLogout={async () => { await supabase.auth.signOut(); window.location.href = '/auth/login'; }}
+        onDeleteAccount={() => { void deleteAccount(); }}
         onCancel={adding ? () => router.push('/dashboard') : undefined}
         pendingInvites={pendingInvites}
         onAcceptInvite={acceptInvite}

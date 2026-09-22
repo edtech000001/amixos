@@ -29,8 +29,7 @@ import {
   CheckCircle2,
   ChevronDown,
   LogOut,
-  type LucideIcon,
-} from 'lucide-react-native';
+  type LucideIcon, Trash2 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { Button } from '../../ui/Button';
@@ -96,6 +95,14 @@ export interface OnboardingScreenProps {
    */
   onLogout?: () => void;
   /**
+   * Delete the signed-in ACCOUNT from here (App Store 5.1.1(v)). A user with
+   * no business is parked on this screen with no route to Ajustes → Cuenta, so
+   * without this the deletion Apple requires is unreachable — exactly the
+   * state someone lands in after closing their only business. Caller owns the
+   * confirm + the API call.
+   */
+  onDeleteAccount?: () => void;
+  /**
    * Return to the app without creating a business. Shown as a "Cancel" link
    * (instead of "Sign out") when the user already has a business and is just
    * adding another — otherwise they'd be trapped in onboarding. Takes
@@ -153,7 +160,7 @@ const US_STATES = [
 // react-native-web) and mobile (via Expo) render the same component.
 // Platform-specific concerns (Supabase, image pickers, post-finish nav)
 // are supplied by the route-level wrapper on each platform.
-export function OnboardingScreen({ onPickLogo, onFinish, onLogout, onCancel, pendingInvites, onAcceptInvite }: OnboardingScreenProps) {
+export function OnboardingScreen({ onPickLogo, onFinish, onLogout, onCancel, onDeleteAccount, pendingInvites, onAcceptInvite }: OnboardingScreenProps) {
   const { t: full } = useLang();
   const t = full.onboarding;
   const c = useThemeColors();
@@ -221,18 +228,35 @@ export function OnboardingScreen({ onPickLogo, onFinish, onLogout, onCancel, pen
     >
       {/* Escape hatch — sign out / use a different account. Onboarding has no
           other way back to login for a wrong-provider sign-in. */}
-      {(onCancel || onLogout) && (
-        <View className="w-full max-w-lg flex-row justify-end mb-4">
-          <Pressable
-            onPress={onCancel ?? onLogout}
-            hitSlop={8}
-            className="flex-row items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-2 active:opacity-70"
-          >
-            {onCancel ? <X size={14} color={c.muted} /> : <LogOut size={14} color={c.muted} />}
-            <Text className="text-xs font-semibold text-muted">
-              {onCancel ? full.common.buttons.cancel : full.common.loadError.signOut}
-            </Text>
-          </Pressable>
+      {(onCancel || onLogout || onDeleteAccount) && (
+        <View className="w-full max-w-lg flex-row justify-end items-center gap-2 mb-4">
+          {/* Deleting the account is only offered on the sign-out variant: with
+              onCancel the user still HAS a business to go back to, and that
+              deletion belongs in Ajustes where the blockers are explained. */}
+          {onDeleteAccount && !onCancel ? (
+            <Pressable
+              onPress={onDeleteAccount}
+              hitSlop={8}
+              className="flex-row items-center gap-1.5 rounded-full border border-red-500/30 px-3.5 py-2 active:opacity-70"
+            >
+              <Trash2 size={14} color="#dc2626" />
+              <Text className="text-xs font-semibold text-red-600">
+                {full.dashboard.settings.account.danger.deleteAccount}
+              </Text>
+            </Pressable>
+          ) : null}
+          {(onCancel || onLogout) ? (
+            <Pressable
+              onPress={onCancel ?? onLogout}
+              hitSlop={8}
+              className="flex-row items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-2 active:opacity-70"
+            >
+              {onCancel ? <X size={14} color={c.muted} /> : <LogOut size={14} color={c.muted} />}
+              <Text className="text-xs font-semibold text-muted">
+                {onCancel ? full.common.buttons.cancel : full.common.loadError.signOut}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       )}
 

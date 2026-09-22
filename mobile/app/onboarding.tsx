@@ -4,6 +4,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth/store';
+import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
+import { requestAccountDeletion } from '@amixos/shared/lib/accountDeletion';
 import { useLang } from '@/lib/i18n/LangProvider';
 import {
   OnboardingScreen,
@@ -20,6 +23,28 @@ export default function OnboardingRoute() {
   const supabase = createSupabaseClient();
   const { t: full } = useLang();
   const t = full.onboarding;
+
+  // Account deletion from ONBOARDING (App Store 5.1.1(v)). Someone who just
+  // closed their only business is parked here with no route to Ajustes →
+  // Cuenta, so this is their only way to delete the account. They own no
+  // business in this state, so the blocker can never apply.
+  const deleteAccount = async () => {
+    const d = full.dashboard.settings.account.danger;
+    const ok = await confirm({
+      title: d.deleteAccount,
+      message: d.deleteAccountBody,
+      confirmText: d.confirmBtn,
+      cancelText: d.cancelBtn,
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await requestAccountDeletion({ apiBaseUrl: getApiBaseUrl(), jwt: await getJwt() });
+      await useAuthStore.getState().logout();
+    } catch {
+      await alertMessage({ message: d.failed });
+    }
+  };
 
   const handlePickLogo = async (): Promise<PickLogoResult> => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -182,6 +207,7 @@ export default function OnboardingRoute() {
       onPickLogo={handlePickLogo}
       onFinish={handleFinish}
       onLogout={() => { void useAuthStore.getState().logout(); }}
+      onDeleteAccount={() => { void deleteAccount(); }}
       onCancel={adding ? () => { if (router.canGoBack()) router.back(); else router.replace('/(tabs)'); } : undefined}
       pendingInvites={pendingInvites}
       onAcceptInvite={acceptInvite}
