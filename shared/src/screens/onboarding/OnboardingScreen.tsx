@@ -474,14 +474,22 @@ function StepServiceType({ value, onChange, onNext, onBack }: StepServiceTypePro
                   setError('');
                 }}
                 className={clsx(
-                  'flex-col items-center justify-center gap-2 p-3 rounded-xl border-2 min-h-[92px]',
+                  'flex-col items-center justify-center gap-2 px-1.5 py-3 rounded-xl border-2 min-h-[92px]',
                   active
                     ? 'border-primary bg-primary/5'
                     : 'border-border-soft',
                 )}
               >
                 <Icon size={22} color={active ? c.primary : c.muted} />
+                {/* Shrink-to-fit rather than wrap: at three tiles per row
+                    "Construction" and "Landscaping" are wider than the tile and
+                    broke mid-word ("Constructio / n"), which reads as damage.
+                    Two lines are allowed for the "Mechanic / Auto" pairs, and
+                    the font steps down only as far as it must. */}
                 <Text
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}
                   className={clsx(
                     'text-sm font-medium text-center',
                     active ? 'text-primary' : 'text-muted',
