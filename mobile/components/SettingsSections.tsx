@@ -49,6 +49,7 @@ import { linkGoogleContacts } from '@/lib/oauth';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { PricingModal } from '@/components/PricingModal';
+import { AccountDangerZone } from '@/components/AccountDangerZone';
 import { UbicacionesSection } from '@/components/UbicacionesSection';
 import {
   isInTrial,
@@ -3751,6 +3752,11 @@ export function AccountSection() {
           <Text className="text-white font-semibold">{t.password.saveBtn}</Text>
         </Button>
       </View>
+
+      {/* Account + business deletion (App Store 5.1.1(v)). */}
+
+      <AccountDangerZone />
+
 
       <Pressable
         onPress={confirmLogout}

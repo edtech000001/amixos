@@ -20,6 +20,7 @@ import { weatherRouter } from './routes/weather';
 import { smsRouter } from './routes/sms';
 import { assistantRouter } from './routes/assistant';
 import { filesRouter } from './routes/files';
+import { accountRouter } from './routes/account';
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 
@@ -93,6 +94,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'amixos-api'
 
 // Routes
 app.use('/api/v1/auth', authRouter);
+app.use('/api/v1/account', accountRouter);
 app.use('/api/v1/business', businessRouter);
 app.use('/api/v1/employees', employeeRouter);
 app.use('/api/v1/invoices', invoiceRouter);

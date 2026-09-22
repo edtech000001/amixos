@@ -1947,6 +1947,33 @@ export type DashboardDict = {
       confirmDelete: string;
     };
     account: {
+      /** In-app account + business deletion (App Store 5.1.1(v), migration 230). */
+      danger: {
+        heading: string;
+        deleteAccount: string;
+        deleteAccountBody: string;
+        deleteBusiness: string;
+        deleteBusinessBody: string;
+        blockedTitle: string;
+        blockedBody: string;
+        blockedMember: string;
+        confirmTitle: string;
+        confirmBody: string;
+        confirmBusinessBody: string;
+        typeToConfirm: string;
+        confirmWord: string;
+        confirmBtn: string;
+        cancelBtn: string;
+        scheduled: string;
+        scheduledBusiness: string;
+        failed: string;
+        pendingTitle: string;
+        pendingBody: string;
+        pendingBusinessBanner: string;
+        restoreBtn: string;
+        restoreNote: string;
+        signOutBtn: string;
+      };
       heading: string;
       subtitle: string;
       emailLabel: string;
@@ -5121,6 +5148,32 @@ export const dashboard: Record<Locale, DashboardDict> = {
         confirmDelete: '¿Eliminar este campo? Los datos en clientes existentes se perderán.',
       },
       account: {
+        danger: {
+          heading: 'Zona de peligro',
+          deleteAccount: 'Eliminar mi cuenta',
+          deleteAccountBody: 'Tu acceso se cierra hoy y tus datos se eliminan en 30 días. Puedes restaurarla iniciando sesión antes de esa fecha.',
+          deleteBusiness: 'Eliminar este negocio',
+          deleteBusinessBody: 'Elimina el negocio y TODOS sus datos (clientes, trabajos, facturas) para todo el equipo. Sus cuentas siguen existiendo.',
+          blockedTitle: 'Primero resuelve tus negocios',
+          blockedBody: 'Eres dueño de un negocio con otras personas. Transfiere el negocio a otro administrador o elimínalo antes de borrar tu cuenta.',
+          blockedMember: '{{name}} · {{count}} miembro(s) más',
+          confirmTitle: '¿Eliminar definitivamente?',
+          confirmBody: 'Cancelaremos tu suscripción hoy. Tus datos se eliminan el {{date}} y no se pueden recuperar después.',
+          confirmBusinessBody: 'Se eliminarán los datos de {{name}} el {{date}} para todo el equipo. La suscripción se cancela hoy.',
+          typeToConfirm: 'Escribe {{word}} para confirmar',
+          confirmWord: 'ELIMINAR',
+          confirmBtn: 'Eliminar',
+          cancelBtn: 'Cancelar',
+          scheduled: 'Tu cuenta se eliminará el {{date}}.',
+          scheduledBusiness: 'El negocio se eliminará el {{date}}.',
+          failed: 'No se pudo procesar. Intenta de nuevo.',
+          pendingTitle: 'Tu cuenta está programada para eliminarse',
+          pendingBody: 'Se elimina el {{date}} (en {{days}} días). Puedes restaurarla hasta entonces.',
+          pendingBusinessBanner: 'Este negocio se eliminará el {{date}}.',
+          restoreBtn: 'Restaurar cuenta',
+          restoreNote: 'Tu suscripción ya se canceló — tendrás que elegir un plan de nuevo.',
+          signOutBtn: 'Cerrar sesión',
+        },
         heading: 'Cuenta',
         subtitle: 'Tu información de acceso.',
         emailLabel: 'Correo',
@@ -8301,6 +8354,32 @@ export const dashboard: Record<Locale, DashboardDict> = {
         confirmDelete: 'Delete this field? Data in existing clients will be lost.',
       },
       account: {
+        danger: {
+          heading: 'Danger zone',
+          deleteAccount: 'Delete my account',
+          deleteAccountBody: 'Your access ends today and your data is deleted in 30 days. Sign in before then to restore it.',
+          deleteBusiness: 'Delete this business',
+          deleteBusinessBody: 'Deletes the business and ALL of its data (clients, jobs, invoices) for the whole team. Their own accounts stay.',
+          blockedTitle: 'Sort out your businesses first',
+          blockedBody: 'You own a business that still has other people in it. Transfer it to another admin, or delete the business, before deleting your account.',
+          blockedMember: '{{name}} · {{count}} other member(s)',
+          confirmTitle: 'Delete for good?',
+          confirmBody: "We'll cancel your subscription today. Your data is deleted on {{date}} and can't be recovered after that.",
+          confirmBusinessBody: "{{name}}'s data will be deleted on {{date}} for the whole team. The subscription is cancelled today.",
+          typeToConfirm: 'Type {{word}} to confirm',
+          confirmWord: 'DELETE',
+          confirmBtn: 'Delete',
+          cancelBtn: 'Cancel',
+          scheduled: 'Your account will be deleted on {{date}}.',
+          scheduledBusiness: 'The business will be deleted on {{date}}.',
+          failed: "That didn't go through. Try again.",
+          pendingTitle: 'Your account is scheduled for deletion',
+          pendingBody: "It's deleted on {{date}} ({{days}} days from now). You can restore it until then.",
+          pendingBusinessBanner: 'This business will be deleted on {{date}}.',
+          restoreBtn: 'Restore account',
+          restoreNote: 'Your subscription was already cancelled — you will need to pick a plan again.',
+          signOutBtn: 'Sign out',
+        },
         heading: 'Account',
         subtitle: 'Your sign-in information.',
         emailLabel: 'Email',

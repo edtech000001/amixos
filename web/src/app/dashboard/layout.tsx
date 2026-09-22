@@ -7,6 +7,7 @@ import AssistantWidget from '@/components/assistant/AssistantWidget';
 import { ImpersonationBanner } from '@/components/dashboard/ImpersonationBanner';
 import { TrialBanner } from '@/components/TrialBanner';
 import { BillingGate } from '@/components/BillingGate';
+import { AccountDeletionGate } from '@/components/AccountDeletionGate';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import ConfirmHost from '@/components/ConfirmHost';
 import { confirm as confirmDialog } from '@amixos/shared/ui/confirmBus';
@@ -96,6 +97,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           <Fragment key={impersonating ? `imp:${impersonating.userId}` : 'self'}>
             {children}
           </Fragment>
+          <AccountDeletionGate />
           <BillingGate />
         </main>
         {/* "Ami" assistant — fixed-position FAB + slide-over panel */}

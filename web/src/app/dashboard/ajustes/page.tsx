@@ -105,6 +105,7 @@ import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { diffById, isDirty, isTempId, newTempId } from '@amixos/shared/lib/draftList';
 import { SortableList } from '@/components/dashboard/SortableList';
 import { PricingModal } from '@/components/PricingModal';
+import { AccountDangerZone } from '@/components/dashboard/AccountDangerZone';
 import { PLANS } from '@amixos/shared/lib/plans';
 import { LogoCropper } from '@/components/dashboard/LogoCropper';
 import { normalizeImageFile } from '@/lib/imageFile';
@@ -3410,6 +3411,9 @@ export default function AjustesPage() {
                   </Button>
                 </div>
               </div>
+
+              {/* Account + business deletion (App Store 5.1.1(v)). */}
+              <AccountDangerZone />
 
               {/* Sign out — lives here so it's the single canonical logout
                   (removed from the sidebar to avoid two competing entry points). */}
