@@ -5,9 +5,12 @@
 // The settings row used to fire a mailto straight away. That left the privacy
 // policy and terms reachable only from the signup screen, which someone who
 // already has an account never sees again.
+//
+// No version line here on purpose: the settings index already shows
+// "v<version> (build <n>)" with a Check-for-update link, one screen back. Two
+// version readouts that can disagree is worse than one that is complete.
 
 import { View, Text, Pressable, Linking, Alert, Platform } from 'react-native';
-import Constants from 'expo-constants';
 import { LifeBuoy, Mail, Shield, FileText, ExternalLink } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
@@ -87,11 +90,6 @@ export default function SoportePage() {
 
           <Text className="text-[11px] text-faint mt-1">{t.legalHint}</Text>
         </View>
-
-        {/* Version — the first thing support asks for. */}
-        <Text className="text-xs text-faint text-center">
-          {t.versionLabel} {Constants.expoConfig?.version ?? '—'}
-        </Text>
       </View>
     </SettingsPageWrapper>
   );

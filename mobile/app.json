@@ -3,7 +3,7 @@
     "name": "Amixos",
     "slug": "amixos",
     "scheme": "amixos",
-    "version": "0.1.50",
+    "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
@@ -16,7 +16,8 @@
         "usesNonExemptEncryption": false
       },
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryAddUsageDescription": "Amixos guarda en tus fotos las imágenes y documentos que eliges descargar desde la app, como el PDF de una factura o la foto de un comprobante."
       }
     },
     "android": {

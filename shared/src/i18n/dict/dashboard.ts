@@ -2028,7 +2028,6 @@ export type DashboardDict = {
       privacy: string;
       terms: string;
       legalHint: string;
-      versionLabel: string;
     };
     google: {
       heading: string;
@@ -5235,7 +5234,6 @@ export const dashboard: Record<Locale, DashboardDict> = {
         privacy: 'Aviso de privacidad',
         terms: 'Términos de servicio',
         legalHint: 'Se abren en tu navegador.',
-        versionLabel: 'Versión',
         noMailApp: 'No se pudo abrir tu app de correo. Escríbenos a {{email}}.',
       },
       google: {
@@ -8450,7 +8448,6 @@ export const dashboard: Record<Locale, DashboardDict> = {
         privacy: 'Privacy policy',
         terms: 'Terms of service',
         legalHint: 'These open in your browser.',
-        versionLabel: 'Version',
       },
       google: {
         heading: 'Sync with Google Contacts',
