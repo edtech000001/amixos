@@ -119,19 +119,64 @@ accountRouter.post('/delete', authenticate, async (req: AuthRequest, res) => {
     .upsert({ user_id: userId, reason }, { onConflict: 'user_id' });
   if (error) return res.status(500).json({ success: false, message: 'could_not_schedule' });
 
+  const { data: row } = await supabase
+    .from('account_deletions').select('purge_after').eq('user_id', userId).maybeSingle();
+
   // Stop the billing clock now, not in 30 days — nobody should pay through a
   // window they asked to end in.
   for (const b of owned) await cancelSubscription(b.stripe_subscription_id);
 
-  const { data: row } = await supabase
-    .from('account_deletions').select('purge_after').eq('user_id', userId).maybeSingle();
+  // Schedule the businesses that will cascade with this account, so the team
+  // banner (232) can warn anyone who joins DURING the window — the owner can
+  // still invite someone in those 30 days, and they would otherwise walk into
+  // a business that is already scheduled to disappear.
+  //
+  // ignoreDuplicates: a business the owner had ALREADY chosen to close keeps
+  // its own earlier date and its from_account_deletion = false, so restoring
+  // the account below cannot quietly revive it.
+  if (owned.length) {
+    const { error: bizErr } = await supabase.from('business_deletions').upsert(
+      owned.map(b => ({
+        business_id: b.id,
+        requested_by: userId,
+        purge_after: row?.purge_after ?? undefined,
+        from_account_deletion: true,
+      })),
+      { onConflict: 'business_id', ignoreDuplicates: true },
+    );
+    // A database without migration 233 rejects the flag column. The account
+    // deletion still stands — the cascade does the real work; only the banner
+    // is missing.
+    if (bizErr?.code === '42703') {
+      await supabase.from('business_deletions').upsert(
+        owned.map(b => ({ business_id: b.id, requested_by: userId })),
+        { onConflict: 'business_id', ignoreDuplicates: true },
+      );
+    }
+  }
+
   res.json({ success: true, purgeAfter: row?.purge_after ?? null });
 });
 
 // POST /api/v1/account/restore — cancel a pending deletion (inside the window).
 accountRouter.post('/restore', authenticate, async (req: AuthRequest, res) => {
-  const { error } = await supabase.from('account_deletions').delete().eq('user_id', req.user!.id);
+  const userId = req.user!.id;
+  const { error } = await supabase.from('account_deletions').delete().eq('user_id', userId);
   if (error) return res.status(500).json({ success: false, message: 'could_not_restore' });
+
+  // Un-schedule only what the ACCOUNT deletion scheduled. A business the owner
+  // closed deliberately (from_account_deletion = false) stays closed.
+  const owned = await ownedBusinesses(userId);
+  if (owned.length) {
+    const ids = owned.map(b => b.id);
+    const { error: bizErr } = await supabase
+      .from('business_deletions').delete().in('business_id', ids).eq('from_account_deletion', true);
+    // Without migration 233 there is no flag to filter on — leave the rows
+    // rather than risk reviving a business the owner meant to close.
+    if (bizErr && bizErr.code !== '42703') {
+      return res.status(500).json({ success: false, message: 'could_not_restore' });
+    }
+  }
   // The subscription is NOT resurrected: it was cancelled at Stripe and has to
   // be bought again. Say so in the UI rather than implying a full undo.
   res.json({ success: true });
