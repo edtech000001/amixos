@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, Building2, Phone, Mail, MapPin } from 'lucide-react-native';
+import { ChevronLeft, Building2, Phone, Mail, MapPin, Check } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { can } from '@amixos/shared/lib/permissions';
@@ -28,6 +28,7 @@ import { newUuid } from '@/lib/offline/ids';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import { withoutEmailIncludeFlags, isUndefinedColumn } from '@amixos/shared/lib/clientRecipients';
 import { fetchClientLocations, setClientLocations } from '@amixos/shared/lib/locations';
 import { parseHiddenFields, isFieldHidden } from '@amixos/shared/lib/fieldLayout';
 import { groupNumberString, localizeTemplates, parseFieldConfig, sanitizeNumberInput, splitMultiValue, toggleMultiOption } from '@amixos/shared/lib/fieldTemplates';
@@ -109,6 +110,10 @@ export default function NuevoClienteRoute() {
   const [phoneOffice, setPhoneOffice] = useState('');
   const [emailOffice, setEmailOffice] = useState('');
   const [emailHome, setEmailHome] = useState('');
+  // Per-address "include in emails" switches (migration 231). Default true so
+  // an address nobody opted out of still receives mail.
+  const [emailOfficeIncluded, setEmailOfficeIncluded] = useState(true);
+  const [emailHomeIncluded, setEmailHomeIncluded] = useState(true);
   const [address, setAddress] = useState('');
   const [addressLine2, setAddressLine2] = useState('');
   const [city, setCity] = useState('');
@@ -153,6 +158,9 @@ export default function NuevoClienteRoute() {
         setPhoneOffice(c.phone_office ?? '');
         setEmailOffice(c.email_office ?? c.email ?? '');
         setEmailHome(c.email_home ?? '');
+        // Absent column (231 not run) reads as included.
+        setEmailOfficeIncluded((c as { email_office_included?: boolean | null }).email_office_included !== false);
+        setEmailHomeIncluded((c as { email_home_included?: boolean | null }).email_home_included !== false);
         setAddress(c.address ?? '');
         setAddressLine2(c.address_line2 ?? '');
         setCity(c.city ?? '');
@@ -398,29 +406,45 @@ export default function NuevoClienteRoute() {
         );
       case 'email_office':
         return (
-          <Input
-            key={key}
-            label={rLabel('email_office', t.fields.emailOffice)}
-            placeholder={t.fields.placeholders.emailOffice}
-            value={emailOffice}
-            onChangeText={setEmailOffice}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            leftIcon={<Mail size={15} color={c.faint} />}
-          />
+          <View key={key}>
+            <Input
+              label={rLabel('email_office', t.fields.emailOffice)}
+              placeholder={t.fields.placeholders.emailOffice}
+              value={emailOffice}
+              onChangeText={setEmailOffice}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              leftIcon={<Mail size={15} color={c.faint} />}
+            />
+            {emailOffice.trim() ? (
+              <IncludeSwitch
+                label={t.fields.includeInEmails}
+                value={emailOfficeIncluded}
+                onChange={setEmailOfficeIncluded}
+              />
+            ) : null}
+          </View>
         );
       case 'email_home':
         return (
-          <Input
-            key={key}
-            label={rLabel('email_home', t.fields.emailHome)}
-            placeholder={t.fields.placeholders.emailHome}
-            value={emailHome}
-            onChangeText={setEmailHome}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            leftIcon={<Mail size={15} color={c.faint} />}
-          />
+          <View key={key}>
+            <Input
+              label={rLabel('email_home', t.fields.emailHome)}
+              placeholder={t.fields.placeholders.emailHome}
+              value={emailHome}
+              onChangeText={setEmailHome}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              leftIcon={<Mail size={15} color={c.faint} />}
+            />
+            {emailHome.trim() ? (
+              <IncludeSwitch
+                label={t.fields.includeInEmails}
+                value={emailHomeIncluded}
+                onChange={setEmailHomeIncluded}
+              />
+            ) : null}
+          </View>
         );
       case 'address':
         return (
@@ -575,6 +599,8 @@ export default function NuevoClienteRoute() {
       phone_office: phoneOffice.trim() || null,
       email_office: emailOffice.trim() || null,
       email_home: emailHome.trim() || null,
+      email_office_included: emailOfficeIncluded,
+      email_home_included: emailHomeIncluded,
       address: address.trim() || null,
       address_line2: addressLine2.trim() || null,
       city: city.trim() || null,
@@ -592,7 +618,11 @@ export default function NuevoClienteRoute() {
       branchIds.length === 0 || branchIds.length >= allBranchIds.length ? [] : branchIds;
 
     if (editId) {
-      const { error: e } = await supabase.from('clients').update(payload).eq('id', editId);
+      let { error: e } = await supabase.from('clients').update(payload).eq('id', editId);
+      // Migration 231 not run yet → save the rest rather than losing the edit.
+      if (isUndefinedColumn(e)) {
+        ({ error: e } = await supabase.from('clients').update(withoutEmailIncludeFlags(payload)).eq('id', editId));
+      }
       if (e) {
         setError(t.modal.saveError);
         setSaving(false);
@@ -620,10 +650,24 @@ export default function NuevoClienteRoute() {
       try {
         const res = await queuedInsert({ table: 'clients', payload: row, businessId: business.id, label: `Cliente: ${label}` });
         queued = res.queued;
-      } catch {
-        setError(t.modal.saveError);
-        setSaving(false);
-        return;
+      } catch (err) {
+        // Migration 231 not run yet → the include flags are unknown columns.
+        // Retry without them rather than refusing to create the client. The
+        // outbox wraps its errors, so this retries once on ANY failure instead
+        // of matching a code it may not surface.
+        try {
+          const res = await queuedInsert({
+            table: 'clients',
+            payload: withoutEmailIncludeFlags(row),
+            businessId: business.id,
+            label: `Cliente: ${label}`,
+          });
+          queued = res.queued;
+        } catch {
+          setError(t.modal.saveError);
+          setSaving(false);
+          return;
+        }
       }
       if (queued) {
         // Offline: show it in the cached list AND seed its detail cache so it's
@@ -738,5 +782,26 @@ export default function NuevoClienteRoute() {
       </KeyboardAvoidingView>
       {unsavedSheet}
     </SafeAreaView>
+  );
+}
+
+/** "Include in emails" row under an address field (migration 231). Shown only
+ *  once the field HAS an address — a switch over an empty box is noise. */
+function IncludeSwitch({ label, value, onChange }: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  const c = useThemeColors();
+  return (
+    <Pressable
+      onPress={() => onChange(!value)}
+      className="flex-row items-center gap-2.5 mt-2 px-1 active:opacity-70"
+    >
+      <View className={`w-5 h-5 rounded border items-center justify-center ${value ? 'bg-primary border-primary' : 'bg-card border-border'}`}>
+        {value ? <Check size={13} color="#fff" /> : null}
+      </View>
+      <Text className="text-xs text-muted">{label}</Text>
+    </Pressable>
   );
 }

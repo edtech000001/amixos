@@ -40,6 +40,10 @@ export interface ClientFormValues {
   phone_office: string;
   email_office: string;
   email_home: string;
+  /** Per-address "include in emails" switches (migration 231). Default true:
+   *  an address nobody opted out of still receives mail. */
+  email_office_included: boolean;
+  email_home_included: boolean;
   address: string;
   address_line2: string;
   city: string;
@@ -53,6 +57,7 @@ const EMPTY: ClientFormValues = {
   first_name: '', last_name: '', company: '',
   phone_cell: '', phone_office: '',
   email_office: '', email_home: '',
+  email_office_included: true, email_home_included: true,
   address: '', address_line2: '', city: '', state: '', zip_code: '',
   notes: '',
   custom_fields: {},
@@ -353,6 +358,13 @@ export function ClientFormModal({
                 placeholder={t.fields.placeholders.emailOffice}
                 value={form.email_office} onChange={e => set('email_office', e.target.value)} />
             </div>
+            {form.email_office.trim() ? (
+              <IncludeSwitch
+                label={t.fields.includeInEmails}
+                value={form.email_office_included}
+                onChange={v => set('email_office_included', v)}
+              />
+            ) : null}
           </Field>
         );
       case 'email_home':
@@ -364,6 +376,13 @@ export function ClientFormModal({
                 placeholder={t.fields.placeholders.emailHome}
                 value={form.email_home} onChange={e => set('email_home', e.target.value)} />
             </div>
+            {form.email_home.trim() ? (
+              <IncludeSwitch
+                label={t.fields.includeInEmails}
+                value={form.email_home_included}
+                onChange={v => set('email_home_included', v)}
+              />
+            ) : null}
           </Field>
         );
       case 'address':
@@ -526,5 +545,25 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <label className="text-sm font-medium text-ink">{label}</label>
       {children}
     </div>
+  );
+}
+
+/** "Include in emails" row under an address field (migration 231). Only shown
+ *  once the field HAS an address — a switch over an empty box is noise. */
+function IncludeSwitch({ label, value, onChange }: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="mt-1.5 flex items-center gap-2 cursor-pointer select-none">
+      <input
+        type="checkbox"
+        checked={value}
+        onChange={e => onChange(e.target.checked)}
+        className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+      />
+      <span className="text-xs text-muted">{label}</span>
+    </label>
   );
 }

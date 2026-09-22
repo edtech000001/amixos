@@ -37,7 +37,7 @@ import { JobPhotosSection } from '@/components/jobs/JobPhotosSection';
 import { JobDocumentsSection } from '@/components/jobs/JobDocumentsSection';
 import { SignaturePad } from '@/components/SignaturePad';
 import { Tooltip } from '@amixos/shared/ui/Tooltip';
-import { resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
+import { fetchClientOwnEmails, resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
 
 interface Job {
   id: string; business_id: string;
@@ -711,16 +711,11 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     let email = '';
     let emails: string[] = [];
     if (job.client_id) {
-      const { data: fresh } = await supabase
-        .from('clients')
-        .select('email, email_office, email_home')
-        .eq('id', job.client_id)
-        .maybeSingle();
-      // Every address the client has on file — office AND personal. Taking
-      // the first non-empty one silently dropped the other, which is how an
-      // invoice reached purchasing@ but not the owner's own address.
-      emails = [fresh?.email_office, fresh?.email_home, fresh?.email]
-        .map(e => (e ?? '').trim()).filter(Boolean) as string[];
+      // Every address the client has on file that is marked "include in
+      // emails" (migration 231). Taking the first non-empty one silently
+      // dropped the other, which is how a send reached purchasing@ but never
+      // the owner's own address.
+      emails = await fetchClientOwnEmails(supabase, job.client_id);
       email = emails[0] ?? '';
       if (!email) {
         const { data: contacts } = await supabase

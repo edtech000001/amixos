@@ -38,6 +38,76 @@ function cleanEmails(values: (string | null | undefined)[]): string[] {
   return out;
 }
 
+/** The client's own address columns + their include flags (migration 231). */
+export interface ClientEmailFields {
+  email?: string | null;
+  email_office?: string | null;
+  email_home?: string | null;
+  /** Migration 231. Absent (undefined) = the migration hasn't run → included. */
+  email_office_included?: boolean | null;
+  email_home_included?: boolean | null;
+}
+
+/**
+ * The client's OWN addresses that should receive mail, in order.
+ *
+ * Only an explicit `false` excludes an address: a database without migration
+ * 231 returns undefined for these columns, and an address nobody has opted out
+ * of must still be written to.
+ *
+ * This says nothing about contact people — a contact flagged receives_email
+ * still replaces this whole set, and cc_on_invoices contacts are still CC.
+ */
+export function clientOwnEmails(c: ClientEmailFields | null | undefined): string[] {
+  if (!c) return [];
+  const out: (string | null | undefined)[] = [];
+  if (c.email_office_included !== false) out.push(c.email_office);
+  if (c.email_home_included !== false) out.push(c.email_home);
+  // The legacy single `email` column predates both flags, so it has no switch
+  // of its own; it trails the two named fields.
+  out.push(c.email);
+  return cleanEmails(out);
+}
+
+/** The columns clientOwnEmails() needs — for .select() calls. */
+export const CLIENT_EMAIL_SELECT =
+  'email, email_office, email_home, email_office_included, email_home_included';
+
+/** Drop the migration-231 columns from a payload — used to retry a write on a
+ *  database that hasn't run it yet (42703 = undefined column). */
+export function withoutEmailIncludeFlags<T extends Record<string, unknown>>(payload: T): T {
+  const copy = { ...payload } as Record<string, unknown>;
+  delete copy.email_office_included;
+  delete copy.email_home_included;
+  return copy as T;
+}
+
+/** True when a PostgREST error is "that column doesn't exist". */
+export const isUndefinedColumn = (e: unknown): boolean =>
+  !!e && typeof e === 'object' && (e as { code?: string }).code === '42703';
+
+/**
+ * Read a client's own mailable addresses, fresh.
+ *
+ * Senders call this at send time rather than trusting the screen's copy (a
+ * user may have just added an address), and it degrades on a database that
+ * hasn't run migration 231: 42703 = the flag columns don't exist yet, so it
+ * retries with the plain address columns and treats both as included.
+ */
+export async function fetchClientOwnEmails(
+  supabase: Supa,
+  clientId: string | null | undefined,
+): Promise<string[]> {
+  if (!clientId) return [];
+  const { data, error } = await (supabase.from('clients') as any)
+    .select(CLIENT_EMAIL_SELECT).eq('id', clientId).maybeSingle();
+  if (!error) return clientOwnEmails(data as ClientEmailFields | null);
+  if ((error as { code?: string }).code !== '42703') return [];
+  const { data: legacy } = await (supabase.from('clients') as any)
+    .select('email, email_office, email_home').eq('id', clientId).maybeSingle();
+  return clientOwnEmails(legacy as ClientEmailFields | null);
+}
+
 /**
  * Resolve the recipients for one client.
  *

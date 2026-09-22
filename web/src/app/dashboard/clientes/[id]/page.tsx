@@ -10,6 +10,7 @@ import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, Phone, Mail, MapPin, FileText, Plus, Pencil, Building2, Trash2, Star, UserPlus, Printer, Share2, ShieldCheck, MoreHorizontal } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { withoutEmailIncludeFlags, isUndefinedColumn } from '@amixos/shared/lib/clientRecipients';
 import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
 import { can } from '@amixos/shared/lib/permissions';
 import { Button } from '@/components/ui/Button';
@@ -174,6 +175,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
     first_name: '', last_name: '', company: '',
     phone_cell: '', phone_office: '',
     email_office: '', email_home: '',
+    email_office_included: true, email_home_included: true,
     address: '', address_line2: '', city: '', state: '', zip_code: '',
     notes: '',
   });
@@ -319,6 +321,9 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
       first_name: c.first_name, last_name: c.last_name, company: c.company ?? '',
       phone_cell: c.phone_cell ?? c.phone ?? '', phone_office: c.phone_office ?? '',
       email_office: c.email_office ?? c.email ?? '', email_home: c.email_home ?? '',
+      // Absent column (migration 231 not run) reads as included.
+      email_office_included: (c as { email_office_included?: boolean | null }).email_office_included !== false,
+      email_home_included: (c as { email_home_included?: boolean | null }).email_home_included !== false,
       address: c.address ?? '', address_line2: c.address_line2 ?? '',
       city: c.city ?? '', state: c.state ?? '', zip_code: c.zip_code ?? '',
       notes: c.notes ?? '',
@@ -393,12 +398,17 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
       company: form.company.trim() || null,
       phone_cell: form.phone_cell.trim() || null, phone_office: form.phone_office.trim() || null,
       email_office: form.email_office.trim() || null, email_home: form.email_home.trim() || null,
+      email_office_included: form.email_office_included, email_home_included: form.email_home_included,
       address: form.address.trim() || null, address_line2: form.address_line2.trim() || null,
       city: form.city.trim() || null, state: form.state.trim() || null, zip_code: form.zip_code.trim() || null,
       notes: form.notes.trim() || null,
       custom_fields: Object.keys(customVals).length > 0 ? customVals : null,
     };
-    await supabase.from('clients').update(payload).eq('id', id);
+    const { error: upErr } = await supabase.from('clients').update(payload).eq('id', id);
+    // Migration 231 not run yet → save the rest rather than losing the edit.
+    if (isUndefinedColumn(upErr)) {
+      await supabase.from('clients').update(withoutEmailIncludeFlags(payload)).eq('id', id);
+    }
     setClient(prev => prev ? { ...prev, ...payload } : prev);
     // Mirror the edit to Google Contacts (fire-and-forget — sync is
     // best-effort and shouldn't slow the modal close).
@@ -876,8 +886,28 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           <section>
             <p className="text-xs font-semibold text-faint uppercase tracking-wide mb-3">{t.sections.emails}</p>
             <div className="grid grid-cols-2 gap-3">
-              <Input label={t.fields.emailOffice} type="email" value={form.email_office} onChange={e => setForm(f => ({ ...f, email_office: e.target.value }))} leftIcon={<Mail size={15}/>}/>
-              <Input label={t.fields.emailHome} type="email" value={form.email_home} onChange={e => setForm(f => ({ ...f, email_home: e.target.value }))} leftIcon={<Mail size={15}/>}/>
+              <div>
+                <Input label={t.fields.emailOffice} type="email" value={form.email_office} onChange={e => setForm(f => ({ ...f, email_office: e.target.value }))} leftIcon={<Mail size={15}/>}/>
+                {form.email_office.trim() ? (
+                  <label className="mt-1.5 flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={form.email_office_included}
+                      onChange={e => setForm(f => ({ ...f, email_office_included: e.target.checked }))}
+                      className="h-4 w-4 rounded border-border text-primary focus:ring-primary" />
+                    <span className="text-xs text-muted">{t.fields.includeInEmails}</span>
+                  </label>
+                ) : null}
+              </div>
+              <div>
+                <Input label={t.fields.emailHome} type="email" value={form.email_home} onChange={e => setForm(f => ({ ...f, email_home: e.target.value }))} leftIcon={<Mail size={15}/>}/>
+                {form.email_home.trim() ? (
+                  <label className="mt-1.5 flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox" checked={form.email_home_included}
+                      onChange={e => setForm(f => ({ ...f, email_home_included: e.target.checked }))}
+                      className="h-4 w-4 rounded border-border text-primary focus:ring-primary" />
+                    <span className="text-xs text-muted">{t.fields.includeInEmails}</span>
+                  </label>
+                ) : null}
+              </div>
             </div>
           </section>
 

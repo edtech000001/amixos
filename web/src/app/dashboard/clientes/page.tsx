@@ -37,6 +37,7 @@ import {
   type ClientFormValues,
   type ClientFieldTemplate,
 } from '@amixos/shared/screens/dashboard/ClientFormModal';
+import { withoutEmailIncludeFlags, isUndefinedColumn } from '@amixos/shared/lib/clientRecipients';
 
 interface FieldTemplate extends ClientFieldTemplate {
   id: string;
@@ -326,6 +327,8 @@ export default function ClientesPage() {
       phone_office: form.phone_office.trim() || null,
       email_office: form.email_office.trim() || null,
       email_home: form.email_home.trim() || null,
+      email_office_included: form.email_office_included,
+      email_home_included: form.email_home_included,
       address: form.address.trim() || null,
       address_line2: form.address_line2.trim() || null,
       city: form.city.trim() || null,
@@ -343,11 +346,20 @@ export default function ClientesPage() {
       branchIds.length === 0 || branchIds.length >= allBranchIds.length ? [] : branchIds;
 
     if (formMode === 'add') {
-      const { data: created, error: e } = await supabase
+      let { data: created, error: e } = await supabase
         .from('clients')
         .insert({ ...payload, business_id: business!.id })
         .select('id')
         .single();
+      // Migration 231 not run yet → save without the include flags rather than
+      // failing the whole client.
+      if (isUndefinedColumn(e)) {
+        ({ data: created, error: e } = await supabase
+          .from('clients')
+          .insert({ ...withoutEmailIncludeFlags(payload), business_id: business!.id })
+          .select('id')
+          .single());
+      }
       if (e) { setError(t.modal.saveError); setSaving(false); return; }
       if (created?.id && multiLocation && branchLinksToSave.length > 0) {
         await saveClientLocations(supabase, business!.id, created.id, branchLinksToSave, branchLinksToSave[0] ?? null);
@@ -364,7 +376,11 @@ export default function ClientesPage() {
         })();
       }
     } else if (formMode === 'edit' && selected) {
-      const { error: e } = await supabase.from('clients').update(payload).eq('id', selected.id);
+      let { error: e } = await supabase.from('clients').update(payload).eq('id', selected.id);
+      if (isUndefinedColumn(e)) {
+        ({ error: e } = await supabase
+          .from('clients').update(withoutEmailIncludeFlags(payload)).eq('id', selected.id));
+      }
       if (e) { setError(t.modal.saveError); setSaving(false); return; }
       if (multiLocation) {
         await saveClientLocations(supabase, business!.id, selected.id, branchLinksToSave, branchLinksToSave[0] ?? null);
@@ -510,6 +526,10 @@ export default function ClientesPage() {
           phone_office: selected.phone_office ?? '',
           email_office: selected.email_office ?? selected.email ?? '',
           email_home: selected.email_home ?? '',
+          // Absent column (migration 231 not run) reads as included, which is
+          // the default the send path assumes too.
+          email_office_included: (selected as { email_office_included?: boolean | null }).email_office_included !== false,
+          email_home_included: (selected as { email_home_included?: boolean | null }).email_home_included !== false,
           address: selected.address ?? '',
           address_line2: selected.address_line2 ?? '',
           city: selected.city ?? '',

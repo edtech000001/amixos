@@ -29,7 +29,7 @@ import { INVOICE_PAYMENT_BUCKET, paymentPhotoPath } from '@amixos/shared/lib/inv
 import { autonameEnabled, autonameJobTitle, detectAutonameType } from '@amixos/shared/lib/autoname';
 import { sortInvoiceLinesByDate, detectLineSortDirection, setLineItemExcluded, removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, AUTOPRICE_SKIP, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
 import { applicableRate, rowToPriceSheetItem, groupPriceItemsByCategory, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
-import { resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
+import { fetchClientOwnEmails, resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { InvoiceRemindersCard } from '@amixos/shared/screens/dashboard/InvoiceRemindersCard';
 import { addInvoiceReminder } from '@amixos/shared/lib/invoiceReminders';
@@ -989,10 +989,12 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     // receives_email is addressed INSTEAD of the client (migration 220), and CC
     // excludes anyone already in To.
     const clientId = invoice.clients[0]?.id ?? null;
-    // BOTH of the client's own addresses: office and personal. A contact
-    // flagged receives_email still replaces them (migration 220); a CC contact
-    // does not — which is what made an invoice go only to purchasing@.
-    const clientEmails = [email, invoice.clients[0]?.emailHome ?? null];
+    // The client's own addresses, honouring the per-address "include in
+    // emails" switches (migration 231) and read fresh at send time. A contact
+    // flagged receives_email still replaces them (220); a CC contact does not
+    // — which is what made an invoice go only to purchasing@.
+    const fetched = await fetchClientOwnEmails(supabase, clientId);
+    const clientEmails = fetched.length ? fetched : [email, invoice.clients[0]?.emailHome ?? null];
     const recipients = await resolveClientRecipients(supabase, clientId, clientEmails, { includeInvoiceCc: true });
     if (!recipients.to.length) { void alertMessage({ message: tInv.sendNoEmail, destructive: true }); return; }
     const toParam = joinRecipients(recipients.to);

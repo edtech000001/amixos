@@ -712,8 +712,13 @@ export default function ClienteDetailRoute() {
     ...contacts
       .filter(ct => ct.receives_email && (ct.email ?? '').trim())
       .map(ct => ({ label: ct.name || ct.role || (ct.email ?? '').trim(), email: (ct.email ?? '').trim() })),
-    ...((primaryEmail ?? '').trim() ? [{ label: t.fields.emailOffice, email: (primaryEmail ?? '').trim() }] : []),
-    ...((homeEmail ?? '').trim() ? [{ label: t.fields.emailHome, email: (homeEmail ?? '').trim() }] : []),
+    // Addresses switched OFF for emails (migration 231) are left out of the
+    // generic action — the labelled ROW below still mails them, so an excluded
+    // address is never unreachable, just not a default recipient.
+    ...((primaryEmail ?? '').trim() && (client as { email_office_included?: boolean | null }).email_office_included !== false
+      ? [{ label: t.fields.emailOffice, email: (primaryEmail ?? '').trim() }] : []),
+    ...((homeEmail ?? '').trim() && (client as { email_home_included?: boolean | null }).email_home_included !== false
+      ? [{ label: t.fields.emailHome, email: (homeEmail ?? '').trim() }] : []),
   ].filter((o, i, arr) => arr.findIndex(x => x.email.toLowerCase() === o.email.toLowerCase()) === i);
   const emailTarget = emailOptions[0]?.email ?? '';
   // US style: ZIP sits on the city line after the state — "Colby, KS 67701".

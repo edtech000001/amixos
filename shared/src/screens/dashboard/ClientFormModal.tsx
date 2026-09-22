@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable } from 'react-native';
-import { Building2, Phone, Mail, MapPin } from 'lucide-react-native';
+import { Building2, Phone, Mail, MapPin, Check } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { isValidEmail } from '../../lib/validation';
@@ -30,6 +30,10 @@ export interface ClientFormValues {
   phone_office: string;
   email_office: string;
   email_home: string;
+  /** Per-address "include in emails" switches (migration 231). Default true:
+   *  an address nobody opted out of still receives mail. */
+  email_office_included: boolean;
+  email_home_included: boolean;
   address: string;
   address_line2: string;
   city: string;
@@ -43,6 +47,7 @@ const EMPTY: ClientFormValues = {
   first_name: '', last_name: '', company: '',
   phone_cell: '', phone_office: '',
   email_office: '', email_home: '',
+  email_office_included: true, email_home_included: true,
   address: '', address_line2: '', city: '', state: '', zip_code: '',
   notes: '',
   custom_fields: {},
@@ -206,6 +211,13 @@ export function ClientFormModal({
               autoCapitalize="none"
               leftIcon={<Mail size={15} color={c.faint} />}
             />
+            {form.email_office.trim() ? (
+              <IncludeSwitch
+                label={t.fields.includeInEmails}
+                value={form.email_office_included}
+                onChange={v => set('email_office_included', v)}
+              />
+            ) : null}
             <Input
               label={rLabel('email_home', t.fields.emailHome)}
               placeholder={t.fields.placeholders.emailHome}
@@ -215,6 +227,13 @@ export function ClientFormModal({
               autoCapitalize="none"
               leftIcon={<Mail size={15} color={c.faint} />}
             />
+            {form.email_home.trim() ? (
+              <IncludeSwitch
+                label={t.fields.includeInEmails}
+                value={form.email_home_included}
+                onChange={v => set('email_home_included', v)}
+              />
+            ) : null}
           </View>
         </View>
 
@@ -376,5 +395,25 @@ export function ClientFormModal({
         </View>
       </View>
     </Modal>
+  );
+}
+
+/** "Include in emails" row under an address field (migration 231). Only shown
+ *  once the field HAS an address — a switch over an empty box is noise. */
+function IncludeSwitch({ label, value, onChange }: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <Pressable
+      onPress={() => onChange(!value)}
+      className="flex-row items-center gap-2.5 -mt-1 mb-1 px-1 active:opacity-70"
+    >
+      <View className={`w-5 h-5 rounded border items-center justify-center ${value ? 'bg-primary border-primary' : 'bg-card border-border'}`}>
+        {value ? <Check size={13} color="#fff" /> : null}
+      </View>
+      <Text className="text-xs text-muted">{label}</Text>
+    </Pressable>
   );
 }

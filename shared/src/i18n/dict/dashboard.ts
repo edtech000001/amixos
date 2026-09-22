@@ -483,6 +483,8 @@ export type DashboardDict = {
       phoneOffice: string;
       emailOffice: string;
       emailHome: string;
+      /** Per-address switch (migration 231) shown under each email field. */
+      includeInEmails: string;
       addressLine1: string;
       addressLine2: string;
       city: string;
@@ -3696,6 +3698,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         phoneOffice: 'Teléfono oficina',
         emailOffice: 'Correo oficina',
         emailHome: 'Correo personal',
+        includeInEmails: 'Incluir en correos',
         addressLine1: 'Calle y número',
         addressLine2: 'Apartamento / Suite',
         city: 'Ciudad',
@@ -6903,6 +6906,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         phoneOffice: 'Office phone',
         emailOffice: 'Office email',
         emailHome: 'Personal email',
+        includeInEmails: 'Include in emails',
         addressLine1: 'Street address',
         addressLine2: 'Apartment / Suite',
         city: 'City',
