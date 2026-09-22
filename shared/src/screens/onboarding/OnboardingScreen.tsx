@@ -5,6 +5,8 @@ import {
   Pressable,
   ScrollView,
   Image,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { clsx } from 'clsx';
 import {
@@ -221,6 +223,13 @@ export function OnboardingScreen({ onPickLogo, onFinish, onLogout, onCancel, onD
   const progress = Math.min(step, TOTAL_STEPS);
 
   return (
+    // The step card is vertically CENTRED, so on a phone the input sits right
+    // where the keyboard opens and was covered by it. Padding behaviour shrinks
+    // the container, which re-centres the card above the keyboard.
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      className="flex-1 bg-surface"
+    >
     <ScrollView
       className="flex-1 bg-surface"
       contentContainerClassName="flex-grow items-center justify-center px-4 py-10"
@@ -357,6 +366,7 @@ export function OnboardingScreen({ onPickLogo, onFinish, onLogout, onCancel, onD
         </Text>
       )}
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -395,14 +405,20 @@ function StepBusinessName({ value, onChange, onNext }: StepBusinessNameProps) {
         <Text className="text-sm text-muted mt-1">{t.sub}</Text>
       </View>
 
+      {/* multiline so a long name WRAPS and stays readable — single-line
+          scrolled the start of the name out of view while typing. Newlines are
+          stripped on the way in, and Return still advances the step rather
+          than inserting one. */}
       <Input
         label={t.label}
         placeholder={t.placeholder}
         value={value}
-        onChangeText={onChange}
+        onChangeText={(v) => onChange(v.replace(/[\r\n]+/g, ' '))}
         error={error}
         onSubmitEditing={handleNext}
         returnKeyType="next"
+        blurOnSubmit
+        multiline
         autoFocus
       />
 
