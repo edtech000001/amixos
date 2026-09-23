@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { supabase } from '../config/supabase';
+import { inviteLimiter } from '../middleware/rateLimit';
 import { wouldExceedMembers, memberLimit, type SubscriptionRow } from '../lib/planLimits';
 
 export const invitesRouter = Router();
@@ -27,7 +28,7 @@ async function assertAdmin(userId: string, businessId: string): Promise<boolean>
  * built-in inviteUserByEmail (no extra email provider needed). Returns the
  * accept URL so the inviter can also copy/share it manually.
  */
-invitesRouter.post('/', async (req: AuthRequest, res) => {
+invitesRouter.post('/', inviteLimiter, async (req: AuthRequest, res) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ success: false, message: 'Unauthenticated' });
 
@@ -214,7 +215,7 @@ invitesRouter.delete('/:id', async (req: AuthRequest, res) => {
  * POST /api/v1/invites/:id/resend
  * Resend the email for a pending invite (does not change the token).
  */
-invitesRouter.post('/:id/resend', async (req: AuthRequest, res) => {
+invitesRouter.post('/:id/resend', inviteLimiter, async (req: AuthRequest, res) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ success: false, message: 'Unauthenticated' });
 

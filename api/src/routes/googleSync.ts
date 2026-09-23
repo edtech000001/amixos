@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { supabase } from '../config/supabase';
+import { googleSyncLimiter } from '../middleware/rateLimit';
 import {
   createGoogleContact,
   updateGoogleContact,
@@ -29,6 +30,9 @@ const DEFAULT_GROUP_NAME = 'Amixos';
 
 export const googleSyncRouter = Router();
 googleSyncRouter.use(authenticate);
+// Every route here spends someone else's API quota; one cap for the router
+// beats remembering to add it to each new endpoint.
+googleSyncRouter.use(googleSyncLimiter);
 
 // Helper: load credentials for the current user IN A SPECIFIC BUSINESS.
 // Migration 031 made the PK composite (user_id, business_id), so loading a

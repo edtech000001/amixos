@@ -19,6 +19,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { authenticate, AuthRequest, getBusinessRole } from '../middleware/auth';
 import { supabase } from '../config/supabase';
+import { thumbnailLimiter, backfillLimiter } from '../middleware/rateLimit';
 
 export const filesRouter = Router();
 filesRouter.use(authenticate);
@@ -149,7 +150,7 @@ async function loadEntry(id: string) {
  * Generate (or return the cached) thumbnail for one file. Called
  * fire-and-forget by the client right after an upload.
  */
-filesRouter.post('/:id/thumbnail', async (req: AuthRequest, res) => {
+filesRouter.post('/:id/thumbnail', thumbnailLimiter, async (req: AuthRequest, res) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ success: false, message: 'Unauthenticated' });
 
@@ -173,7 +174,7 @@ filesRouter.post('/:id/thumbnail', async (req: AuthRequest, res) => {
  * so one request cannot run for minutes; the client repeats while `remaining`
  * is above zero.
  */
-filesRouter.post('/thumbnails/backfill', async (req: AuthRequest, res) => {
+filesRouter.post('/thumbnails/backfill', backfillLimiter, async (req: AuthRequest, res) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ success: false, message: 'Unauthenticated' });
 
