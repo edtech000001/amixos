@@ -44,34 +44,67 @@ begin
 end $$;
 
 -- ── 2. The public surface, re-granted deliberately ──────────────────────────
--- These back pages that are reached WITHOUT an account. Every one of them
--- authorizes by an unguessable token (crypto.randomUUID, 122 bits) or refuses
--- outright when auth.uid() is null.
-
--- Invite landing: shows who invited you before you sign in.
-grant execute on function public.lookup_invite(text) to anon, authenticated;
--- Raises 'not_authenticated' when auth.uid() is null, so anon calling it is a
--- no-op; granted anyway because the invite page may fire it while the session
--- is still hydrating, and a spurious error there reads as a broken invite.
-grant execute on function public.accept_invite(text) to anon, authenticated;
-
--- Shared document links (invoice / proposal / lease) — token in the URL.
-grant execute on function public.get_shared_invoice(text) to anon, authenticated;
-grant execute on function public.get_shared_proposal(text) to anon, authenticated;
-grant execute on function public.get_shared_lease(text) to anon, authenticated;
-grant execute on function public.respond_shared_proposal(text, text, text, text) to anon, authenticated;
-grant execute on function public.sign_shared_lease(text, text, text) to anon, authenticated;
-grant execute on function public.business_has_shared_invoice(uuid) to anon, authenticated;
+-- These back pages reached WITHOUT an account. Each authorizes by an
+-- unguessable token (crypto.randomUUID, 122 bits) or refuses outright when
+-- auth.uid() is null.
+--
+-- Matched by NAME, not by signature: the first cut of this migration named
+-- business_has_shared_invoice(uuid), which 064 had dropped, and the whole
+-- script aborted. Argument lists also drift (179 rebuilt lookup_invite with a
+-- new return type), so looking them up in the catalog is the form that keeps
+-- working. A name that no longer exists is simply skipped.
+do $$
+declare
+  fn record;
+  granted int := 0;
+begin
+  for fn in
+    select p.oid::regprocedure as sig, p.proname
+    from pg_proc p
+    join pg_namespace ns on ns.oid = p.pronamespace
+    where ns.nspname = 'public'
+      and p.proname in (
+        -- Invite landing: shows who invited you before you sign in.
+        'lookup_invite',
+        -- Raises 'not_authenticated' with no session, so anon calling it is a
+        -- no-op; granted because the invite page can fire it while the session
+        -- is still hydrating, and a spurious error there reads as a dead link.
+        'accept_invite',
+        -- Shared document links — token in the URL.
+        'get_shared_invoice',
+        'get_shared_proposal',
+        'get_shared_lease',
+        'respond_shared_proposal',
+        'sign_shared_lease'
+      )
+  loop
+    execute format('grant execute on function %s to anon, authenticated', fn.sig);
+    granted := granted + 1;
+    raise notice 'anon may call %', fn.sig;
+  end loop;
+  raise notice 'granted anon execute on % function(s)', granted;
+end $$;
 
 -- ── 3. Cron-only functions stay out of reach of every logged-in user ────────
 -- Step 1's blanket grant would otherwise hand these to `authenticated`, and
 -- they permanently delete accounts and businesses whose window has closed.
 -- The API calls them with the service role (230).
-revoke all on function public.purge_due_accounts() from public, anon, authenticated;
-revoke all on function public.purge_due_businesses() from public, anon, authenticated;
+do $$
+declare fn record;
+begin
+  for fn in
+    select p.oid::regprocedure as sig
+    from pg_proc p join pg_namespace ns on ns.oid = p.pronamespace
+    where ns.nspname = 'public'
+      and p.proname in ('purge_due_accounts', 'purge_due_businesses')
+  loop
+    execute format('revoke all on function %s from public, anon, authenticated', fn.sig);
+    raise notice 'service_role only: %', fn.sig;
+  end loop;
+end $$;
 
 -- ── Verify ──────────────────────────────────────────────────────────────────
--- Functions anon can still execute — expect exactly the eight above:
+-- Functions anon can still execute — expect exactly the seven above:
 --
 --   select p.oid::regprocedure as fn
 --   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
