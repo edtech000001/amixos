@@ -31,6 +31,7 @@ import { useAuthStore } from '@/lib/auth/store';
 import { isValidEmail } from '@amixos/shared/lib/validation';
 import { pathFromPublicUrl, PUBLIC_ASSETS_BUCKET } from '@amixos/shared/lib/storageUrls';
 import { logAudit } from '@amixos/shared/lib/audit';
+import { PASSWORD_MIN_LENGTH, passwordMeetsPolicy, classifyPasswordError } from '@amixos/shared/lib/passwordErrors';
 import { InvoiceDesigner } from './InvoiceDesigner';
 import { normalizeBundle, activeBundleConfig, invoiceDefaultLanguage, setBundleDefaultLanguage, DEFAULT_INVOICE_START_NUMBER, type InvoiceThemeBundle, type InvoiceBranding, type InvoiceLang } from '@amixos/shared/lib/invoiceTemplate';
 import { formatPhoneInput } from '@amixos/shared/lib/format';
@@ -3385,6 +3386,24 @@ export function AccountSection() {
   const c = useThemeColors();
   const t = full.dashboard.settings;
 
+  // GoTrue answers in English and names raw character classes; map its
+  // rejection onto the localized strings instead of surfacing error.message.
+  const passwordErrorText = (error: unknown) => {
+    switch (classifyPasswordError(error as { code?: string; message?: string; reasons?: string[] })) {
+      case 'pwned':         return t.password.errorPwned;
+      case 'characters':    return t.password.errorWeak;
+      case 'length':        return t.password.errorMinLength;
+      case 'same':          return t.password.errorSamePassword;
+      case 'current-wrong': return t.password.errorCurrentWrong;
+      default: {
+        // Nothing matched — fall back to the server's own wording rather than
+        // swallowing a real error into a vague one.
+        const msg = (error as { message?: string } | null)?.message ?? '';
+        return t.password.errorPrefix.replace('{{message}}', msg);
+      }
+    }
+  };
+
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
   const [showCurrentPw, setShowCurrentPw] = useState(false);
@@ -3435,8 +3454,14 @@ export function AccountSection() {
       setPwMsg({ text: t.password.errorCurrentRequired, isError: true });
       return;
     }
-    if (newPw.length < 8) {
+    if (newPw.length < PASSWORD_MIN_LENGTH) {
       setPwMsg({ text: t.password.errorMinLength, isError: true });
+      return;
+    }
+    // Same character classes the Supabase project enforces — checked here so
+    // the user is corrected in Spanish instead of by GoTrue's English list.
+    if (!passwordMeetsPolicy(newPw)) {
+      setPwMsg({ text: t.password.errorWeak, isError: true });
       return;
     }
     setSavingPw(true);
@@ -3453,10 +3478,17 @@ export function AccountSection() {
       setPwMsg({ text: t.password.errorCurrentWrong, isError: true });
       return;
     }
-    const { error } = await supabase.auth.updateUser({ password: newPw });
+    // current_password is required by the project ("Require current password
+    // when updating"): without it the server rejects, and more importantly
+    // WITH it the check is server-side, so a stolen access token can no longer
+    // change the password by calling the API and skipping this form.
+    const { error } = await supabase.auth.updateUser({
+      password: newPw,
+      current_password: currentPw,
+    });
     setSavingPw(false);
     if (error) {
-      setPwMsg({ text: `${t.password.errorPrefix}: ${error.message}`, isError: true });
+      setPwMsg({ text: passwordErrorText(error), isError: true });
     } else {
       setPwMsg({ text: t.password.successMsg, isError: false });
       setCurrentPw('');
@@ -3747,6 +3779,12 @@ export function AccountSection() {
             </Pressable>
           }
         />
+        {/* State the rule up front — the project rejects passwords missing a
+            character class, and being told after a failed submit is the worse
+            way to learn it. */}
+        <Text className="text-xs -mt-2 mb-1" style={{ color: c.faint }}>
+          {t.password.requirementsHint}
+        </Text>
         <StatusMsg msg={pwMsg} />
         <Button onPress={onSavePassword} loading={savingPw} fullWidth>
           <Text className="text-white font-semibold">{t.password.saveBtn}</Text>

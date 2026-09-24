@@ -50,6 +50,8 @@ export type AuthDict = {
       lastNameRequired: string;
       emailInvalid: string;
       passwordShort: string;
+      passwordWeak: string;
+      passwordPwned: string;
       passwordMismatch: string;
       alreadyRegistered: string;
       generic: string;
@@ -67,6 +69,33 @@ export type AuthDict = {
     successSub: string;
     error: string;
     emailInvalid: string;
+  };
+  reset: {
+    tagline: string;
+    heading: string;
+    sub: string;
+    newPassword: string;
+    newPasswordPlaceholder: string;
+    confirmPassword: string;
+    confirmPasswordPlaceholder: string;
+    requirementsHint: string;
+    submit: string;
+    verifying: string;
+    successTitle: string;
+    successSub: string;
+    goToLogin: string;
+    backToLogin: string;
+    invalidTitle: string;
+    invalidSub: string;
+    requestNew: string;
+    errors: {
+      passwordShort: string;
+      passwordWeak: string;
+      passwordPwned: string;
+      passwordMismatch: string;
+      samePassword: string;
+      generic: string;
+    };
   };
   oauth: {
     continueWith: string;
@@ -128,6 +157,8 @@ export const auth: Record<Locale, AuthDict> = {
         lastNameRequired: 'Apellido requerido',
         emailInvalid: 'Ingresa un correo válido',
         passwordShort: 'La contraseña debe tener al menos 8 caracteres',
+        passwordWeak: 'Debe incluir mayúscula, minúscula, número y símbolo (ej. Sol#2026casa)',
+        passwordPwned: 'Esa contraseña apareció en una filtración de datos. Elige otra.',
         passwordMismatch: 'Las contraseñas no coinciden',
         alreadyRegistered: 'Ya existe una cuenta con ese correo. ¿Quieres iniciar sesión?',
         generic: 'Algo salió mal. Intenta de nuevo.',
@@ -145,6 +176,33 @@ export const auth: Record<Locale, AuthDict> = {
       successSub: 'Te enviamos un enlace para restablecer tu contraseña. Si no lo ves, revisa tu carpeta de spam.',
       error: 'Algo salió mal. Verifica el correo e intenta de nuevo.',
       emailInvalid: 'Ingresa un correo válido',
+    },
+    reset: {
+      tagline: 'Crea tu nueva contraseña',
+      heading: 'Nueva contraseña',
+      sub: 'Elige una contraseña nueva para tu cuenta.',
+      newPassword: 'Nueva contraseña',
+      newPasswordPlaceholder: 'Mínimo 8 caracteres',
+      confirmPassword: 'Confirmar contraseña',
+      confirmPasswordPlaceholder: 'Repite la contraseña',
+      requirementsHint: 'Mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo.',
+      submit: 'Guardar contraseña',
+      verifying: 'Verificando el enlace...',
+      successTitle: '¡Contraseña actualizada!',
+      successSub: 'Ya puedes iniciar sesión con tu nueva contraseña.',
+      goToLogin: 'Iniciar sesión',
+      backToLogin: 'Volver a iniciar sesión',
+      invalidTitle: 'Este enlace ya no sirve',
+      invalidSub: 'Los enlaces para restablecer la contraseña caducan por seguridad. Pide uno nuevo.',
+      requestNew: 'Pedir un enlace nuevo',
+      errors: {
+        passwordShort: 'La contraseña debe tener al menos 8 caracteres',
+        passwordWeak: 'Debe incluir mayúscula, minúscula, número y símbolo (ej. Sol#2026casa)',
+        passwordPwned: 'Esa contraseña apareció en una filtración de datos. Elige otra.',
+        passwordMismatch: 'Las contraseñas no coinciden',
+        samePassword: 'La nueva contraseña debe ser distinta de la anterior.',
+        generic: 'No pudimos guardar la contraseña. Intenta de nuevo.',
+      },
     },
     oauth: {
       continueWith: 'Continuar con',
@@ -204,6 +262,8 @@ export const auth: Record<Locale, AuthDict> = {
         lastNameRequired: 'Last name required',
         emailInvalid: 'Enter a valid email',
         passwordShort: 'Password must be at least 8 characters',
+        passwordWeak: 'Must include an uppercase letter, a lowercase letter, a number and a symbol (e.g. Sun#2026home)',
+        passwordPwned: 'That password appeared in a known data breach. Pick a different one.',
         passwordMismatch: 'Passwords do not match',
         alreadyRegistered: 'An account already exists with that email. Want to sign in?',
         generic: 'Something went wrong. Try again.',
@@ -221,6 +281,33 @@ export const auth: Record<Locale, AuthDict> = {
       successSub: "We sent you a link to reset your password. If you don't see it, check your spam folder.",
       error: 'Something went wrong. Check the email and try again.',
       emailInvalid: 'Enter a valid email',
+    },
+    reset: {
+      tagline: 'Create your new password',
+      heading: 'New password',
+      sub: 'Choose a new password for your account.',
+      newPassword: 'New password',
+      newPasswordPlaceholder: 'At least 8 characters',
+      confirmPassword: 'Confirm password',
+      confirmPasswordPlaceholder: 'Repeat the password',
+      requirementsHint: 'At least 8 characters, with an uppercase letter, a lowercase letter, a number and a symbol.',
+      submit: 'Save password',
+      verifying: 'Checking the link...',
+      successTitle: 'Password updated!',
+      successSub: 'You can now sign in with your new password.',
+      goToLogin: 'Sign in',
+      backToLogin: 'Back to sign in',
+      invalidTitle: 'This link no longer works',
+      invalidSub: 'Password reset links expire for security. Request a new one.',
+      requestNew: 'Request a new link',
+      errors: {
+        passwordShort: 'Password must be at least 8 characters',
+        passwordWeak: 'Must include an uppercase letter, a lowercase letter, a number and a symbol (e.g. Sun#2026home)',
+        passwordPwned: 'That password appeared in a known data breach. Pick a different one.',
+        passwordMismatch: 'Passwords do not match',
+        samePassword: 'The new password must be different from the old one.',
+        generic: "We couldn't save the password. Try again.",
+      },
     },
     oauth: {
       continueWith: 'Continue with',

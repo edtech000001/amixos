@@ -16,6 +16,7 @@ import { roleLabel, can } from '@amixos/shared/lib/permissions';
 import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
 import { parseHiddenFields, JOB_FIELDS_ALWAYS_SHOWN, parseJobLayout, fieldsInSection, JOB_LAYOUT_SECTIONS, type JobFieldEntry, type JobLayoutSection } from '@amixos/shared/lib/jobSections';
 import { sameFieldMap } from '@amixos/shared/lib/fieldMaps';
+import { PASSWORD_MIN_LENGTH, passwordMeetsPolicy, classifyPasswordError } from '@amixos/shared/lib/passwordErrors';
 import {
   CLIENT_FIELD_SECTIONS, CLIENT_FIELDS_ALWAYS_SHOWN, parseClientLayout, clientFieldsInSection,
   CLIENT_SECTION_FIELDS, type ClientFieldSection, type ClientFieldEntry,
@@ -188,6 +189,24 @@ export default function AjustesPage() {
   const { business, user, refetchBusiness, currentRole, businesses, roles, activeBusinessId, locations } = useApp();
   const { t: full, locale } = useLang();
   const t = full.dashboard.settings;
+
+  // GoTrue answers in English and names raw character classes; map its
+  // rejection onto the localized strings instead of surfacing error.message.
+  const passwordErrorText = (error: unknown) => {
+    switch (classifyPasswordError(error as { code?: string; message?: string; reasons?: string[] })) {
+      case 'pwned':         return t.password.errorPwned;
+      case 'characters':    return t.password.errorWeak;
+      case 'length':        return t.password.errorMinLength;
+      case 'same':          return t.password.errorSamePassword;
+      case 'current-wrong': return t.password.errorCurrentWrong;
+      default: {
+        // Nothing matched — fall back to the server's own wording rather than
+        // swallowing a real error into a vague one.
+        const msg = (error as { message?: string } | null)?.message ?? '';
+        return t.password.errorPrefix.replace('{{message}}', msg);
+      }
+    }
+  };
   const tc = full.common;
   const tFields = full.dashboard.clients.fields;
   const searchParams = useSearchParams();
@@ -968,9 +987,16 @@ export default function AjustesPage() {
       setPwMsg(t.password.errorCurrentRequired);
       return;
     }
-    if (!newPw || newPw.length < 8) {
+    if (!newPw || newPw.length < PASSWORD_MIN_LENGTH) {
       setPwMsgIsError(true);
       setPwMsg(t.password.errorMinLength);
+      return;
+    }
+    // Same character classes the Supabase project enforces — checked here so
+    // the user is corrected in Spanish instead of by GoTrue's English list.
+    if (!passwordMeetsPolicy(newPw)) {
+      setPwMsgIsError(true);
+      setPwMsg(t.password.errorWeak);
       return;
     }
     setSavingPw(true); setPwMsg('');
@@ -986,9 +1012,16 @@ export default function AjustesPage() {
       setSavingPw(false);
       return;
     }
-    const { error } = await supabase.auth.updateUser({ password: newPw });
+    // current_password is required by the project ("Require current password
+    // when updating"): without it the server rejects, and more importantly
+    // WITH it the check is server-side, so a stolen access token can no longer
+    // change the password by calling the API and skipping this form.
+    const { error } = await supabase.auth.updateUser({
+      password: newPw,
+      current_password: currentPw,
+    });
     setPwMsgIsError(!!error);
-    setPwMsg(error ? t.password.errorPrefix.replace('{{message}}', error.message) : t.password.successMsg);
+    setPwMsg(error ? passwordErrorText(error) : t.password.successMsg);
     if (!error) { setCurrentPw(''); setNewPw(''); }
     setSavingPw(false);
   };
@@ -3404,6 +3437,10 @@ export default function AjustesPage() {
                     }
                   />
                 </div>
+                {/* State the rule up front — the project rejects passwords
+                    missing a character class, and being told after a failed
+                    submit is the worse way to learn it. */}
+                <p className="text-xs mt-2 text-faint">{t.password.requirementsHint}</p>
                 {pwMsg && <p className={`text-xs mt-3 ${pwMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{pwMsg}</p>}
                 <div className="mt-5">
                   <Button onClick={savePassword} loading={savingPw} disabled={!currentPw || !newPw}>

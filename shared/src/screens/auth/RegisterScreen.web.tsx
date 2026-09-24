@@ -6,10 +6,15 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import { useLang } from '../../i18n';
+import { PASSWORD_MIN_LENGTH, passwordMeetsPolicy } from '../../lib/passwordErrors';
 
 export type RegisterAttemptResult =
   | { ok: true }
-  | { ok: false; reason: 'already-registered' | 'generic' };
+  // 'weak-password' / 'leaked-password' come from the project's password
+  // policy (see shared/lib/passwordErrors). The composition rule is also
+  // checked client-side below, so 'weak-password' should be rare — it is the
+  // safety net for when the dashboard policy and PASSWORD_CLASSES drift apart.
+  | { ok: false; reason: 'already-registered' | 'weak-password' | 'leaked-password' | 'generic' };
 
 export interface RegisterScreenProps {
   onRegister: (data: { firstName: string; lastName: string; email: string; password: string }) => Promise<RegisterAttemptResult>;
@@ -29,6 +34,17 @@ export function RegisterScreen({
   const { t: full } = useLang();
   const t = full.auth;
 
+  // One place deciding what each rejection says, so the native and web forms
+  // can never drift into wording one of them explains better.
+  const registerErrorText = (reason: 'already-registered' | 'weak-password' | 'leaked-password' | 'generic') => {
+    switch (reason) {
+      case 'already-registered': return t.register.errors.alreadyRegistered;
+      case 'leaked-password':    return t.register.errors.passwordPwned;
+      case 'weak-password':      return t.register.errors.passwordWeak;
+      default:                   return t.register.errors.generic;
+    }
+  };
+
   const schema = useMemo(
     () =>
       z
@@ -36,7 +52,9 @@ export function RegisterScreen({
           firstName: z.string().min(1, t.register.errors.firstNameRequired),
           lastName: z.string().min(1, t.register.errors.lastNameRequired),
           email: z.string().email(t.register.errors.emailInvalid),
-          password: z.string().min(8, t.register.errors.passwordShort),
+          password: z.string()
+            .min(PASSWORD_MIN_LENGTH, t.register.errors.passwordShort)
+            .refine(passwordMeetsPolicy, t.register.errors.passwordWeak),
           confirmPassword: z.string(),
         })
         .refine((d) => d.password === d.confirmPassword, {
@@ -69,11 +87,7 @@ export function RegisterScreen({
       password: data.password,
     });
     if (!result.ok) {
-      setError(
-        result.reason === 'already-registered'
-          ? t.register.errors.alreadyRegistered
-          : t.register.errors.generic,
-      );
+      setError(registerErrorText(result.reason));
     }
   });
 

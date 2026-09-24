@@ -3,6 +3,7 @@ import { Linking } from 'react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { RegisterScreen, type RegisterAttemptResult } from '@amixos/shared/screens/auth/RegisterScreen';
+import { classifyPasswordError } from '@amixos/shared/lib/passwordErrors';
 import { OAuthButtons } from '@/components/OAuthButtons';
 
 export default function RegisterRoute() {
@@ -24,6 +25,12 @@ export default function RegisterRoute() {
       if (m.includes('already registered') || m.includes('already been registered')) {
         return { ok: false, reason: 'already-registered' };
       }
+      // The project rejects breached and low-complexity passwords server-side
+      // and explains why in English; classify so the screen can say it in the
+      // user's language.
+      const issue = classifyPasswordError(error);
+      if (issue === 'pwned') return { ok: false, reason: 'leaked-password' };
+      if (issue === 'characters' || issue === 'length') return { ok: false, reason: 'weak-password' };
       return { ok: false, reason: 'generic' };
     }
     router.replace('/onboarding');

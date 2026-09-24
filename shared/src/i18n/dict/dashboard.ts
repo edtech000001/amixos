@@ -2011,9 +2011,13 @@ export type DashboardDict = {
       hidePassword: string;
       saveBtn: string;
       errorMinLength: string;
+      errorWeak: string;
+      errorPwned: string;
+      errorSamePassword: string;
       errorCurrentRequired: string;
       errorCurrentWrong: string;
       errorPrefix: string;
+      requirementsHint: string;
       successMsg: string;
     };
     support: {
@@ -5220,9 +5224,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
         hidePassword: 'Ocultar contraseña',
         saveBtn: 'Actualizar contraseña',
         errorMinLength: 'Mínimo 8 caracteres',
+        errorWeak: 'Debe incluir mayúscula, minúscula, número y símbolo (ej. Sol#2026casa)',
+        errorPwned: 'Esa contraseña apareció en una filtración de datos. Elige otra.',
+        errorSamePassword: 'La nueva contraseña debe ser distinta de la actual.',
         errorCurrentRequired: 'Ingresa tu contraseña actual.',
         errorCurrentWrong: 'La contraseña actual es incorrecta.',
         errorPrefix: 'Error: {{message}}',
+        requirementsHint: 'Mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo.',
         successMsg: '¡Contraseña actualizada!',
       },
       support: {
@@ -8433,9 +8441,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
         hidePassword: 'Hide password',
         saveBtn: 'Update password',
         errorMinLength: 'At least 8 characters',
+        errorWeak: 'Must include an uppercase letter, a lowercase letter, a number and a symbol (e.g. Sun#2026home)',
+        errorPwned: 'That password appeared in a known data breach. Pick a different one.',
+        errorSamePassword: 'The new password must be different from the current one.',
         errorCurrentRequired: 'Enter your current password.',
         errorCurrentWrong: 'Your current password is incorrect.',
         errorPrefix: 'Error: {{message}}',
+        requirementsHint: 'At least 8 characters, with an uppercase letter, a lowercase letter, a number and a symbol.',
         successMsg: 'Password updated!',
       },
       support: {

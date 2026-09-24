@@ -7,6 +7,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/i18n/LangProvider';
 import { OAuthButtons } from '@/components/auth/OAuthButtons';
 import { RegisterScreen, type RegisterAttemptResult } from '@amixos/shared/screens/auth/RegisterScreen';
+import { classifyPasswordError } from '@amixos/shared/lib/passwordErrors';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -25,6 +26,12 @@ export default function RegisterPage() {
       if (m.includes('already registered') || m.includes('already been registered')) {
         return { ok: false, reason: 'already-registered' };
       }
+      // The project rejects breached and low-complexity passwords server-side
+      // and explains why in English; classify so the screen can say it in the
+      // user's language.
+      const issue = classifyPasswordError(error);
+      if (issue === 'pwned') return { ok: false, reason: 'leaked-password' };
+      if (issue === 'characters' || issue === 'length') return { ok: false, reason: 'weak-password' };
       return { ok: false, reason: 'generic' };
     }
     // Honor ?next= (invite links). An invited user is joining a business,
