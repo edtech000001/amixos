@@ -10,6 +10,7 @@ import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { Button } from '@/components/ui/Button';
 import { PricingModal } from '@/components/PricingModal';
+import { AccountDangerZone } from '@/components/dashboard/AccountDangerZone';
 import { createSupabaseClient } from '@/lib/supabase';
 
 function subInfoOf(b: {
@@ -28,9 +29,16 @@ function subInfoOf(b: {
 
 export function BillingGate() {
   const { business, businesses, currentRole, setActiveBusiness } = useApp();
-  const { locale } = useLang();
+  const { t: full, locale } = useLang();
+  const dt = full.dashboard.settings.account.danger;
   const es = locale === 'es';
   const [open, setOpen] = useState(false);
+  // A user who decides NOT to pay still has to be able to delete their data.
+  // Without this the gate offered only "view plans" or "sign out", which left
+  // the account and its business sitting there with no in-app way to remove
+  // them — a dead end for the user, and on mobile an App Store 5.1.1(v)
+  // problem, since deletion has to be reachable from inside the app.
+  const [danger, setDanger] = useState(false);
 
   if (!business) return null;
 
@@ -73,7 +81,8 @@ export function BillingGate() {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] bg-surface flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] bg-surface overflow-y-auto">
+      <div className="min-h-full flex flex-col items-center justify-center p-4 gap-4">
       <div className="max-w-md w-full bg-card rounded-2xl border border-border-soft shadow-sm p-8 text-center">
         <h1 className="text-xl font-bold text-ink">{heading}</h1>
         {/* WHICH business this gate is for. Without it, a user with two
@@ -122,10 +131,28 @@ export function BillingGate() {
         <button
           type="button"
           onClick={handleSignOut}
-          className="mt-6 text-sm font-medium text-faint hover:text-muted"
+          className="mt-6 block w-full text-sm font-medium text-faint hover:text-muted"
         >
           {es ? 'Cerrar sesión' : 'Sign out'}
         </button>
+
+        {!danger && (
+          <button
+            type="button"
+            onClick={() => setDanger(true)}
+            className="mt-2 block w-full text-sm font-medium text-red-600 hover:text-red-700"
+          >
+            {dt.paywallLink}
+          </button>
+        )}
+      </div>
+
+      {danger && (
+        <div className="max-w-md w-full">
+          <p className="mb-2 text-center text-xs text-muted">{dt.paywallHint}</p>
+          <AccountDangerZone />
+        </div>
+      )}
       </div>
 
       <PricingModal open={open} onClose={() => setOpen(false)} />

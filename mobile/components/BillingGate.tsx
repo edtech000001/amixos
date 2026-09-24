@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useAuthStore } from '@/lib/auth/store';
 import {
@@ -8,6 +8,7 @@ import {
   type SubscriptionInfo,
 } from '@amixos/shared/lib/subscription';
 import { PricingModal } from '@/components/PricingModal';
+import { AccountDangerZone } from '@/components/AccountDangerZone';
 
 // Full-screen mobile "billing gate". When the active business has no access
 // (expired trial / canceled / un-activated 'none'), it overlays the whole
@@ -33,8 +34,9 @@ function buildSubInfo(business: {
 }
 
 export function BillingGate() {
-  const { locale } = useLang();
+  const { t: full, locale } = useLang();
   const en = locale === 'en';
+  const dt = full.dashboard.settings.account.danger;
 
   const business = useAuthStore((s) => s.business);
   const businesses = useAuthStore((s) => s.businesses);
@@ -43,6 +45,12 @@ export function BillingGate() {
   const logout = useAuthStore((s) => s.logout);
 
   const [open, setOpen] = useState(false);
+  // A user who decides NOT to pay still has to be able to delete their data.
+  // Without this the gate offered only "view plans" or "sign out", which left
+  // the account and its business sitting there with no in-app way to remove
+  // them — a dead end for the user and an App Store 5.1.1(v) problem, since
+  // deletion has to be reachable from inside the app.
+  const [danger, setDanger] = useState(false);
 
   if (!business) return null;
 
@@ -93,9 +101,13 @@ export function BillingGate() {
         zIndex: 9999,
         elevation: 9999,
       }}
-      className="bg-surface items-center justify-center"
+      className="bg-surface"
     >
-      <View className="bg-card rounded-2xl border border-border-soft p-6 m-4 w-full max-w-md items-center">
+      <ScrollView
+        contentContainerClassName="flex-grow items-center justify-center px-4 py-8"
+        keyboardShouldPersistTaps="handled"
+      >
+      <View className="bg-card rounded-2xl border border-border-soft p-6 w-full max-w-md items-center">
         <Text className="text-xl font-bold text-ink text-center">
           {heading}
         </Text>
@@ -156,7 +168,21 @@ export function BillingGate() {
             {en ? 'Sign out' : 'Cerrar sesión'}
           </Text>
         </Pressable>
+
+        {danger ? null : (
+          <Pressable onPress={() => setDanger(true)} className="mt-2 py-2" hitSlop={8}>
+            <Text className="text-sm font-medium text-red-600">{dt.paywallLink}</Text>
+          </Pressable>
+        )}
       </View>
+
+      {danger ? (
+        <View className="w-full max-w-md mt-4">
+          <Text className="text-xs text-muted text-center mb-2">{dt.paywallHint}</Text>
+          <AccountDangerZone />
+        </View>
+      ) : null}
+      </ScrollView>
 
       {isAdmin ? (
         <PricingModal visible={open} onClose={() => setOpen(false)} />

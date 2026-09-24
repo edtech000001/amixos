@@ -1979,6 +1979,10 @@ export type DashboardDict = {
         restoreBtn: string;
         restoreNote: string;
         signOutBtn: string;
+        /** Escape hatch on the paywall: a user who declines to pay must still
+         *  be able to delete their data without buying a plan first. */
+        paywallLink: string;
+        paywallHint: string;
       };
       heading: string;
       subtitle: string;
@@ -5189,6 +5193,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
           pendingTitle: 'Tu cuenta está programada para eliminarse',
           pendingBody: 'Se elimina el {{date}} (en {{days}} días). Puedes restaurarla hasta entonces.',
           pendingBusinessBanner: 'Este negocio se eliminará el {{date}}.',
+          paywallLink: 'Eliminar negocio o cuenta',
+          paywallHint: 'No necesitas un plan para eliminar tus datos.',
           restoreBtn: 'Restaurar cuenta',
           restoreNote: 'Tu suscripción ya se canceló — tendrás que elegir un plan de nuevo.',
           signOutBtn: 'Cerrar sesión',
@@ -8406,6 +8412,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
           pendingTitle: 'Your account is scheduled for deletion',
           pendingBody: "It's deleted on {{date}} ({{days}} days from now). You can restore it until then.",
           pendingBusinessBanner: 'This business will be deleted on {{date}}.',
+          paywallLink: 'Delete business or account',
+          paywallHint: 'You do not need a plan to delete your data.',
           restoreBtn: 'Restore account',
           restoreNote: 'Your subscription was already cancelled — you will need to pick a plan again.',
           signOutBtn: 'Sign out',
