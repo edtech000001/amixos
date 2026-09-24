@@ -24,63 +24,82 @@ export default function ResetPasswordRoute() {
   const router = useRouter();
   const [linkState, setLinkState] = useState<ResetLinkState>('verifying');
 
+  // useURL(), not getInitialURL(): the latter only reports a link that COLD
+  // STARTED the app. Tapping the email link while Amixos is already running in
+  // the background delivers it as a url event instead, and that path would
+  // otherwise arrive here with nothing to parse.
+  const url = Linking.useURL();
+
   useEffect(() => {
     let cancelled = false;
+    let graceTimer: ReturnType<typeof setTimeout> | undefined;
 
     const establish = async () => {
       const supabase = createSupabaseClient();
-      const url = await Linking.getInitialURL();
 
       const readParams = (raw: string | null) => {
         const out = new Map<string, string>();
         if (!raw) return out;
         // Everything after the first '#' or '?', whichever comes first.
-        const idx = Math.min(
-          ...[raw.indexOf('#'), raw.indexOf('?')].filter(i => i >= 0).concat([raw.length]),
-        );
-        for (const pair of raw.slice(idx + 1).split(/[&#?]/)) {
+        const marks = [raw.indexOf('#'), raw.indexOf('?')].filter(i => i >= 0);
+        if (!marks.length) return out;
+        for (const pair of raw.slice(Math.min(...marks) + 1).split(/[&#?]/)) {
           const [k, v] = pair.split('=');
           if (k && v) out.set(decodeURIComponent(k), decodeURIComponent(v));
         }
         return out;
       };
 
-      const p = readParams(url);
-      if (cancelled) return;
+      // useURL() reports null on the first render and fills in once the link
+      // is delivered, so "no URL" is not yet "bad URL". Stay on the verifying
+      // state and let the effect re-run — unless a session is already in hand,
+      // or the grace period below decides nothing is coming.
+      if (!url) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (session) { setLinkState('ready'); return; }
+        // Nothing arrived and nothing is stored. Give the link a moment, then
+        // stop spinning — an indefinite spinner is worse than a wrong verdict
+        // the user can act on.
+        graceTimer = setTimeout(() => {
+          if (!cancelled) setLinkState('invalid');
+        }, 4000);
+        return;
+      }
 
-      if (p.get('error') || p.get('error_code')) { setLinkState('invalid'); return; }
+      const p = readParams(url);
+      if (p.get('error') || p.get('error_code')) {
+        if (!cancelled) setLinkState('invalid');
+        return;
+      }
 
       const accessToken = p.get('access_token');
       const refreshToken = p.get('refresh_token');
       const tokenHash = p.get('token_hash');
 
+      // Best effort, exactly as on web: a failure here is not the verdict,
+      // because the session may already have been established another way.
       try {
         if (accessToken && refreshToken) {
-          const { error } = await supabase.auth.setSession({
+          await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           });
-          if (error) { if (!cancelled) setLinkState('invalid'); return; }
         } else if (tokenHash) {
-          const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' });
-          if (error) { if (!cancelled) setLinkState('invalid'); return; }
-        } else {
-          // Cold start can deliver the route before the URL; fall back to any
-          // session the client already holds.
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) { if (!cancelled) setLinkState('invalid'); return; }
+          await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' });
         }
       } catch {
-        if (!cancelled) setLinkState('invalid');
-        return;
+        // Fall through to the session check.
       }
 
-      if (!cancelled) setLinkState('ready');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (cancelled) return;
+      setLinkState(session ? 'ready' : 'invalid');
     };
 
     establish();
-    return () => { cancelled = true; };
-  }, []);
+    return () => { cancelled = true; clearTimeout(graceTimer); };
+  }, [url]);
 
   const handleSubmit = async (password: string): Promise<ResetAttemptResult> => {
     const supabase = createSupabaseClient();

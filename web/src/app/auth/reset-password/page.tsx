@@ -40,29 +40,31 @@ export default function ResetPasswordPage() {
       const accessToken = hash.get('access_token');
       const refreshToken = hash.get('refresh_token');
 
+      // Every branch below is BEST EFFORT, and a failure is not decisive.
+      // createBrowserClient runs with detectSessionInUrl: true (the auth-js
+      // default), so the client consumes the ?code= while it initializes —
+      // before this effect ever runs. Our own exchange then fails on an
+      // already-spent code, which is success wearing an error's clothes.
+      // /auth/callback survives the same race only because it re-checks the
+      // session; this does the same, and asks the session last, once.
       try {
         if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) { setLinkState('invalid'); return; }
+          await supabase.auth.exchangeCodeForSession(code);
         } else if (tokenHash) {
-          const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' });
-          if (error) { setLinkState('invalid'); return; }
+          await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' });
         } else if (accessToken && refreshToken) {
-          const { error } = await supabase.auth.setSession({
+          await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           });
-          if (error) { setLinkState('invalid'); return; }
-        } else {
-          // No token of any kind. A recovery session may still exist if the
-          // exchange already ran (remount, double navigation).
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) { setLinkState('invalid'); return; }
         }
       } catch {
-        setLinkState('invalid');
-        return;
+        // Fall through — the session check below is the real verdict.
       }
+
+      // The only question that matters: is there a usable session now?
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setLinkState('invalid'); return; }
 
       // Strip the token from the address bar so it is not left in history or
       // leaked through a Referer header on the next navigation.
