@@ -3,6 +3,7 @@ import { View, Text, Pressable, TextInput, Modal as RNModal, ScrollView, Platfor
 import { ChevronDown, Check, Search, X } from 'lucide-react-native';
 import { clsx } from 'clsx';
 import { useThemeColors } from '../theme';
+import { SHEET_BACKDROP } from './sheetBackdrop';
 
 export interface SelectOption {
   value: string;
@@ -122,12 +123,12 @@ export function Select({
             animationType="fade"
             onRequestClose={() => setOpen(false)}
           >
-            <Pressable
-              onPress={() => setOpen(false)}
-              className="flex-1 bg-black/40 justify-end"
-            >
-              <Pressable
-                onPress={(e: any) => e.stopPropagation?.()}
+            {/* Backdrop first, card as a plain sibling (sheet contract in
+                CLAUDE.md) — the card nested in the backdrop Pressable stopped
+                the options list from scrolling unless a drag began on a row. */}
+            <View className="flex-1 justify-end">
+              <Pressable onPress={() => setOpen(false)} style={SHEET_BACKDROP} />
+              <View
                 className={clsx(
                   'bg-card rounded-t-3xl w-full overflow-hidden pb-6',
                   // Fixed height when searchable so the sheet doesn't shrink /
@@ -203,8 +204,8 @@ export function Select({
                     );
                   })}
                 </ScrollView>
-              </Pressable>
-            </Pressable>
+              </View>
+            </View>
           </RNModal>
         </>
       )}

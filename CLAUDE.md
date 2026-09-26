@@ -85,6 +85,8 @@ Two patterns that LOOK equivalent but break scrolling (drag only works when it s
 - Wrapping the card inside the backdrop `Pressable` and giving the card `onPress={() => {}}` to stop close-propagation.
 - Wrapping the card inside the backdrop and giving the card `onStartShouldSetResponder={() => true}`.
 
+Backdrop = `style={SHEET_BACKDROP}` from `shared/src/ui/sheetBackdrop.ts` (40% black) + `animationType="fade"`. Never `className="bg-black/40"` for it — the class renders NO dim on native — and never `"slide"` (the dim slides up with the card).
+
 Reference implementation: the job form's lead/crew picker modals in `mobile/app/dashboard/trabajos/nuevo.tsx`.
 
 Related iOS rule: never open a second `RNModal` while one is visible — iOS silently refuses to present it (button appears dead). Render an in-modal absolute overlay instead (see the manual-payment worker picker in `PayrollScreen.tsx`).

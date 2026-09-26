@@ -45,6 +45,7 @@ import { fetchEmployeeLocations, employeeIdsAtLocation, type EmployeeLocation } 
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { resolveAccess, orphanMembers, displayNameFromAccount, type AccessMember, type AccessInvite } from '@amixos/shared/lib/teamPeople';
 import { can, isReadOnly, type Role } from '@amixos/shared/lib/permissions';
+import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 
 interface RawEmployee {
   id: string;
@@ -185,7 +186,6 @@ export default function EmpleadosRoute() {
   // Floating bottom-sheet look (matches the client picker): a heavier scrim so
   // the screen behind reads as a soft dark wash, plus a rounded card lifted off
   // the screen edges with a soft shadow.
-  const sheetScrim = { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' };
   const sheetShadow = {
     marginBottom: insets.bottom + 12,
     shadowColor: '#000',
@@ -855,7 +855,7 @@ export default function EmpleadosRoute() {
         <View className="flex-1 justify-end">
           <Pressable
             onPress={() => setHistoryOpen(false)}
-            style={sheetScrim}
+            style={SHEET_BACKDROP}
           />
           <View
             className="bg-card rounded-3xl pt-3 mx-3 overflow-hidden"
@@ -893,7 +893,7 @@ export default function EmpleadosRoute() {
           <View className="flex-1 justify-end">
             <Pressable
               onPress={() => setTsModalOpen(false)}
-              style={sheetScrim}
+              style={SHEET_BACKDROP}
             />
             <View
               className="bg-card rounded-3xl pt-3 mx-3 overflow-hidden"
@@ -1011,7 +1011,7 @@ export default function EmpleadosRoute() {
                 className="justify-end"
                 style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
               >
-                <Pressable onPress={() => setEmpPickerOpen(false)} style={sheetScrim} />
+                <Pressable onPress={() => setEmpPickerOpen(false)} style={SHEET_BACKDROP} />
                 <View
                   className="bg-card rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
                   style={{ maxHeight: '70%', ...sheetShadow }}

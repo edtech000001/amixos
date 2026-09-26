@@ -57,6 +57,7 @@ import { CommunicationLog } from '@amixos/shared/screens/dashboard/Communication
 import { useContactOutcomePrompt } from '@/lib/useContactOutcomePrompt';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useThemeColors } from '@/lib/ThemeProvider';
+import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 
 interface FieldTemplate {
   id: string;
@@ -799,8 +800,7 @@ export default function ClienteDetailRoute() {
         <View className="flex-1 justify-end">
           <Pressable
             onPress={() => setEmailPickOpen(false)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-            className="bg-black/40"
+            style={SHEET_BACKDROP}
           />
           <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10">
             <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
@@ -843,8 +843,7 @@ export default function ClienteDetailRoute() {
         <View className="flex-1 justify-end">
           <Pressable
             onPress={() => setMoreOpen(false)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-            className="bg-black/40"
+            style={SHEET_BACKDROP}
           />
           <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10">
             <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>

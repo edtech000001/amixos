@@ -5,6 +5,7 @@ import { clsx } from 'clsx';
 import { useThemeColors } from '../theme';
 import { useLang } from '../i18n/context';
 import { formatTime12h } from '../lib/format';
+import { SHEET_BACKDROP } from './sheetBackdrop';
 
 type Mode = 'date' | 'time' | 'datetime-local';
 
@@ -184,7 +185,7 @@ function NativePicker({
           <View className="flex-1 justify-end">
             <Pressable
               onPress={() => setIosOpen(false)}
-              className="absolute inset-0 bg-black/40"
+              style={SHEET_BACKDROP}
             />
             <View className="bg-card rounded-t-3xl pt-3">
               {/* Drag-handle */}

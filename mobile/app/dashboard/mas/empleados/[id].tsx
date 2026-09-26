@@ -75,6 +75,7 @@ import {
   employeeFieldsInSection,
   type EmployeeFieldSection,
 } from '@amixos/shared/lib/employeeFieldSections';
+import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 
 interface RawEmployee {
   id: string;
@@ -1109,7 +1110,7 @@ export default function EmpleadoDetailRoute() {
         <View className="flex-1 justify-end">
           <Pressable
             onPress={() => setHistoryOpen(false)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
+            style={SHEET_BACKDROP}
           />
           <View className="bg-card rounded-t-3xl pt-3" style={{ maxHeight: '85%' }}>
             <View className="items-center mb-2">

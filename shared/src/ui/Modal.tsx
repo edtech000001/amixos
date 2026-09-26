@@ -1,8 +1,9 @@
-import { Modal as RNModal, View, Text, Pressable, ScrollView, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
+import { Modal as RNModal, View, Text, Pressable, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { X } from 'lucide-react-native';
 import { clsx } from 'clsx';
 import { useThemeColors } from '../theme';
 import type { ReactNode } from 'react';
+import { SHEET_BACKDROP } from './sheetBackdrop';
 
 type Size = 'sm' | 'md' | 'lg';
 
@@ -35,13 +36,13 @@ export function Modal({ open, onClose, title, children, size = 'md' }: ModalProp
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
-        <View className="flex-1 bg-black/40 items-center justify-center p-4">
+        <View className="flex-1 items-center justify-center p-4">
           {/* Backdrop press-to-close — sits BEHIND the card, so taps inside
               the card go to the card's children (ScrollView, inputs, etc.)
               and only outside-card taps hit this Pressable. Wrapping the
               card in a Pressable competed with ScrollView's pan gesture and
               broke scrolling unless an input was focused. */}
-          <Pressable onPress={onClose} style={StyleSheet.absoluteFill} />
+          <Pressable onPress={onClose} style={SHEET_BACKDROP} />
 
           <View
             className={clsx(

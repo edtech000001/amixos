@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { SkeletonRow } from '../../ui/Skeleton';
-import { View, Text, Pressable, ScrollView, Modal as RNModal, Platform } from 'react-native';
+import { View, Text, Pressable, ScrollView, Modal as RNModal } from 'react-native';
 import {
   UserPlus,
   Mail,
@@ -14,6 +14,7 @@ import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { Input, Button, Fab } from '../../ui';
 import { ROLE_LABELS, ROLE_DESCRIPTIONS, INVITABLE_ROLES, type Role } from '../../lib/permissions';
+import { SHEET_BACKDROP } from '../../ui/sheetBackdrop';
 
 export interface TeamMember {
   id: string;            // business_members.id
@@ -247,14 +248,12 @@ export function TeamScreen({
       <RNModal
         visible={inviteOpen}
         transparent
-        animationType={Platform.OS === 'web' ? 'fade' : 'slide'}
+        animationType="fade"
         onRequestClose={() => setInviteOpen(false)}
       >
-        <Pressable
-          onPress={() => setInviteOpen(false)}
-          className="flex-1 bg-black/40 items-center justify-end web:justify-center px-6 pb-10"
-        >
-          <Pressable className="bg-card rounded-2xl w-full max-w-md p-5">
+        <View className="flex-1 items-center justify-end web:justify-center px-6 pb-10">
+          <Pressable onPress={() => setInviteOpen(false)} style={SHEET_BACKDROP} />
+          <View className="bg-card rounded-2xl w-full max-w-md p-5">
             <Text className="text-lg font-bold text-ink mb-1">{t.inviteModalTitle}</Text>
             <Text className="text-sm text-muted mb-5">{t.subtitle}</Text>
 
@@ -318,22 +317,20 @@ export function TeamScreen({
                 </Button>
               </View>
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </RNModal>
 
       {/* Role picker (change role) */}
       <RNModal
         visible={!!rolePickerFor}
         transparent
-        animationType={Platform.OS === 'web' ? 'fade' : 'slide'}
+        animationType="fade"
         onRequestClose={() => setRolePickerFor(null)}
       >
-        <Pressable
-          onPress={() => setRolePickerFor(null)}
-          className="flex-1 bg-black/40 items-center justify-end web:justify-center px-6 pb-10"
-        >
-          <Pressable className="bg-card rounded-2xl w-full max-w-md p-5">
+        <View className="flex-1 items-center justify-end web:justify-center px-6 pb-10">
+          <Pressable onPress={() => setRolePickerFor(null)} style={SHEET_BACKDROP} />
+          <View className="bg-card rounded-2xl w-full max-w-md p-5">
             <Text className="text-lg font-bold text-ink mb-1">{t.changeRoleBtn}</Text>
             <Text className="text-sm text-muted mb-4">
               {rolePickerFor?.displayName ?? rolePickerFor?.email}
@@ -367,8 +364,8 @@ export function TeamScreen({
                 );
               })}
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </RNModal>
     </ScrollView>
 

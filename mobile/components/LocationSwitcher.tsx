@@ -5,6 +5,7 @@ import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { can } from '@amixos/shared/lib/permissions';
+import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 
 // Branch switcher (mobile). A compact pill that opens a bottom sheet to scope
 // day-to-day lists to one location or "All" — much lighter than a full-width
@@ -65,7 +66,7 @@ export function LocationSwitcher({
         <View className="flex-1 justify-end">
           <Pressable
             onPress={() => setOpen(false)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)' }}
+            style={SHEET_BACKDROP}
           />
           <View className="bg-card rounded-t-3xl pb-8 pt-2 max-h-[70%]">
             <View className="items-center pb-2">

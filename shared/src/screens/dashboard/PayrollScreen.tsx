@@ -18,6 +18,7 @@ import {
   OP_SYMBOLS,
   validateFormula,
 } from '../../lib/payrollFormula';
+import { SHEET_BACKDROP } from '../../ui/sheetBackdrop';
 
 export type PayMethod = 'cash' | 'check' | 'wire';
 
@@ -776,7 +777,7 @@ export function PayrollScreen({
         <View className="flex-1 justify-end">
                   <Pressable
                     onPress={() => setManualOpen(false)}
-                    style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+                    style={SHEET_BACKDROP}
                   />
           <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
             <View className="items-center mb-3">
@@ -860,7 +861,7 @@ export function PayrollScreen({
             <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end' }}>
               <Pressable
                 onPress={() => setManualPeriodPickerOpen(false)}
-                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
+                style={SHEET_BACKDROP}
               />
               <View
                 className="bg-card rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
@@ -901,7 +902,7 @@ export function PayrollScreen({
             <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end' }}>
           <Pressable
             onPress={() => setManualPickerOpen(false)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
+            style={SHEET_BACKDROP}
           />
           <View
             className="bg-card rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
@@ -972,7 +973,7 @@ export function PayrollScreen({
         >
                   <Pressable
                     onPress={closeSettings}
-                    style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+                    style={SHEET_BACKDROP}
                   />
           <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
             <View className="flex-row items-center justify-between mb-4">
@@ -1188,7 +1189,7 @@ export function PayrollScreen({
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end">
                   <Pressable
                     onPress={() => setPayRow(null)}
-                    style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+                    style={SHEET_BACKDROP}
                   />
           <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -1328,7 +1329,7 @@ export function PayrollScreen({
           {payRow && showLoans ? (
             <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} className="justify-end">
               <Pressable onPress={() => setShowLoans(false)}
-                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
+                style={SHEET_BACKDROP} />
               <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
                 <View className="flex-row items-center justify-between mb-3">
                   <View>
@@ -1401,7 +1402,7 @@ export function PayrollScreen({
         <View className="flex-1 justify-end">
                   <Pressable
                     onPress={() => setDetailRow(null)}
-                    style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+                    style={SHEET_BACKDROP}
                   />
           <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[90%]">
             <View className="items-center mb-3">
@@ -1495,7 +1496,7 @@ export function PayrollScreen({
           className="flex-1 justify-end"
         >
           <Pressable onPress={() => setLoansOpen(false)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
+            style={SHEET_BACKDROP} />
           <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 h-[85%]">
             <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
 

@@ -14,6 +14,7 @@ import { Check, X, Search, MapPin } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import type { FieldClient, FieldJobLocation } from '@amixos/shared/lib/fieldHome';
+import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 
 // expo-location is loaded lazily + guarded. Importing it eagerly triggers a
 // native-module lookup (`requireNativeModule('ExpoLocation')`) at module load,
@@ -120,7 +121,7 @@ export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmi
     : '';
 
   return (
-    <RNModal visible={visible} transparent animationType="slide" onRequestClose={close}>
+    <RNModal visible={visible} transparent animationType="fade" onRequestClose={close}>
       {/* KeyboardAvoidingView: the sheet is anchored to the bottom, exactly
           where the keyboard opens. Backdrop is an absolute FIRST child and the
           card a plain sibling, per the sheet contract in CLAUDE.md — the
@@ -132,7 +133,7 @@ export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmi
       >
         <Pressable
           onPress={close}
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+          style={SHEET_BACKDROP}
         />
         <View className="bg-card rounded-t-3xl px-5 pb-10 pt-4 max-h-[88%]">
           <View className="items-center mb-3">

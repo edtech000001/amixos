@@ -33,6 +33,7 @@ import {
   type PriceSheetTemplateConfig,
 } from '@amixos/shared/lib/priceSheetTemplate';
 import { buildPriceSheetHtml } from '@amixos/shared/lib/priceSheetHtml';
+import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 
 interface ClientLite {
   id: string;
@@ -269,13 +270,11 @@ export default function FacturasPreciosPage() {
       <RNModal visible={genOpen} transparent animationType="fade" onRequestClose={() => setGenOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
           <View className="flex-1 justify-end">
-            {/* Inline style, not `absolute inset-0 bg-black/50`: the class-based
-                form was not producing a dim at all, leaving the sheet floating
-                over a fully-lit screen. Every other sheet in the app uses this
-                inline shape for the same reason. */}
+            {/* SHEET_BACKDROP, not `absolute inset-0 bg-black/50`: the class-based
+                form was not producing a dim at all on native. */}
             <Pressable
               onPress={() => setGenOpen(false)}
-              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' }}
+              style={SHEET_BACKDROP}
             />
             <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10" style={{ maxHeight: '88%' }}>
               <View className="flex-row items-center justify-between mb-4">

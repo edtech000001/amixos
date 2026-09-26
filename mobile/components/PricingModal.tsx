@@ -29,6 +29,7 @@ import {
   type PlanKey,
 } from '@amixos/shared/lib/plans';
 import { activePlanKey } from '@amixos/shared/lib/subscription';
+import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 
 // Pricing / plans bottom sheet (UI only — no billing/Stripe yet). One-handed:
 // a slide-up sheet, not a centered dialog. Mirrors the LogJobSheet structure
@@ -138,7 +139,7 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
         : 'Planes y precios';
 
   return (
-    <RNModal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <RNModal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       {/* KeyboardAvoidingView: the sheet is anchored to the bottom, exactly
           where the keyboard opens, so its fields sat underneath it. */}
       <KeyboardAvoidingView
@@ -148,7 +149,7 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
         {/* Backdrop sits BEHIND the sheet as an absolute sibling — wrapping the
            sheet in a Pressable would steal the touch responder and block the
            ScrollView from scrolling anywhere but the buttons. */}
-        <Pressable onPress={onClose} className="absolute inset-0 bg-black/40" />
+        <Pressable onPress={onClose} style={SHEET_BACKDROP} />
         <View
           className="bg-card rounded-t-3xl px-5 pt-4"
           style={{ maxHeight: height * 0.9, paddingBottom: Math.max(insets.bottom, 16) + 8 }}

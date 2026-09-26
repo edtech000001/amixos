@@ -69,6 +69,7 @@ import {
   jobInDateRange,
   parseJobsFilters,
 } from '../../lib/jobsFilters';
+import { SHEET_BACKDROP } from '../../ui/sheetBackdrop';
 
 export interface JobListItem {
   id: string;
@@ -1252,8 +1253,7 @@ export function JobsListScreen({
         <View className="flex-1 justify-end">
           <Pressable
             onPress={() => setSortMenuOpen(false)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-            className="bg-black/40"
+            style={SHEET_BACKDROP}
           />
           {/* Compact rows so all 12 options fit without scrolling on most
               phones; the ScrollView + visible indicator cover small screens. */}
@@ -1340,7 +1340,7 @@ export function JobsListScreen({
         <View className="flex-1 justify-end">
           <Pressable
             onPress={() => setNewMenuOpen(false)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+            style={SHEET_BACKDROP}
           />
           <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
             <View className="items-center mb-3">

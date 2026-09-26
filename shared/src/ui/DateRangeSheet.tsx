@@ -2,6 +2,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DatePicker } from './DatePicker';
 import type { DateRangePreset } from '../lib/dateRangePresets';
+import { SHEET_BACKDROP } from './sheetBackdrop';
 
 interface Props {
   open: boolean;
@@ -51,7 +52,7 @@ export function DateRangeSheet({
   const active = !!from || !!to;
   return (
     <View style={[StyleSheet.absoluteFill, { zIndex: 1000 }]} className="justify-end">
-      <Pressable onPress={onClose} style={StyleSheet.absoluteFill} className="bg-black/40" />
+      <Pressable onPress={onClose} style={SHEET_BACKDROP} />
       <View
         className="bg-card rounded-t-3xl px-5 pt-3"
         // Clear the floating dock so the buttons stay tappable.

@@ -73,6 +73,7 @@ import { JobPhotosSection } from '@/components/JobPhotosSection';
 import { JobDocumentsSection } from '@/components/JobDocumentsSection';
 import { SignaturePad } from '@/components/SignaturePad';
 import { fetchClientOwnEmails, resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
+import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 
 // Local-date helpers for the schedule sheet (avoid UTC parsing shifting the
 // picked day across midnight).
@@ -1124,7 +1125,7 @@ export default function JobDetailRoute() {
           <View className="flex-1 justify-end">
             <Pressable
               onPress={goBack}
-              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+              style={SHEET_BACKDROP}
             />
             <View className="bg-card rounded-t-3xl px-5 pt-6 pb-10">
               <View className="flex-row items-center justify-between mb-4">
@@ -1960,10 +1961,12 @@ export default function JobDetailRoute() {
       </ScrollView>
 
       {/* Job-items editor */}
-      <RNModal visible={itemsEditOpen} transparent animationType="slide" onRequestClose={() => setItemsEditOpen(false)}>
+      <RNModal visible={itemsEditOpen} transparent animationType="fade" onRequestClose={() => setItemsEditOpen(false)}>
         {/* Keyboard shrinks the sheet instead of covering it — without this the
-            iOS keyboard sat on top of the description/qty inputs. */}
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 bg-black/40 justify-end">
+            iOS keyboard sat on top of the description/qty inputs. The dim is
+            display-only (outside taps never closed this editor — unsaved rows). */}
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end">
+          <View pointerEvents="none" style={SHEET_BACKDROP} />
           <View className="bg-card rounded-t-3xl pt-3" style={{ maxHeight: '88%' }}>
             <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">
@@ -2053,7 +2056,7 @@ export default function JobDetailRoute() {
         <View className="flex-1 justify-end">
           <Pressable
             onPress={() => setDelegateOpen(false)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+            style={SHEET_BACKDROP}
           />
           <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
             <View className="items-center mb-3">
@@ -2129,7 +2132,7 @@ export default function JobDetailRoute() {
         <View className="flex-1 justify-end">
           <Pressable
             onPress={() => setLocationModalOpen(false)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+            style={SHEET_BACKDROP}
           />
           <View
             className="bg-card rounded-t-3xl pt-3"
@@ -2195,9 +2198,9 @@ export default function JobDetailRoute() {
          the public accept-and-sign link. Backdrop is an absolute Pressable
          FIRST child; the card is a plain sibling on top (see CLAUDE.md —
          wrapping the card inside the backdrop breaks its touch handling). */}
-      <RNModal visible={signSheetOpen} transparent animationType="slide" onRequestClose={() => setSignSheetOpen(false)}>
+      <RNModal visible={signSheetOpen} transparent animationType="fade" onRequestClose={() => setSignSheetOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end">
-          <Pressable onPress={() => setSignSheetOpen(false)} className="absolute inset-0 bg-black/40" />
+          <Pressable onPress={() => setSignSheetOpen(false)} style={SHEET_BACKDROP} />
           <View className="bg-card rounded-t-3xl pt-3 pb-8">
             <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">
@@ -2233,9 +2236,9 @@ export default function JobDetailRoute() {
 
       {/* Schedule — asks for the work date so a "scheduled" job never
          silently lacks one. */}
-      <RNModal visible={schedSheetOpen} transparent animationType="slide" onRequestClose={() => setSchedSheetOpen(false)}>
+      <RNModal visible={schedSheetOpen} transparent animationType="fade" onRequestClose={() => setSchedSheetOpen(false)}>
         <View className="flex-1 justify-end">
-          <Pressable onPress={() => setSchedSheetOpen(false)} className="absolute inset-0 bg-black/40" />
+          <Pressable onPress={() => setSchedSheetOpen(false)} style={SHEET_BACKDROP} />
           <View className="bg-card rounded-t-3xl pt-3 pb-8">
             <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">
@@ -2279,7 +2282,7 @@ export default function JobDetailRoute() {
         <View className="flex-1 justify-end">
           <Pressable
             onPress={() => setDraftChoices([])}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+            style={SHEET_BACKDROP}
           />
           <View className="bg-card rounded-t-3xl pt-3 pb-8" style={{ maxHeight: '85%' }}>
             <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>

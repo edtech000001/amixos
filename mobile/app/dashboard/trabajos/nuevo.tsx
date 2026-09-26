@@ -67,6 +67,7 @@ import {
 } from '@amixos/shared/lib/operatingHours';
 import { JobPhotosSection } from '@/components/JobPhotosSection';
 import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
+import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 
 interface Client {
   id: string;
@@ -2461,7 +2462,7 @@ export default function NuevoTrabajoRoute() {
               renders without waiting on a Metro/NativeWind regeneration. */}
           <Pressable
             onPress={() => setClientPickerOpen(false)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
+            style={SHEET_BACKDROP}
           />
           {/* Floating card: rounded on all corners, lifted off the screen
               edges with side + bottom margins and a soft shadow. */}
@@ -2583,7 +2584,7 @@ export default function NuevoTrabajoRoute() {
         >
           <Pressable
             onPress={() => setQuickAddOpen(false)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
+            style={SHEET_BACKDROP}
           />
           <View
             className="bg-card rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
@@ -2667,7 +2668,7 @@ export default function NuevoTrabajoRoute() {
         >
           <Pressable
             onPress={() => setLeadPickerOpen(false)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
+            style={SHEET_BACKDROP}
           />
           <View
             className="bg-card rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
@@ -2758,7 +2759,7 @@ export default function NuevoTrabajoRoute() {
         >
           <Pressable
             onPress={() => { setLinkingName(null); setCrewPickerOpen(false); }}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
+            style={SHEET_BACKDROP}
           />
           <View
             className="bg-card rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
@@ -2856,7 +2857,7 @@ export default function NuevoTrabajoRoute() {
         >
           <Pressable
             onPress={() => setDriverPickerOpen(false)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
+            style={SHEET_BACKDROP}
           />
           <View
             className="bg-card rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"

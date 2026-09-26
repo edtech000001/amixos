@@ -34,6 +34,7 @@ import {
   type InvoiceTemplateConfig,
   resolveLineDescriptions,
 } from '../../lib/invoiceTemplate';
+import { SHEET_BACKDROP } from '../../ui/sheetBackdrop';
 
 export interface InvoiceDetailClient {
   /** clients.id — enables the name → client detail link. */
@@ -762,8 +763,7 @@ export function InvoiceDetailScreen({
         <View className="flex-1 justify-end">
           <Pressable
             onPress={() => setMoreOpen(false)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-            className="bg-black/40"
+            style={SHEET_BACKDROP}
           />
           <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10">
             <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>

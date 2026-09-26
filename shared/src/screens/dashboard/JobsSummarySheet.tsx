@@ -10,6 +10,7 @@ import { X } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import type { JobsSummaryTotals } from '../../lib/jobsSummary';
+import { SHEET_BACKDROP } from '../../ui/sheetBackdrop';
 
 export interface JobsSummarySheetProps {
   open: boolean;
@@ -54,7 +55,7 @@ export function JobsSummarySheet({
       <View className="flex-1 justify-end">
         <Pressable
           onPress={onClose}
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)' }}
+          style={SHEET_BACKDROP}
         />
         <View className="bg-card rounded-t-3xl pt-3 pb-10" style={{ maxHeight: '85%' }}>
           <View className="items-center pb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>

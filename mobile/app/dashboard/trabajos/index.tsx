@@ -23,6 +23,7 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { clientPickerDisplay } from '@amixos/shared/lib/clientSearch';
 import { createInvoicesFromJobs } from '@amixos/shared/lib/invoicing';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 
 interface RawJob {
   id: string;
@@ -592,7 +593,7 @@ export default function TrabajosTab() {
       />
 
       {/* Bulk move-to-client picker */}
-      <RNModal visible={moveClientIds !== null} transparent animationType="slide" onRequestClose={() => setMoveClientIds(null)}>
+      <RNModal visible={moveClientIds !== null} transparent animationType="fade" onRequestClose={() => setMoveClientIds(null)}>
         {/* KeyboardAvoidingView: the search field sits at the bottom of the
             screen, exactly where the keyboard opens. Backdrop is an absolute
             FIRST child and the card a plain sibling — the nested-card +
@@ -604,7 +605,7 @@ export default function TrabajosTab() {
         >
           <Pressable
             onPress={() => setMoveClientIds(null)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+            style={SHEET_BACKDROP}
           />
           <View className="bg-card rounded-t-3xl px-5 pt-5 pb-8">
             <Text className="text-lg font-bold text-ink mb-3">

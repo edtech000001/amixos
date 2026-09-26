@@ -45,6 +45,7 @@ import {
   invoiceFieldsInSection,
   type InvoiceFieldSection,
 } from '@amixos/shared/lib/invoiceFieldSections';
+import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 
 interface Client {
   id: string;
@@ -957,7 +958,7 @@ export default function NuevaFacturaRoute() {
               NativeWind regeneration. */}
           <Pressable
             onPress={() => setClientPickerOpen(false)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
+            style={SHEET_BACKDROP}
           />
           {/* Floating card: rounded on all corners, lifted off the screen
               edges with side + bottom margins and a soft shadow. */}

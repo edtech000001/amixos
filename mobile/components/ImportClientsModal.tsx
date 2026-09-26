@@ -23,6 +23,7 @@ import {
   buildClientIndex, matchExistingClient, clientFieldPatch, mergeContacts,
   type DuplicateStrategy, type ExistingClientLite, type ContactLite,
 } from '@amixos/shared/lib/clientImportMerge';
+import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 
 export interface ImportClientsModalProps {
   open: boolean;
@@ -1019,7 +1020,7 @@ export function ImportClientsModal({
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', padding: 16 }}>
           <Pressable
             onPress={() => answerDuplicates(null)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' }}
+            style={SHEET_BACKDROP}
           />
           <View className="bg-card rounded-2xl p-5">
             <Text className="text-base font-bold text-ink">{t.dupTitle}</Text>

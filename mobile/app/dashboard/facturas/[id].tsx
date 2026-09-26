@@ -46,6 +46,7 @@ import {
   buildInvoiceHtml,
   type InvoiceBranding,
 } from '@amixos/shared/lib/invoiceTemplate';
+import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 
 // Check first — the default and most common method for these businesses.
 const PAY_METHODS = ['check', 'cash', 'card', 'transfer', 'zelle', 'cashapp', 'venmo', 'paypal', 'moneyOrder', 'other'] as const;
@@ -1295,7 +1296,7 @@ export default function FacturaDetailRoute() {
         <View className="flex-1 justify-end">
           <Pressable
             onPress={() => setMoveJobId(null)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+            style={SHEET_BACKDROP}
           />
           <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10">
             <View className="flex-row items-center justify-between mb-3">
@@ -1323,8 +1324,7 @@ export default function FacturaDetailRoute() {
         <View className="flex-1 justify-end">
           <Pressable
             onPress={closeAdd}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-            className="bg-black/40"
+            style={SHEET_BACKDROP}
           />
           <View
             className="bg-card rounded-t-3xl px-5 pt-5 pb-10"
@@ -1448,8 +1448,7 @@ export default function FacturaDetailRoute() {
         <View className="flex-1 justify-end">
           <Pressable
             onPress={() => setEditOpen(false)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-            className="bg-black/40"
+            style={SHEET_BACKDROP}
           />
           <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-10" onPress={Keyboard.dismiss}>
             <View className="flex-row items-center justify-between mb-3">
@@ -1513,7 +1512,7 @@ export default function FacturaDetailRoute() {
         {/* Backdrop is an absolute FIRST child and the card a plain sibling —
             the card renders on top, so its ScrollView drags natively. */}
         <View className="flex-1 justify-end">
-          <Pressable onPress={() => setPayOpen(false)} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)' }} />
+          <Pressable onPress={() => setPayOpen(false)} style={SHEET_BACKDROP} />
           <View className="bg-card rounded-t-3xl pt-3 pb-10" style={{ maxHeight: '92%' }}>
             <View className="items-center pb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">
@@ -1642,7 +1641,7 @@ export default function FacturaDetailRoute() {
             nested RNModal (iOS silently refuses to present a second one). */}
         {payPhotoChooserOpen ? (
           <View className="justify-end" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
-            <Pressable onPress={() => setPayPhotoChooserOpen(false)} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
+            <Pressable onPress={() => setPayPhotoChooserOpen(false)} style={SHEET_BACKDROP} />
             <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
               <View className="items-center mb-3">
                 <View className="w-10 h-1 bg-border rounded-full" />
@@ -1687,7 +1686,7 @@ export default function FacturaDetailRoute() {
       {/* Read-only price list resolved for THIS client (tier > state > base). */}
       <RNModal visible={pricesOpen} transparent animationType="fade" onRequestClose={() => setPricesOpen(false)}>
         <View className="flex-1 justify-end">
-          <Pressable onPress={() => setPricesOpen(false)} className="absolute inset-0 bg-black/40" />
+          <Pressable onPress={() => setPricesOpen(false)} style={SHEET_BACKDROP} />
           <View className="bg-card rounded-t-3xl pt-3 pb-8" style={{ maxHeight: '80%' }}>
             <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">

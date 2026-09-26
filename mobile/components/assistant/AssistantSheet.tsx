@@ -27,6 +27,7 @@ import { useThemeColors } from '@/lib/ThemeProvider';
 import type { useAssistant } from './useAssistant';
 import { useVoiceCall } from './useVoiceCall';
 import { MessageBubble } from './MessageBubble';
+import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 
 // Show the END of a long in-progress utterance, not the start.
 const liveTail = (s: string, max = 90) => (s.length > max ? `…${s.slice(-max)}` : s);
@@ -127,7 +128,7 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
 
   return (
     <View style={[StyleSheet.absoluteFill, { zIndex: 1001 }]}>
-      <Pressable onPress={onClose} style={StyleSheet.absoluteFill} className="bg-black/40" />
+      <Pressable onPress={onClose} style={SHEET_BACKDROP} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         pointerEvents="box-none"
