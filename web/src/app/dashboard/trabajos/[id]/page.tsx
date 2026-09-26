@@ -1691,8 +1691,11 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       ) : null}
 
       {/* Generate Invoice Modal */}
-      <Modal open={invoiceModal} onClose={() => setInvoiceModal(false)} title={td.genInvoiceTitle} size="sm">
+      <Modal open={invoiceModal} onClose={() => setInvoiceModal(false)} title={td.genInvoiceTitle} size={clientDrafts?.length ? 'xl' : 'sm'}>
         <div className="flex flex-col gap-4">
+          {/* With a draft to choose from: widen and split — choice left,
+             summary/totals right — so neither path needs scrolling. */}
+          <div className={clientDrafts?.length ? 'grid md:grid-cols-2 gap-5 items-start' : 'contents'}>
           {clientDrafts?.length ? (
             <div className="flex flex-col gap-2">
               <div>
@@ -1728,6 +1731,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             </div>
           ) : null}
 
+          <div className="flex flex-col gap-4">
           <div className="bg-surface rounded-xl p-4">
             <p className="text-xs text-muted mb-2">{td.summary}</p>
             <p className="text-sm font-semibold text-ink mb-1">{job.title}</p>
@@ -1801,6 +1805,8 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           ) : (
             <p className="text-xs text-faint">{td.addToDraftNote}</p>
           )}
+          </div>
+          </div>
 
           <div className="flex gap-3">
             <Button variant="secondary" onClick={() => setInvoiceModal(false)} fullWidth>{tc.buttons.cancel}</Button>
