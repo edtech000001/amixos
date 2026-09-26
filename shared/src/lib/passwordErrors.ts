@@ -77,3 +77,19 @@ export function classifyPasswordError(error: MaybeAuthError): PasswordIssue {
 
   return error.code === 'weak_password' ? 'characters' : 'generic';
 }
+
+/** True when Supabase refused because too many emails were requested, not
+ *  because anything is wrong with the address.
+ *
+ *  Matters most with the built-in email sender, whose ceiling is a couple of
+ *  messages per hour (Authentication → Rate Limits). The caller must not tell
+ *  the user to "try again" — that is exactly what the server is refusing. */
+export function isEmailRateLimit(error: MaybeAuthError): boolean {
+  if (!error) return false;
+  if (error.code === 'over_email_send_rate_limit') return true;
+  if (error.code === 'over_request_rate_limit') return true;
+  const m = (error.message ?? '').toLowerCase();
+  return m.includes('rate limit')
+    || m.includes('too many requests')
+    || m.includes('for security purposes, you can only request this after');
+}

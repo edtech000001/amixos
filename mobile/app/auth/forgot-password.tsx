@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { createSupabaseClient } from '@/lib/supabase';
 import { ForgotPasswordScreen } from '@amixos/shared/screens/auth/ForgotPasswordScreen';
+import { isEmailRateLimit } from '@amixos/shared/lib/passwordErrors';
 
 export default function ForgotPasswordRoute() {
   const router = useRouter();
@@ -14,7 +15,10 @@ export default function ForgotPasswordRoute() {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: 'amixos://auth/reset-password',
         });
-        return error ? { ok: false } : { ok: true };
+        if (!error) return { ok: true };
+        // See the note in web/src/app/auth/forgot-password/page.tsx — a
+        // throttled send is a "wait", not a "try again".
+        return { ok: false, reason: isEmailRateLimit(error) ? 'rate-limited' : 'generic' };
       }}
       onBackToLogin={() => router.push('/auth/login')}
     />

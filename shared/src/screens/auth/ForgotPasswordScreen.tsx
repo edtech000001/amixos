@@ -11,7 +11,9 @@ import { Input } from '../../ui/Input';
 
 export interface ForgotPasswordScreenProps {
   /** Send the password reset email. Returns ok=true on success. */
-  onResetEmail: (email: string) => Promise<{ ok: true } | { ok: false }>;
+  onResetEmail: (email: string) => Promise<
+    { ok: true } | { ok: false; reason?: 'rate-limited' | 'generic' }
+  >;
   /** Navigate back to the login screen. */
   onBackToLogin: () => void;
 }
@@ -40,8 +42,8 @@ export function ForgotPasswordScreen({ onResetEmail, onBackToLogin }: ForgotPass
   const onSubmit = async (data: FormData) => {
     setError('');
     const result = await onResetEmail(data.email);
-    if (!result.ok) {
-      setError(t.forgot.error);
+    if (result.ok === false) {
+      setError(result.reason === 'rate-limited' ? t.forgot.rateLimited : t.forgot.error);
       return;
     }
     setSent(true);

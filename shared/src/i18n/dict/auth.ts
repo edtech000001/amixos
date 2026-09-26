@@ -68,6 +68,9 @@ export type AuthDict = {
     successTitle: string;
     successSub: string;
     error: string;
+    /** Supabase throttles password-reset sends hard — surfaced separately
+     *  because "try again" is the wrong advice when the answer is "wait". */
+    rateLimited: string;
     emailInvalid: string;
   };
   reset: {
@@ -175,6 +178,7 @@ export const auth: Record<Locale, AuthDict> = {
       successTitle: '¡Revisa tu correo!',
       successSub: 'Te enviamos un enlace para restablecer tu contraseña. Si no lo ves, revisa tu carpeta de spam.',
       error: 'Algo salió mal. Verifica el correo e intenta de nuevo.',
+      rateLimited: 'Ya pediste un enlace hace poco. Revisa tu correo (y la carpeta de spam) o espera unos minutos antes de pedir otro.',
       emailInvalid: 'Ingresa un correo válido',
     },
     reset: {
@@ -280,6 +284,7 @@ export const auth: Record<Locale, AuthDict> = {
       successTitle: 'Check your email!',
       successSub: "We sent you a link to reset your password. If you don't see it, check your spam folder.",
       error: 'Something went wrong. Check the email and try again.',
+      rateLimited: 'You already requested a link recently. Check your email (and spam folder), or wait a few minutes before asking for another.',
       emailInvalid: 'Enter a valid email',
     },
     reset: {

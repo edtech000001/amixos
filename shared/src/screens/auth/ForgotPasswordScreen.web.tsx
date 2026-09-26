@@ -9,7 +9,9 @@ import { useLang } from '../../i18n';
 
 export interface ForgotPasswordScreenProps {
   /** Send the password reset email. Returns ok=true on success. */
-  onResetEmail: (email: string) => Promise<{ ok: true } | { ok: false }>;
+  onResetEmail: (email: string) => Promise<
+    { ok: true } | { ok: false; reason?: 'rate-limited' | 'generic' }
+  >;
   /** Navigate back to the login screen. */
   onBackToLogin: () => void;
 }
@@ -43,7 +45,7 @@ export function ForgotPasswordScreen({ onResetEmail, onBackToLogin }: ForgotPass
     setError(undefined);
     const result = await onResetEmail(data.email);
     if (result.ok) setSuccess(true);
-    else setError(t.forgot.error);
+    else setError(result.reason === 'rate-limited' ? t.forgot.rateLimited : t.forgot.error);
   });
 
   return (
