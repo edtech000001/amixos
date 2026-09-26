@@ -12,7 +12,7 @@ import {
   Zap, Wind, Home, Paintbrush, Fence, Waves, Hammer, Layers, Flame, TreePine,
   Bug, SprayCan, Snowflake, Truck, WashingMachine, CarFront, Car, Scissors,
   Dumbbell, PartyPopper, Camera, ShieldCheck, HandCoins,
-  Search, ChevronLeft, ChevronRight,
+  Search, ChevronLeft, ChevronRight, Trash2, LogOut,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import {
@@ -61,6 +61,17 @@ export interface OnboardingScreenProps {
   pendingInvites?: OnboardingPendingInvite[];
   /** Accepts one invite; resolves to an error message or null on success. */
   onAcceptInvite?: (token: string) => Promise<string | null>;
+  /** Sign out — onboarding has no other way back to login when someone lands
+   *  here on the wrong account (a Google sign-in that picked the wrong
+   *  profile, say). The route passes these; until now this file silently
+   *  dropped them, leaving web users with no way off this screen. */
+  onLogout?: () => void;
+  /** Offered only alongside onLogout: someone with no business and no wish to
+   *  create one still has to be able to delete their account. */
+  onDeleteAccount?: () => void;
+  /** Present when ADDING a business from an existing account — takes
+   *  precedence over onLogout when both are provided. */
+  onCancel?: () => void;
 }
 
 const TOTAL_STEPS = 5;
@@ -122,7 +133,7 @@ const US_STATES = [
   'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming',
 ];
 
-export function OnboardingScreen({ onPickLogo, onFinish, pendingInvites, onAcceptInvite }: OnboardingScreenProps) {
+export function OnboardingScreen({ onPickLogo, onFinish, onLogout, onCancel, onDeleteAccount, pendingInvites, onAcceptInvite }: OnboardingScreenProps) {
   const { t: full } = useLang();
   const t = full.onboarding;
 
@@ -178,6 +189,37 @@ export function OnboardingScreen({ onPickLogo, onFinish, pendingInvites, onAccep
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/5 to-white flex flex-col items-center justify-center px-4 py-10">
+      {/* Escape hatch — mirrors OnboardingScreen.tsx. Without it there is no
+          way off this screen: no nav, no sign out, and the account may not be
+          the one the user meant to use. */}
+      {(onCancel || onLogout || onDeleteAccount) && (
+        <div className="w-full max-w-lg flex justify-end items-center gap-2 mb-4">
+          {/* Deletion only on the sign-out variant: with onCancel the user
+              still HAS a business to go back to, and that deletion belongs in
+              Ajustes where the blockers are explained. */}
+          {onDeleteAccount && !onCancel ? (
+            <button
+              type="button"
+              onClick={onDeleteAccount}
+              className="inline-flex items-center gap-1.5 rounded-full border border-red-500/30 px-3.5 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors"
+            >
+              <Trash2 size={14} />
+              {full.dashboard.settings.account.danger.deleteAccount}
+            </button>
+          ) : null}
+          {(onCancel || onLogout) ? (
+            <button
+              type="button"
+              onClick={onCancel ?? onLogout}
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3.5 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
+            >
+              {onCancel ? <X size={14} /> : <LogOut size={14} />}
+              {onCancel ? full.common.buttons.cancel : full.common.loadError.signOut}
+            </button>
+          ) : null}
+        </div>
+      )}
+
       {/* Progress bar */}
       <div className="w-full max-w-lg mb-8">
         <div className="flex justify-between mb-2">
