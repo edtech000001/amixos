@@ -27,7 +27,7 @@ import { parseJobLayout, fieldsInSection, type JobLayoutSection } from '@amixos/
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { memberNameMap } from '@amixos/shared/lib/memberNames';
-import { insertInvoiceUnique, removeJobFromInvoice, placeholderQtyFor } from '@amixos/shared/lib/invoicing';
+import { insertInvoiceUnique, removeJobFromInvoice, placeholderQtyFor, fetchClientDraftInvoices, addJobsToInvoice, type ClientDraftInvoice } from '@amixos/shared/lib/invoicing';
 import { can } from '@amixos/shared/lib/permissions';
 import { estimateJobLaborCost, type JobLaborEstimate } from '@amixos/shared/lib/payroll';
 import { rowToPriceSheetItem, autopriceLine, suggestPriceItem, matchingAddons, extractQuantity, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
@@ -166,6 +166,11 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [invoiceModal, setInvoiceModal] = useState(false);
   const [invoicing, setInvoicing] = useState(false);
+  // The client's open drafts, loaded when the invoice modal opens. When any
+  // exist the modal asks: add this job to one of them, or start a new invoice.
+  // invoiceTarget = a draft id, or 'new'.
+  const [clientDrafts, setClientDrafts] = useState<ClientDraftInvoice[] | null>(null);
+  const [invoiceTarget, setInvoiceTarget] = useState<string>('new');
   const [taxRate, setTaxRate] = useState(0);
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -411,8 +416,47 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     setUnInvoicing(false);
   };
 
+  useEffect(() => {
+    if (!invoiceModal || !job || !business) return;
+    let alive = true;
+    setClientDrafts(null);
+    setInvoiceTarget('new');
+    void fetchClientDraftInvoices(supabase, {
+      businessId: business.id,
+      clientId: job.client_id,
+      locationId: (job as { location_id?: string | null }).location_id ?? null,
+    }).then((drafts) => {
+      if (!alive) return;
+      setClientDrafts(drafts);
+      // Default to the newest draft — adding to it is the usual intent.
+      if (drafts.length) setInvoiceTarget(drafts[0].id);
+    });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoiceModal]);
+
+  const addToDraftInvoice = async (draft: ClientDraftInvoice) => {
+    if (!job || !business) return;
+    setInvoicing(true);
+    const { ok } = await addJobsToInvoice(supabase, {
+      invoice: draft,
+      jobIds: [id],
+      itemTypeLabels: ITEM_TYPE_LABELS,
+      hideItemTypes: business.job_item_types_enabled === false,
+      qtyField: business.invoice_qty_field,
+    });
+    if (!ok) { setInvoicing(false); return; }
+    void logAudit(supabase, business.id, 'job.status_changed', 'job', id, {
+      from: job.status, to: 'invoiced', job_title: job.title, invoice_number: draft.invoice_number,
+    });
+    setInvoicing(false);
+    window.location.href = `/dashboard/facturas/${draft.id}`;
+  };
+
   const generateInvoice = async () => {
     if (!job || !business) return;
+    const draft = clientDrafts?.find(d => d.id === invoiceTarget);
+    if (draft) { await addToDraftInvoice(draft); return; }
     setInvoicing(true);
 
     const itemSubtotal = items.reduce((s, i) => s + i.total, 0);
@@ -820,6 +864,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   };
   const itemSubtotal = items.reduce((s, i) => s + i.total, 0);
   const hasFinancials = (job.tax_rate > 0 || job.discount > 0) && isProposal;
+  const targetDraft = clientDrafts?.find(d => d.id === invoiceTarget) ?? null;
   const clientName = job.clients ? `${job.clients.first_name} ${job.clients.last_name}` : null;
   const isExpired = job.expiry_date && job.status === 'sent' && new Date(job.expiry_date) < new Date();
   const canInvoice = (job.status === 'completed' || job.status === 'accepted') && !job.invoice_id && can.createInvoice(currentRole);
@@ -1648,6 +1693,41 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       {/* Generate Invoice Modal */}
       <Modal open={invoiceModal} onClose={() => setInvoiceModal(false)} title={td.genInvoiceTitle} size="sm">
         <div className="flex flex-col gap-4">
+          {clientDrafts?.length ? (
+            <div className="flex flex-col gap-2">
+              <div>
+                <p className="text-sm font-semibold text-ink">{td.draftExistsTitle}</p>
+                <p className="text-xs text-muted mt-0.5">{td.draftExistsHint}</p>
+              </div>
+              {[...clientDrafts.map(d => ({
+                key: d.id,
+                label: td.draftOption.replace('{{number}}', d.invoice_number),
+                meta: (d.jobCount === 1 ? td.draftMetaSingle : td.draftMetaPlural)
+                  .replace('{{count}}', String(d.jobCount)).replace('{{total}}', fmt(d.total_amount)),
+              })), { key: 'new', label: td.newInvoiceOption, meta: td.newInvoiceMeta }].map(o => {
+                const on = invoiceTarget === o.key;
+                return (
+                  <button
+                    key={o.key}
+                    type="button"
+                    onClick={() => setInvoiceTarget(o.key)}
+                    className={`flex items-center gap-3 text-left rounded-xl border px-4 py-3 transition-colors ${
+                      on ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'
+                    }`}
+                  >
+                    <span className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${on ? 'border-primary' : 'border-border'}`}>
+                      {on ? <span className="w-2 h-2 rounded-full bg-primary" /> : null}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-ink">{o.label}</span>
+                      <span className="block text-xs text-muted">{o.meta}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
           <div className="bg-surface rounded-xl p-4">
             <p className="text-xs text-muted mb-2">{td.summary}</p>
             <p className="text-sm font-semibold text-ink mb-1">{job.title}</p>
@@ -1658,66 +1738,76 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
             </p>
           </div>
 
-          {!hasFinancials && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-ink">{t.new.taxPercent}</label>
-              <input type="number" min="0" max="30" step="0.5" value={taxRate || ''}
-                placeholder="0"
-                onChange={e => setTaxRate(parseFloat(e.target.value) || 0)}
-                className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"/>
-            </div>
-          )}
-
-          <div className="bg-primary/5 rounded-xl p-4 space-y-1">
-            {hasFinancials ? (
-              <>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted">{t.new.subtotal}</span>
-                  <span className="font-medium">{fmt(job.subtotal_amount)}</span>
-                </div>
-                {job.tax_rate > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted">{td.tax.replace('{{rate}}', String(job.tax_rate))}</span>
-                    <span className="font-medium">{fmt(job.tax_amount)}</span>
-                  </div>
-                )}
-                {job.discount > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted">{td.discount}</span>
-                    <span className="font-medium text-emerald-600">-{fmt(job.discount)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-sm font-bold pt-1 border-t border-primary/10">
-                  <span>{t.new.total}</span>
-                  <span className="text-primary">{fmt(job.total_amount)}</span>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted">{t.new.subtotal}</span>
-                  <span className="font-medium">{fmt(itemSubtotal)}</span>
-                </div>
-                {taxRate > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted">{td.tax.replace('{{rate}}', String(taxRate))}</span>
-                    <span className="font-medium">{fmt(itemSubtotal * taxRate / 100)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-sm font-bold pt-1 border-t border-primary/10">
-                  <span>{t.new.total}</span>
-                  <span className="text-primary">{fmt(itemSubtotal * (1 + taxRate / 100))}</span>
-                </div>
-              </>
+          {/* Tax + totals describe a NEW invoice; adding to a draft keeps that
+             invoice's own tax/discount, so they'd be misleading there. */}
+          {!targetDraft ? (
+            <>
+            {!hasFinancials && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-ink">{t.new.taxPercent}</label>
+                <input type="number" min="0" max="30" step="0.5" value={taxRate || ''}
+                  placeholder="0"
+                  onChange={e => setTaxRate(parseFloat(e.target.value) || 0)}
+                  className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"/>
+              </div>
             )}
-          </div>
 
-          <p className="text-xs text-faint" dangerouslySetInnerHTML={{ __html: td.draftStatusNote }} />
+            <div className="bg-primary/5 rounded-xl p-4 space-y-1">
+              {hasFinancials ? (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted">{t.new.subtotal}</span>
+                    <span className="font-medium">{fmt(job.subtotal_amount)}</span>
+                  </div>
+                  {job.tax_rate > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted">{td.tax.replace('{{rate}}', String(job.tax_rate))}</span>
+                      <span className="font-medium">{fmt(job.tax_amount)}</span>
+                    </div>
+                  )}
+                  {job.discount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted">{td.discount}</span>
+                      <span className="font-medium text-emerald-600">-{fmt(job.discount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm font-bold pt-1 border-t border-primary/10">
+                    <span>{t.new.total}</span>
+                    <span className="text-primary">{fmt(job.total_amount)}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted">{t.new.subtotal}</span>
+                    <span className="font-medium">{fmt(itemSubtotal)}</span>
+                  </div>
+                  {taxRate > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted">{td.tax.replace('{{rate}}', String(taxRate))}</span>
+                      <span className="font-medium">{fmt(itemSubtotal * taxRate / 100)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm font-bold pt-1 border-t border-primary/10">
+                    <span>{t.new.total}</span>
+                    <span className="text-primary">{fmt(itemSubtotal * (1 + taxRate / 100))}</span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <p className="text-xs text-faint" dangerouslySetInnerHTML={{ __html: td.draftStatusNote }} />
+            </>
+          ) : (
+            <p className="text-xs text-faint">{td.addToDraftNote}</p>
+          )}
 
           <div className="flex gap-3">
             <Button variant="secondary" onClick={() => setInvoiceModal(false)} fullWidth>{tc.buttons.cancel}</Button>
-            <Button onClick={generateInvoice} loading={invoicing} fullWidth>
-              {td.createInvoiceBtn}
+            {/* Held until the draft lookup lands so a fast click can't start a
+               new invoice the user would have been offered to merge into. */}
+            <Button onClick={generateInvoice} loading={invoicing || clientDrafts === null} fullWidth>
+              {targetDraft ? td.addToDraftBtn.replace('{{number}}', targetDraft.invoice_number) : td.createInvoiceBtn}
             </Button>
           </div>
         </div>

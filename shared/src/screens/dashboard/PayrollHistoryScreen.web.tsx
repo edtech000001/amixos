@@ -9,6 +9,7 @@ import { useMemo, useRef, useState } from 'react';
 import { ChevronLeft, Search, X, Check, Trash2, Calendar, Wrench, Truck, Clock } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { SkeletonList, SkeletonCard } from '../../ui/Skeleton';
+import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { confirm } from '../../ui/confirmBus';
 import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
@@ -75,6 +76,10 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [dateOpen, setDateOpen] = useState(false);
+  // Row-hiding filters (search + a user-picked range) — drives the
+  // FilteredEmpty "clear filters" prompt.
+  const narrowed = search.trim() !== '' || !!dateFrom || !!dateTo;
+  const clearNarrowing = () => { setSearch(''); setDateFrom(''); setDateTo(''); };
   const dateActive = !!(dateFrom || dateTo);
   // Recomputed per render so a tab left open past midnight stays correct.
   const presets = buildHistoryRangePresets(t.historyPresets, payPeriod);
@@ -285,8 +290,10 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
 
       {loading ? (
         <SkeletonList rows={6} />
+      ) : groups.length === 0 && narrowed ? (
+        <FilteredEmpty onClear={clearNarrowing} title={t.historyNoResults} />
       ) : groups.length === 0 ? (
-        <p className="text-sm text-faint text-center py-16">{search ? t.historyNoResults : t.historyEmpty}</p>
+        <p className="text-sm text-faint text-center py-16">{t.historyEmpty}</p>
       ) : (
         <div className="flex flex-col gap-5">
           {groups.map(([periodStart, list]) => (

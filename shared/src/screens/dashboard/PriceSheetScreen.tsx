@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { loadCachedThenFresh, writeCacheAndStamp } from '../../lib/swrCache';
 import { useDataFingerprint } from '../../lib/dataFingerprint';
 import { SkeletonList } from '../../ui/Skeleton';
+import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Modal as RNModal, KeyboardAvoidingView, Keyboard, Platform } from 'react-native';
 import { Plus, X, Trash2, Pencil, Copy, DollarSign, Search, ChevronDown, Check, ArrowUpDown, GripVertical } from 'lucide-react-native';
 // Native-only screen (PriceSheetScreen.web.tsx is the web variant), so a
@@ -397,7 +398,8 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
           <Text className="text-sm text-faint text-center px-8">{t.empty}</Text>
         </View>
       ) : groups.length === 0 ? (
-        <View className="items-center py-16"><Text className="text-sm text-faint">{t.noResults}</Text></View>
+        // Items exist, so only the search can have emptied the list.
+        <FilteredEmpty onClear={() => setSearch('')} title={t.noResults} compact />
       ) : (
         <View className="gap-5">
           {groups.map(([key, list]) => (

@@ -14,6 +14,7 @@ import { roleLabel } from '../../lib/permissions';
 import type { AccessStatus } from '../../lib/teamPeople';
 import { splitMultiValue } from '../../lib/fieldTemplates';
 import { SkeletonList } from '../../ui/Skeleton';
+import { FilteredEmpty } from '../../ui/FilteredEmpty';
 
 export interface EmployeeListItem {
   id: string;
@@ -212,6 +213,10 @@ export function EmployeesScreen({
       return true;
     });
   }, [employees, search, filterFields, filterSel, statusView]);
+  // Row-hiding filters (search + field filters) — the Activos/Inactivos
+  // segment is a view, not a filter, so the empty-state clear leaves it alone.
+  const narrowed = search.trim() !== '' || filtersActive;
+  const clearNarrowing = () => { setSearch(''); clearFilters(); };
 
   // Multi-select + bulk delete (team tab). Long-press a row to enter select
   // mode; tap toggles; a bottom bar deletes. Mirrors the clients/jobs lists.
@@ -547,6 +552,8 @@ export function EmployeesScreen({
           ListEmptyComponent={
             loading ? (
               <SkeletonList rows={6} />
+            ) : employees.length > 0 && narrowed ? (
+              <FilteredEmpty onClear={clearNarrowing} icon={<UserCheck size={40} color={c.faint} />} />
             ) : (
               <View className="items-center py-20">
                 <UserCheck size={40} color={c.faint} />
@@ -574,6 +581,12 @@ export function EmployeesScreen({
           ListEmptyComponent={
             loading && timesheets.length === 0 ? (
               <SkeletonList rows={6} />
+            ) : tsSearch.trim() && timesheets.length > 0 ? (
+              <FilteredEmpty
+                onClear={() => setTsSearch('')}
+                title={t.hoursNoResults}
+                icon={<ClipboardList size={40} color={c.faint} />}
+              />
             ) : (
               <View className="items-center py-20">
                 <ClipboardList size={40} color={c.faint} />

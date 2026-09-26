@@ -773,6 +773,57 @@ export async function moveJobToInvoice(
   return { fromRemaining: fromRemaining.length };
 }
 
+/** A client's open draft invoice — what "Generate invoice" on a job offers to
+ *  add the job to instead of starting another invoice. */
+export interface ClientDraftInvoice {
+  id: string;
+  client_id: string | null;
+  invoice_number: string;
+  issue_date: string | null;
+  total_amount: number;
+  line_items: InvoiceLineItem[] | null;
+  tax_rate: number;
+  discount: number;
+  /** Distinct jobs already billed on this draft (from line job_id tags). */
+  jobCount: number;
+}
+
+/**
+ * Draft invoices for one client, newest first. Scoped to the job's branch when
+ * it has one (an invoice files under a single location — adding a Branch-A job
+ * to a Branch-B draft would hide it from Branch A's invoice list). Bounded:
+ * a client with more than a handful of open drafts is not the case this serves.
+ */
+export async function fetchClientDraftInvoices(
+  supabase: Supa,
+  opts: { businessId: string; clientId: string | null; locationId?: string | null },
+): Promise<ClientDraftInvoice[]> {
+  if (!opts.clientId) return [];
+  let q = supabase
+    .from('invoices')
+    .select('id, client_id, invoice_number, issue_date, total_amount, line_items, tax_rate, discount')
+    .eq('business_id', opts.businessId)
+    .eq('client_id', opts.clientId)
+    .eq('status', 'draft');
+  if (opts.locationId) q = q.eq('location_id', opts.locationId);
+  const { data, error } = await q.order('created_at', { ascending: false }).limit(10);
+  if (error || !data) return [];
+  return (data as any[]).map((r) => {
+    const items = (r.line_items ?? []) as InvoiceLineItem[];
+    return {
+      id: r.id,
+      client_id: r.client_id,
+      invoice_number: r.invoice_number ?? '',
+      issue_date: r.issue_date ?? null,
+      total_amount: Number(r.total_amount) || 0,
+      line_items: items,
+      tax_rate: Number(r.tax_rate) || 0,
+      discount: Number(r.discount) || 0,
+      jobCount: new Set(items.map((li) => li.job_id).filter(Boolean)).size,
+    };
+  });
+}
+
 /** Attach already-completed jobs (same client) to an EXISTING invoice: append
  *  their line items, recompute, and mark the jobs invoiced. Returns false if a
  *  job belongs to a different client than the invoice. */

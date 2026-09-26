@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { SkeletonList, SkeletonRow } from '../../ui/Skeleton';
+import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { View, Text, Pressable, FlatList } from 'react-native';
 import {
   Search,
@@ -86,6 +87,9 @@ export function InventoryScreen({
       return matchSearch;
     });
   }, [items, search, filter, serverMode]);
+  // Row-hiding filters — drive the empty-state "clear filters" prompt.
+  const narrowed = search.trim() !== '' || filter !== 'todos';
+  const clearNarrowing = () => { setSearch(''); setFilter('todos'); };
 
   // Server mode: report search + segment UP (debounced) so the wrapper re-queries.
   // debouncedSearch comes from usePersistedSearch (restore-aware).
@@ -229,13 +233,13 @@ export function InventoryScreen({
         ListEmptyComponent={
           loading ? (
             <SkeletonList rows={8} />
+          ) : narrowed ? (
+            <FilteredEmpty onClear={clearNarrowing} icon={<Package size={40} color={c.faint} />} />
           ) : (
             <View className="items-center py-20">
               <Package size={40} color={c.faint} />
-              <Text className="text-sm text-faint mt-3">
-                {search || filter !== 'todos' ? t.emptyNoMatch : t.emptyAll}
-              </Text>
-              {onAddItem && !search && filter === 'todos' ? (
+              <Text className="text-sm text-faint mt-3">{t.emptyAll}</Text>
+              {onAddItem ? (
                 <Pressable onPress={onAddItem} className="mt-1">
                   <Text className="text-primary text-sm font-medium">{t.addFirst}</Text>
                 </Pressable>

@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useCallback, useEffect, useState } from 'react';
 import { SkeletonRow } from '@amixos/shared/ui/Skeleton';
+import { FilteredEmpty } from '@amixos/shared/ui/FilteredEmpty';
 import { Activity, Search } from 'lucide-react';
 import { SettingsNav } from '@/components/dashboard/SettingsNav';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -157,7 +158,8 @@ export default function ActividadPage() {
         ) : rows.length === 0 ? (
           <p className="py-10 text-center text-sm text-faint">{t.emptyState}</p>
         ) : filtered.length === 0 ? (
-          <p className="py-10 text-center text-sm text-faint">{t.noResults}</p>
+          // Rows exist, so only the search can have emptied the list.
+          <FilteredEmpty onClear={() => setSearch('')} title={t.noResults} compact />
         ) : (
           <div className="flex flex-col max-h-[calc(100vh-280px)] overflow-y-auto -mr-3 pr-3">
             {filtered.map((row, i) => (

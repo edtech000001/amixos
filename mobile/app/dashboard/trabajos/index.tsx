@@ -464,16 +464,17 @@ export default function TrabajosTab() {
     <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       <LocationSwitcher />
       <JobsListScreen
-        onRequestSummary={async () => {
+        onRequestSummary={async (jobIds) => {
           // paramsRef holds the filters the list is CURRENTLY showing, so the
-          // summary always describes what's on screen. The RPC aggregates every
-          // match server-side — summing the loaded page would under-count.
+          // summary always describes what's on screen — or, with jobIds (rows picked
+          // in select mode), exactly those jobs. The RPC aggregates every match
+          // server-side — summing the loaded page would under-count.
           const p = paramsRef.current;
           if (!business || !p) return null;
           const summary = await fetchJobsSummary(
             supabase,
             { businessId: p.businessId, locationId: p.locationId, tabs: p.tabs, search: p.search, dateFrom: p.dateFrom, dateTo: p.dateTo },
-            { jcfKeys: payrollJcfKeys(business.payroll_config) },
+            { jcfKeys: payrollJcfKeys(business.payroll_config), jobIds },
           );
           if (!summary) return null; // tab combo the RPC can't express
           // Pay data is hidden (not zeroed) for roles without the permission —

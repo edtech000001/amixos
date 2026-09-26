@@ -29,6 +29,7 @@ import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { Input } from '../../ui/Input';
 import { Fab } from '../../ui/Fab';
+import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { SkeletonList, SkeletonRow } from '../../ui/Skeleton';
 import { clientMatchesSearch, matchingContacts } from '../../lib/clientSearch';
 import { groupClients, parseClientGroupKey, CLIENTS_GROUP_KEY, type ClientSection, type ClientGroupKey } from '../../lib/clientSections';
@@ -448,13 +449,14 @@ export function ClientsListScreen({
 
       {loading && filtered.length === 0 ? (
         <SkeletonList rows={8} />
+      ) : filtered.length === 0 && searching ? (
+        // Search is the only row-hiding filter here; grouping is kept.
+        <FilteredEmpty onClear={() => onSearchChange('')} icon={<User size={40} color={c.faint} />} />
       ) : filtered.length === 0 ? (
         <View className="items-center py-20">
           <User size={40} color={c.faint} />
-          <Text className="text-sm text-faint mt-3">
-            {search ? t.emptyNoMatch : t.emptyAll}
-          </Text>
-          {!search && onNewClientPress ? (
+          <Text className="text-sm text-faint mt-3">{t.emptyAll}</Text>
+          {onNewClientPress ? (
             <Pressable onPress={onNewClientPress} className="mt-1">
               <Text className="text-primary text-sm font-medium">{t.addFirst}</Text>
             </Pressable>

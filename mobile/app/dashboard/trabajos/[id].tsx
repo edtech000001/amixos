@@ -41,7 +41,7 @@ import {
   Share2,
   X,
   Sparkles,
-  type LucideIcon, Archive, DollarSign, PenLine, Download } from 'lucide-react-native';
+  type LucideIcon, Archive, DollarSign, PenLine, Download, Plus } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
@@ -58,7 +58,7 @@ import { delegateJob } from '@amixos/shared/lib/delegation';
 import { jobShortCode } from '@amixos/shared/lib/jobRef';
 import { secureShareToken } from '@amixos/shared/lib/shareToken';
 import { logAudit } from '@amixos/shared/lib/audit';
-import { insertInvoiceUnique, removeJobFromInvoice, placeholderQtyFor } from '@amixos/shared/lib/invoicing';
+import { insertInvoiceUnique, removeJobFromInvoice, placeholderQtyFor, fetchClientDraftInvoices, addJobsToInvoice, type ClientDraftInvoice } from '@amixos/shared/lib/invoicing';
 import { invoiceDefaultLanguage, nextInvoiceNumber, resolveConfig, buildInvoiceViewModel, buildInvoiceHtml, type InvoiceBranding, type InvoiceDocData } from '@amixos/shared/lib/invoiceTemplate';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { memberNameMap } from '@amixos/shared/lib/memberNames';
@@ -360,6 +360,9 @@ export default function JobDetailRoute() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [unInvoicing, setUnInvoicing] = useState(false);
   const [delegateOpen, setDelegateOpen] = useState(false);
+  // The client's open drafts when "Generate invoice" found any — non-empty
+  // opens the add-to-draft / create-new sheet.
+  const [draftChoices, setDraftChoices] = useState<ClientDraftInvoice[]>([]);
   const [delegating, setDelegating] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
 
@@ -905,6 +908,40 @@ export default function JobDetailRoute() {
     }
     setJob((prev) => (prev ? { ...prev, ...update } : prev));
     setUpdatingStatus(false);
+  };
+
+  // "Generate invoice" tap: if the client already has a draft, ask whether to
+  // add this job to it or start a new invoice; otherwise create as before.
+  const startInvoice = async () => {
+    if (!job || !business) return;
+    setUpdatingStatus(true);
+    const drafts = await fetchClientDraftInvoices(supabase, {
+      businessId: business.id,
+      clientId: job.client_id,
+      locationId: (job as { location_id?: string | null }).location_id ?? null,
+    });
+    setUpdatingStatus(false);
+    if (drafts.length) setDraftChoices(drafts);
+    else await generateInvoice();
+  };
+
+  const addToDraftInvoice = async (draft: ClientDraftInvoice) => {
+    if (!job || !business) return;
+    setUpdatingStatus(true);
+    const { ok } = await addJobsToInvoice(supabase, {
+      invoice: draft,
+      jobIds: [job.id],
+      itemTypeLabels: ITEM_TYPE_LABELS,
+      hideItemTypes: !showItemTypes,
+      qtyField: business.invoice_qty_field,
+    });
+    setUpdatingStatus(false);
+    setDraftChoices([]);
+    if (!ok) return;
+    void logAudit(supabase, business.id, 'job.status_changed', 'job', job.id, {
+      from: job.status, to: 'invoiced', job_title: job.title, invoice_number: draft.invoice_number,
+    });
+    router.replace(`/dashboard/facturas/${draft.id}` as never);
   };
 
   const generateInvoice = async () => {
@@ -1501,7 +1538,7 @@ export default function JobDetailRoute() {
         {/* Primary actions */}
         <View className="gap-2 mb-5">
           {canInvoice ? (
-            <Button onPress={generateInvoice} loading={updatingStatus} fullWidth>
+            <Button onPress={startInvoice} loading={updatingStatus} fullWidth>
               <FileText size={16} color="#FFFFFF" />
               <Text className="text-white font-semibold ml-2">{td.generateInvoiceBtn}</Text>
             </Button>
@@ -2230,6 +2267,61 @@ export default function JobDetailRoute() {
                 <Text className="text-white font-semibold">{td.scheduleWork}</Text>
               </Button>
             </View>
+          </View>
+        </View>
+      </RNModal>
+
+      {/* Add-to-draft chooser — only when the client already has a draft.
+         Each row acts on tap (one-hand: no separate confirm button). */}
+      <RNModal visible={draftChoices.length > 0} transparent animationType="fade" onRequestClose={() => setDraftChoices([])}>
+        {/* Same backdrop as the jobs list "New" sheet: fade (slide drags the
+            dim up with the card) + inline rgba dim. */}
+        <View className="flex-1 justify-end">
+          <Pressable
+            onPress={() => setDraftChoices([])}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
+          />
+          <View className="bg-card rounded-t-3xl pt-3 pb-8" style={{ maxHeight: '85%' }}>
+            <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
+            <View className="flex-row items-start justify-between px-5 pb-3 border-b border-border-soft">
+              <View className="flex-1 pr-3">
+                <Text className="text-lg font-bold text-ink">{td.draftExistsTitle}</Text>
+                <Text className="text-xs text-muted mt-0.5">{td.draftExistsHint}</Text>
+              </View>
+              <Pressable onPress={() => setDraftChoices([])} hitSlop={8}><X size={20} color={c.faint} /></Pressable>
+            </View>
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, gap: 10 }}>
+              {draftChoices.map((d) => (
+                <Pressable
+                  key={d.id}
+                  disabled={updatingStatus}
+                  onPress={() => { void addToDraftInvoice(d); }}
+                  className="flex-row items-center gap-3 border border-primary/40 bg-primary/5 rounded-xl px-4 py-3.5 active:opacity-70"
+                >
+                  <FileText size={18} color={c.primary} />
+                  <View className="flex-1">
+                    <Text className="text-sm font-semibold text-ink">{td.draftOption.replace('{{number}}', d.invoice_number)}</Text>
+                    <Text className="text-xs text-muted">
+                      {(d.jobCount === 1 ? td.draftMetaSingle : td.draftMetaPlural)
+                        .replace('{{count}}', String(d.jobCount)).replace('{{total}}', fmt(d.total_amount))}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
+              <Pressable
+                disabled={updatingStatus}
+                onPress={() => { setDraftChoices([]); void generateInvoice(); }}
+                className="flex-row items-center gap-3 border border-border rounded-xl px-4 py-3.5 active:opacity-70"
+              >
+                <Plus size={18} color={c.muted} />
+                <View className="flex-1">
+                  <Text className="text-sm font-semibold text-ink">{td.newInvoiceOption}</Text>
+                  <Text className="text-xs text-muted">{td.newInvoiceMeta}</Text>
+                </View>
+              </Pressable>
+              <Text className="text-xs text-faint">{td.addToDraftNote}</Text>
+              {updatingStatus ? <ActivityIndicator color={c.primary} /> : null}
+            </ScrollView>
           </View>
         </View>
       </RNModal>

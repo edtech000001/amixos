@@ -6,6 +6,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { SkeletonRow, SkeletonList } from '../../ui/Skeleton';
+import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import {
   Plus,
   Search,
@@ -86,6 +87,9 @@ export function InventoryScreen({
       return matchSearch;
     });
   }, [items, search, filter, serverMode]);
+  // Row-hiding filters — drive the empty-state "clear filters" prompt.
+  const narrowed = search.trim() !== '' || filter !== 'todos';
+  const clearNarrowing = () => { setSearch(''); setFilter('todos'); };
 
   // Server mode: report search + segment UP (debounced) so the wrapper re-queries.
   // debouncedSearch comes from usePersistedSearch (restore-aware).
@@ -207,13 +211,13 @@ export function InventoryScreen({
       {/* List */}
       {loading && filtered.length === 0 ? (
         <SkeletonList rows={8} />
+      ) : filtered.length === 0 && narrowed ? (
+        <FilteredEmpty onClear={clearNarrowing} icon={<Package size={40} className="text-faint" />} />
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center py-20">
           <Package size={40} className="text-faint" />
-          <p className="text-sm text-faint mt-3">
-            {search || filter !== 'todos' ? t.emptyNoMatch : t.emptyAll}
-          </p>
-          {!search && filter === 'todos' ? (
+          <p className="text-sm text-faint mt-3">{t.emptyAll}</p>
+          {onAddItem ? (
             <button type="button" onClick={onAddItem} className="text-primary text-sm font-medium mt-1 hover:underline">
               {t.addFirst}
             </button>

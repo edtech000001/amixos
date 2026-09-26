@@ -14,6 +14,7 @@ import { SkeletonList, SkeletonRow } from '../../ui/Skeleton';
 import { ChipScroll } from '../../ui/ChipScroll';
 import { INVOICES_FILTERS_KEY, parseInvoicesFilters } from '../../lib/invoicesFilters';
 import { useThemeColors } from '../../theme';
+import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { reminderBadge } from '../../lib/invoiceReminders';
 
 export interface InvoiceListItem {
@@ -228,6 +229,10 @@ export function InvoicesListScreen({
     : computedCounts;
 
   const dateActive = !!dateFrom || !!dateTo;
+  // Filters that can HIDE invoices (group only regroups) — drives the
+  // empty-state "clear filters" prompt, whose clear keeps grouping.
+  const narrowed = statuses.length > 0 || search.trim() !== '' || dateActive;
+  const clearNarrowing = () => { setStatuses([]); setSearch(''); setDateFrom(null); setDateTo(null); };
   const clearDate = () => { setDateFrom(null); setDateTo(null); };
 
   const inDateRange = (d: string | null) => {
@@ -565,6 +570,8 @@ export function InvoicesListScreen({
         ListEmptyComponent={
           loading ? (
             <SkeletonList rows={8} />
+          ) : narrowed ? (
+            <FilteredEmpty onClear={clearNarrowing} icon={<FileText size={40} color={c.faint} />} />
           ) : (
             <View className="items-center py-20">
               <FileText size={40} color={c.faint} />

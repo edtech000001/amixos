@@ -8,6 +8,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { SkeletonRow } from '../../ui/Skeleton';
 import { JobsSummarySheet } from './JobsSummarySheet';
+import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import type { JobsSummaryTotals } from '../../lib/jobsSummary';
 import {
   Plus,
@@ -152,10 +153,11 @@ const GROUP_ICON: Record<JobGroupKey, typeof List> = {
 };
 
 export interface JobsListScreenProps {
-  /** Opens the filtered-set summary. Resolves null when the tab selection
+  /** Opens the filtered-set summary — or, given jobIds, the summary of exactly
+   *  those (select-mode picks). Resolves null when the tab selection
    *  can't be aggregated server-side (see jobSummaryFilterParams). Omit to
    *  hide the Summary button entirely. */
-  onRequestSummary?: () => Promise<JobsSummaryTotals | null>;
+  onRequestSummary?: (jobIds?: string[]) => Promise<JobsSummaryTotals | null>;
   loading: boolean;
   jobs: JobListItem[];
   initialTab?: TabKey;
@@ -366,24 +368,44 @@ export function JobsListScreen({
 
   const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy, dateFrom, dateTo });
   const dateActive = !!dateFrom || !!dateTo;
+  // Filters that can HIDE jobs (sort/group only reorder) — drives the
+  // empty-state "clear filters" prompt.
+  const narrowed = tabs.length > 0 || search.trim() !== '' || dateActive;
+  // Empty-state clear: drops only the row-hiding filters, keeps sort/group.
+  const clearNarrowing = () => { setTabs([]); setSearch(''); setDateFrom(null); setDateTo(null); };
 
   // Filtered-set summary. Fetched on open (not with the list) so the extra
   // aggregate query only runs when someone asks for it.
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryTotals, setSummaryTotals] = useState<JobsSummaryTotals | null>(null);
-  const openSummary = async () => {
+  // Rows picked in select mode when the sheet opened (snapshotted so the
+  // Selected/All toggle keeps meaning the same set while the sheet is up).
+  // Empty = no selection → no toggle, summary covers the filtered set.
+  const [summaryPicked, setSummaryPicked] = useState<string[]>([]);
+  const [summaryScope, setSummaryScope] = useState<'selected' | 'all'>('all');
+  const summaryReq = useRef(0);
+  const loadSummary = async (jobIds?: string[]) => {
     if (!onRequestSummary) return;
-    setSummaryOpen(true);
+    const req = ++summaryReq.current; // a fast toggle must not show the older answer
     setSummaryLoading(true);
     setSummaryTotals(null);
     try {
-      setSummaryTotals(await onRequestSummary());
+      const totals = await onRequestSummary(jobIds);
+      if (req === summaryReq.current) setSummaryTotals(totals);
     } catch {
-      setSummaryTotals(null); // renders the "unavailable" copy
+      if (req === summaryReq.current) setSummaryTotals(null); // renders the "unavailable" copy
     } finally {
-      setSummaryLoading(false);
+      if (req === summaryReq.current) setSummaryLoading(false);
     }
+  };
+  const openSummary = () => {
+    if (!onRequestSummary) return;
+    const picked = selectMode ? selectedJobs.map(j => j.id) : [];
+    setSummaryPicked(picked);
+    setSummaryScope(picked.length ? 'selected' : 'all');
+    setSummaryOpen(true);
+    void loadSummary(picked.length ? picked : undefined);
   };
   // Quick date-range chips — same set as payroll history, including the
   // "This/Last pay period" chips when the caller passes payPeriod.
@@ -1079,11 +1101,13 @@ export function JobsListScreen({
             </div>
           ))}
         </div>
+      ) : filtered.length === 0 && narrowed ? (
+        <FilteredEmpty onClear={clearNarrowing} icon={<ClipboardList size={40} className="text-faint" />} />
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center py-20">
           <ClipboardList size={40} className="text-faint" />
-          <p className="text-sm text-faint mt-3">{search || tabs.length > 0 ? t.emptyNoMatch : t.emptyAll}</p>
-          {!search && tabs.length === 0 && canCreate ? (
+          <p className="text-sm text-faint mt-3">{t.emptyAll}</p>
+          {canCreate ? (
             <button onClick={onNewJob} className="text-primary text-sm font-medium mt-1 hover:underline">{t.createFirst}</button>
           ) : null}
         </div>
@@ -1380,6 +1404,11 @@ export function JobsListScreen({
         filtered={filtersActive}
         statusLabels={t.statuses as unknown as Record<string, string>}
         formatMoney={fmt}
+        scope={summaryPicked.length ? {
+          value: summaryScope,
+          selectedCount: summaryPicked.length,
+          onChange: (v) => { setSummaryScope(v); void loadSummary(v === 'selected' ? summaryPicked : undefined); },
+        } : undefined}
       />
     </div>
   );

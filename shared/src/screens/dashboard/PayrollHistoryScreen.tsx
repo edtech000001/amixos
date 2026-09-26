@@ -11,6 +11,7 @@ import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
+import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
 import type { PayrollBreakdown } from '../../lib/payroll';
 
@@ -75,6 +76,10 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [dateOpen, setDateOpen] = useState(false);
+  // Row-hiding filters (search + a user-picked range) — drives the
+  // FilteredEmpty "clear filters" prompt.
+  const narrowed = search.trim() !== '' || !!dateFrom || !!dateTo;
+  const clearNarrowing = () => { setSearch(''); setDateFrom(''); setDateTo(''); };
   const dateActive = !!(dateFrom || dateTo);
   const norm = (x: string) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const filtered = useMemo(() => {
@@ -210,8 +215,10 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
         <View className="px-4 pt-2">
           <SkeletonList rows={6} />
         </View>
+      ) : groups.length === 0 && narrowed ? (
+        <FilteredEmpty onClear={clearNarrowing} title={t.historyNoResults} />
       ) : groups.length === 0 ? (
-        <Text className="text-sm text-faint text-center py-16 px-6">{search ? t.historyNoResults : t.historyEmpty}</Text>
+        <Text className="text-sm text-faint text-center py-16 px-6">{t.historyEmpty}</Text>
       ) : (
         <ScrollView contentContainerClassName={`px-5 py-5 ${selectMode ? 'pb-40' : 'pb-24'}`}>
           {groups.map(([periodStart, list]) => (

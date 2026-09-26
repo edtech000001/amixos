@@ -1,5 +1,6 @@
 import { View, Text, ScrollView, Pressable, TextInput } from 'react-native';
 import { SkeletonCard } from '../../ui/Skeleton';
+import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { useMemo, useState } from 'react';
 import { Check, Search } from 'lucide-react-native';
 import { useLang } from '../../i18n';
@@ -47,6 +48,9 @@ export function AddonStoreScreen({
 
   const [search, setSearch] = usePersistedSearch('search.moduleStore');
   const [category, setCategory] = useState<CategoryFilter>('all');
+  // Row-hiding filters — drives the FilteredEmpty "clear filters" prompt.
+  const narrowed = search.trim() !== '' || category !== 'all';
+  const clearNarrowing = () => { setSearch(''); setCategory('all'); };
 
   const labelFor = (m: ModuleDef): { name: string; description: string } => {
     // i18n keys are aligned with module ids by convention. The dict shape
@@ -153,7 +157,9 @@ export function AddonStoreScreen({
           {[0, 1, 2, 3].map(i => <SkeletonCard key={i} lines={3} />)}
         </View>
       ) : (
-        filtered.length === 0 ? (
+        filtered.length === 0 && narrowed ? (
+          <FilteredEmpty onClear={clearNarrowing} title={t.noResults} compact />
+        ) : filtered.length === 0 ? (
           <View className="py-10 items-center">
             <Text className="text-sm text-muted">{t.noResults}</Text>
           </View>

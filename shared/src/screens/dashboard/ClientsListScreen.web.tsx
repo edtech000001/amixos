@@ -15,6 +15,7 @@ import { clientMatchesSearch, matchingContacts } from '../../lib/clientSearch';
 import { groupClients, parseClientGroupKey, CLIENTS_GROUP_KEY, type ClientGroupKey } from '../../lib/clientSections';
 import { usStateName } from '../../lib/usStates';
 import { Tooltip } from '../../ui/Tooltip';
+import { FilteredEmpty } from '../../ui/FilteredEmpty';
 
 export interface ClientListItem {
   id: string;
@@ -369,11 +370,14 @@ export function ClientsListScreen({
             </div>
           ))}
         </div>
+      ) : filtered.length === 0 && searching ? (
+        // Search is the only row-hiding filter here; grouping is kept.
+        <FilteredEmpty onClear={() => onSearchChange('')} icon={<User size={40} className="text-faint" />} />
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center py-20">
           <User size={40} className="text-faint" />
-          <p className="text-sm text-faint mt-3">{search ? t.emptyNoMatch : t.emptyAll}</p>
-          {!search && onNewClientPress ? (
+          <p className="text-sm text-faint mt-3">{t.emptyAll}</p>
+          {onNewClientPress ? (
             <button onClick={onNewClientPress} className="text-primary text-sm font-medium mt-1 hover:underline">{t.addFirst}</button>
           ) : null}
         </div>

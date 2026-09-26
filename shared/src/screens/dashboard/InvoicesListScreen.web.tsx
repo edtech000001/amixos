@@ -14,6 +14,7 @@ import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { INVOICES_FILTERS_KEY, parseInvoicesFilters } from '../../lib/invoicesFilters';
 import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
 import { Tooltip } from '../../ui/Tooltip';
+import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { reminderBadge } from '../../lib/invoiceReminders';
 
 export interface InvoiceListItem {
@@ -204,6 +205,10 @@ export function InvoicesListScreen({
     : computedCounts;
 
   const dateActive = !!dateFrom || !!dateTo;
+  // Filters that can HIDE invoices (group only regroups) — drives the
+  // empty-state "clear filters" prompt, whose clear keeps grouping.
+  const narrowed = statuses.length > 0 || search.trim() !== '' || dateActive;
+  const clearNarrowing = () => { setStatuses([]); setSearch(''); setDateFrom(null); setDateTo(null); };
   const clearDate = () => { setDateFrom(null); setDateTo(null); };
 
   const inDateRange = (d: string | null) => {
@@ -595,6 +600,8 @@ export function InvoicesListScreen({
             </div>
           ))}
         </div>
+      ) : filtered.length === 0 && narrowed ? (
+        <FilteredEmpty onClear={clearNarrowing} icon={<FileText size={40} className="text-faint" />} />
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center py-20">
           <FileText size={40} className="text-faint" />

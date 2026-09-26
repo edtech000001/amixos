@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState, type HTMLAttributes } from 'react
 import { loadCachedThenFresh, writeCacheAndStamp } from '../../lib/swrCache';
 import { useDataFingerprint } from '../../lib/dataFingerprint';
 import { SkeletonList } from '../../ui/Skeleton';
+import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { Plus, X, Trash2, Pencil, Copy, DollarSign, FileText, Search, ArrowUpDown, GripVertical, ChevronDown, Check } from 'lucide-react';
 import { SortableList } from '../../ui/SortableList';
 import { useLang } from '../../i18n';
@@ -390,9 +391,8 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate, 
           <p className="text-sm text-faint max-w-xs">{t.empty}</p>
         </div>
       ) : groups.length === 0 ? (
-        <div className="flex flex-col items-center py-16 text-center">
-          <p className="text-sm text-faint">{t.noResults}</p>
-        </div>
+        // Items exist, so only the search can have emptied the list.
+        <FilteredEmpty onClear={() => setSearch('')} title={t.noResults} compact />
       ) : (
         <div className="flex flex-col gap-5">
           {groups.map(([key, list]) => (

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { SkeletonRow } from '@amixos/shared/ui/Skeleton';
+import { FilteredEmpty } from '@amixos/shared/ui/FilteredEmpty';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -158,7 +159,8 @@ export default function ActividadPage() {
         ) : rows.length === 0 ? (
           <Text className="py-10 text-center text-sm text-faint">{t.emptyState}</Text>
         ) : filtered.length === 0 ? (
-          <Text className="py-10 text-center text-sm text-faint">{t.noResults}</Text>
+          // Rows exist, so only the search can have emptied the list.
+          <FilteredEmpty onClear={() => setSearch('')} title={t.noResults} compact />
         ) : (
           <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
             {filtered.map((row, i) => (

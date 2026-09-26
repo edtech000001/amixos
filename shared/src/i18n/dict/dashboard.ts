@@ -718,6 +718,9 @@ export type DashboardDict = {
       title: string;
       subtitleFiltered: string;
       subtitleAll: string;
+      subtitleSelected: string;
+      scopeSelected: string;
+      scopeAll: string;
       jobs: string;
       totalValue: string;
       avgPerJob: string;
@@ -969,6 +972,15 @@ export type DashboardDict = {
       itemsCountPlural: string;
       draftStatusNote: string;
       createInvoiceBtn: string;
+      draftExistsTitle: string;
+      draftExistsHint: string;
+      draftOption: string;
+      draftMetaSingle: string;
+      draftMetaPlural: string;
+      newInvoiceOption: string;
+      newInvoiceMeta: string;
+      addToDraftBtn: string;
+      addToDraftNote: string;
       // Delete confirmation modal
       deleteJobTitle: string;
       deleteJobConfirm: string;
@@ -3946,6 +3958,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         title: 'Resumen de trabajos',
         subtitleFiltered: 'Totales de los trabajos que coinciden con tus filtros.',
         subtitleAll: 'Totales de todos tus trabajos.',
+        subtitleSelected: 'Totales de los trabajos que seleccionaste.',
+        scopeSelected: 'Seleccionados ({{count}})',
+        scopeAll: 'Todos',
         jobs: 'Trabajos',
         totalValue: 'Valor total',
         avgPerJob: 'Promedio por trabajo',
@@ -4186,6 +4201,15 @@ export const dashboard: Record<Locale, DashboardDict> = {
         itemsCountPlural: '{{count}} ítems',
         draftStatusNote: 'La factura se creará en estado <strong>Borrador</strong>. Puedes editarla antes de enviarla.',
         createInvoiceBtn: 'Crear factura →',
+        draftExistsTitle: 'Este cliente ya tiene una factura en borrador',
+        draftExistsHint: '¿Agregas este trabajo a esa factura o creas una nueva?',
+        draftOption: 'Agregar a {{number}}',
+        draftMetaSingle: '{{count}} trabajo · {{total}}',
+        draftMetaPlural: '{{count}} trabajos · {{total}}',
+        newInvoiceOption: 'Crear factura nueva',
+        newInvoiceMeta: 'Una factura aparte, solo para este trabajo',
+        addToDraftBtn: 'Agregar a {{number}} →',
+        addToDraftNote: 'El trabajo se agrega como líneas nuevas a la factura en borrador. Los impuestos y el descuento de esa factura se mantienen.',
         deleteJobTitle: 'Eliminar trabajo',
         deleteJobConfirm: '¿Estás seguro de que deseas eliminar este trabajo? Esta acción no se puede deshacer.',
         cancelJobBtn: 'Cancelar trabajo',
@@ -7165,6 +7189,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         title: 'Jobs summary',
         subtitleFiltered: 'Totals for the jobs matching your filters.',
         subtitleAll: 'Totals across all your jobs.',
+        subtitleSelected: 'Totals for the jobs you selected.',
+        scopeSelected: 'Selected ({{count}})',
+        scopeAll: 'All',
         jobs: 'Jobs',
         totalValue: 'Total value',
         avgPerJob: 'Average per job',
@@ -7405,6 +7432,15 @@ export const dashboard: Record<Locale, DashboardDict> = {
         itemsCountPlural: '{{count}} items',
         draftStatusNote: 'The invoice will be created as a <strong>Draft</strong>. You can edit it before sending.',
         createInvoiceBtn: 'Create invoice →',
+        draftExistsTitle: 'This client already has a draft invoice',
+        draftExistsHint: 'Add this job to that invoice, or create a new one?',
+        draftOption: 'Add to {{number}}',
+        draftMetaSingle: '{{count}} job · {{total}}',
+        draftMetaPlural: '{{count}} jobs · {{total}}',
+        newInvoiceOption: 'Create a new invoice',
+        newInvoiceMeta: 'A separate invoice for just this job',
+        addToDraftBtn: 'Add to {{number}} →',
+        addToDraftNote: "The job is added as new lines on the draft invoice. That invoice's tax and discount stay as they are.",
         deleteJobTitle: 'Delete job',
         deleteJobConfirm: 'Are you sure you want to delete this job? This action cannot be undone.',
         cancelJobBtn: 'Cancel job',

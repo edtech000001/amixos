@@ -7,6 +7,7 @@
 
 import { useMemo, useState } from 'react';
 import { SkeletonCard } from '../../ui/Skeleton';
+import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { Check, Search } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
@@ -41,6 +42,9 @@ export function AddonStoreScreen({
 
   const [search, setSearch] = usePersistedSearch('search.moduleStore');
   const [category, setCategory] = useState<CategoryFilter>('all');
+  // Row-hiding filters — drives the FilteredEmpty "clear filters" prompt.
+  const narrowed = search.trim() !== '' || category !== 'all';
+  const clearNarrowing = () => { setSearch(''); setCategory('all'); };
 
   const labelFor = (m: ModuleDef): { name: string; description: string } => {
     const entry = (modulesDict as unknown as Record<string, { name: string; description: string } | undefined>)[m.i18nKey];
@@ -127,6 +131,8 @@ export function AddonStoreScreen({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[0, 1, 2, 3, 4, 5].map(i => <SkeletonCard key={i} lines={3} />)}
         </div>
+      ) : filtered.length === 0 && narrowed ? (
+        <FilteredEmpty onClear={clearNarrowing} title={t.noResults} compact />
       ) : filtered.length === 0 ? (
         <div className="py-10 flex items-center justify-center">
           <p className="text-sm text-muted">{t.noResults}</p>

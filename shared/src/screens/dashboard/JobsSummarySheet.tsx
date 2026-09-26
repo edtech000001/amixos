@@ -20,6 +20,13 @@ export interface JobsSummarySheetProps {
   filtered: boolean;
   statusLabels: Record<string, string>;
   formatMoney: (n: number) => string;
+  /** Present only when rows are picked in select mode: renders a
+   *  Selected / All toggle so the user chooses which set is totalled. */
+  scope?: {
+    value: 'selected' | 'all';
+    selectedCount: number;
+    onChange: (v: 'selected' | 'all') => void;
+  };
 }
 
 function Row({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
@@ -32,7 +39,7 @@ function Row({ label, value, muted }: { label: string; value: string; muted?: bo
 }
 
 export function JobsSummarySheet({
-  open, onClose, loading, totals, filtered, statusLabels, formatMoney,
+  open, onClose, loading, totals, filtered, statusLabels, formatMoney, scope,
 }: JobsSummarySheetProps) {
   const { t: full } = useLang();
   const c = useThemeColors();
@@ -56,13 +63,31 @@ export function JobsSummarySheet({
             <View className="flex-1 pr-3">
               <Text className="text-lg font-bold text-ink">{t.title}</Text>
               <Text className="text-xs text-muted mt-0.5">
-                {filtered ? t.subtitleFiltered : t.subtitleAll}
+                {scope?.value === 'selected' ? t.subtitleSelected : filtered ? t.subtitleFiltered : t.subtitleAll}
               </Text>
             </View>
             <Pressable onPress={onClose} hitSlop={10} className="p-1 -mr-1 active:opacity-60">
               <X size={22} color={c.faint} />
             </Pressable>
           </View>
+
+          {scope ? (
+            <View className="px-5 pt-4">
+              <View className="flex-row p-1 bg-surface rounded-xl border border-border-soft">
+                {(['selected', 'all'] as const).map((v) => (
+                  <Pressable
+                    key={v}
+                    onPress={() => { if (scope.value !== v) scope.onChange(v); }}
+                    className={`flex-1 py-2 rounded-lg items-center ${scope.value === v ? 'bg-card' : ''}`}
+                  >
+                    <Text className={`text-sm font-semibold ${scope.value === v ? 'text-ink' : 'text-muted'}`}>
+                      {v === 'selected' ? t.scopeSelected.replace('{{count}}', String(scope.selectedCount)) : t.scopeAll}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : null}
 
           <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
             {loading ? (

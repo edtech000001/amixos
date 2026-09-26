@@ -23,6 +23,13 @@ export interface JobsSummarySheetProps {
   /** Localized status labels, keyed by status. */
   statusLabels: Record<string, string>;
   formatMoney: (n: number) => string;
+  /** Present only when rows are picked in select mode: renders a
+   *  Selected / All toggle so the user chooses which set is totalled. */
+  scope?: {
+    value: 'selected' | 'all';
+    selectedCount: number;
+    onChange: (v: 'selected' | 'all') => void;
+  };
 }
 
 function Row({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
@@ -35,7 +42,7 @@ function Row({ label, value, muted }: { label: string; value: string; muted?: bo
 }
 
 export function JobsSummarySheet({
-  open, onClose, loading, totals, filtered, statusLabels, formatMoney,
+  open, onClose, loading, totals, filtered, statusLabels, formatMoney, scope,
 }: JobsSummarySheetProps) {
   const { t: full } = useLang();
   const t = full.dashboard.jobs.summary;
@@ -51,13 +58,31 @@ export function JobsSummarySheet({
           <div>
             <h2 className="text-base font-bold text-ink">{t.title}</h2>
             <p className="text-xs text-muted mt-0.5">
-              {filtered ? t.subtitleFiltered : t.subtitleAll}
+              {scope?.value === 'selected' ? t.subtitleSelected : filtered ? t.subtitleFiltered : t.subtitleAll}
             </p>
           </div>
           <button onClick={onClose} aria-label={full.common.buttons.close} className="p-1 -mr-1 text-muted hover:text-ink">
             <X size={18} />
           </button>
         </div>
+
+        {scope ? (
+          <div className="px-5 pt-4 shrink-0">
+            <div className="flex p-1 bg-surface rounded-xl border border-border-soft">
+              {(['selected', 'all'] as const).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => { if (scope.value !== v) scope.onChange(v); }}
+                  className={`flex-1 py-1.5 text-sm font-semibold rounded-lg transition-colors ${
+                    scope.value === v ? 'bg-card text-ink shadow-sm' : 'text-muted hover:text-ink'
+                  }`}
+                >
+                  {v === 'selected' ? t.scopeSelected.replace('{{count}}', String(scope.selectedCount)) : t.scopeAll}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div className="overflow-y-auto px-5 py-4">
           {loading ? (

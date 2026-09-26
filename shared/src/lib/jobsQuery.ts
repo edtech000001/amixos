@@ -479,13 +479,26 @@ export function jobSummaryFilterParams(
  *
  * `jcfKeys` are the job custom-field keys the business's pay formula reads —
  * pass them so formula-based pay resolves; omit when there's no formula.
+ *
+ * `jobIds` summarizes exactly those jobs (select-mode picks) and ignores the
+ * tab/search/date filters — needs migration 238. Only sent when non-empty, so
+ * plain filter summaries keep working against the 210 signature.
  */
 export async function fetchJobsSummary(
   supabase: AnySupabase,
   params: Pick<JobsQueryParams, 'businessId' | 'locationId' | 'tabs' | 'search' | 'dateFrom' | 'dateTo'>,
-  opts?: { jcfKeys?: string[] | null },
+  opts?: { jcfKeys?: string[] | null; jobIds?: string[] | null },
   searchIds?: SearchIds | null,
 ): Promise<JobsSummary | null> {
+  if (opts?.jobIds?.length) {
+    const { data, error } = await supabase.rpc('jobs_summary', {
+      p_business_id: params.businessId,
+      p_jcf_keys: opts.jcfKeys?.length ? opts.jcfKeys : null,
+      p_job_ids: opts.jobIds,
+    });
+    if (error) throw new Error(error.message);
+    return parseJobsSummary(data);
+  }
   const term = params.search?.trim() ?? '';
   const fp = jobSummaryFilterParams(params.tabs ?? [], !!term);
   if (!fp) return null;
@@ -506,6 +519,10 @@ export async function fetchJobsSummary(
     p_jcf_keys: opts?.jcfKeys?.length ? opts.jcfKeys : null,
   });
   if (error) throw new Error(error.message);
+  return parseJobsSummary(data);
+}
+
+function parseJobsSummary(data: unknown): JobsSummary {
   const d = (data ?? {}) as Partial<JobsSummary>;
   return {
     jobCount: Number(d.jobCount ?? 0) || 0,

@@ -32,6 +32,12 @@ export type CommonDict = {
     optional: string;
   };
   // Stale-while-revalidate UI (swrCache): freshness caption + refresh hint.
+  // Empty list caused by active filters — shared FilteredEmpty component.
+  filteredEmpty: {
+    title: string;
+    hint: string;
+    clear: string;
+  };
   swr: {
     updatedAgo: string;   // "{{time}}" placeholder, e.g. "hace 5 min"
     justNow: string;
@@ -168,6 +174,11 @@ export const common: Record<Locale, CommonDict> = {
       no: 'No',
       optional: 'opcional',
     },
+    filteredEmpty: {
+      title: 'Sin resultados.',
+      hint: 'Puede que tus filtros estén ocultando resultados.',
+      clear: 'Limpiar filtros',
+    },
     swr: {
       updatedAgo: 'Actualizado {{time}}',
       justNow: 'justo ahora',
@@ -280,6 +291,11 @@ export const common: Record<Locale, CommonDict> = {
       yes: 'Yes',
       no: 'No',
       optional: 'optional',
+    },
+    filteredEmpty: {
+      title: 'No results.',
+      hint: 'Your filters may be hiding results.',
+      clear: 'Clear filters',
     },
     swr: {
       updatedAgo: 'Updated {{time}}',
