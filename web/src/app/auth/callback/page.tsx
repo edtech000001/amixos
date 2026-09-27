@@ -4,9 +4,10 @@ import { useEffect } from 'react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/i18n/LangProvider';
 import { userNeedsOnboarding } from '@/lib/onboardingGate';
+import { syncUserLocale } from '@amixos/shared/lib/userLocale';
 
 export default function AuthCallbackPage() {
-  const { t } = useLang();
+  const { t, locale } = useLang();
   useEffect(() => {
     const handleCallback = async () => {
       const supabase = createSupabaseClient();
@@ -32,6 +33,7 @@ export default function AuthCallbackPage() {
           // remount) — if a session exists anyway, just continue.
           const { data: { session: existing } } = await supabase.auth.getSession();
           if (existing) {
+            await syncUserLocale(supabase, locale);
             const needsOnboarding = await userNeedsOnboarding(supabase, existing.user.id);
             window.location.href = needsOnboarding ? '/onboarding' : '/dashboard';
             return;
@@ -47,6 +49,11 @@ export default function AuthCallbackPage() {
         // ?google_link=1. It now goes through /auth/google-callback (direct
         // OAuth, see web/src/app/auth/google-callback/page.tsx) — this
         // callback is purely for Supabase sign-in / sign-up.
+
+        // OAuth sends no options.data, so this is the only chance to record
+        // which language the user signed up in — without it every auth email
+        // falls back to Spanish forever.
+        await syncUserLocale(supabase, locale);
 
         // Send members (owners + invited team) to the dashboard; only users
         // who belong to no business at all go through create-business onboarding.

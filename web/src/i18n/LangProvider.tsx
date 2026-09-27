@@ -10,6 +10,8 @@ import {
   LangContext,
   type LangContextValue,
 } from '@amixos/shared';
+import { syncUserLocale } from '@amixos/shared/lib/userLocale';
+import { createSupabaseClient } from '@/lib/supabase';
 
 // Re-export the shared hook so existing imports `from '@/i18n/LangProvider'` work.
 export { useLang } from '@amixos/shared';
@@ -30,6 +32,11 @@ export function LangProvider({ initialLocale, children }: LangProviderProps) {
       document.cookie = `${LOCALE_STORAGE_KEY}=${next}; path=/; max-age=${COOKIE_MAX_AGE_SECONDS}; samesite=lax`;
       document.documentElement.lang = next;
     }
+    // Also persist to the profile, so Supabase renders auth emails in the
+    // language the user just chose. Fire-and-forget: a signed-out visitor on
+    // the landing page is a no-op, and a failure must never block the UI from
+    // switching.
+    void syncUserLocale(createSupabaseClient(), next);
   }, []);
 
   const toggleLocale = useCallback(() => {

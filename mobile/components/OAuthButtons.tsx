@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { View, Pressable, Platform, Alert, ActivityIndicator } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { signInWithApple, signInWithGoogle, type OAuthResult } from '@/lib/oauth';
+import { useLang } from '@/lib/i18n/LangProvider';
+import { createSupabaseClient } from '@/lib/supabase';
+import { syncUserLocale } from '@amixos/shared/lib/userLocale';
 
 export interface OAuthButtonsProps {
   onSuccess: () => void;
@@ -11,6 +14,7 @@ type Provider = 'google' | 'apple';
 
 export function OAuthButtons({ onSuccess }: OAuthButtonsProps) {
   const [busy, setBusy] = useState<Provider | null>(null);
+  const { locale } = useLang();
 
   const handle = async (provider: Provider) => {
     if (busy) return;
@@ -25,7 +29,14 @@ export function OAuthButtons({ onSuccess }: OAuthButtonsProps) {
   };
 
   const handleResult = (result: OAuthResult, provider: Provider) => {
-    if (result.ok) return onSuccess();
+    if (result.ok) {
+      // OAuth carries no options.data, so this is the only point where a
+      // Google/Apple sign-up's language can be recorded. Without it every auth
+      // email for that account falls back to Spanish forever. Fire-and-forget
+      // — sign-in must not wait on a preference write.
+      void syncUserLocale(createSupabaseClient(), locale);
+      return onSuccess();
+    }
     // `in` narrows to the failure variant. `if (!result.ok)` alone doesn't
     // narrow reliably with mobile's `strict: false` tsconfig.
     if (!('reason' in result)) return;

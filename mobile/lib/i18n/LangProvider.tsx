@@ -12,6 +12,8 @@ import {
   type LangContextValue,
   type Locale,
 } from '@amixos/shared';
+import { createSupabaseClient } from '@/lib/supabase';
+import { syncUserLocale } from '@amixos/shared/lib/userLocale';
 
 // Re-export the shared hook so screens can `import { useLang } from '@/lib/i18n/LangProvider'`.
 export { useLang } from '@amixos/shared';
@@ -62,6 +64,10 @@ export function LangProvider({ children }: LangProviderProps) {
     AsyncStorage.setItem(LOCALE_STORAGE_KEY, next).catch(() => {
       // Persistence failure isn't fatal — choice persists for the session.
     });
+    // Also persist to the profile so Supabase renders auth emails in the
+    // language just chosen. This is what lets an existing OAuth user, who
+    // never had a locale recorded, fix their emails by switching in Ajustes.
+    void syncUserLocale(createSupabaseClient(), next);
   }, []);
 
   const toggleLocale = useCallback(() => {
