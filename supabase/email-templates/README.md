@@ -15,10 +15,23 @@ body → Save.
 | `confirmation.html` | Confirm signup | `Confirma tu correo · Confirm your email` |
 | `magic-link.html` | Magic Link | `Tu enlace de acceso · Your sign-in link` |
 | `email-change.html` | Change Email Address | `Confirma tu nuevo correo · Confirm your new email` |
+| `invite.html` | Invite user | `Te invitaron a Amixos · You have been invited to Amixos` |
+| `reauthentication.html` | Reauthentication | `{{ if eq .Data.locale "en" }}Confirm it is you{{ else }}Confirma que eres tú{{ end }}` |
 
-"Invite user" is deliberately not here: team invites go through our own API
-(`/api/v1/invites`) with our own copy, not `admin.inviteUserByEmail`, so the
-Supabase invite template is never sent.
+Two of these behave differently from the rest:
+
+**`invite.html` is not locale-branched.** `api/src/routes/invites.ts` sends it
+via `admin.inviteUserByEmail` with `data: { invite_token, business_id, role }`
+— no locale, because the recipient has no account yet and therefore no language
+preference. Both languages are stacked, Spanish first. Worth improving: pass
+`business_name` and `inviter_name` from the API and the email could say
+"Prime Solutions te invitó" instead of "alguien".
+
+**`reauthentication.html` is not currently sent.** Nothing calls
+`supabase.auth.reauthenticate()`, and "Secure password change" is off. It is
+styled so that enabling either does not start mailing customers a stock,
+English-only template. It carries `{{ .Token }}` (a code, not a link), sized
+for the 8-digit OTP length this project is set to.
 
 ## How the language switch works
 
@@ -50,3 +63,10 @@ Settings with a provider (Resend, Postmark, SendGrid) sending as
 these out of spam. That is a separate task from the templates; do it before the
 App Store listing goes live, because a password reset that never arrives looks
 identical to a broken app.
+
+## Subjects support templating too
+
+Verified on a live send: `{{ if eq .Data.locale "en" }}…{{ else }}…{{ end }}`
+in the **Subject** field renders per user, it is not treated as literal text.
+So subjects are localized like bodies — except for `invite.html`, which has no
+locale to read and uses a static bilingual subject.

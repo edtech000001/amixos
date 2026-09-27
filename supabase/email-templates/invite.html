@@ -1,0 +1,85 @@
+<!-- Supabase → Authentication → Emails → "Invite user"
+     Subject: Te invitaron a Amixos · You have been invited to Amixos
+
+     THIS ONE IS SENT. api/src/routes/invites.ts calls
+     supabase.auth.admin.inviteUserByEmail, so this template reaches every
+     person invited to a business.
+
+     Deliberately NOT locale-branched. The call passes
+     data: { invite_token, business_id, role } and no locale — the recipient
+     has no account yet, so there is no language preference to read. Both
+     languages are stacked instead, Spanish first, because guessing wrong
+     leaves the reader with an email they cannot act on.
+
+     {{ .Data.business_id }} and {{ .Data.role }} are available but not used:
+     one is a UUID and the other is an internal key like 'field' or 'c_foreman'.
+     Passing business_name and inviter_name from the API would let this say
+     "Prime Solutions te invitó" — worth doing, and a change to invites.ts. -->
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F8FAFC;padding:32px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <tr>
+    <td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;background:#FFFFFF;border-radius:16px;border:1px solid #E2E8F0;overflow:hidden;">
+
+        <tr>
+          <td style="padding:28px 32px 0;">
+            <div style="font-size:24px;font-weight:700;color:#2563EB;letter-spacing:-0.5px;">Amixos</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:20px 32px 0;">
+            <div style="font-size:20px;font-weight:700;color:#0F172A;">
+              Te invitaron a Amixos
+            </div>
+            <div style="font-size:15px;line-height:24px;color:#475569;padding-top:12px;">
+              Alguien te invitó a unirte a su equipo en Amixos, el sistema para
+              administrar clientes, trabajos y facturas. Acepta la invitación
+              para crear tu acceso.
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 32px 0;">
+            <a href="{{ .ConfirmationURL }}"
+               style="display:block;background:#2563EB;color:#FFFFFF;font-size:16px;font-weight:600;text-decoration:none;text-align:center;padding:14px 20px;border-radius:12px;">
+              Aceptar invitación
+            </a>
+          </td>
+        </tr>
+
+        <!-- The link is spelled out too: some clients strip or rewrite the
+             button, and a reset the user cannot complete is a support email. -->
+        <tr>
+          <td style="padding:16px 32px 0;">
+            <div style="font-size:12px;line-height:20px;color:#94A3B8;">
+              Si el botón no funciona, copia este enlace:
+              <br>
+              <a href="{{ .ConfirmationURL }}" style="color:#2563EB;word-break:break-all;">{{ .ConfirmationURL }}</a>
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 32px 28px;">
+            <div style="border-top:1px solid #F1F5F9;padding-top:16px;font-size:13px;line-height:21px;color:#64748B;">
+                Si no esperabas esta invitación, ignora el correo — no se crea
+                nada hasta que la aceptes.
+                <br><br>
+                <strong style="color:#0F172A;">English:</strong> someone invited you to
+                join their team on Amixos. Tap the button above to accept and set up
+                your access. If you were not expecting this invitation, ignore this
+                email — nothing is created until you accept.
+            </div>
+          </td>
+        </tr>
+
+      </table>
+
+      <div style="max-width:480px;padding:16px 8px 0;font-size:12px;line-height:20px;color:#94A3B8;text-align:center;">
+        Amixos · Prime Solutions LLC<br>
+        <a href="mailto:soporte@amixos.com" style="color:#94A3B8;">soporte@amixos.com</a>
+      </div>
+    </td>
+  </tr>
+</table>

@@ -1,0 +1,77 @@
+<!-- Supabase → Authentication → Emails → "Reauthentication"
+     Subject: {{ if eq .Data.locale "en" }}Confirm it is you{{ else }}Confirma que eres tú{{ end }}
+
+     NOT CURRENTLY SENT. Nothing in web, mobile, shared or api calls
+     supabase.auth.reauthenticate(), and "Secure password change" is off in the
+     dashboard. Styled anyway so that turning either on does not suddenly send
+     customers a stock, unbranded, English-only email.
+
+     Carries {{ .Token }} — a code, not a link. Email OTP length is set to 8
+     digits, so the box below is sized for that. -->
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F8FAFC;padding:32px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <tr>
+    <td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;background:#FFFFFF;border-radius:16px;border:1px solid #E2E8F0;overflow:hidden;">
+
+        <tr>
+          <td style="padding:28px 32px 0;">
+            <div style="font-size:24px;font-weight:700;color:#2563EB;letter-spacing:-0.5px;">Amixos</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:20px 32px 0;">
+            <div style="font-size:20px;font-weight:700;color:#0F172A;">
+              {{ if eq .Data.locale "en" }}Confirm it is you{{ else }}Confirma que eres tú{{ end }}
+            </div>
+            <div style="font-size:15px;line-height:24px;color:#475569;padding-top:12px;">
+              {{ if eq .Data.locale "en" }}
+                {{ if .Data.first_name }}Hi {{ .Data.first_name }},{{ else }}Hi,{{ end }}
+                enter this code in Amixos to confirm the change to your account:
+              {{ else }}
+                {{ if .Data.first_name }}Hola {{ .Data.first_name }},{{ else }}Hola,{{ end }}
+                ingresa este código en Amixos para confirmar el cambio en tu cuenta:
+              {{ end }}
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 32px 0;">
+            <div style="background:#F1F5F9;border-radius:12px;padding:18px 20px;text-align:center;font-size:30px;font-weight:700;letter-spacing:6px;color:#0F172A;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">
+              {{ .Token }}
+            </div>
+            <!-- No link here on purpose: reauthentication is confirmed by
+                 typing the code back into a screen the user already has open.
+                 A clickable link would be a phishable step for no benefit. -->
+
+          </td>
+        </tr>
+
+        <!-- The link is spelled out too: some clients strip or rewrite the
+             button, and a reset the user cannot complete is a support email. -->
+        <tr>
+          <td style="padding:24px 32px 28px;">
+            <div style="border-top:1px solid #F1F5F9;padding-top:16px;font-size:13px;line-height:21px;color:#64748B;">
+              {{ if eq .Data.locale "en" }}
+                This code expires shortly and can only be used once.
+                <strong style="color:#0F172A;">If you did not request it, ignore this email
+                and change your password</strong> — someone may know it.
+              {{ else }}
+                Este código caduca pronto y solo se puede usar una vez.
+                <strong style="color:#0F172A;">Si no lo pediste, ignora este correo y
+                cambia tu contraseña</strong> — alguien podría conocerla.
+              {{ end }}
+            </div>
+          </td>
+        </tr>
+
+      </table>
+
+      <div style="max-width:480px;padding:16px 8px 0;font-size:12px;line-height:20px;color:#94A3B8;text-align:center;">
+        Amixos · Prime Solutions LLC<br>
+        <a href="mailto:soporte@amixos.com" style="color:#94A3B8;">soporte@amixos.com</a>
+      </div>
+    </td>
+  </tr>
+</table>
