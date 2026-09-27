@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, ReactNode } from 'react';
 import { createSupabaseClient } from '@/lib/supabase';
+import { withTimeout, recoverFromWedgedAuth } from '@/lib/authRecovery';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import {
   setActiveRolePermissions,
@@ -491,16 +492,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const u = { id: session.user.id, email: session.user.email ?? '', name: displayNameFromUser(session.user) };
-        setRealUser(u);
-        await fetchBusinesses(u.id);
-      } else if (window.location.pathname.startsWith('/dashboard')) {
-        window.location.href = '/auth/login';
-        return;
+      try {
+        // Ceiling on getSession(). Chunked auth cookies can end up
+        // inconsistent (an orphaned .1 from a longer previous session, or an
+        // apex/www split), and the auth client then hangs while initializing.
+        // Without a timeout this await never settles, setLoading(false) below
+        // never runs, and the dashboard renders skeletons forever — with no
+        // way out but clearing site data by hand.
+        const { data: { session } } = await withTimeout(
+          supabase.auth.getSession(), 8000, 'get_session',
+        );
+        if (session) {
+          const u = { id: session.user.id, email: session.user.email ?? '', name: displayNameFromUser(session.user) };
+          setRealUser(u);
+          await fetchBusinesses(u.id);
+        } else if (window.location.pathname.startsWith('/dashboard')) {
+          window.location.href = '/auth/login';
+          return;
+        }
+      } catch (err) {
+        console.error('Auth init failed', err);
+        // Clear the wedged cookies and restart at login. Self-healing is the
+        // only option that works for the person affected: the state is
+        // unrecoverable from inside the app, and "clear your cookies" is not
+        // advice a landscaper is going to act on.
+        if (recoverFromWedgedAuth()) return;
+        // Already tried once in this tab — stop looping, drop the loading
+        // state and let the UI show a signed-out app rather than a spinner.
+      } finally {
+        // In a finally so a thrown or timed-out session lookup still ends the
+        // loading state. This was the actual bug: only the happy path cleared
+        // it.
+        setLoading(false);
       }
-      setLoading(false);
     };
     init();
 
