@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { sendEmail } from '../lib/email';
+import { teamInviteHtml, teamInviteSubject, teamInviteText } from '../lib/emails/teamInvite';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { supabase } from '../config/supabase';
 import { inviteLimiter } from '../middleware/rateLimit';
@@ -32,6 +34,89 @@ async function inviterDisplayName(userId: string): Promise<string | null> {
   }
 }
 
+/**
+ * True when Supabase refused because the address already has an account.
+ *
+ * admin.inviteUserByEmail exists to CREATE a pending user, so a registered
+ * address is not an error to retry — it is a different delivery path. Checked
+ * by code first; the message is a fallback for GoTrue versions that answered
+ * before the codes existed.
+ */
+function isAlreadyRegistered(err: { code?: string; message?: string } | null): boolean {
+  if (!err) return false;
+  if (err.code === 'email_exists' || err.code === 'user_already_exists') return true;
+  const m = (err.message ?? '').toLowerCase();
+  return m.includes('already been registered') || m.includes('already registered');
+}
+
+/**
+ * Sends the invitation by whichever path can actually reach this person.
+ *
+ *  • New address → Supabase's inviteUserByEmail, which also creates the
+ *    pending auth user that the signup flow needs.
+ *  • Registered  → our own email through Resend. They do not need an
+ *    invite-to-signup link; they need telling that they now have a second
+ *    workspace, and the accept URL.
+ *
+ * That second path is the bug this fixes. inviteUserByEmail REFUSES a
+ * registered address, so for anyone who had used Amixos before — a contractor
+ * working for two businesses, someone re-added after removal, anyone who
+ * signed up and never finished onboarding — the invite row was written and no
+ * email was ever sent. Silently, and re-inviting failed identically.
+ *
+ * Returns whether anything was actually delivered, so the UI can offer the
+ * copy-link fallback honestly rather than implying mail that never left.
+ */
+async function deliverInvite(args: {
+  email: string;
+  acceptUrl: string;
+  inviteToken: string;
+  businessId: string;
+  businessName: string | null;
+  inviterName: string | null;
+  role?: string;
+}): Promise<boolean> {
+  const { email, acceptUrl, inviteToken, businessId, businessName, inviterName, role } = args;
+
+  try {
+    const { error } = await supabase.auth.admin.inviteUserByEmail(email, {
+      redirectTo: acceptUrl,
+      data: {
+        invite_token: inviteToken,
+        business_id: businessId,
+        ...(role ? { role } : {}),
+        business_name: businessName,
+        inviter_name: inviterName,
+      },
+    });
+    if (!error) return true;
+
+    if (!isAlreadyRegistered(error)) {
+      // eslint-disable-next-line no-console
+      console.warn('[invites] inviteUserByEmail failed', error.message);
+      return false;
+    }
+
+    const data = { businessName, inviterName, acceptUrl };
+    const sent = await sendEmail({
+      to: email,
+      subject: teamInviteSubject(data),
+      html: teamInviteHtml(data),
+      text: teamInviteText(data),
+    });
+    if (!sent.ok) {
+      // eslint-disable-next-line no-console
+      console.warn('[invites] resend send failed', sent.reason, sent.detail ?? '');
+      return false;
+    }
+    return true;
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn('[invites] deliverInvite threw', e);
+    return false;
+  }
+}
+
 export const invitesRouter = Router();
 invitesRouter.use(authenticate);
 
@@ -52,8 +137,10 @@ async function assertAdmin(userId: string, businessId: string): Promise<boolean>
 /**
  * POST /api/v1/invites
  * Body: { business_id, email, role }
- * Creates a business_invites row and sends an invite email via Supabase Auth's
- * built-in inviteUserByEmail (no extra email provider needed). Returns the
+ * Creates a business_invites row and sends an invite email. NEW addresses go
+ * through Supabase Auth's inviteUserByEmail, which also creates the pending
+ * user; addresses that ALREADY have an account go through Resend, because
+ * inviteUserByEmail refuses them. Returns the
  * accept URL so the inviter can also copy/share it manually.
  */
 invitesRouter.post('/', inviteLimiter, async (req: AuthRequest, res) => {
@@ -164,35 +251,18 @@ invitesRouter.post('/', inviteLimiter, async (req: AuthRequest, res) => {
   const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
   const acceptUrl = `${frontendUrl.replace(/\/$/, '')}/invitacion/${invite.token}`;
 
-  // Send invitation email via Supabase Auth's built-in inviter. This creates
-  // a pending auth user if none exists yet, and emails them a magic link
-  // redirecting to our accept URL. Failures are non-fatal — the invite row
-  // exists either way, and the admin can copy the link manually.
-  let emailSent = false;
-  try {
-    // business_name and inviter_name are for the email template only. Without
-    // them it can only say "alguien te invitó a un equipo", which reads like
-    // spam to someone who was expecting an invitation from a person they know.
-    const { error: emailErr } = await supabase.auth.admin.inviteUserByEmail(normalizedEmail, {
-      redirectTo: acceptUrl,
-      data: {
-        invite_token: invite.token,
-        business_id,
-        role,
-        business_name: (bizRow as { name?: string } | null)?.name ?? null,
-        inviter_name: await inviterDisplayName(userId),
-      },
-    });
-    if (!emailErr) {
-      emailSent = true;
-    } else {
-      // eslint-disable-next-line no-console
-      console.warn('[invites] inviteUserByEmail failed', emailErr.message);
-    }
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.warn('[invites] inviteUserByEmail threw', e);
-  }
+  // Delivery is non-fatal — the invite row and its shareable link exist either
+  // way, and the admin can hand the link over directly. deliverInvite picks
+  // the path that can actually reach this address; see its docblock.
+  const emailSent = await deliverInvite({
+    email: normalizedEmail,
+    acceptUrl,
+    inviteToken: invite.token,
+    businessId: business_id,
+    businessName: (bizRow as { name?: string } | null)?.name ?? null,
+    inviterName: await inviterDisplayName(userId),
+    role,
+  });
 
   // Audit log
   await supabase.from('audit_log').insert({
@@ -273,28 +343,20 @@ invitesRouter.post('/:id/resend', inviteLimiter, async (req: AuthRequest, res) =
   const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
   const acceptUrl = `${frontendUrl.replace(/\/$/, '')}/invitacion/${invite.token}`;
 
-  let emailSent = false;
-  try {
-    // Same shape as the create path — a resent invite must not be more
-    // anonymous than the original.
-    const { data: bizRow } = await supabase
-      .from('businesses')
-      .select('name')
-      .eq('id', invite.business_id)
-      .maybeSingle();
+  const { data: bizRow } = await supabase
+    .from('businesses')
+    .select('name')
+    .eq('id', invite.business_id)
+    .maybeSingle();
 
-    const { error } = await supabase.auth.admin.inviteUserByEmail(invite.email, {
-      redirectTo: acceptUrl,
-      data: {
-        invite_token: invite.token,
-        business_name: (bizRow as { name?: string } | null)?.name ?? null,
-        inviter_name: await inviterDisplayName(userId),
-      },
-    });
-    emailSent = !error;
-  } catch {
-    /* swallow */
-  }
+  const emailSent = await deliverInvite({
+    email: invite.email,
+    acceptUrl,
+    inviteToken: invite.token,
+    businessId: invite.business_id,
+    businessName: (bizRow as { name?: string } | null)?.name ?? null,
+    inviterName: await inviterDisplayName(userId),
+  });
 
   return res.json({ success: true, data: { acceptUrl, emailSent } });
 });
