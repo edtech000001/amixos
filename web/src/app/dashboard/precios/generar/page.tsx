@@ -233,9 +233,10 @@ export default function GenerarPreciosPage() {
     return <p className="mb-2 text-xs font-bold uppercase tracking-wide" style={{ color: accent }}>{label}</p>;
   };
 
+  // Street before city/state/zip — the usual mailing-address order.
   const businessLines = business ? [
-    `${business.city ?? ''}${business.state ? `, ${business.state}` : ''}${business.postal_code ? ` ${business.postal_code}` : ''}`,
     business.address ?? '',
+    `${business.city ?? ''}${business.state ? `, ${business.state}` : ''}${business.postal_code ? ` ${business.postal_code}` : ''}`,
     business.phone ?? '',
     business.email ?? '',
     business.website ?? '',

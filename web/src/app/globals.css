@@ -99,7 +99,9 @@
   --color-success: 22 163 74;
   --color-danger: 220 38 38;
   --color-warning: 217 119 6;
-  background: rgb(var(--color-surface));
+  /* The element IS the printed document — paper white, not the slate-50
+     page surface (that printed as a gray box ending mid-page). */
+  background: #fff;
   color: rgb(var(--color-ink));
   }
 }

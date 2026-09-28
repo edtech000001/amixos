@@ -210,8 +210,8 @@ export default function FacturasPreciosPage() {
         businessName: b.name ?? business.name,
         logoUrl: b.logo_url,
         businessLines: [
-          [[b.city, b.state].filter(Boolean).join(', '), b.postal_code ?? ''].filter(Boolean).join(' '),
           b.address ?? '',
+          [[b.city, b.state].filter(Boolean).join(', '), b.postal_code ?? ''].filter(Boolean).join(' '),
           b.phone ?? '',
           b.email ?? '',
         ],
