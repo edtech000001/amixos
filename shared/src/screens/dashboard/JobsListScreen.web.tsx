@@ -70,7 +70,7 @@ import {
   parseJobsFilters,
   type JobsFilters,
 } from '../../lib/jobsFilters';
-import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
+import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset, type DateRangePreset } from '../../lib/dateRangePresets';
 import { formatHours } from '../../lib/fieldHome';
 import { Tooltip } from '../../ui/Tooltip';
 
@@ -325,6 +325,7 @@ export function JobsListScreen({
   // Scheduled-date range filter (yyyy-mm-dd). null = open-ended that side.
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
+  const [datePreset, setDatePreset] = useState<AppliedDatePreset | null>(null);
   const [dateMenuOpen, setDateMenuOpen] = useState(false);
   // Gate persistence until after the restore pass, so we don't overwrite saved
   // filters with defaults on the first render.
@@ -355,6 +356,7 @@ export function JobsListScreen({
     setGroupBy(saved?.groupBy ?? 'none');
     setDateFrom(saved?.dateFrom ?? null);
     setDateTo(saved?.dateTo ?? null);
+    setDatePreset(saved?.datePreset ?? null);
     setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtersKey]);
@@ -362,9 +364,9 @@ export function JobsListScreen({
   // Persist on change — only after restore, so defaults don't clobber saved.
   useEffect(() => {
     if (!hydrated || typeof window === 'undefined') return;
-    const f: JobsFilters = { tabs, search, sortBy, groupBy, dateFrom, dateTo };
+    const f: JobsFilters = { tabs, search, sortBy, groupBy, dateFrom, dateTo, datePreset };
     window.localStorage.setItem(filtersKey, JSON.stringify(f));
-  }, [hydrated, filtersKey, tabs, search, sortBy, groupBy, dateFrom, dateTo]);
+  }, [hydrated, filtersKey, tabs, search, sortBy, groupBy, dateFrom, dateTo, datePreset]);
 
   const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy, dateFrom, dateTo });
   const dateActive = !!dateFrom || !!dateTo;
@@ -410,6 +412,16 @@ export function JobsListScreen({
   // Quick date-range chips — same set as payroll history, including the
   // "This/Last pay period" chips when the caller passes payPeriod.
   const dateRangePresets = buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets, payPeriod);
+  // A tapped relative preset ("This pay period", "This week"…) rolls forward
+  // to its current range once the period turns over, instead of pinning the
+  // dates it had when it was picked.
+  const rolledPreset = rollDatePreset(dateRangePresets, datePreset, dateFrom, dateTo);
+  useEffect(() => {
+    if (!rolledPreset) return;
+    setDateFrom(rolledPreset.from);
+    setDateTo(rolledPreset.to);
+    setDatePreset(rolledPreset);
+  }, [rolledPreset?.key, rolledPreset?.from, rolledPreset?.to]);
 
   // "Actualizado hace 5 min" caption for cache-served rows (swrCache).
   const swrT = full.common.swr;
@@ -422,7 +434,7 @@ export function JobsListScreen({
   };
   const staleCaption = stale && cachedAt ? swrT.updatedAgo.replace('{{time}}', relTime(cachedAt)) : null;
 
-  const applyDatePreset = (from: string, to: string) => { setDateFrom(from); setDateTo(to); };
+  const applyDatePreset = (p: DateRangePreset) => { setDateFrom(p.from); setDateTo(p.to); setDatePreset(toAppliedDatePreset(p)); };
   const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setGroupBy('none'); setDateFrom(null); setDateTo(null); };
 
   const tabLabels: Record<TabKey, string> = {
@@ -945,7 +957,7 @@ export function JobsListScreen({
                     return (
                       <button
                         key={p.label}
-                        onClick={() => applyDatePreset(p.from, p.to)}
+                        onClick={() => applyDatePreset(p)}
                         className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                           active ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
                         }`}

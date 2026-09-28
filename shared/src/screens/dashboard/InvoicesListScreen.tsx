@@ -5,7 +5,7 @@ import { FileText, Search, Calendar, Layers, XCircle, List, Building2, MapPin, C
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
-import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
+import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset } from '../../lib/dateRangePresets';
 import { Fab } from '../../ui/Fab';
 import { formatDateLong, daysOverdue, daysSince } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
@@ -148,6 +148,7 @@ export function InvoicesListScreen({
   // Issue-date range filter.
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
+  const [datePreset, setDatePreset] = useState<AppliedDatePreset | null>(null);
   const [dateOpen, setDateOpen] = useState(false);
   // Group the list into sections — persisted per device+business, like the
   // jobs list, so leaving the screen keeps the chosen grouping.
@@ -191,6 +192,7 @@ export function InvoicesListScreen({
         setStatuses(deepLink ?? (Array.isArray(f?.statuses) ? f!.statuses.filter((k): k is StatusKey => (STATUS_KEYS as readonly string[]).includes(k)) : []));
         setDateFrom(f?.dateFrom ?? null);
         setDateTo(f?.dateTo ?? null);
+        setDatePreset(f?.datePreset ?? null);
         filtersHydrated.current = true;
       })
       .catch(() => { filtersHydrated.current = true; });
@@ -199,8 +201,20 @@ export function InvoicesListScreen({
   }, [filtersKey, initialStatuses]);
   useEffect(() => {
     if (!filtersHydrated.current) return;
-    void AsyncStorage.setItem(filtersKey, JSON.stringify({ statuses, dateFrom, dateTo })).catch(() => {});
-  }, [filtersKey, statuses, dateFrom, dateTo]);
+    void AsyncStorage.setItem(filtersKey, JSON.stringify({ statuses, dateFrom, dateTo, datePreset })).catch(() => {});
+  }, [filtersKey, statuses, dateFrom, dateTo, datePreset]);
+
+  const dateRangePresets = buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets, payPeriod);
+  // A tapped relative preset ("This pay period", "This week"…) rolls forward
+  // to its current range once the period turns over, instead of pinning the
+  // dates it had when it was picked.
+  const rolledPreset = rollDatePreset(dateRangePresets, datePreset, dateFrom, dateTo);
+  useEffect(() => {
+    if (!rolledPreset) return;
+    setDateFrom(rolledPreset.from);
+    setDateTo(rolledPreset.to);
+    setDatePreset(rolledPreset);
+  }, [rolledPreset?.key, rolledPreset?.from, rolledPreset?.to]);
 
   const statusLabels: Record<StatusKey, string> = {
     draft: t.filters.drafts,
@@ -676,14 +690,14 @@ export function InvoicesListScreen({
       onClose={() => setDateOpen(false)}
       from={dateFrom}
       to={dateTo}
-      onChange={({ from, to }) => { setDateFrom(from); setDateTo(to); }}
+      onChange={({ from, to, preset }) => { setDateFrom(from); setDateTo(to); setDatePreset(toAppliedDatePreset(preset)); }}
       title={tdate.title}
       subtitle={t.dateFilterBasis}
       fromLabel={tdate.from}
       toLabel={tdate.to}
       clearLabel={tdate.clear}
       applyLabel={tdate.apply}
-      presets={buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets, payPeriod)}
+      presets={dateRangePresets}
     />
     </View>
   );

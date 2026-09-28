@@ -39,7 +39,7 @@ import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { Input } from '../../ui/Input';
 import { DateRangeSheet } from '../../ui/DateRangeSheet';
-import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
+import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset } from '../../lib/dateRangePresets';
 import { Fab } from '../../ui/Fab';
 import { SkeletonList, SkeletonRow } from '../../ui/Skeleton';
 import { ChipScroll } from '../../ui/ChipScroll';
@@ -324,6 +324,7 @@ export function JobsListScreen({
   // Scheduled-date range filter (yyyy-mm-dd). null = open-ended that side.
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
+  const [datePreset, setDatePreset] = useState<AppliedDatePreset | null>(null);
   const [dateMenuOpen, setDateMenuOpen] = useState(false);
 
   // Re-anchor after returning from a job detail. The screen stays mounted so
@@ -373,6 +374,7 @@ export function JobsListScreen({
         setGroupBy(s?.groupBy ?? 'none');
         setDateFrom(s?.dateFrom ?? null);
         setDateTo(s?.dateTo ?? null);
+        setDatePreset(s?.datePreset ?? null);
         hydrated.current = true;
         setReady(true);
       })
@@ -383,8 +385,20 @@ export function JobsListScreen({
   // Persist on change (after the initial load so we don't clobber stored values).
   useEffect(() => {
     if (!hydrated.current) return;
-    void AsyncStorage.setItem(filtersKey, JSON.stringify({ tabs, search, sortBy, groupBy, dateFrom, dateTo })).catch(() => {});
-  }, [filtersKey, tabs, search, sortBy, groupBy, dateFrom, dateTo]);
+    void AsyncStorage.setItem(filtersKey, JSON.stringify({ tabs, search, sortBy, groupBy, dateFrom, dateTo, datePreset })).catch(() => {});
+  }, [filtersKey, tabs, search, sortBy, groupBy, dateFrom, dateTo, datePreset]);
+
+  const dateRangePresets = buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets, payPeriod);
+  // A tapped relative preset ("This pay period", "This week"…) rolls forward
+  // to its current range once the period turns over, instead of pinning the
+  // dates it had when it was picked.
+  const rolledPreset = rollDatePreset(dateRangePresets, datePreset, dateFrom, dateTo);
+  useEffect(() => {
+    if (!rolledPreset) return;
+    setDateFrom(rolledPreset.from);
+    setDateTo(rolledPreset.to);
+    setDatePreset(rolledPreset);
+  }, [rolledPreset?.key, rolledPreset?.from, rolledPreset?.to]);
 
   const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy, dateFrom, dateTo });
   const dateActive = !!dateFrom || !!dateTo;
@@ -1474,13 +1488,13 @@ export function JobsListScreen({
       onClose={() => setDateMenuOpen(false)}
       from={dateFrom}
       to={dateTo}
-      onChange={({ from, to }) => { setDateFrom(from); setDateTo(to); }}
+      onChange={({ from, to, preset }) => { setDateFrom(from); setDateTo(to); setDatePreset(toAppliedDatePreset(preset)); }}
       title={t.dateFilter.title}
       fromLabel={t.dateFilter.from}
       toLabel={t.dateFilter.to}
       clearLabel={t.dateFilter.clear}
       applyLabel={t.dateFilter.apply}
-      presets={buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets, payPeriod)}
+      presets={dateRangePresets}
     />
     <JobsSummarySheet
       open={summaryOpen}

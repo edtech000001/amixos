@@ -5,12 +5,17 @@
 // invoicesGroupBy key); this module covers the remaining filters. Mirrors
 // jobsFilters.ts.
 
+import { parseAppliedDatePreset, type AppliedDatePreset } from './dateRangePresets';
+
 export interface InvoicesFilters {
   /** Selected status filters (multi-select). Empty = "all" (no status filter). */
   statuses: string[];
   /** Issue-date range filter (yyyy-mm-dd). null = open-ended on that side. */
   dateFrom: string | null;
   dateTo: string | null;
+  /** The quick preset that produced dateFrom/dateTo, so "This pay period"
+   *  etc. roll forward on later visits (see rollDatePreset). */
+  datePreset?: AppliedDatePreset | null;
 }
 
 export const INVOICES_FILTERS_KEY = 'amixos.invoicesFilters.v1';
@@ -27,6 +32,7 @@ export function parseInvoicesFilters(raw: string | null | undefined): Partial<In
     }
     if (typeof o.dateFrom === 'string') out.dateFrom = o.dateFrom;
     if (typeof o.dateTo === 'string') out.dateTo = o.dateTo;
+    out.datePreset = parseAppliedDatePreset(o.datePreset);
     return out;
   } catch {
     return null;

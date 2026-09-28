@@ -12,7 +12,7 @@ import { formatDateLong, daysOverdue, daysSince } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { INVOICES_FILTERS_KEY, parseInvoicesFilters } from '../../lib/invoicesFilters';
-import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
+import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset } from '../../lib/dateRangePresets';
 import { Tooltip } from '../../ui/Tooltip';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { reminderBadge } from '../../lib/invoiceReminders';
@@ -138,6 +138,7 @@ export function InvoicesListScreen({
   const [search, setSearch, debouncedSearch] = usePersistedSearch(businessId ? `search.invoices.${businessId}` : null);
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
+  const [datePreset, setDatePreset] = useState<AppliedDatePreset | null>(null);
   const [dateOpen, setDateOpen] = useState(false);
   // Group the list into sections — persisted per device+business, like the
   // jobs list, so leaving the page keeps the chosen grouping.
@@ -164,6 +165,7 @@ export function InvoicesListScreen({
     setStatuses(deepLink ?? (Array.isArray(f?.statuses) ? f!.statuses.filter((k): k is StatusKey => (STATUS_KEYS as readonly string[]).includes(k)) : []));
     setDateFrom(f?.dateFrom ?? null);
     setDateTo(f?.dateTo ?? null);
+    setDatePreset(f?.datePreset ?? null);
     setHydrated(true);
     // Re-run when the business changes so filters are scoped per company.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -175,8 +177,18 @@ export function InvoicesListScreen({
   // Persist status + date filters on change (after the restore).
   useEffect(() => {
     if (!hydrated) return;
-    try { window.localStorage.setItem(filtersKey, JSON.stringify({ statuses, dateFrom, dateTo })); } catch { /* private mode */ }
-  }, [hydrated, filtersKey, statuses, dateFrom, dateTo]);
+    try { window.localStorage.setItem(filtersKey, JSON.stringify({ statuses, dateFrom, dateTo, datePreset })); } catch { /* private mode */ }
+  }, [hydrated, filtersKey, statuses, dateFrom, dateTo, datePreset]);
+  // A tapped relative preset ("This pay period", "This week"…) rolls forward
+  // to its current range once the period turns over, instead of pinning the
+  // dates it had when it was picked.
+  const rolledPreset = rollDatePreset(dateRangePresets, datePreset, dateFrom, dateTo);
+  useEffect(() => {
+    if (!rolledPreset) return;
+    setDateFrom(rolledPreset.from);
+    setDateTo(rolledPreset.to);
+    setDatePreset(rolledPreset);
+  }, [rolledPreset?.key, rolledPreset?.from, rolledPreset?.to]);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
 
   const statusLabels: Record<StatusKey, string> = {
@@ -454,7 +466,7 @@ export function InvoicesListScreen({
                     return (
                       <button
                         key={pr.label}
-                        onClick={() => { setDateFrom(pr.from); setDateTo(pr.to); }}
+                        onClick={() => { setDateFrom(pr.from); setDateTo(pr.to); setDatePreset(toAppliedDatePreset(pr)); }}
                         className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                           active ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
                         }`}

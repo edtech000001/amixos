@@ -9,7 +9,8 @@ interface Props {
   onClose: () => void;
   from: string | null;
   to: string | null;
-  onChange: (next: { from: string | null; to: string | null }) => void;
+  /** `preset` is set only when a quick-preset chip was tapped. */
+  onChange: (next: { from: string | null; to: string | null; preset?: DateRangePreset }) => void;
   title: string;
   /** Optional caption under the title — e.g. WHICH date the filter matches. */
   subtitle?: string;
@@ -83,7 +84,7 @@ export function DateRangeSheet({
               return (
                 <Pressable
                   key={p.label}
-                  onPress={() => onChange({ from: p.from, to: p.to })}
+                  onPress={() => onChange({ from: p.from, to: p.to, preset: p })}
                   className={`px-3.5 py-1.5 rounded-full border ${selected ? 'border-primary bg-primary/10' : 'border-border bg-card'}`}
                 >
                   <Text className={`text-sm font-semibold ${selected ? 'text-primary' : 'text-muted'}`}>{p.label}</Text>

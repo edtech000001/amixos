@@ -5,6 +5,7 @@
 // shape; this module owns the key, defaults, and "is anything active?" check.
 
 import type { JobSortKey, JobGroupKey } from './jobSort';
+import { parseAppliedDatePreset, type AppliedDatePreset } from './dateRangePresets';
 
 export interface JobsFilters {
   /** Selected status tabs (multi-select). Empty = "all" (no status filter). */
@@ -15,6 +16,9 @@ export interface JobsFilters {
   /** Scheduled-date range filter (yyyy-mm-dd). null = open-ended on that side. */
   dateFrom: string | null;
   dateTo: string | null;
+  /** The quick preset that produced dateFrom/dateTo, so "This pay period"
+   *  etc. roll forward on later visits (see rollDatePreset). */
+  datePreset?: AppliedDatePreset | null;
 }
 
 export const JOBS_FILTERS_KEY = 'amixos.jobsFilters.v1';
@@ -79,6 +83,7 @@ export function parseJobsFilters(raw: string | null | undefined): Partial<JobsFi
     if (o.groupBy) out.groupBy = o.groupBy;
     if (typeof o.dateFrom === 'string') out.dateFrom = o.dateFrom;
     if (typeof o.dateTo === 'string') out.dateTo = o.dateTo;
+    out.datePreset = parseAppliedDatePreset(o.datePreset);
     return out;
   } catch {
     return null;
