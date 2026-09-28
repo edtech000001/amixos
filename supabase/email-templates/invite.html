@@ -5,11 +5,16 @@
      supabase.auth.admin.inviteUserByEmail, so this template reaches every
      person invited to a business.
 
-     Deliberately NOT locale-branched. The call passes
-     data: { invite_token, business_id, role } and no locale — the recipient
-     has no account yet, so there is no language preference to read. Both
-     languages are stacked instead, Spanish first, because guessing wrong
-     leaves the reader with an email they cannot act on.
+     Deliberately still BILINGUAL, even though invites.ts now forwards a
+     `locale`. That value is the INVITER's UI language, not the recipient's —
+     a good prior (an owner usually invites people who read what they read)
+     but only a prior, and the recipient has no account to check it against.
+     Stacking costs a few lines and guarantees the reader can act on it; the
+     locale is available as {{ .Data.locale }} if you later decide to lead
+     with one language and demote the other.
+
+     Contrast with the existing-user path in api/src/lib/emails/teamInvite.ts,
+     which renders ONE language — that recipient does have an account.
 
      {{ .Data.business_id }} and {{ .Data.role }} are available but not used:
      one is a UUID and the other is an internal key like 'field' or 'c_foreman'.

@@ -522,7 +522,12 @@ export default function EmpleadoDetailRoute() {
     const res = await fetch(`${getApiBaseUrl()}/api/v1/invites`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await getJwt()}` },
-      body: JSON.stringify({ business_id: business.id, email, role }),
+      // locale is a HINT for the invite email, not a setting. The invitee has
+      // no account yet, so there is no preference to read — but a
+      // Spanish-speaking owner inviting their crew is almost certainly
+      // inviting Spanish speakers. On mobile this is the phone's language,
+      // since LangProvider seeds from getDeviceLocale() on first launch.
+      body: JSON.stringify({ business_id: business.id, email, role, locale }),
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));

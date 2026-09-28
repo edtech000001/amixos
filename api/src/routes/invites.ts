@@ -74,9 +74,14 @@ async function deliverInvite(args: {
   businessId: string;
   businessName: string | null;
   inviterName: string | null;
+  /** The INVITER's UI language, forwarded by the client. A hint, not a
+   *  setting: the invitee has no account, so there is no preference to read,
+   *  and a Spanish-speaking owner is almost certainly inviting Spanish
+   *  speakers. On mobile this is the phone's language. */
+  locale?: string | null;
   role?: string;
 }): Promise<boolean> {
-  const { email, acceptUrl, inviteToken, businessId, businessName, inviterName, role } = args;
+  const { email, acceptUrl, inviteToken, businessId, businessName, inviterName, locale, role } = args;
 
   try {
     const { error } = await supabase.auth.admin.inviteUserByEmail(email, {
@@ -87,6 +92,10 @@ async function deliverInvite(args: {
         ...(role ? { role } : {}),
         business_name: businessName,
         inviter_name: inviterName,
+        // invite.html stays bilingual — GoTrue sends it to someone with no
+        // account — but the locale rides along so it can lead with the right
+        // language once that template is taught to use it.
+        locale: locale ?? null,
       },
     });
     if (!error) return true;
@@ -97,7 +106,7 @@ async function deliverInvite(args: {
       return false;
     }
 
-    const data = { businessName, inviterName, acceptUrl };
+    const data = { businessName, inviterName, acceptUrl, locale };
     const sent = await sendEmail({
       to: email,
       subject: teamInviteSubject(data),
@@ -147,7 +156,7 @@ invitesRouter.post('/', inviteLimiter, async (req: AuthRequest, res) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ success: false, message: 'Unauthenticated' });
 
-  const { business_id, email, role } = req.body ?? {};
+  const { business_id, email, role, locale } = req.body ?? {};
   if (!business_id || !email || !role) {
     return res.status(400).json({ success: false, message: 'business_id, email, role required' });
   }
@@ -261,6 +270,7 @@ invitesRouter.post('/', inviteLimiter, async (req: AuthRequest, res) => {
     businessId: business_id,
     businessName: (bizRow as { name?: string } | null)?.name ?? null,
     inviterName: await inviterDisplayName(userId),
+    locale: typeof locale === 'string' ? locale : null,
     role,
   });
 
@@ -325,6 +335,9 @@ invitesRouter.delete('/:id', async (req: AuthRequest, res) => {
  * Resend the email for a pending invite (does not change the token).
  */
 invitesRouter.post('/:id/resend', inviteLimiter, async (req: AuthRequest, res) => {
+  // Same hint as the create path, from whoever is resending — they are the one
+  // on screen now, and the body is otherwise empty on this route.
+  const locale = (req.body ?? {}).locale;
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ success: false, message: 'Unauthenticated' });
 
@@ -356,6 +369,8 @@ invitesRouter.post('/:id/resend', inviteLimiter, async (req: AuthRequest, res) =
     businessId: invite.business_id,
     businessName: (bizRow as { name?: string } | null)?.name ?? null,
     inviterName: await inviterDisplayName(userId),
+    // Resend uses the RESENDER's language — they are the one on screen now.
+    locale: typeof locale === 'string' ? locale : null,
   });
 
   return res.json({ success: true, data: { acceptUrl, emailSent } });
