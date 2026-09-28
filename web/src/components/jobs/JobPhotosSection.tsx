@@ -20,6 +20,8 @@ import { useSignedUrls } from '@amixos/shared/lib/storageUrls';
 import { normalizeImageFiles } from '@/lib/imageFile';
 import { usePasteImage } from '@/lib/usePasteImage';
 import { PasteHint } from '@/components/ui/PasteHint';
+import { useDropImages } from '@/lib/useDropImages';
+import { DropOverlay } from '@/components/ui/DropOverlay';
 
 interface Props {
   jobId: string;
@@ -126,6 +128,10 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
   // Ctrl/Cmd+V uploads a copied image. `photos` is a dep because uploadFiles
   // closes over it for the count guard + sort order.
   usePasteImage(canWrite, files => void normalizeImageFiles(files).then(uploadFiles), [photos]);
+  // …and so does dragging photos onto the card.
+  const { dragging, dropProps } = useDropImages(canWrite && photos.length < MAX_PHOTOS_PER_JOB && !uploading, files =>
+    void normalizeImageFiles(files).then(uploadFiles),
+  );
 
   const removePhoto = async (photo: JobPhoto) => {
     if (!(await confirm({ message: t.deleteConfirm, destructive: true }))) return;
@@ -207,7 +213,8 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
   };
 
   return (
-    <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+    <div {...dropProps} className="relative bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+      <DropOverlay show={dragging} />
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold text-ink">{t.heading}</h2>
         <span className="text-xs text-faint">
@@ -277,7 +284,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
           ) : null}
         </div>
       )}
-      {canWrite && !atLimit ? <PasteHint className="mt-2" /> : null}
+      {canWrite && !atLimit ? <PasteHint drop className="mt-2" /> : null}
 
       <input
         ref={fileInputRef}

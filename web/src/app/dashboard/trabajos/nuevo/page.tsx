@@ -33,6 +33,8 @@ import { evaluateOperatingHours, normalizeOperatingHours } from '@amixos/shared/
 import { normalizeImageFiles } from '@/lib/imageFile';
 import { usePasteImage } from '@/lib/usePasteImage';
 import { PasteHint } from '@/components/ui/PasteHint';
+import { useDropImages } from '@/lib/useDropImages';
+import { DropOverlay } from '@/components/ui/DropOverlay';
 
 interface Client { id: string; first_name: string; last_name: string; company: string | null; job_address?: string; city?: string; state?: string; contacts?: { name: string; role: string | null }[]; }
 interface Employee { id: string; first_name: string; last_name: string; role: string; }
@@ -1406,13 +1408,18 @@ function NuevoTrabajoContent() {
     ev.target.value = '';
   };
 
-  // Ctrl/Cmd+V stages a copied image alongside the picked ones.
-  usePasteImage(true, files =>
+  // Ctrl/Cmd+V or dragging photos onto the card stages them alongside the
+  // picked ones.
+  const stagePhotos = (files: File[]) =>
     void normalizeImageFiles(files).then(norm =>
       setPendingPhotos(prev =>
         [...prev, ...norm.map(file => ({ file, url: URL.createObjectURL(file) }))].slice(0, MAX_PHOTOS_PER_JOB),
       ),
-    ),
+    );
+  usePasteImage(true, stagePhotos);
+  const { dragging: photoDragging, dropProps: photoDropProps } = useDropImages(
+    pendingPhotos.length < MAX_PHOTOS_PER_JOB,
+    stagePhotos,
   );
 
   const removePendingPhoto = (url: string) => {
@@ -2174,11 +2181,11 @@ function NuevoTrabajoContent() {
             {isEditProposal ? (
               /* Proposal: simpler grid without item_type */
               <>
-                <div className="grid grid-cols-[1fr_70px_90px_80px_32px] gap-2 text-xs font-semibold text-faint uppercase tracking-wide pb-1">
+                <div className="grid grid-cols-[1fr_110px_120px_110px_32px] gap-2 text-xs font-semibold text-faint uppercase tracking-wide pb-1">
                   <span>{t.colDescription}</span><span className="text-center">{t.colQty}</span><span className="text-right">{t.colUnitPrice}</span><span className="text-right">{t.colTotal}</span><span/>
                 </div>
                 {items.map(item => (
-                  <div key={item.id} className="grid grid-cols-[1fr_70px_90px_80px_32px] gap-2 items-center">
+                  <div key={item.id} className="grid grid-cols-[1fr_110px_120px_110px_32px] gap-2 items-center">
                     <input type="text" placeholder={t.itemDescriptionPlaceholderProposal}
                       value={item.description} onChange={e => updateItem(item.id, 'description', e.target.value)}
                       className="rounded-xl border border-border px-3 py-2 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary"/>
@@ -2202,11 +2209,11 @@ function NuevoTrabajoContent() {
             ) : (
               /* Job: full grid with item_type (type column hidden when off) */
               <>
-                <div className={`grid ${showItemTypes ? 'grid-cols-[100px_1fr_70px_90px_80px_32px]' : 'grid-cols-[1fr_70px_90px_80px_32px]'} gap-2 text-xs font-semibold text-faint uppercase tracking-wide pb-1`}>
+                <div className={`grid ${showItemTypes ? 'grid-cols-[100px_1fr_110px_120px_110px_32px]' : 'grid-cols-[1fr_110px_120px_110px_32px]'} gap-2 text-xs font-semibold text-faint uppercase tracking-wide pb-1`}>
                   {showItemTypes ? <span>{t.colType}</span> : null}<span>{t.colDescription}</span><span className="text-center">{t.colQty}</span><span className="text-right">{t.colUnitPrice}</span><span className="text-right">{t.colTotal}</span><span/>
                 </div>
                 {items.map(item => (
-                  <div key={item.id} className={`grid ${showItemTypes ? 'grid-cols-[100px_1fr_70px_90px_80px_32px]' : 'grid-cols-[1fr_70px_90px_80px_32px]'} gap-2 items-center`}>
+                  <div key={item.id} className={`grid ${showItemTypes ? 'grid-cols-[100px_1fr_110px_120px_110px_32px]' : 'grid-cols-[1fr_110px_120px_110px_32px]'} gap-2 items-center`}>
                     {showItemTypes ? (
                     <select value={item.item_type}
                       onChange={e => updateItem(item.id, 'item_type', e.target.value)}
@@ -2279,7 +2286,8 @@ function NuevoTrabajoContent() {
         {editId && business ? (
           <JobPhotosSection jobId={editId} businessId={business.id} canWrite />
         ) : (
-          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+          <div {...photoDropProps} className="relative bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+            <DropOverlay show={photoDragging} />
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <ImagePlus size={15} className="text-primary"/>
@@ -2316,7 +2324,7 @@ function NuevoTrabajoContent() {
                 </button>
               )}
             </div>
-            <PasteHint className="mt-2" />
+            <PasteHint drop className="mt-2" />
             {pendingPhotos.length > 0 && (
               <p className="text-xs text-faint mt-1">{full.dashboard.jobs.detail.photos.pendingHint}</p>
             )}

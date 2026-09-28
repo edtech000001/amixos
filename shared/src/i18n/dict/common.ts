@@ -46,6 +46,9 @@ export type CommonDict = {
   // Web-only discoverability hint: paste an image straight into a photo
   // field. "{{keys}}" is the platform shortcut (⌘V on Mac, Ctrl+V else).
   pasteImageHint: string;
+  /** Same hint where the area also accepts a dragged-in photo. */
+  dropOrPasteImageHint: string;
+  dropImagesHere: string;
   // Shown when the app can't load the user's account/business (e.g. a
   // not-yet-run DB migration). Deliberately reassures the user nothing was
   // lost and offers a retry.
@@ -199,6 +202,8 @@ export const common: Record<Locale, CommonDict> = {
       refreshing: 'Actualizando…',
     },
     pasteImageHint: 'También puedes pegar una foto copiada con {{keys}}',
+    dropOrPasteImageHint: 'También puedes arrastrar una foto aquí o pegarla con {{keys}}',
+    dropImagesHere: 'Suelta las fotos aquí',
     listLoadFailed: 'No se pudo cargar la lista.',
     legalConsent: {
       title: 'Antes de continuar',
@@ -329,6 +334,8 @@ export const common: Record<Locale, CommonDict> = {
       refreshing: 'Refreshing…',
     },
     pasteImageHint: 'You can also paste a copied photo with {{keys}}',
+    dropOrPasteImageHint: 'You can also drag a photo here or paste it with {{keys}}',
+    dropImagesHere: 'Drop photos here',
     listLoadFailed: "Couldn't load the list.",
     legalConsent: {
       title: 'Before you continue',

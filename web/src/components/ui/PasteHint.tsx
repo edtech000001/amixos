@@ -12,7 +12,11 @@ import { useLang } from '@/i18n/LangProvider';
  * render would mismatch the server-rendered HTML, so it starts as the Ctrl
  * label and corrects itself in an effect — a swap nobody notices on a hint.
  */
-export function PasteHint({ className = '' }: { className?: string }) {
+export function PasteHint({ className = '', drop = false }: {
+  className?: string;
+  /** The area also accepts drag-and-drop (see `useDropImages`) — say so. */
+  drop?: boolean;
+}) {
   const { t } = useLang();
   const [keys, setKeys] = useState('Ctrl+V');
 
@@ -28,7 +32,7 @@ export function PasteHint({ className = '' }: { className?: string }) {
   // where flow content like <p> is invalid nesting and React warns.
   return (
     <span className={`block text-xs text-faint ${className}`}>
-      {t.common.pasteImageHint.replace('{{keys}}', keys)}
+      {(drop ? t.common.dropOrPasteImageHint : t.common.pasteImageHint).replace('{{keys}}', keys)}
     </span>
   );
 }
