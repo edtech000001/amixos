@@ -333,6 +333,13 @@ export default function EmpleadoDetailPage({ params }: { params: { id: string } 
       setAccessBusy(false);
       return;
     }
+    // The API creates the invite row even when the email fails to send — a
+    // deliberate choice so the link can still be shared by hand. Surface that,
+    // or an admin has no way to tell a delivered invite from a silent failure.
+    const sentBody = await res.json().catch(() => ({}));
+    if (sentBody?.data && sentBody.data.emailSent === false) {
+      setAccessError(teamT.inviteEmailFailed);
+    }
     await load(); setAccessBusy(false);
   };
 

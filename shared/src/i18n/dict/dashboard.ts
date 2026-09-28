@@ -2130,6 +2130,10 @@ export type DashboardDict = {
       noPendingInvites: string;
       inviteSentToast: string;
       inviteFailedToast: string;
+      /** The invite row was created but the EMAIL did not go out. Delivery is
+       *  non-fatal in the API, so without this the admin cannot tell a sent
+       *  invite from a silently undelivered one. */
+      inviteEmailFailed: string;
       confirmRemove: string;
       confirmRevoke: string;
       errorInviteSelf: string;
@@ -5350,6 +5354,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         noPendingInvites: 'No hay invitaciones pendientes.',
         inviteSentToast: 'Invitación enviada a {{email}}.',
         inviteFailedToast: 'No se pudo enviar la invitación.',
+        inviteEmailFailed: 'Invitación creada, pero no pudimos enviar el correo. Copia el enlace y compártelo.',
         confirmRemove: '¿Quitar a {{name}} del negocio?',
         confirmRevoke: '¿Revocar la invitación para {{email}}?',
         errorInviteSelf: 'No puedes invitarte a ti mismo.',
@@ -8581,6 +8586,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         noPendingInvites: 'No pending invites.',
         inviteSentToast: 'Invite sent to {{email}}.',
         inviteFailedToast: 'Could not send invite.',
+        inviteEmailFailed: 'Invite created, but we could not send the email. Copy the link and share it.',
         confirmRemove: 'Remove {{name}} from the business?',
         confirmRevoke: 'Revoke the invite for {{email}}?',
         errorInviteSelf: "You can't invite yourself.",

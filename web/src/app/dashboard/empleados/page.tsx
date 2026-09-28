@@ -876,11 +876,20 @@ export default function EmpleadosPage() {
       setAccessBusy(false);
       return;
     }
+    // The API creates the invite row even when the email fails to send — a
+    // deliberate choice so the link can still be shared by hand. Surface that,
+    // or an admin has no way to tell a delivered invite from a silent failure.
+    const body = await res.json().catch(() => ({}));
+    if (body?.data && body.data.emailSent === false) {
+      setAccessError(teamT.inviteEmailFailed);
+    }
     await loadPeople(); setAccessBusy(false);
   };
 
-  // Copy the invite's accept link for manual sharing (email delivery via
-  // Supabase can be slow / land in spam).
+  // Copy the invite's accept link for manual sharing. The invite email now
+  // goes out through our own domain via Resend, so this is a backup rather
+  // than the main path — but a mistyped address or a strict spam filter still
+  // happens, and the admin needs a way to hand the link over directly.
   const copyInviteLink = async (inviteId: string) => {
     const url = invites.find(i => i.id === inviteId)?.acceptUrl;
     if (!url) return;
