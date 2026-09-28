@@ -4,6 +4,34 @@ import { supabase } from '../config/supabase';
 import { inviteLimiter } from '../middleware/rateLimit';
 import { wouldExceedMembers, memberLimit, type SubscriptionRow } from '../lib/planLimits';
 
+/**
+ * A human name for whoever sent the invite, so the email can say
+ * "Edvin te invitó" instead of "alguien te invitó".
+ *
+ * Email/password signups store first_name / last_name; Google and Apple store
+ * name or full_name. All of them can be absent, and the email address is a
+ * poor last resort but still better than nothing — the template has its own
+ * fallback for when even this returns null.
+ */
+async function inviterDisplayName(userId: string): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.admin.getUserById(userId);
+    const m = (data?.user?.user_metadata ?? {}) as Record<string, unknown>;
+    const first = typeof m.first_name === 'string' ? m.first_name.trim() : '';
+    const last = typeof m.last_name === 'string' ? m.last_name.trim() : '';
+    const joined = [first, last].filter(Boolean).join(' ');
+    if (joined) return joined;
+    for (const key of ['full_name', 'name']) {
+      const v = m[key];
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+    return data?.user?.email ?? null;
+  } catch {
+    // Never fail an invite over a nicety.
+    return null;
+  }
+}
+
 export const invitesRouter = Router();
 invitesRouter.use(authenticate);
 
@@ -93,7 +121,9 @@ invitesRouter.post('/', inviteLimiter, async (req: AuthRequest, res) => {
   const [{ data: bizRow }, { count: pendingCount }] = await Promise.all([
     supabase
       .from('businesses')
-      .select('plan, subscription_status, trial_ends_at')
+      // name comes along for the invite email — the seat-cap query already
+      // reads this row, so naming the business costs nothing extra.
+      .select('name, plan, subscription_status, trial_ends_at')
       .eq('id', business_id)
       .maybeSingle(),
     supabase
@@ -140,9 +170,18 @@ invitesRouter.post('/', inviteLimiter, async (req: AuthRequest, res) => {
   // exists either way, and the admin can copy the link manually.
   let emailSent = false;
   try {
+    // business_name and inviter_name are for the email template only. Without
+    // them it can only say "alguien te invitó a un equipo", which reads like
+    // spam to someone who was expecting an invitation from a person they know.
     const { error: emailErr } = await supabase.auth.admin.inviteUserByEmail(normalizedEmail, {
       redirectTo: acceptUrl,
-      data: { invite_token: invite.token, business_id, role },
+      data: {
+        invite_token: invite.token,
+        business_id,
+        role,
+        business_name: (bizRow as { name?: string } | null)?.name ?? null,
+        inviter_name: await inviterDisplayName(userId),
+      },
     });
     if (!emailErr) {
       emailSent = true;
@@ -236,9 +275,21 @@ invitesRouter.post('/:id/resend', inviteLimiter, async (req: AuthRequest, res) =
 
   let emailSent = false;
   try {
+    // Same shape as the create path — a resent invite must not be more
+    // anonymous than the original.
+    const { data: bizRow } = await supabase
+      .from('businesses')
+      .select('name')
+      .eq('id', invite.business_id)
+      .maybeSingle();
+
     const { error } = await supabase.auth.admin.inviteUserByEmail(invite.email, {
       redirectTo: acceptUrl,
-      data: { invite_token: invite.token },
+      data: {
+        invite_token: invite.token,
+        business_name: (bizRow as { name?: string } | null)?.name ?? null,
+        inviter_name: await inviterDisplayName(userId),
+      },
     });
     emailSent = !error;
   } catch {

@@ -1,5 +1,5 @@
 <!-- Supabase → Authentication → Emails → "Invite user"
-     Subject: Te invitaron a Amixos · You have been invited to Amixos
+     Subject: {{ if .Data.business_name }}Te invitaron a {{ .Data.business_name }}{{ else }}Te invitaron a Amixos{{ end }} · You have been invited to Amixos
 
      THIS ONE IS SENT. api/src/routes/invites.ts calls
      supabase.auth.admin.inviteUserByEmail, so this template reaches every
@@ -13,8 +13,9 @@
 
      {{ .Data.business_id }} and {{ .Data.role }} are available but not used:
      one is a UUID and the other is an internal key like 'field' or 'c_foreman'.
-     Passing business_name and inviter_name from the API would let this say
-     "Prime Solutions te invitó" — worth doing, and a change to invites.ts. -->
+     business_name and inviter_name ARE used — invites.ts passes both, on the
+     create and the resend path. Every use has a fallback, because an OAuth
+     signup may have no name stored and a business row could be mid-rename. -->
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F8FAFC;padding:32px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
   <tr>
     <td align="center">
@@ -29,12 +30,14 @@
         <tr>
           <td style="padding:20px 32px 0;">
             <div style="font-size:20px;font-weight:700;color:#0F172A;">
-              Te invitaron a Amixos
+              {{ if .Data.business_name }}Te invitaron a {{ .Data.business_name }}{{ else }}Te invitaron a Amixos{{ end }}
             </div>
             <div style="font-size:15px;line-height:24px;color:#475569;padding-top:12px;">
-              Alguien te invitó a unirte a su equipo en Amixos, el sistema para
-              administrar clientes, trabajos y facturas. Acepta la invitación
-              para crear tu acceso.
+              {{ if .Data.inviter_name }}{{ .Data.inviter_name }}{{ else }}Alguien{{ end }}
+              te invitó a unirte
+              {{ if .Data.business_name }}al equipo de <strong style="color:#0F172A;">{{ .Data.business_name }}</strong>{{ else }}a un equipo{{ end }}
+              en Amixos, el sistema para administrar clientes, trabajos y
+              facturas. Acepta la invitación para crear tu acceso.
             </div>
           </td>
         </tr>
@@ -66,10 +69,13 @@
                 Si no esperabas esta invitación, ignora el correo — no se crea
                 nada hasta que la aceptes.
                 <br><br>
-                <strong style="color:#0F172A;">English:</strong> someone invited you to
-                join their team on Amixos. Tap the button above to accept and set up
-                your access. If you were not expecting this invitation, ignore this
-                email — nothing is created until you accept.
+                <strong style="color:#0F172A;">English:</strong>
+                {{ if .Data.inviter_name }}{{ .Data.inviter_name }}{{ else }}Someone{{ end }}
+                invited you to join
+                {{ if .Data.business_name }}{{ .Data.business_name }}{{ else }}their team{{ end }}
+                on Amixos. Tap the button above to accept and set up your access.
+                If you were not expecting this invitation, ignore this email —
+                nothing is created until you accept.
             </div>
           </td>
         </tr>

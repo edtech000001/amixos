@@ -23,9 +23,9 @@ Two of these behave differently from the rest:
 **`invite.html` is not locale-branched.** `api/src/routes/invites.ts` sends it
 via `admin.inviteUserByEmail` with `data: { invite_token, business_id, role }`
 — no locale, because the recipient has no account yet and therefore no language
-preference. Both languages are stacked, Spanish first. Worth improving: pass
-`business_name` and `inviter_name` from the API and the email could say
-"Prime Solutions te invitó" instead of "alguien".
+preference. Both languages are stacked, Spanish first. `invites.ts` does pass `business_name` and `inviter_name` (create and resend),
+so the email says "Edvin te invitó a unirte al equipo de Prime Solutions".
+Every use is guarded — an OAuth signup may have no name stored.
 
 **`reauthentication.html` is not currently sent.** Nothing calls
 `supabase.auth.reauthenticate()`, and "Secure password change" is off. It is
