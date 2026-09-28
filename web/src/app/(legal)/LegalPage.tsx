@@ -15,23 +15,12 @@ import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
-export type Lang = 'es' | 'en';
+// Types and text both come from shared/ — the consent gate inside the apps
+// renders the same documents, and they must not drift.
+import type { Lang, LegalContent, LegalDoc } from '@amixos/shared/legal/types';
+export type { Lang, LegalContent } from '@amixos/shared/legal/types';
 
-/** A section: heading + paragraphs. A paragraph starting with "- " renders as
- *  a bullet, which is all the structure these documents need. */
-export interface LegalSection {
-  heading: string;
-  body: string[];
-}
-
-export interface LegalContent {
-  title: string;
-  updated: string;
-  intro: string[];
-  sections: LegalSection[];
-}
-
-export function LegalPage({ content }: { content: Record<Lang, LegalContent> }) {
+export function LegalPage({ content }: { content: LegalDoc }) {
   const [lang, setLang] = useState<Lang>('es');
   const c = content[lang];
 

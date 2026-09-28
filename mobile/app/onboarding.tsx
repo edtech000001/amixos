@@ -13,6 +13,7 @@ import {
   type OnboardingData,
   type PickLogoResult,
 } from '@amixos/shared/screens/onboarding/OnboardingScreen';
+import { PolicyConsentGate } from '@/components/PolicyConsentGate';
 
 export default function OnboardingRoute() {
   const router = useRouter();
@@ -203,14 +204,19 @@ export default function OnboardingRoute() {
   };
 
   return (
-    <OnboardingScreen
-      onPickLogo={handlePickLogo}
-      onFinish={handleFinish}
-      onLogout={() => { void useAuthStore.getState().logout(); }}
-      onDeleteAccount={() => { void deleteAccount(); }}
-      onCancel={adding ? () => { if (router.canGoBack()) router.back(); else router.replace('/(tabs)'); } : undefined}
-      pendingInvites={pendingInvites}
-      onAcceptInvite={acceptInvite}
-    />
+    <>
+      <OnboardingScreen
+        onPickLogo={handlePickLogo}
+        onFinish={handleFinish}
+        onLogout={() => { void useAuthStore.getState().logout(); }}
+        onDeleteAccount={() => { void deleteAccount(); }}
+        onCancel={adding ? () => { if (router.canGoBack()) router.back(); else router.replace('/(tabs)'); } : undefined}
+        pendingInvites={pendingInvites}
+        onAcceptInvite={acceptInvite}
+      />
+      {/* Above the form: a brand-new account must consent before creating a
+          business, and onboarding is the first screen it ever sees. */}
+      <PolicyConsentGate />
+    </>
   );
 }

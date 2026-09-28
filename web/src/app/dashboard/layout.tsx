@@ -7,6 +7,7 @@ import AssistantWidget from '@/components/assistant/AssistantWidget';
 import { ImpersonationBanner } from '@/components/dashboard/ImpersonationBanner';
 import { TrialBanner } from '@/components/TrialBanner';
 import { BillingGate } from '@/components/BillingGate';
+import { PolicyConsentGate } from '@/components/PolicyConsentGate';
 import { AccountDeletionGate } from '@/components/AccountDeletionGate';
 import { BusinessDeletionBanner } from '@/components/BusinessDeletionBanner';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
@@ -101,6 +102,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           <BusinessDeletionBanner />
           <AccountDeletionGate />
           <BillingGate />
+          <PolicyConsentGate />
         </main>
         {/* "Ami" assistant — fixed-position FAB + slide-over panel */}
         <div className="contents print:hidden"><AssistantWidget /></div>

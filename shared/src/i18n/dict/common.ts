@@ -52,6 +52,20 @@ export type CommonDict = {
   /** Inline strip when a LIST fetch fails (jobs, clients…) — a silent catch
    *  made a broken query look like "no results". */
   listLoadFailed: string;
+  /** Consent gate shown before the dashboard when a user has not accepted the
+   *  current terms/privacy version (migration 239). */
+  legalConsent: {
+    title: string;
+    subtitleNew: string;
+    subtitleUpdated: string;
+    scrollHint: string;
+    accept: string;
+    accepting: string;
+    error: string;
+    signOut: string;
+    docTerms: string;
+    docPrivacy: string;
+  };
   loadError: {
     title: string;
     body: string;
@@ -186,6 +200,18 @@ export const common: Record<Locale, CommonDict> = {
     },
     pasteImageHint: 'También puedes pegar una foto copiada con {{keys}}',
     listLoadFailed: 'No se pudo cargar la lista.',
+    legalConsent: {
+      title: 'Antes de continuar',
+      subtitleNew: 'Lee y acepta nuestros Términos de Servicio y Aviso de Privacidad.',
+      subtitleUpdated: 'Actualizamos nuestros Términos y Aviso de Privacidad. Léelos y acéptalos para continuar.',
+      scrollHint: 'Desplázate hasta el final para aceptar',
+      accept: 'Acepto los Términos y el Aviso de Privacidad',
+      accepting: 'Guardando…',
+      error: 'No pudimos guardar tu aceptación. Intenta de nuevo.',
+      signOut: 'Cerrar sesión',
+      docTerms: 'Términos de Servicio',
+      docPrivacy: 'Aviso de Privacidad',
+    },
     loadError: {
       title: 'No pudimos cargar tu cuenta',
       body: 'Tu información sigue guardada. Esto suele pasar justo después de una actualización. Intenta de nuevo en un momento.',
@@ -304,6 +330,18 @@ export const common: Record<Locale, CommonDict> = {
     },
     pasteImageHint: 'You can also paste a copied photo with {{keys}}',
     listLoadFailed: "Couldn't load the list.",
+    legalConsent: {
+      title: 'Before you continue',
+      subtitleNew: 'Read and accept our Terms of Service and Privacy Policy.',
+      subtitleUpdated: 'We updated our Terms and Privacy Policy. Please read and accept them to continue.',
+      scrollHint: 'Scroll to the end to accept',
+      accept: 'I accept the Terms and Privacy Policy',
+      accepting: 'Saving…',
+      error: "We couldn't save your acceptance. Try again.",
+      signOut: 'Sign out',
+      docTerms: 'Terms of Service',
+      docPrivacy: 'Privacy Policy',
+    },
     loadError: {
       title: "We couldn't load your account",
       body: 'Your data is still safe. This usually happens right after an update — try again in a moment.',

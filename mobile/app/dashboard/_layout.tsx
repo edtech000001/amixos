@@ -15,6 +15,7 @@ import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { OfflineSyncBanner } from '@/components/OfflineSyncBanner';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { BillingGate } from '@/components/BillingGate';
+import { PolicyConsentGate } from '@/components/PolicyConsentGate';
 import { AccountDeletionGate } from '@/components/AccountDeletionGate';
 import { BusinessDeletionBanner } from '@/components/BusinessDeletionBanner';
 import { AssistantWidget } from '@/components/assistant/AssistantWidget';
@@ -236,6 +237,7 @@ function DashboardTabs() {
       <BusinessDeletionBanner />
       <AccountDeletionGate />
       <BillingGate />
+      <PolicyConsentGate />
     </>
   );
 }

@@ -1,9 +1,10 @@
 import { useRouter } from 'expo-router';
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { RegisterScreen, type RegisterAttemptResult } from '@amixos/shared/screens/auth/RegisterScreen';
 import { classifyPasswordError } from '@amixos/shared/lib/passwordErrors';
+import { recordAcceptanceQuietly } from '@amixos/shared/lib/policyConsent';
 import { OAuthButtons } from '@/components/OAuthButtons';
 
 export default function RegisterRoute() {
@@ -33,6 +34,16 @@ export default function RegisterRoute() {
       if (issue === 'characters' || issue === 'length') return { ok: false, reason: 'weak-password' };
       return { ok: false, reason: 'generic' };
     }
+    // The signup screen shows "Al registrarte aceptas nuestros Términos y
+    // Política de privacidad" above the button — ordinary sign-in-wrap consent.
+    // Record it so there is evidence of WHICH version was agreed to. Quiet by
+    // design: a failed insert must not block someone from reaching the app,
+    // and the consent gate catches anyone this misses.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      recordAcceptanceQuietly(supabase, session.user.id, { method: 'signup', scrolledToEnd: false, platform: Platform.OS === 'android' ? 'android' : 'ios' });
+    }
+
     router.replace('/onboarding');
     return { ok: true };
   };

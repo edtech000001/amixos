@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { createSupabaseClient } from '@/lib/supabase';
+import { PolicyConsentGate } from '@/components/PolicyConsentGate';
 import {
   OnboardingScreen,
   type OnboardingData,
@@ -239,6 +240,7 @@ export default function OnboardingPage() {
 
   return (
     <>
+      <PolicyConsentGate />
       <OnboardingScreen
         onPickLogo={handlePickLogo}
         onFinish={handleFinish}
