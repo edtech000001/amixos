@@ -201,7 +201,12 @@ export default function GenerarPreciosPage() {
   }, [pendingEmail, mode, clientId]);
 
   const onEmailPress = () => {
-    if (mode === 'client' && selectedClient && clientEmail(selectedClient)) { doEmail(selectedClient); return; }
+    // Keyed on the SELECTED CLIENT, not on `mode` — arriving from a client's
+    // page means the recipient is already known, and asking who it is for
+    // would be absurd. pickEmailTarget rather than doEmail so that a sheet
+    // currently showing STATE pricing is switched to that client first: the
+    // recipient and the prices they are shown have to agree.
+    if (selectedClient && clientEmail(selectedClient)) { pickEmailTarget(selectedClient); return; }
     setEmailPickQuery('');
     setEmailPickOpen(true);
   };

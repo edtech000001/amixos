@@ -370,9 +370,15 @@ export default function FacturasPreciosPage() {
   );
 
   const onEmailPress = () => {
-    const sel = mode === 'client' ? (clients.find(x => x.id === clientId) ?? null) : null;
+    // Keyed on the SELECTED CLIENT, not on `mode`. Arriving from a client's
+    // page means we already know who this is for, and asking "who should
+    // receive this?" about the person whose page you just left is absurd.
+    // Mode can drift — it survives closing and reopening the sheet — so it is
+    // the wrong thing to ask.
+    const sel = clients.find(x => x.id === clientId) ?? null;
     if (sel && clientEmail(sel)) { void emailTo(sel); return; }
-    // State mode, or a client with no address on file — ask who it goes to.
+    // No client in context, or one with no usable address: now the list earns
+    // its place.
     setEmailPickQuery('');
     setEmailPickOpen(true);
   };
