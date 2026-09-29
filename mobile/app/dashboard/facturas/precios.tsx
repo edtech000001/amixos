@@ -88,6 +88,12 @@ export default function FacturasPreciosPage() {
       setMode('client');
       setClientId(clientParam);
       setGenOpen(true);
+      // CONSUME the param. It is a one-shot trigger, not state: closing the
+      // sheet leaves ?client=abc in the route, so arriving again for the SAME
+      // client is abc -> abc, this effect never re-runs, and the sheet refuses
+      // to open with no way for the user to tell why. Clearing it makes the
+      // next arrival undefined -> abc, which fires.
+      router.setParams({ client: undefined });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientParam]);
