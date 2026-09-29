@@ -98,7 +98,15 @@ export function BugReportSheet({
               </Pressable>
             </View>
           ) : (
-            <ScrollView keyboardShouldPersistTaps="handled">
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              // The field is multiline and Send sits below it, so the keyboard
+              // covers both. Insets scroll the focused input into view; a
+              // bottom sheet has no room to re-centre the way a full screen
+              // does.
+              automaticallyAdjustKeyboardInsets
+              keyboardDismissMode="interactive"
+            >
               <Text className="text-sm text-muted mb-3">{t.subtitle}</Text>
 
               <TextInput

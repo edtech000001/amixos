@@ -717,7 +717,10 @@ export default function EmpleadoDetailRoute() {
     return (
       <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
         <Header onBack={goBack} />
-        <ScrollView className="flex-1" contentContainerStyle={{ padding: 24, gap: 16 }}>
+        <ScrollView className="flex-1" contentContainerStyle={{ padding: 24, gap: 16 }}
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="interactive"
+      >
           <SkeletonBlock className="h-7 w-52" />
           <SkeletonCard lines={5} />
           <SkeletonCard lines={4} />

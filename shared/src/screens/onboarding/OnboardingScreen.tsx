@@ -5,8 +5,6 @@ import {
   Pressable,
   ScrollView,
   Image,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { clsx } from 'clsx';
 import {
@@ -283,17 +281,28 @@ export function OnboardingScreen({ onPickLogo, onFinish, onLogout, onCancel, onD
   const progress = Math.min(step, TOTAL_STEPS);
 
   return (
-    // The step card is vertically CENTRED, so on a phone the input sits right
-    // where the keyboard opens and was covered by it. Padding behaviour shrinks
-    // the container, which re-centres the card above the keyboard.
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      className="flex-1 bg-surface"
-    >
+    // automaticallyAdjustKeyboardInsets, not KeyboardAvoidingView.
+    //
+    // 'padding' behaviour shrinks the container so a CENTRED card re-centres
+    // above the keyboard — which works for the one-field business-name step
+    // and does nothing for the location step, where address, city, state, zip
+    // and the operating-hours grid are taller than the screen. There the card
+    // cannot re-centre, and nothing scrolled the focused field into view, so
+    // typing a zip code happened underneath the keyboard.
+    //
+    // The inset version fixes both: iOS insets the scroll content by the
+    // keyboard height AND scrolls the focused input into view, short card or
+    // long. Android needs neither — softwareKeyboardLayoutMode defaults to
+    // "resize", so the window shrinks and the ScrollView handles it.
+    //
+    // The two must not be combined: padding plus insets counts the keyboard
+    // twice and leaves a gap the size of the keyboard under the form.
     <ScrollView
       className="flex-1 bg-surface"
       contentContainerClassName="flex-grow items-center justify-center px-4 py-10"
       keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
+      keyboardDismissMode="interactive"
     >
       {/* Escape hatch — sign out / use a different account. Onboarding has no
           other way back to login for a wrong-provider sign-in. */}
@@ -426,7 +435,6 @@ export function OnboardingScreen({ onPickLogo, onFinish, onLogout, onCancel, onD
         </Text>
       )}
     </ScrollView>
-    </KeyboardAvoidingView>
   );
 }
 
