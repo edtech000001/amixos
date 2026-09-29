@@ -12,18 +12,31 @@
 
 import { useEffect, useRef } from 'react';
 
-// Lazily required, like MailComposer in facturas/[id].tsx. A dev client built
-// before expo-sensors was added has no ExpoSensors native module, and a
-// top-level import would take the whole dashboard down with
-// "Cannot find native module" rather than just losing the gesture — the same
-// failure that produced commit 7c01875 for expo-asset. Shake detection is a
-// convenience; it must never be the reason the app will not open.
+// Lazily required, like MailComposer in facturas/[id].tsx — a dev client built
+// before expo-sensors existed must lose the gesture, not the whole dashboard.
+//
+// The SUBMODULE, not the package. expo-sensors/build/index.js opens with
+// `import * as Pedometer from './Pedometer'`, so requiring the package
+// initialises Pedometer and dies on "Cannot find native module
+// 'ExponentPedometer'" — a sensor this app never asks for. Importing
+// Accelerometer directly never touches it.
+//
+// Deep-importing past a package's entry point is normally a smell; here it is
+// the difference between needing one native module and needing eight. Falls
+// back to the package entry in case the build layout moves.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function loadAccelerometer(): any | null {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-    const mod = require('expo-sensors');
-    return mod?.Accelerometer ?? null;
+    const mod = require('expo-sensors/build/Accelerometer');
+    const accel = mod?.default ?? mod?.Accelerometer;
+    if (accel) return accel;
+  } catch {
+    /* fall through to the package entry */
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    return require('expo-sensors')?.Accelerometer ?? null;
   } catch {
     return null;
   }
