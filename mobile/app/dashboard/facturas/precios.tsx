@@ -6,10 +6,10 @@
 // counterpart of the web /precios/generar page: pick a client (uses their
 // state + client prices) or a state, then share.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, Modal as RNModal, ActivityIndicator, Platform, KeyboardAvoidingView, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronDown, ChevronLeft, ChevronUp, Printer, Sliders, X, GripVertical, Eye, EyeOff, Mail, Search } from 'lucide-react-native';
 import Sortable from 'react-native-sortables';
 import * as Print from 'expo-print';
@@ -90,20 +90,25 @@ export default function FacturasPreciosPage() {
   const [emailPickOpen, setEmailPickOpen] = useState(false);
   const [emailPickQuery, setEmailPickQuery] = useState('');
 
-  useEffect(() => {
-    if (typeof clientParam === 'string' && clientParam) {
+  // Arriving here from a client's page opens the sheet for them.
+  //
+  // Keyed on FOCUS, not on the param changing. Two earlier attempts failed:
+  // a plain effect on [clientParam] never re-fired when you came back for the
+  // SAME client (abc -> abc is not a change), and clearing the param with
+  // router.setParams to force that change raced the navigation update — the
+  // screen settled with genOpen back to false and the sheet never appeared at
+  // all. Focus is simply the right signal: it is what "arrived here" means,
+  // and it fires every arrival regardless of which client.
+  //
+  // Closing the sheet does not blur the screen, so it will not spring back.
+  useFocusEffect(
+    useCallback(() => {
+      if (typeof clientParam !== 'string' || !clientParam) return;
       setMode('client');
       setClientId(clientParam);
       setGenOpen(true);
-      // CONSUME the param. It is a one-shot trigger, not state: closing the
-      // sheet leaves ?client=abc in the route, so arriving again for the SAME
-      // client is abc -> abc, this effect never re-runs, and the sheet refuses
-      // to open with no way for the user to tell why. Clearing it makes the
-      // next arrival undefined -> abc, which fires.
-      router.setParams({ client: undefined });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientParam]);
+    }, [clientParam]),
+  );
 
   // Reopening the Generate sheet starts from the saved default again. Without
   // this, hiding a section for one customer silently carried into the next
