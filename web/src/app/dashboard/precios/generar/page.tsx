@@ -287,6 +287,22 @@ export default function GenerarPreciosPage() {
     setExpandedCat(null);
     setCustomizeOpen(true);
   };
+
+  // Is there anything to save? The Save button writes these five fields to the
+  // business template, so "dirty" is exactly: do they differ from what is
+  // stored. Order is compared positionally — reordering IS a change — while
+  // the exclusion lists are compared as sets, since toggling an eye off and
+  // back on leaves the array reordered but the sheet identical.
+  const sameSet = (a: string[], b: string[]) =>
+    a.length === b.length && a.every(x => b.includes(x));
+  const templateDirty =
+    draftDesign !== template.design ||
+    draftAccent !== template.accentColor ||
+    draftOrder.length !== template.categoryOrder.length ||
+    draftOrder.some((k, i) => k !== template.categoryOrder[i]) ||
+    !sameSet(draftHiddenCats, template.hiddenCategories) ||
+    !sameSet(draftHiddenItems, template.hiddenItemIds);
+
   const toggleCatHidden = (cat: string) =>
     setDraftHiddenCats(prev => (prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]));
   const toggleItemHidden = (id: string) =>
@@ -572,8 +588,12 @@ export default function GenerarPreciosPage() {
           ) : null}
 
           <div className="sticky bottom-0 -mx-7 px-7 -mb-6 pb-6 pt-3 bg-card">
-            <button type="button" onClick={saveCustomize} disabled={savingTpl}
-              className="w-full py-3 rounded-2xl bg-primary text-white font-semibold hover:opacity-90 disabled:opacity-50">{t.saveBtn}</button>
+            <button type="button" onClick={saveCustomize} disabled={savingTpl || !templateDirty}
+              className={`w-full py-3 rounded-2xl font-semibold transition-opacity ${
+                templateDirty
+                  ? 'bg-primary text-white hover:opacity-90'
+                  : 'bg-border-soft text-faint cursor-default'
+              } disabled:opacity-50`}>{t.saveBtn}</button>
           </div>
         </div>
       </Modal>

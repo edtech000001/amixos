@@ -187,6 +187,21 @@ export default function FacturasPreciosPage() {
     return by;
   }, [items]);
 
+
+  // Is there anything to save? Mirrors web. `template` can be null here until
+  // the business row loads, and nothing is dirty before there is a baseline to
+  // compare against.
+  const sameSet = (a: string[], b: string[]) =>
+    a.length === b.length && a.every(x => b.includes(x));
+  const templateDirty = !!template && (
+    draftDesign !== template.design ||
+    draftAccent !== template.accentColor ||
+    draftOrder.length !== template.categoryOrder.length ||
+    draftOrder.some((k, i) => k !== template.categoryOrder[i]) ||
+    !sameSet(draftHiddenCats, template.hiddenCategories) ||
+    !sameSet(draftHiddenItems, template.hiddenItemIds)
+  );
+
   const toggleCatHidden = (cat: string) =>
     setDraftHiddenCats(prev => (prev.includes(cat) ? prev.filter(x => x !== cat) : [...prev, cat]));
   const toggleItemHidden = (id: string) =>
@@ -454,10 +469,10 @@ export default function FacturasPreciosPage() {
                       </View>
                     </View>
                   ) : null}
-                  <Pressable onPress={saveCustomize} disabled={savingTpl}
-                    className="py-3 rounded-2xl bg-border-soft items-center active:opacity-80 disabled:opacity-50">
-                    {savingTpl ? <ActivityIndicator color={c.primary} /> : (
-                      <Text className="text-sm font-semibold text-ink">{t.saveBtn}</Text>
+                  <Pressable onPress={saveCustomize} disabled={savingTpl || !templateDirty}
+                    className={`py-3 rounded-2xl items-center ${templateDirty ? 'bg-primary active:opacity-80' : 'bg-border-soft'} disabled:opacity-50`}>
+                    {savingTpl ? <ActivityIndicator color={c.white} /> : (
+                      <Text className={`text-sm font-semibold ${templateDirty ? 'text-white' : 'text-faint'}`}>{t.saveBtn}</Text>
                     )}
                   </Pressable>
                 </View>
