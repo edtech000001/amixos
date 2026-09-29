@@ -94,7 +94,10 @@ function getUpdates(): typeof import('expo-updates') | null {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const Updates = require('expo-updates') as typeof import('expo-updates');
-    return Updates.isEnabled ? Updates : null;
+    // A dev build running from Metro can't take OTA updates. SDK 51 reported
+    // isEnabled=false there; SDK 54 reports true and then checkForUpdateAsync
+    // throws — which surfaced as "couldn't check, check your connection".
+    return Updates.isEnabled && !__DEV__ ? Updates : null;
   } catch {
     return null;
   }

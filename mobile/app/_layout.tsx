@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { cssInterop } from 'nativewind';
+import * as Lucide from 'lucide-react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { LangProvider } from '@/lib/i18n/LangProvider';
 import { ThemeProvider, useTheme } from '@/lib/ThemeProvider';
@@ -25,6 +26,22 @@ import '@/lib/auth/store';
 // the root and leaving the body blank (forms, detail, and Más screens). Register
 // it once here so className → style works app-wide.
 cssInterop(SafeAreaView, { className: 'style' });
+
+// Same for lucide icons: `<DollarSign className="text-primary" />` colors the
+// icon via className. NativeWind 4.0 happened to reach them (lucide renders
+// its Svg with plain createElement); 4.2 only converts className on
+// registered components, so every className-colored icon fell back to black
+// after the SDK 54 upgrade. Register each icon, mapping the resolved style
+// `color` onto lucide's `color` prop (its stroke). Icons that pass `color`
+// explicitly are unaffected. Deduped: lucide also exports alias names
+// (CheckCircle / CircleCheck) that point at the same component.
+const seenIcons = new Set<unknown>();
+for (const Icon of Object.values(Lucide) as unknown[]) {
+  // forwardRef components are { $$typeof, render } objects.
+  if (typeof Icon !== 'object' || Icon === null || !('render' in Icon) || seenIcons.has(Icon)) continue;
+  seenIcons.add(Icon);
+  cssInterop(Icon as never, { className: { target: 'style', nativeStyleToProp: { color: true } } });
+}
 
 // expo-router calls SplashScreen._internal_preventAutoHideAsync() at startup.
 // The native call throws "No native splash screen registered" because the
