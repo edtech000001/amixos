@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { PassthroughTag } from '@amixos/shared/lib/invoicing';
 import { SkeletonBlock, SkeletonCard } from '@amixos/shared/ui/Skeleton';
 import { formatMoneyInput, formatNumberGrouped } from '@amixos/shared/lib/format';
 import {
@@ -76,6 +77,8 @@ interface LineItem {
   /** Source job (invoices built from jobs) — must survive an edit round-trip
    *  or Move/Remove on the detail screen breaks. */
   job_id?: string | null;
+  /** Billed on behalf of another business (migration 240) — kept on edit. */
+  passthrough?: PassthroughTag | null;
   /** Hand-edited job line: the draft rebuild keeps it instead of re-deriving. */
   edited?: boolean;
   // Raw input text while typing, so intermediate states like "12." aren't
@@ -292,10 +295,10 @@ export default function NuevaFacturaRoute() {
           setTaxRate(inv.tax_rate ?? 0);
           setLanguage((inv.language as InvoiceLang) ?? 'es');
           setCustomFields((inv.custom_fields as Record<string, string> | null) ?? {});
-          const items = (inv.line_items as { description: string; qty: number; rate: number; job_id?: string | null; edited?: boolean }[] | null) ?? [];
+          const items = (inv.line_items as { description: string; qty: number; rate: number; job_id?: string | null; edited?: boolean; passthrough?: PassthroughTag | null }[] | null) ?? [];
           setLines(
             items.length > 0
-              ? items.map((i) => ({ id: newId(), description: i.description, qty: i.qty, rate: i.rate, job_id: i.job_id ?? null, edited: i.edited }))
+              ? items.map((i) => ({ id: newId(), description: i.description, qty: i.qty, rate: i.rate, job_id: i.job_id ?? null, edited: i.edited, passthrough: i.passthrough ?? null }))
               : [newLine()],
           );
           const idsFromLinks = (links ?? []).map((r: { client_id: string }) => r.client_id);
@@ -608,7 +611,9 @@ export default function NuevaFacturaRoute() {
       invoice_number: invoiceNumber,
       issue_date: issueDate,
       due_date: dueDate || null,
-      line_items: validLines.map((l) => ({ description: l.description, qty: l.qty, rate: l.rate, ...(l.job_id ? { job_id: l.job_id, ...(l.edited ? { edited: true } : {}) } : {}) })),
+      // passthrough (240) must survive the round-trip, or editing the invoice
+      // would silently turn another company's lines into this one's revenue.
+      line_items: validLines.map((l) => ({ description: l.description, qty: l.qty, rate: l.rate, ...(l.job_id ? { job_id: l.job_id, ...(l.edited ? { edited: true } : {}) } : {}), ...(l.passthrough ? { passthrough: l.passthrough } : {}) })),
       subtotal_amount: subtotal,
       tax_rate: taxRate,
       tax_amount: taxAmount,

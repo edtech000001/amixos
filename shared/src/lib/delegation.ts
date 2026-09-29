@@ -62,7 +62,7 @@ interface JobItemRow {
   total: number;
 }
 
-const CLIENT_COPY_FIELDS = [
+export const CLIENT_COPY_FIELDS = [
   'first_name', 'last_name', 'company',
   'phone_cell', 'phone_office', 'email_office', 'email_home',
   'address', 'address_line2', 'city', 'state', 'zip_code',

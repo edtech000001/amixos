@@ -23,6 +23,7 @@ import {
   Trash2,
   Undo2,
   Ban,
+  Building2,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import {
@@ -70,6 +71,8 @@ export interface InvoiceDetailLineItem {
   excluded?: boolean;
   /** Date the work was performed (manual lines). */
   service_date?: string | null;
+  /** Billed on behalf of another business (migration 240). */
+  passthrough?: { business_id: string; business_name: string; invoice_id: string; invoice_number: string } | null;
 }
 
 export interface InvoiceDetail {
@@ -92,6 +95,11 @@ export interface InvoiceDetail {
   notes: string | null;
   /** Private to the business — never rendered on the client-facing document. */
   internalNotes: string | null;
+  /** Part of totalAmount billed for OTHER businesses (migration 240) — the
+   *  client pays it, but it isn't this business's money. 0 when none. */
+  passthroughAmount?: number;
+  /** This invoice's lines were billed through another business's invoice. */
+  billedThrough?: { business_id: string; business_name: string; invoice_id: string; invoice_number: string; at?: string }[];
   language: InvoiceLang;
   /** Custom fields (invoice_field_templates), pre-formatted for display. */
   customFields?: { label: string; value: string; key?: string }[];
@@ -209,6 +217,12 @@ export interface InvoiceDetailScreenProps {
   /** Payment-reminder log card (InvoiceRemindersCard) — rendered under the
    *  dates while the invoice is open (sent / overdue). Platform-owned. */
   remindersSlot?: ReactNode;
+  /** This business's name — labels its own share when the invoice carries
+   *  lines billed for another business. */
+  businessName?: string;
+  /** Bill this invoice's lines through another company. Hidden when not
+   *  provided (user isn't in another company that can invoice). */
+  onBillThrough?: () => void;
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
@@ -273,9 +287,12 @@ export function InvoiceDetailScreen({
   jobStates,
   jobDates,
   remindersSlot,
+  businessName,
+  onBillThrough,
 }: InvoiceDetailScreenProps) {
   const { t: ui, locale } = useLang();
   const tInv = ui.dashboard.invoices;
+  const tBt = tInv.billThrough;
   const tStatus = ui.dashboard.invoiceStatus;
   // Hooks must run before the early returns below (Rules of Hooks).
   // null = auto (expand short lists, collapse 3+); a click pins the choice.
@@ -380,6 +397,11 @@ export function InvoiceDetailScreen({
               <Eraser size={15} /> {tInv.jobsSection.clearPricesBtn}
             </button>
           ) : null}
+          {onBillThrough && canEdit ? (
+            <button type="button" onClick={onBillThrough} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-surface text-sm font-semibold text-muted transition-colors mr-1">
+              <Building2 size={15} /> {tBt.action}
+            </button>
+          ) : null}
           {onShareLink ? (
             <Tooltip tip="shareLink">
               <button type="button" onClick={onShareLink}
@@ -424,11 +446,39 @@ export function InvoiceDetailScreen({
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
             <DollarSign size={18} className="text-primary" />
           </div>
-          <div>
-            <p className="text-xs text-faint font-medium">{t.total}</p>
-            <p className="text-xl font-bold text-ink">{fmt(invoice.totalAmount)}</p>
-          </div>
+          {/* With lines billed for another company (240) the headline is
+             THIS business's share; the client-facing amount sits underneath,
+             since that's what the client pays and payments track. */}
+          {(invoice.passthroughAmount ?? 0) > 0 ? (
+            <div className="min-w-0">
+              <p className="text-xs text-faint font-medium">
+                {businessName ? tBt.ownShare.replace('{{company}}', businessName) : t.total}
+              </p>
+              <p className="text-xl font-bold text-ink">{fmt(invoice.totalAmount - (invoice.passthroughAmount ?? 0))}</p>
+              <p className="text-xs text-muted mt-0.5">
+                {tBt.clientPays.replace('{{total}}', fmt(invoice.totalAmount)).replace('{{amount}}', fmt(invoice.passthroughAmount ?? 0))}
+              </p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-xs text-faint font-medium">{t.total}</p>
+              <p className="text-xl font-bold text-ink">{fmt(invoice.totalAmount)}</p>
+            </div>
+          )}
         </div>
+
+        {/* Source side: where this invoice's lines were billed through. Its
+           own status/amount are untouched — the other company pays it later. */}
+        {invoice.billedThrough?.length ? (
+          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 flex flex-col gap-1.5">
+            {invoice.billedThrough.map(b => (
+              <p key={b.invoice_id} className="flex items-center gap-2 text-sm text-muted">
+                <Building2 size={14} className="shrink-0" />
+                {tBt.billedVia.replace('{{company}}', b.business_name).replace('{{invoice}}', b.invoice_number)}
+              </p>
+            ))}
+          </div>
+        ) : null}
 
         {/* Client — name, business, address */}
         <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
@@ -610,6 +660,12 @@ export function InvoiceDetailScreen({
                       })()}
                     </p>
                     {li.addonNote ? <p className="text-[11px] text-faint mt-0.5">{li.addonNote}</p> : null}
+                    {li.passthrough ? (
+                      <p className="flex items-center gap-1 text-[11px] font-medium text-faint mt-1">
+                        <Building2 size={11} />
+                        {tBt.fromTag.replace('{{company}}', li.passthrough.business_name).replace('{{invoice}}', li.passthrough.invoice_number)}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     {/* Link is safe on ANY status (no total change) — so imported

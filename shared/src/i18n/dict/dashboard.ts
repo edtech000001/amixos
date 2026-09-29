@@ -352,6 +352,51 @@ export type DashboardDict = {
     createdLabel: string;
     moreActionsTitle: string;
     shareLinkAction: string;
+    /** Bill this invoice's lines through another company (migration 240). */
+    billThrough: {
+      action: string;
+      title: string;
+      subtitle: string;
+      notEnabled: string;
+      stepCompany: string;
+      stepClient: string;
+      stepInvoice: string;
+      stepLines: string;
+      suggested: string;
+      reasonEmail: string;
+      reasonPhone: string;
+      reasonName: string;
+      reasonCompany: string;
+      noMatch: string;
+      searchPlaceholder: string;
+      copyClient: string;
+      copyClientHint: string;
+      newInvoice: string;
+      newInvoiceHint: string;
+      openInvoicesHeading: string;
+      noOpenInvoices: string;
+      selectAll: string;
+      linesSelected: string;
+      confirmBtn: string;
+      working: string;
+      back: string;
+      change: string;
+      duplicateTitle: string;
+      duplicateMessage: string;
+      duplicateConfirm: string;
+      done: string;
+      openTarget: string;
+      failed: string;
+      targetNote: string;
+      /** Detail screen. */
+      fromTag: string;
+      ownShare: string;
+      clientPays: string;
+      billedVia: string;
+      /** Ajustes toggle. */
+      settingTitle: string;
+      settingHint: string;
+    };
     clientPrices: {
       viewBtn: string;
       title: string;
@@ -3596,6 +3641,48 @@ export const dashboard: Record<Locale, DashboardDict> = {
       createdLabel: 'Creada',
       moreActionsTitle: 'Más acciones',
       shareLinkAction: 'Compartir enlace',
+      billThrough: {
+        action: 'Facturar por otra empresa',
+        title: 'Facturar por otra empresa',
+        subtitle: 'Copia estas líneas a una factura de tu otra empresa. Esta factura se queda igual (sin pagar) hasta que la otra empresa te pague.',
+        notEnabled: 'Esta empresa no permite facturar sus facturas por otras empresas. Un administrador lo puede activar en Ajustes → Facturas.',
+        stepCompany: 'Empresa',
+        stepClient: 'Cliente',
+        stepInvoice: 'Factura',
+        stepLines: 'Líneas a copiar',
+        suggested: 'Sugerido',
+        reasonEmail: 'mismo correo',
+        reasonPhone: 'mismo teléfono',
+        reasonName: 'mismo nombre',
+        reasonCompany: 'misma compañía',
+        noMatch: 'No encontramos este cliente en {{company}}. Búscalo o cópialo.',
+        searchPlaceholder: 'Buscar cliente…',
+        copyClient: 'Copiar este cliente a {{company}}',
+        copyClientHint: 'Crea un cliente nuevo con los mismos datos.',
+        newInvoice: 'Nueva factura',
+        newInvoiceHint: 'Crea un borrador con estas líneas.',
+        openInvoicesHeading: 'Facturas abiertas de este cliente',
+        noOpenInvoices: 'Este cliente no tiene facturas abiertas.',
+        selectAll: 'Seleccionar todo',
+        linesSelected: '{{count}} líneas · {{amount}}',
+        confirmBtn: 'Copiar a {{company}}',
+        working: 'Copiando…',
+        back: 'Atrás',
+        change: 'Cambiar',
+        duplicateTitle: '¿Copiar otra vez?',
+        duplicateMessage: 'Esa factura ya tiene líneas de {{invoice}}. Copiarlas de nuevo cobraría dos veces.',
+        duplicateConfirm: 'Copiar de todos modos',
+        done: 'Listo — agregado a {{invoice}} de {{company}}.',
+        openTarget: 'Ver factura',
+        failed: 'No se pudo copiar: {{error}}',
+        targetNote: '{{count}} líneas de {{company}} {{invoice}}',
+        fromTag: 'De {{company}} · {{invoice}}',
+        ownShare: 'Total de {{company}}',
+        clientPays: 'El cliente paga {{total}} · incluye {{amount}} de otras empresas',
+        billedVia: 'Facturado por {{company}} · {{invoice}}',
+        settingTitle: 'Facturar por otra empresa',
+        settingHint: 'Permite copiar las líneas de las facturas de esta empresa a una factura de tus otras empresas. Las líneas copiadas no cuentan como ingreso de la otra empresa.',
+      },
       clientPrices: {
         viewBtn: 'Ver precios',
         title: 'Precios para este cliente',
@@ -6828,6 +6915,48 @@ export const dashboard: Record<Locale, DashboardDict> = {
       createdLabel: 'Created',
       moreActionsTitle: 'More actions',
       shareLinkAction: 'Share link',
+      billThrough: {
+        action: 'Bill through another company',
+        title: 'Bill through another company',
+        subtitle: "Copies these lines onto an invoice from your other company. This invoice stays as it is (unpaid) until that company pays you.",
+        notEnabled: "This company doesn't allow its invoices to be billed through other companies. An admin can turn it on in Settings → Invoices.",
+        stepCompany: 'Company',
+        stepClient: 'Client',
+        stepInvoice: 'Invoice',
+        stepLines: 'Lines to copy',
+        suggested: 'Suggested',
+        reasonEmail: 'same email',
+        reasonPhone: 'same phone',
+        reasonName: 'same name',
+        reasonCompany: 'same company',
+        noMatch: "We couldn't find this client in {{company}}. Search for them or copy them over.",
+        searchPlaceholder: 'Search clients…',
+        copyClient: 'Copy this client to {{company}}',
+        copyClientHint: 'Creates a new client with the same details.',
+        newInvoice: 'New invoice',
+        newInvoiceHint: 'Creates a draft with these lines.',
+        openInvoicesHeading: "This client's open invoices",
+        noOpenInvoices: 'This client has no open invoices.',
+        selectAll: 'Select all',
+        linesSelected: '{{count}} lines · {{amount}}',
+        confirmBtn: 'Copy to {{company}}',
+        working: 'Copying…',
+        back: 'Back',
+        change: 'Change',
+        duplicateTitle: 'Copy again?',
+        duplicateMessage: 'That invoice already has lines from {{invoice}}. Copying them again would bill them twice.',
+        duplicateConfirm: 'Copy anyway',
+        done: "Done — added to {{company}}'s {{invoice}}.",
+        openTarget: 'View invoice',
+        failed: "Couldn't copy: {{error}}",
+        targetNote: '{{count}} lines from {{company}} {{invoice}}',
+        fromTag: 'From {{company}} · {{invoice}}',
+        ownShare: '{{company}} total',
+        clientPays: 'Client pays {{total}} · includes {{amount}} for other companies',
+        billedVia: 'Billed through {{company}} · {{invoice}}',
+        settingTitle: 'Bill through another company',
+        settingHint: "Lets this company's invoice lines be copied onto an invoice from your other companies. Copied lines don't count as the other company's revenue.",
+      },
       clientPrices: {
         viewBtn: 'View prices',
         title: 'Prices for this client',

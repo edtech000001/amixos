@@ -112,6 +112,7 @@ import { LogoCropper } from '@/components/dashboard/LogoCropper';
 import { normalizeImageFile } from '@/lib/imageFile';
 import { usePasteImage } from '@/lib/usePasteImage';
 import { PasteHint } from '@/components/ui/PasteHint';
+import { BillThroughSettingCard } from '@/components/settings/BillThroughSettingCard';
 import { Tooltip } from '@amixos/shared/ui/Tooltip';
 import {
   activePlanKey,
@@ -3535,6 +3536,7 @@ export default function AjustesPage() {
 
           {tab === 'facturas' && (
             <div className="flex flex-col gap-5">
+              <BillThroughSettingCard />
               <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
                 <h2 className="text-base font-semibold text-ink mb-1">{t.invoices.heading}</h2>
                 <p className="text-xs text-faint mb-4">{t.invoices.subtitle}</p>

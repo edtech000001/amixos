@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { PassthroughTag } from '@amixos/shared/lib/invoicing';
 import { SkeletonBlock, SkeletonCard } from '@amixos/shared/ui/Skeleton';
 import { formatMoneyInput, formatNumberGrouped } from '@amixos/shared/lib/format';
 import { Trash2, ArrowLeft, X, Search, ChevronDown } from 'lucide-react';
@@ -33,7 +34,7 @@ import {
 // job_id/edited: source-job linkage — must survive an edit round-trip or
 // Move/Remove on the detail screen breaks. qtyText/rateText hold the raw
 // input while typing so "12." isn't collapsed by parseFloat (stripped on save).
-interface LineItem { description: string; qty: number; rate: number; job_id?: string | null; edited?: boolean; qtyText?: string; rateText?: string; }
+interface LineItem { description: string; qty: number; rate: number; job_id?: string | null; edited?: boolean; qtyText?: string; rateText?: string; passthrough?: PassthroughTag | null; }
 interface Client { id: string; first_name: string; last_name: string; company: string | null; contacts?: { name: string; role: string | null }[]; }
 interface FieldTemplate {
   id: string;
@@ -471,7 +472,9 @@ function NuevaFacturaContent() {
       invoice_number: invoiceNumber,
       issue_date: issueDate,
       due_date: dueDate || null,
-      line_items: validLines.map(l => ({ description: l.description, qty: l.qty, rate: l.rate, ...(l.job_id ? { job_id: l.job_id, ...(l.edited ? { edited: true } : {}) } : {}) })),
+      // passthrough (240) must survive the round-trip, or editing the invoice
+      // would silently turn another company's lines into this one's revenue.
+      line_items: validLines.map(l => ({ description: l.description, qty: l.qty, rate: l.rate, ...(l.job_id ? { job_id: l.job_id, ...(l.edited ? { edited: true } : {}) } : {}), ...(l.passthrough ? { passthrough: l.passthrough } : {}) })),
       subtotal_amount: subtotal,
       tax_rate: taxRate,
       tax_amount: taxAmount,

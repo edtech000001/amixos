@@ -23,6 +23,9 @@ import type { InvoiceLang } from '@amixos/shared';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { can } from '@amixos/shared/lib/permissions';
+import { billThroughTargets } from '@amixos/shared/lib/invoiceBillThrough';
+import { resolveLineDescriptions } from '@amixos/shared/lib/invoiceTemplate';
+import { BillThroughModal } from '@/components/invoices/BillThroughModal';
 import { resolveConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
 import { signedUrl } from '@amixos/shared/lib/storageUrls';
 import { INVOICE_PAYMENT_BUCKET, paymentPhotoPath } from '@amixos/shared/lib/invoicePayments';
@@ -109,7 +112,9 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       : '/dashboard/facturas',
   );
   const supabase = createSupabaseClient();
-  const { business, currentRole } = useApp();
+  const { business, currentRole, businesses, roles, setActiveBusiness } = useApp();
+  // "Bill through another company" modal (migration 240).
+  const [billThroughOpen, setBillThroughOpen] = useState(false);
   const { t: full, locale } = useLang();
   const tInv = full.dashboard.invoices;
   const tc = full.common;
@@ -594,6 +599,8 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       totalAmount: raw.total_amount,
       notes: raw.notes,
       internalNotes: (raw as { internal_notes?: string | null }).internal_notes ?? null,
+      passthroughAmount: Number((raw as { passthrough_amount?: number | null }).passthrough_amount) || 0,
+      billedThrough: (raw as { billed_through?: InvoiceDetail['billedThrough'] | null }).billed_through ?? [],
       language: raw.language ?? 'es',
       createdAt: raw.created_at,
       updatedAt: raw.updated_at,
@@ -1037,6 +1044,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
 
   const canDelete = can.deleteInvoice(currentRole);
   const canEdit = can.editInvoice(currentRole);
+  const billTargets = billThroughTargets(businesses, roles, business?.id);
 
   // "Ver precios" body — shared by the docked desktop panel and the small-
   // screen modal.
@@ -1137,7 +1145,30 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         remindersSlot={business && invoice ? (
           <InvoiceRemindersCard supabase={supabase} businessId={business.id} invoiceId={id} canEdit={canEdit} nameById={nameById} refreshToken={remindersToken} />
         ) : null}
+        businessName={business?.name}
+        onBillThrough={invoice && canEdit && billTargets.length > 0 ? () => setBillThroughOpen(true) : undefined}
       />
+
+      {business && invoice ? (
+        <BillThroughModal
+          open={billThroughOpen}
+          onClose={() => { setBillThroughOpen(false); void reloadInvoice(); }}
+          supabase={supabase}
+          sourceBusinessId={business.id}
+          sourceInvoiceId={id}
+          sourceClientId={invClientId}
+          lines={(() => {
+            const names = resolveLineDescriptions(invoice.lineItems, Object.fromEntries(attachedJobs.map(j => [j.id, j.title])));
+            return invoice.lineItems.map((li, i) => ({ name: names[i], qty: Number(li.qty) || 0, rate: Number(li.rate) || 0, excluded: li.excluded }));
+          })()}
+          targets={billTargets}
+          onOpenTarget={(bizId, invId) => {
+            setBillThroughOpen(false);
+            setActiveBusiness(bizId);
+            router.push(`/dashboard/facturas/${invId}`);
+          }}
+        />
+      ) : null}
 
       <JobPreviewSheet
         supabase={supabase}

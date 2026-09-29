@@ -65,6 +65,19 @@ export interface InvoiceLineItem {
   /** Summary of per-unit add-ons folded into this line's rate, shown as a small
    *  indicator under the line (e.g. "+Polly/Aluminum $0.50/ft"). */
   addonNote?: string | null;
+  /** Billed on behalf of ANOTHER business (migration 240): a real,
+   *  client-facing line that counts in this invoice's total, but the money
+   *  belongs to the source business — revenue reports leave it out
+   *  (invoices.passthrough_amount). Never printed; app-only tag. */
+  passthrough?: PassthroughTag | null;
+}
+
+/** Where a billed-through line came from. */
+export interface PassthroughTag {
+  business_id: string;
+  business_name: string;
+  invoice_id: string;
+  invoice_number: string;
 }
 
 /** Build the line items for one job from its job_items, tagged with the job id

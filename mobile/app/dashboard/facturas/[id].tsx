@@ -40,6 +40,10 @@ import { InvoiceRemindersCard } from '@amixos/shared/screens/dashboard/InvoiceRe
 import { addInvoiceReminder } from '@amixos/shared/lib/invoiceReminders';
 import { formatDateLong, formatMoneyInput, formatNumberGrouped, todayLocalISO } from '@amixos/shared/lib/format';
 import { can } from '@amixos/shared/lib/permissions';
+import { billThroughTargets } from '@amixos/shared/lib/invoiceBillThrough';
+import { resolveLineDescriptions } from '@amixos/shared/lib/invoiceTemplate';
+import { useAuthStore } from '@/lib/auth/store';
+import { BillThroughSheet } from '@/components/BillThroughSheet';
 import {
   resolveConfig,
   buildInvoiceViewModel,
@@ -153,7 +157,8 @@ export default function FacturaDetailRoute() {
   }, [params.from, navigation, routeKey]);
 
   const supabase = createSupabaseClient();
-  const { business, currentRole } = useApp();
+  const { business, currentRole, businesses, setActiveBusiness } = useApp();
+  const rolesByBusiness = useAuthStore((s) => s.roles);
   const { t: full, locale } = useLang();
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -188,6 +193,8 @@ export default function FacturaDetailRoute() {
   const [clientState, setClientState] = useState<string | null>(null);
   // Read-only "prices for this client" sheet (tier + state resolved rates).
   const [pricesOpen, setPricesOpen] = useState(false);
+  // "Bill through another company" sheet (migration 240).
+  const [billThroughOpen, setBillThroughOpen] = useState(false);
   const [showInvVerify, setShowInvVerify] = useState(false);
   const [previewJobId, setPreviewJobId] = useState<string | null>(null);
   const [jobBusy, setJobBusy] = useState(false);
@@ -880,6 +887,8 @@ export default function FacturaDetailRoute() {
       totalAmount: raw.total_amount,
       notes: raw.notes,
       internalNotes: (raw as { internal_notes?: string | null }).internal_notes ?? null,
+      passthroughAmount: Number((raw as { passthrough_amount?: number | null }).passthrough_amount) || 0,
+      billedThrough: (raw as { billed_through?: InvoiceDetail['billedThrough'] | null }).billed_through ?? [],
       language: raw.language ?? 'es',
       createdAt: raw.created_at,
       updatedAt: raw.updated_at,
@@ -1225,6 +1234,7 @@ export default function FacturaDetailRoute() {
 
   const canDelete = can.deleteInvoice(currentRole);
   const canEdit = can.editInvoice(currentRole);
+  const billTargets = billThroughTargets(businesses, rolesByBusiness, business?.id);
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
@@ -1276,10 +1286,33 @@ export default function FacturaDetailRoute() {
         jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
         jobStates={Object.fromEntries(attachedJobs.filter(j => j.job_state).map(j => [j.id, j.job_state as string]))}
         jobDates={Object.fromEntries(attachedJobs.filter(j => j.scheduled_date).map(j => [j.id, j.scheduled_date as string]))}
+        businessName={business?.name}
+        onBillThrough={invoice && canEdit && billTargets.length > 0 ? () => setTimeout(() => setBillThroughOpen(true), 400) : undefined}
         remindersSlot={business && invoice ? (
           <InvoiceRemindersCard supabase={supabase} businessId={business.id} invoiceId={id} canEdit={canEdit} nameById={nameById} refreshToken={remindersToken} />
         ) : null}
       />
+
+      {business && invoice ? (
+        <BillThroughSheet
+          open={billThroughOpen}
+          onClose={() => { setBillThroughOpen(false); void reloadInvoice(); }}
+          supabase={supabase}
+          sourceBusinessId={business.id}
+          sourceInvoiceId={id}
+          sourceClientId={invClientId}
+          lines={(() => {
+            const names = resolveLineDescriptions(invoice.lineItems, Object.fromEntries(attachedJobs.map(j => [j.id, j.title])));
+            return invoice.lineItems.map((li, i) => ({ name: names[i], qty: Number(li.qty) || 0, rate: Number(li.rate) || 0, excluded: li.excluded }));
+          })()}
+          targets={billTargets}
+          onOpenTarget={(bizId, invId) => {
+            setBillThroughOpen(false);
+            setActiveBusiness(bizId);
+            router.replace(`/dashboard/facturas/${invId}` as never);
+          }}
+        />
+      ) : null}
 
       <JobPreviewSheet
         supabase={supabase}

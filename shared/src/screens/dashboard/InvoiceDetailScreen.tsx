@@ -20,6 +20,7 @@ import {
   Trash2,
   Undo2,
   Ban,
+  Building2,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
@@ -68,6 +69,8 @@ export interface InvoiceDetailLineItem {
   excluded?: boolean;
   /** Date the work was performed (manual lines). */
   service_date?: string | null;
+  /** Billed on behalf of another business (migration 240). */
+  passthrough?: { business_id: string; business_name: string; invoice_id: string; invoice_number: string } | null;
 }
 
 export interface InvoiceDetail {
@@ -90,6 +93,11 @@ export interface InvoiceDetail {
   notes: string | null;
   /** Private to the business — never rendered on the client-facing document. */
   internalNotes: string | null;
+  /** Part of totalAmount billed for OTHER businesses (migration 240) — the
+   *  client pays it, but it isn't this business's money. 0 when none. */
+  passthroughAmount?: number;
+  /** This invoice's lines were billed through another business's invoice. */
+  billedThrough?: { business_id: string; business_name: string; invoice_id: string; invoice_number: string; at?: string }[];
   language: InvoiceLang;
   /** Row audit timestamps (ISO). createdAt → header; updatedAt → footer. */
   createdAt: string;
@@ -210,6 +218,12 @@ export interface InvoiceDetailScreenProps {
   /** Payment-reminder log card (InvoiceRemindersCard) — rendered under the
    *  dates while the invoice is open (sent / overdue). Platform-owned. */
   remindersSlot?: ReactNode;
+  /** This business's name — labels its own share when the invoice carries
+   *  lines billed for another business. */
+  businessName?: string;
+  /** Bill this invoice's lines through another company (⋯ menu). Hidden when
+   *  not provided (user isn't in another company that can invoice). */
+  onBillThrough?: () => void;
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
@@ -275,10 +289,13 @@ export function InvoiceDetailScreen({
   jobStates,
   jobDates,
   remindersSlot,
+  businessName,
+  onBillThrough,
 }: InvoiceDetailScreenProps) {
   const { t: ui, locale } = useLang();
   const c = useThemeColors();
   const tInv = ui.dashboard.invoices;
+  const tBt = tInv.billThrough;
   // Overflow actions sheet — the header keeps only print/edit/delete; the
   // occasional actions (autoprice / clear prices / share link) live here so
   // six cramped icons stop squeezing the invoice number onto two lines.
@@ -374,7 +391,7 @@ export function InvoiceDetailScreen({
           {onDelete ? (
             <Pressable onPress={onDelete} className="p-2 rounded-xl active:bg-red-500/10"><Trash2 size={18} color={c.danger} /></Pressable>
           ) : null}
-          {((onAutoprice || onAutoname || onClearPrices) && canEdit) || onShareLink || onViewPrices ? (
+          {((onAutoprice || onAutoname || onClearPrices || onBillThrough) && canEdit) || onShareLink || onViewPrices ? (
             <Pressable onPress={() => setMoreOpen(true)} className="p-2 rounded-xl active:bg-border-soft" accessibilityLabel={tInv.moreActionsTitle}>
               <MoreHorizontal size={18} color={c.muted} />
             </Pressable>
@@ -389,16 +406,45 @@ export function InvoiceDetailScreen({
         {invoice.createdByName ? ` · ${tInv.byUser.replace('{{name}}', invoice.createdByName)}` : ''}
       </Text>
 
-      {/* Quick total */}
+      {/* Quick total. With lines billed for another company (240) the
+         headline is THIS business's share; the client-facing amount sits
+         underneath, since that's what the client pays and payments track. */}
       <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 flex-row items-center gap-3 mb-4">
         <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
           <DollarSign size={18} className="text-primary" />
         </View>
-        <View>
-          <Text className="text-xs text-faint font-medium">{t.total}</Text>
-          <Text className="text-xl font-bold text-ink">{fmt(invoice.totalAmount)}</Text>
-        </View>
+        {(invoice.passthroughAmount ?? 0) > 0 ? (
+          <View className="flex-1 min-w-0">
+            <Text className="text-xs text-faint font-medium">
+              {businessName ? tBt.ownShare.replace('{{company}}', businessName) : t.total}
+            </Text>
+            <Text className="text-xl font-bold text-ink">{fmt(invoice.totalAmount - (invoice.passthroughAmount ?? 0))}</Text>
+            <Text className="text-xs text-muted mt-0.5">
+              {tBt.clientPays.replace('{{total}}', fmt(invoice.totalAmount)).replace('{{amount}}', fmt(invoice.passthroughAmount ?? 0))}
+            </Text>
+          </View>
+        ) : (
+          <View>
+            <Text className="text-xs text-faint font-medium">{t.total}</Text>
+            <Text className="text-xl font-bold text-ink">{fmt(invoice.totalAmount)}</Text>
+          </View>
+        )}
       </View>
+
+      {/* Source side: where this invoice's lines were billed through. Its
+         own status/amount are untouched — the other company pays it later. */}
+      {invoice.billedThrough?.length ? (
+        <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-4 gap-1.5">
+          {invoice.billedThrough.map(b => (
+            <View key={b.invoice_id} className="flex-row items-center gap-2">
+              <Building2 size={14} color={c.muted} />
+              <Text className="text-sm text-muted flex-1">
+                {tBt.billedVia.replace('{{company}}', b.business_name).replace('{{invoice}}', b.invoice_number)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
 
       {/* Client — name, business, address */}
       <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-4">
@@ -585,6 +631,14 @@ export function InvoiceDetailScreen({
                       })()}
                     </Text>
                     {li.addonNote ? <Text className="text-[11px] text-faint mt-0.5">{li.addonNote}</Text> : null}
+                    {li.passthrough ? (
+                      <View className="flex-row items-center gap-1 mt-1">
+                        <Building2 size={11} color={c.faint} />
+                        <Text className="text-[11px] font-medium text-faint">
+                          {tBt.fromTag.replace('{{company}}', li.passthrough.business_name).replace('{{invoice}}', li.passthrough.invoice_number)}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
                   <View className="flex-row items-center gap-2">
                     {onToggleLineExcluded && canEdit ? (
@@ -795,6 +849,12 @@ export function InvoiceDetailScreen({
               <Pressable onPress={() => { setMoreOpen(false); onClearPrices(); }} className="flex-row items-center gap-3 py-3.5 border-b border-border-soft active:opacity-60">
                 <View className="w-9 h-9 rounded-xl bg-border-soft items-center justify-center"><Eraser size={18} color={c.muted} /></View>
                 <Text className="text-base text-ink font-medium">{tInv.jobsSection.clearPricesBtn}</Text>
+              </Pressable>
+            ) : null}
+            {onBillThrough && canEdit ? (
+              <Pressable onPress={() => { setMoreOpen(false); onBillThrough(); }} className="flex-row items-center gap-3 py-3.5 border-b border-border-soft active:opacity-60">
+                <View className="w-9 h-9 rounded-xl bg-border-soft items-center justify-center"><Building2 size={18} color={c.muted} /></View>
+                <Text className="text-base text-ink font-medium">{tBt.action}</Text>
               </Pressable>
             ) : null}
             {onShareLink ? (

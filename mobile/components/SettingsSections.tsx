@@ -2107,6 +2107,64 @@ export function JobPrivateOnInvoiceSection() {
   );
 }
 
+// Bill through another company (businesses.allow_bill_through, migration 240):
+// lets this business's invoice lines be copied onto an invoice from the
+// owner's other businesses. Only shown to people in 2+ businesses. The flag
+// is read here rather than from the app-wide business query, so an
+// un-migrated column can't break loading. Mirrors web Ajustes → Facturas.
+export function InvoiceBillThroughSection() {
+  const supabase = createSupabaseClient();
+  const { business, businesses } = useApp();
+  const { t: full } = useLang();
+  const c = useThemeColors();
+  const t = full.dashboard.invoices.billThrough;
+
+  const [value, setValue] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; isError: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!business) return;
+    void supabase.from('businesses').select('allow_bill_through').eq('id', business.id).single()
+      .then(({ data }: { data: { allow_bill_through?: boolean } | null }) => {
+        const v = !!data?.allow_bill_through;
+        setValue(v);
+        setSaved(v);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id]);
+
+  const save = async () => {
+    if (!business) return;
+    setSaving(true);
+    setMsg(null);
+    const { error } = await supabase.from('businesses').update({ allow_bill_through: value }).eq('id', business.id);
+    setSaving(false);
+    setMsg({ text: error ? full.dashboard.settings.itemTypes.saveError : full.dashboard.settings.itemTypes.saveSuccess, isError: !!error });
+    if (!error) setSaved(value);
+  };
+
+  const dirty = value !== saved;
+  useSettingsSaveAction({ dirty, saving, onSave: save });
+
+  if (businesses.length < 2) return null;
+  return (
+    <View className="gap-3">
+      <SectionHeader
+        icon={<Building2 size={18} color={c.primary} />}
+        title={t.settingTitle}
+        subtitle={t.settingHint}
+      />
+      <View className="bg-card rounded-2xl border border-border-soft px-4 py-3 flex-row items-center gap-3">
+        <Text className="flex-1 text-sm text-ink">{t.settingTitle}</Text>
+        <Toggle value={value} onValueChange={setValue} />
+      </View>
+      <StatusMsg msg={msg} />
+    </View>
+  );
+}
+
 // ─── Job alerts (upcoming-job tier highlight) ─────────────────────────────
 // Owner-configured tiers (e.g. "1 day before = red, 3 days before = orange")
 // that surface as a colored left border + chip on each job card. Schema:
