@@ -359,7 +359,13 @@ export default function FacturasPreciosPage() {
    *  showing everyone and failing on tap: an empty row you cannot select is a
    *  worse answer than not listing it. */
   const emailableClients = useMemo(
-    () => clients.filter(c => !!clientEmail(c)),
+    () => clients
+      .filter(c => !!clientEmail(c))
+      // Sorted by NAME. The rows arrive ordered by id, because that is what
+      // the keyset pagination walks — which is effectively random to a human
+      // scrolling for one person among hundreds.
+      .sort((a, b) => clientName(a).localeCompare(clientName(b), undefined, { sensitivity: 'base' })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [clients],
   );
 
@@ -624,7 +630,10 @@ export default function FacturasPreciosPage() {
                       const list = q
                         ? emailableClients.filter(x =>
                             `${x.first_name ?? ''} ${x.last_name ?? ''}`.toLowerCase().includes(q) ||
-                            (x.company ?? '').toLowerCase().includes(q))
+                            (x.company ?? '').toLowerCase().includes(q) ||
+                            // The address is shown on the row, so people will
+                            // type it.
+                            (clientEmail(x) ?? '').toLowerCase().includes(q))
                         : emailableClients;
                       if (!list.length) {
                         return <Text className="text-sm text-muted py-6 text-center">{t.noClientMatches}</Text>;

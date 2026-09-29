@@ -160,7 +160,15 @@ export default function GenerarPreciosPage() {
       (c.state ?? '').toLowerCase() === q);
   }, [clients, clientQuery]);
   /** Clients this can actually be sent to. */
-  const emailableClients = useMemo(() => clients.filter(c => !!clientEmail(c)), [clients]);
+  // Sorted by NAME — the rows arrive in fetch order, which is effectively
+  // random to someone scrolling for one person among hundreds.
+  const emailableClients = useMemo(
+    () => clients
+      .filter(c => !!clientEmail(c))
+      .sort((a, b) => clientName(a).localeCompare(clientName(b), undefined, { sensitivity: 'base' })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [clients],
+  );
   const [emailPickOpen, setEmailPickOpen] = useState(false);
   const [emailPickQuery, setEmailPickQuery] = useState('');
   // Set when a recipient is chosen from state mode. The sheet must be switched
