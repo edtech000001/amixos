@@ -54,9 +54,6 @@ interface ClientLite {
 
 const UNCAT = '__uncategorized__';
 const ADDONS = '__additional_charges__';
-// Swatch palette for mobile (no native color input) — the web page's free
-// color picker still accepts anything; these cover the common brands.
-const ACCENT_SWATCHES = ['#4F46E5', '#2563EB', '#0D9488', '#16A34A', '#D97706', '#EA580C', '#DC2626', '#DB2777', '#7C3AED', '#475569'];
 
 export default function FacturasPreciosPage() {
   const router = useRouter();
@@ -77,13 +74,12 @@ export default function FacturasPreciosPage() {
   const [clients, setClients] = useState<ClientLite[]>([]);
   const [busy, setBusy] = useState(false);
   const [items, setItems] = useState<PriceSheetItem[]>([]);
-  const [biz, setBiz] = useState<{ name?: string; logo_url?: string | null; address?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; phone?: string | null; email?: string | null; price_sheet_template?: unknown } | null>(null);
+  const [biz, setBiz] = useState<{ name?: string; logo_url?: string | null; address?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; phone?: string | null; email?: string | null; price_sheet_template?: unknown; invoice_template?: unknown } | null>(null);
   const [template, setTemplate] = useState<PriceSheetTemplateConfig | null>(null);
   // Customize (design + accent + section order) — persisted business-wide,
   // same businesses.price_sheet_template the web generator uses.
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [draftDesign, setDraftDesign] = useState<PriceSheetDesign>('classic');
-  const [draftAccent, setDraftAccent] = useState('#4F46E5');
   const [draftOrder, setDraftOrder] = useState<string[]>([]);
   // Exclusions, not inclusions: a category or price added later prints by
   // default. An inclusion list would silently drop everything new.
@@ -133,7 +129,7 @@ export default function FacturasPreciosPage() {
           .select('id, name, category, pricing_mode, unit_label, rate, state_rates, client_rates, match_terms, is_addon, addon_inline, sort_order, active')
           .eq('business_id', business.id).eq('active', true).order('sort_order').order('name'),
         supabase.from('businesses')
-          .select('name, logo_url, address, city, state, postal_code, phone, email, price_sheet_template')
+          .select('name, logo_url, address, city, state, postal_code, phone, email, price_sheet_template, invoice_template')
           .eq('id', business.id).single(),
       ]);
       setItems(((itemRows ?? []) as PriceSheetRow[]).map(rowToPriceSheetItem));
@@ -179,7 +175,6 @@ export default function FacturasPreciosPage() {
   const openCustomize = () => {
     const tpl = template ?? normalizePriceSheetTemplate(null);
     setDraftDesign(tpl.design);
-    setDraftAccent(tpl.accentColor);
     setDraftOrder(sectionKeys);
     // Exclusions are deliberately NOT re-seeded here — they are live state
     // now, and resetting them on every reopen would discard the choice just
@@ -206,7 +201,6 @@ export default function FacturasPreciosPage() {
     a.length === b.length && a.every(x => b.includes(x));
   const templateDirty = !!template && (
     draftDesign !== template.design ||
-    draftAccent !== template.accentColor ||
     draftOrder.length !== template.categoryOrder.length ||
     draftOrder.some((k, i) => k !== template.categoryOrder[i]) ||
     !sameSet(draftHiddenCats, template.hiddenCategories) ||
@@ -235,7 +229,8 @@ export default function FacturasPreciosPage() {
     setSavingTpl(true);
     const cfg: PriceSheetTemplateConfig = {
       design: draftDesign,
-      accentColor: draftAccent,
+      // Preserved as stored; the picker is gone and the invoice theme rules.
+      accentColor: template.accentColor ?? '#4F46E5',
       categoryOrder: draftOrder,
       hiddenCategories: draftHiddenCats,
       hiddenItemIds: draftHiddenItems,
@@ -275,6 +270,9 @@ export default function FacturasPreciosPage() {
         hiddenCategories: draftHiddenCats,
         hiddenItemIds: draftHiddenItems,
       },
+      // Chrome — logo, font, accent, density — from the invoice theme, so a
+      // client who has seen an invoice recognises this document.
+      invoiceTemplate: b.invoice_template ?? null,
       labels: {
         sheetTitle: t.sheetTitle,
         generatedOn: t.generatedOn,
@@ -478,16 +476,8 @@ export default function FacturasPreciosPage() {
                       ))}
                     </View>
                   </View>
-                  <View>
-                    <Text className="text-sm font-semibold text-ink mb-2">{t.accentColorLabel}</Text>
-                    <View className="flex-row flex-wrap gap-2">
-                      {ACCENT_SWATCHES.map(hex => (
-                        <Pressable key={hex} onPress={() => setDraftAccent(hex)}
-                          style={{ backgroundColor: hex, width: 34, height: 34, borderRadius: 17, borderWidth: draftAccent.toUpperCase() === hex ? 3 : 0, borderColor: c.ink }}
-                        />
-                      ))}
-                    </View>
-                  </View>
+                  {/* The accent swatches used to live here — accent now comes
+                      from the INVOICE theme so every document matches. */}
                   {draftOrder.length > 0 ? (
                     <View>
                       <Text className="text-sm font-semibold text-ink mb-1">{t.sectionOrderLabel}</Text>

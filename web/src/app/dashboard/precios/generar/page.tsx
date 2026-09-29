@@ -18,6 +18,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { Modal } from '@/components/ui/Modal';
+import { resolveConfig, styleTokens } from '@amixos/shared/lib/invoiceTemplate';
 import { alertMessage } from '@amixos/shared/ui/confirmBus';
 import {
   rowToPriceSheetItem,
@@ -98,7 +99,20 @@ export default function GenerarPreciosPage() {
     setDraftHiddenCats(tpl.hiddenCategories);
     setDraftHiddenItems(tpl.hiddenItemIds);
   }, [business?.id]);
-  const accent = template.accentColor;
+  // Chrome comes from the INVOICE theme, not a second palette. The owner
+  // already chose how their documents look; a price sheet styled like a
+  // different company is worse than one that matches, and asking them to
+  // configure two identities is asking twice. template.accentColor is left in
+  // the stored config but no longer read.
+  const invTok = useMemo(
+    () => styleTokens(resolveConfig(null, business?.invoice_template ?? null)),
+    [business?.invoice_template],
+  );
+  const invCfg = useMemo(
+    () => resolveConfig(null, business?.invoice_template ?? null),
+    [business?.invoice_template],
+  );
+  const accent = invTok.accent;
 
   useEffect(() => {
     if (!business) return;
@@ -300,7 +314,6 @@ export default function GenerarPreciosPage() {
   // ── Customize modal ──────────────────────────────────────────────────────
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [draftDesign, setDraftDesign] = useState<PriceSheetDesign>(template.design);
-  const [draftAccent, setDraftAccent] = useState(accent);
   const [draftOrder, setDraftOrder] = useState<string[]>([]);
   // Exclusions, not inclusions: a category or price added later prints by
   // default. An inclusion list would silently drop everything new.
@@ -309,7 +322,6 @@ export default function GenerarPreciosPage() {
 
   const openCustomize = () => {
     setDraftDesign(template.design);
-    setDraftAccent(template.accentColor);
     // Seed the reorder list from the CURRENT display order (so it matches the
     // sheet), excluding the always-last uncategorized bucket.
     // Ordered over ALL sections, not just printed ones — a hidden section must
@@ -331,7 +343,6 @@ export default function GenerarPreciosPage() {
     a.length === b.length && a.every(x => b.includes(x));
   const templateDirty =
     draftDesign !== template.design ||
-    draftAccent !== template.accentColor ||
     draftOrder.length !== template.categoryOrder.length ||
     draftOrder.some((k, i) => k !== template.categoryOrder[i]) ||
     !sameSet(draftHiddenCats, template.hiddenCategories) ||
@@ -346,7 +357,8 @@ export default function GenerarPreciosPage() {
     setSavingTpl(true);
     const cfg: PriceSheetTemplateConfig = {
       design: draftDesign,
-      accentColor: draftAccent,
+      // Preserved as stored; the picker is gone and the invoice theme rules.
+      accentColor: template.accentColor,
       categoryOrder: draftOrder,
       hiddenCategories: draftHiddenCats,
       hiddenItemIds: draftHiddenItems,
@@ -452,13 +464,13 @@ export default function GenerarPreciosPage() {
       {/* print-force-light: on screen the preview follows the app theme, but
           the PRINTED document always comes out on white paper (this is what
           killed the black bars in the saved PDF). */}
-      <div className={`print-force-light max-w-3xl print:max-w-full mx-auto bg-card rounded-2xl print:rounded-none border border-border-soft print:border-0 shadow-sm print:shadow-none p-8 print:p-0 ${theme.font}`}>
+      <div className={`print-force-light max-w-3xl print:max-w-full mx-auto bg-card rounded-2xl print:rounded-none border border-border-soft print:border-0 shadow-sm print:shadow-none p-8 print:p-0`} style={{ fontFamily: invTok.cssFontFamily }}>
         {/* Header — split (default) or centered (elegant) */}
         {theme.centered ? (
           <div className="text-center pb-5 print:pb-2 border-b border-border-soft">
-            {business?.logo_url ? (
+            {invCfg.showLogo && business?.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={business.logo_url} alt="" className="w-16 h-16 rounded-xl object-contain border border-border-soft mx-auto mb-2" />
+              <img src={business.logo_url} alt="" style={{ maxHeight: invTok.logoPx, maxWidth: invTok.logoPx * 2 }} className="object-contain mx-auto mb-2" />
             ) : null}
             <p className="text-2xl font-bold text-ink">{business?.name ?? ''}</p>
             {businessLines.map((l, i) => <p key={i} className="text-xs text-muted leading-relaxed">{l}</p>)}
@@ -470,9 +482,9 @@ export default function GenerarPreciosPage() {
         ) : (
           <div className="flex items-start justify-between gap-6 pb-5 print:pb-2 border-b border-border-soft">
             <div className="flex items-start gap-3">
-              {business?.logo_url ? (
+              {invCfg.showLogo && business?.logo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={business.logo_url} alt="" className="w-14 h-14 rounded-xl object-contain border border-border-soft" />
+                <img src={business.logo_url} alt="" style={{ maxHeight: invTok.logoPx, maxWidth: invTok.logoPx * 2 }} className="object-contain" />
               ) : null}
               <div>
                 <p className="text-lg font-bold text-ink">{business?.name ?? ''}</p>
@@ -531,16 +543,10 @@ export default function GenerarPreciosPage() {
             </div>
           </div>
 
-          {/* Accent color */}
-          <div>
-            <label className="block text-sm font-semibold text-ink mb-2">{t.accentColorLabel}</label>
-            <div className="flex items-center gap-3">
-              <input type="color" value={draftAccent} onChange={e => setDraftAccent(e.target.value)}
-                className="w-10 h-10 rounded-lg border border-border cursor-pointer bg-card" />
-              <input value={draftAccent} onChange={e => setDraftAccent(e.target.value)}
-                className="w-28 rounded-xl border border-border px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary" />
-            </div>
-          </div>
+          {/* The accent picker used to live here. Accent now comes from the
+              INVOICE theme (Ajustes → Facturas) so every document this business
+              sends looks like the same company. accentColor stays in the stored
+              price-sheet config, unread, rather than migrating it away. */}
 
           {/* Section order */}
           {draftOrder.length > 0 ? (
