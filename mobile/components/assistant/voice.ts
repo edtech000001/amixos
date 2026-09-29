@@ -13,14 +13,14 @@ try {
   Speech = null;
 }
 
-// expo-av is deprecated and REMOVED in SDK 55 — move playback to expo-audio
-// before the next SDK upgrade.
-export let AV: typeof import('expo-av') | null = null;
+// Cloud-voice playback. expo-audio replaced expo-av (deprecated in SDK 54,
+// removed in 55).
+export let AudioLib: typeof import('expo-audio') | null = null;
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  AV = require('expo-av');
+  AudioLib = require('expo-audio');
 } catch {
-  AV = null;
+  AudioLib = null;
 }
 
 // 3.x (SDK 54 API): listeners attach to ExpoSpeechRecognitionModule itself.
@@ -62,9 +62,9 @@ export async function fetchTtsFileUri(
 /** Audio mode for playback: silent-switch override + main speaker (not the
  * quiet earpiece route iOS picks while a recording session lingers). */
 export async function setPlaybackAudioMode() {
-  if (!AV) return;
-  await AV.Audio.setAudioModeAsync({
-    playsInSilentModeIOS: true,
-    allowsRecordingIOS: false,
+  if (!AudioLib) return;
+  await AudioLib.setAudioModeAsync({
+    playsInSilentMode: true,
+    allowsRecording: false,
   });
 }

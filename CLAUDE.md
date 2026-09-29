@@ -115,4 +115,18 @@ From `mobile/`:
 - `eas build --profile development --platform ios` — cloud dev-client build
 - `npx expo run:android` — Android equivalent
 
-Do NOT run `npx expo` from the repo root — it won't find the local SDK 51 and npx will offer to install SDK 55.
+Do NOT run `npx expo` from the repo root — it won't find the local Expo SDK and npx will offer to install a different one.
+- `npx expo run:android` needs **Java 17** (the Mac's default and Android Studio's bundled JDK are 25). Without it, build Android on EAS instead.
+
+## Mobile SDK / Monorepo (CRITICAL)
+
+Mobile is on **Expo SDK 54** (RN 0.81, React 19, expo-router 6 / React Navigation 7, Reanimated 4, New Architecture). **Web stays on React 18 / RN 0.74** (Next 14 + react-native-web). The npm workspace therefore holds TWO versions of React and several native libraries: web's at the root `node_modules`, mobile's in `mobile/node_modules`.
+
+- Never add `react`, `react-native` or native libraries to the ROOT `package.json` — each app declares its own.
+- `mobile/metro.config.js` resolves any package mobile has its own copy of (and every bare import from `shared/src`) from `mobile/`. Two Reacts in the bundle = "Invalid hook call"; web's JS against mobile's native module = crash.
+- `mobile/tsconfig.json` `paths` do the same for types (react → mobile's `@types/react`). Metro does NOT read tsconfig paths (`experiments.tsconfigPaths: false`); the `@/` alias lives in the Metro resolver.
+- `babel.config.js` adds expo-router's babel plugin explicitly (the hoisted preset can't see mobile's expo-router).
+- React 19 ignores `defaultProps` on function components — a library relying on it silently loses its defaults (react-native-map-clustering 3.x crashed the map).
+- NativeWind 4.2 only applies `className` to registered components: lucide icons are registered in `mobile/app/_layout.tsx`. A new third-party component styled via `className` needs `cssInterop` there too.
+- File system: import from `expo-file-system/legacy` (the default export is the new API). Audio: `expo-audio` (expo-av is gone).
+- `runtimeVersion` is `2.0.0` (native change) — OTA updates only reach builds made on SDK 54.

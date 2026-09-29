@@ -60,6 +60,19 @@
         }
       ],
       [
+        "expo-contacts",
+        {
+          "contactsPermission": "Amixos usa tus contactos para que puedas importar clientes desde tu teléfono."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Amixos usa tus fotos para que puedas adjuntar imágenes a trabajos, facturas y equipos.",
+          "cameraPermission": "Amixos usa la cámara para escanear el código VIN y tomar fotos del equipo."
+        }
+      ],
+      [
         "expo-speech-recognition",
         {
           "microphonePermission": "Amixos usa el micrófono para que puedas hablar con Ami, tu asistente de negocio.",

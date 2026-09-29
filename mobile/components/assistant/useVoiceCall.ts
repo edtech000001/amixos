@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AV, Speech, SpeechRecognition, fetchTtsFileUri, setPlaybackAudioMode } from './voice';
+import type { AudioPlayer } from 'expo-audio';
+import { AudioLib, Speech, SpeechRecognition, fetchTtsFileUri, setPlaybackAudioMode } from './voice';
+
+/** Stop + free an expo-audio player (remove() also drops its listeners). */
+function releasePlayer(player: AudioPlayer | null) {
+  if (!player) return;
+  try {
+    player.pause();
+    player.remove();
+  } catch {
+    /* already released */
+  }
+}
 
 // Hands-free "call" with Ami: a continuous turn loop —
 //   listening (on-device speech recognition; a silence timer closes the turn)
@@ -33,7 +45,7 @@ export function useVoiceCall({
 
   // Session generation — bumping it cancels whatever the loop is doing.
   const genRef = useRef(0);
-  const soundRef = useRef<{ stopAsync: () => Promise<any>; unloadAsync: () => Promise<any> } | null>(null);
+  const soundRef = useRef<AudioPlayer | null>(null);
   // Resolves the current speak() early when the user taps to interrupt.
   const interruptRef = useRef<(() => void) | null>(null);
   // The loop reads send/locale through refs so a long call never uses a stale
@@ -50,9 +62,8 @@ export function useVoiceCall({
     } catch {
       /* noop */
     }
-    const sound = soundRef.current;
+    releasePlayer(soundRef.current);
     soundRef.current = null;
-    if (sound) void sound.stopAsync().then(() => sound.unloadAsync()).catch(() => {});
     interruptRef.current?.();
     interruptRef.current = null;
     Speech?.stop();
@@ -123,32 +134,29 @@ export function useVoiceCall({
         if (done) return;
         done = true;
         interruptRef.current = null;
-        const sound = soundRef.current;
+        releasePlayer(soundRef.current);
         soundRef.current = null;
-        if (sound) void sound.stopAsync().then(() => sound.unloadAsync()).catch(() => {});
         Speech?.stop();
         resolve();
       };
       interruptRef.current = finish;
       (async () => {
         try {
-          if (!AV || !businessId) throw new Error('cloud voice unavailable');
+          if (!AudioLib || !businessId) throw new Error('cloud voice unavailable');
           const uri = await fetchTtsFileUri(businessId, text, localeRef.current, 'ami-call.mp3');
           if (gen !== genRef.current || done) return finish();
           await setPlaybackAudioMode();
-          const { sound } = await AV.Audio.Sound.createAsync({ uri }, { shouldPlay: true });
+          const player = AudioLib.createAudioPlayer({ uri });
           if (gen !== genRef.current || done) {
-            void sound.unloadAsync().catch(() => {});
+            releasePlayer(player);
             return finish();
           }
-          soundRef.current = sound;
-          sound.setOnPlaybackStatusUpdate(st => {
-            if (st.isLoaded) {
-              if (st.didJustFinish) finish();
-            } else if ((st as { error?: string }).error) {
-              finish();
-            }
+          soundRef.current = player;
+          player.addListener('playbackStatusUpdate', st => {
+            // iOS reports a load/playback error as playbackState 'failed'.
+            if (st.didJustFinish || st.playbackState === 'failed' || st.playbackState === 'error') finish();
           });
+          player.play();
         } catch {
           // On-device voice fallback so the call keeps flowing.
           if (gen !== genRef.current || done || !Speech) return finish();
