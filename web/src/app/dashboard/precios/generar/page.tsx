@@ -145,10 +145,20 @@ export default function GenerarPreciosPage() {
       (c.company ?? '').toLowerCase().includes(q) ||
       (c.state ?? '').toLowerCase() === q);
   }, [clients, clientQuery]);
-  const emailSheet = () => {
-    if (!selectedClient) return;
-    const to = clientEmail(selectedClient);
+  /** Clients this can actually be sent to. */
+  const emailableClients = useMemo(() => clients.filter(c => !!clientEmail(c)), [clients]);
+  const [emailPickOpen, setEmailPickOpen] = useState(false);
+  const [emailPickQuery, setEmailPickQuery] = useState('');
+  // Set when a recipient is chosen from state mode. The sheet must be switched
+  // to that client FIRST — window.print() prints whatever is on screen, so
+  // emailing before the switch renders would send a Colorado sheet to a Kansas
+  // customer. The effect below fires once React has applied the switch.
+  const [pendingEmail, setPendingEmail] = useState<ClientLite | null>(null);
+
+  const doEmail = (target: ClientLite) => {
+    const to = clientEmail(target);
     if (!to) return;
+    const selectedClient = target;
     const subject = t.emailSubject.replace('{{business}}', business?.name ?? 'Amixos');
     const body = t.emailBody
       .replace('{{name}}', (selectedClient.first_name ?? '').trim() || clientName(selectedClient))
@@ -158,6 +168,30 @@ export default function GenerarPreciosPage() {
     window.print();
     window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
+  useEffect(() => {
+    if (!pendingEmail) return;
+    // Wait until the mode/client switch has actually rendered.
+    if (mode !== 'client' || clientId !== pendingEmail.id) return;
+    const target = pendingEmail;
+    setPendingEmail(null);
+    doEmail(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingEmail, mode, clientId]);
+
+  const onEmailPress = () => {
+    if (mode === 'client' && selectedClient && clientEmail(selectedClient)) { doEmail(selectedClient); return; }
+    setEmailPickQuery('');
+    setEmailPickOpen(true);
+  };
+  const pickEmailTarget = (target: ClientLite) => {
+    setEmailPickOpen(false);
+    // Switching the sheet to this client is the point: the recipient and the
+    // prices they are shown have to agree.
+    setMode('client');
+    setClientId(target.id);
+    setPendingEmail(target);
+  };
+
   const preparedFor = mode === 'client' && selectedClient ? clientName(selectedClient) : null;
   const stateLabel = ctx.state ? usStateName(ctx.state, locale) : t.allStatesLabel;
 
@@ -400,8 +434,8 @@ export default function GenerarPreciosPage() {
               className="flex items-center justify-center gap-1 bg-card border border-border px-2.5 py-2 rounded-lg text-xs font-semibold text-ink hover:bg-surface">
               <Sliders size={14} /> {t.customizeBtn}
             </button>
-            {mode === 'client' && selectedClient && clientEmail(selectedClient) ? (
-              <button type="button" onClick={emailSheet}
+            {emailableClients.length ? (
+              <button type="button" onClick={onEmailPress}
                 className="flex items-center justify-center gap-1 bg-card border border-border px-2.5 py-2 rounded-lg text-xs font-semibold text-primary hover:bg-surface">
                 <Mail size={14} /> {t.emailBtn}
               </button>

@@ -7,10 +7,10 @@
 // state + client prices) or a state, then share.
 
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, Modal as RNModal, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, Pressable, ScrollView, Modal as RNModal, ActivityIndicator, Platform, KeyboardAvoidingView, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronDown, ChevronLeft, ChevronUp, Printer, Sliders, X, GripVertical, Eye, EyeOff } from 'lucide-react-native';
+import { ChevronDown, ChevronLeft, ChevronUp, Printer, Sliders, X, GripVertical, Eye, EyeOff, Mail, Search } from 'lucide-react-native';
 import Sortable from 'react-native-sortables';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -23,6 +23,7 @@ import { PriceSheetScreen } from '@amixos/shared/screens/dashboard/PriceSheetScr
 import { Select } from '@amixos/shared/ui';
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { formatDateLong } from '@amixos/shared/lib/format';
+import { CLIENT_EMAIL_SELECT, clientOwnEmails } from '@amixos/shared/lib/clientRecipients';
 import { usStateName, US_STATE_ABBR_TO_NAME } from '@amixos/shared/lib/usStates';
 import { rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import {
@@ -41,6 +42,14 @@ interface ClientLite {
   last_name: string | null;
   company: string | null;
   state: string | null;
+  // Needed to email a sheet. clientOwnEmails() respects the per-address
+  // "include in emails" flags from migration 231, so a client who opted an
+  // address out of email never receives one there.
+  email: string | null;
+  email_office: string | null;
+  email_home: string | null;
+  email_office_included: boolean | null;
+  email_home_included: boolean | null;
 }
 
 const UNCAT = '__uncategorized__';
@@ -82,6 +91,8 @@ export default function FacturasPreciosPage() {
   const [draftHiddenItems, setDraftHiddenItems] = useState<string[]>([]);
   const [expandedCat, setExpandedCat] = useState<string | null>(null);
   const [savingTpl, setSavingTpl] = useState(false);
+  const [emailPickOpen, setEmailPickOpen] = useState(false);
+  const [emailPickQuery, setEmailPickQuery] = useState('');
 
   useEffect(() => {
     if (typeof clientParam === 'string' && clientParam) {
@@ -111,7 +122,7 @@ export default function FacturasPreciosPage() {
   useEffect(() => {
     if (!business || !genOpen || clients.length) return;
     void fetchAllById<ClientLite>((afterId, pageSize) => {
-      let q = supabase.from('clients').select('id, first_name, last_name, company, state')
+      let q = supabase.from('clients').select(`id, first_name, last_name, company, state, ${CLIENT_EMAIL_SELECT}`)
         .eq('business_id', business.id).order('id', { ascending: true }).limit(pageSize);
       if (afterId) q = q.gt('id', afterId);
       return q;
@@ -202,6 +213,9 @@ export default function FacturasPreciosPage() {
     !sameSet(draftHiddenItems, template.hiddenItemIds)
   );
 
+  /** First address this client actually accepts mail at, or null. */
+  const clientEmail = (c: ClientLite | null) => clientOwnEmails(c)[0] ?? null;
+
   const toggleCatHidden = (cat: string) =>
     setDraftHiddenCats(prev => (prev.includes(cat) ? prev.filter(x => x !== cat) : [...prev, cat]));
   const toggleItemHidden = (id: string) =>
@@ -234,53 +248,129 @@ export default function FacturasPreciosPage() {
     setSavingTpl(false);
   };
 
+  /** Renders the sheet to a PDF and returns its file URI. Shared by Print and
+   *  Email so the two can never drift into producing different documents. */
+  const renderPdf = async (forClient: ClientLite | null): Promise<string | null> => {
+    if (!business || !biz) return null;
+    const ctx = forClient
+      ? { state: forClient.state ?? null, clientId: forClient.id }
+      : { state: stateCode || null, clientId: null };
+    const b = biz;
+    const html = buildPriceSheetHtml({
+      items,
+      ctx,
+      businessName: b.name ?? business.name,
+      logoUrl: b.logo_url,
+      businessLines: [
+        b.address ?? '',
+        [[b.city, b.state].filter(Boolean).join(', '), b.postal_code ?? ''].filter(Boolean).join(' '),
+        b.phone ?? '',
+        b.email ?? '',
+      ],
+      // Exclusions come from the live drafts, not the saved template: the
+      // eye toggles used to do nothing until Save, and Save then hid that
+      // section for every client forever.
+      template: {
+        ...(template ?? normalizePriceSheetTemplate(b.price_sheet_template)),
+        hiddenCategories: draftHiddenCats,
+        hiddenItemIds: draftHiddenItems,
+      },
+      labels: {
+        sheetTitle: t.sheetTitle,
+        generatedOn: t.generatedOn,
+        preparedFor: t.preparedFor,
+        flatWord: t.flatWord,
+        additionalCharges: t.additionalCharges,
+        uncategorized: t.uncategorized,
+      },
+      stateLabel: ctx.state ? usStateName(ctx.state, locale) : t.allStatesLabel,
+      preparedFor: forClient ? clientName(forClient) : null,
+      todayStr: formatDateLong(new Date(), locale),
+    });
+    const { uri } = await Print.printToFileAsync({ html });
+    return uri;
+  };
+
   const generate = async () => {
     if (!business || !biz) return;
     setBusy(true);
     try {
-      const selClient = clients.find(x => x.id === clientId) ?? null;
-      const ctx = mode === 'client'
-        ? { state: selClient?.state ?? null, clientId: selClient?.id ?? null }
-        : { state: stateCode || null, clientId: null };
-      const b = biz;
-      const html = buildPriceSheetHtml({
-        items,
-        ctx,
-        businessName: b.name ?? business.name,
-        logoUrl: b.logo_url,
-        businessLines: [
-          b.address ?? '',
-          [[b.city, b.state].filter(Boolean).join(', '), b.postal_code ?? ''].filter(Boolean).join(' '),
-          b.phone ?? '',
-          b.email ?? '',
-        ],
-        // Exclusions come from the live drafts, not the saved template: the
-        // eye toggles used to do nothing until Save, and Save then hid that
-        // section for every client forever.
-        template: {
-          ...(template ?? normalizePriceSheetTemplate(b.price_sheet_template)),
-          hiddenCategories: draftHiddenCats,
-          hiddenItemIds: draftHiddenItems,
-        },
-        labels: {
-          sheetTitle: t.sheetTitle,
-          generatedOn: t.generatedOn,
-          preparedFor: t.preparedFor,
-          flatWord: t.flatWord,
-          additionalCharges: t.additionalCharges,
-          uncategorized: t.uncategorized,
-        },
-        stateLabel: ctx.state ? usStateName(ctx.state, locale) : t.allStatesLabel,
-        preparedFor: mode === 'client' && selClient ? clientName(selClient) : null,
-        todayStr: formatDateLong(new Date(), locale),
-      });
-      const { uri } = await Print.printToFileAsync({ html });
+      const selClient = mode === 'client' ? (clients.find(x => x.id === clientId) ?? null) : null;
+      const uri = await renderPdf(selClient);
+      if (!uri) return;
       setGenOpen(false);
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: t.sheetTitle });
       }
     } catch { /* keep sheet open on failure */ }
     setBusy(false);
+  };
+
+  /** Emails the sheet to one client, PDF attached.
+   *
+   *  Addressed to the client the sheet was BUILT for — so the prices in the
+   *  attachment and the recipient always agree. In state mode there is no such
+   *  client, so the picker below asks for one and the sheet is re-rendered for
+   *  them; emailing a Colorado sheet to a Kansas customer would be worse than
+   *  refusing. */
+  const emailTo = async (target: ClientLite) => {
+    const to = clientEmail(target);
+    if (!to || !business) return;
+    setBusy(true);
+    try {
+      const uri = await renderPdf(target);
+      const subject = t.emailSubject.replace('{{business}}', business.name ?? 'Amixos');
+      const body = t.emailBody
+        .replace('{{name}}', (target.first_name ?? '').trim() || clientName(target))
+        .replace(/\{\{business\}\}/g, business.name ?? 'Amixos');
+
+      // Lazily required, as in facturas/[id].tsx: a dev client without the
+      // native module compiled in must fall back rather than crash on import.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let MailComposer: any = null;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+        MailComposer = require('expo-mail-composer');
+      } catch { MailComposer = null; }
+      let available = false;
+      if (MailComposer) {
+        try { available = await MailComposer.isAvailableAsync(); } catch { available = false; }
+      }
+
+      setGenOpen(false);
+      setEmailPickOpen(false);
+      if (MailComposer && available) {
+        await MailComposer.composeAsync({
+          recipients: [to],
+          subject,
+          body,
+          attachments: uri ? [uri] : [],
+        });
+        return;
+      }
+      // No composer: mailto cannot carry an attachment, so hand over the PDF
+      // through the share sheet instead of sending an email with nothing in it.
+      if (uri && (await Sharing.isAvailableAsync())) {
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: t.sheetTitle });
+      }
+    } catch { /* swallow — the sheet stays usable */ }
+    setBusy(false);
+  };
+
+  /** Clients that can actually receive this. Filtering here rather than
+   *  showing everyone and failing on tap: an empty row you cannot select is a
+   *  worse answer than not listing it. */
+  const emailableClients = useMemo(
+    () => clients.filter(c => !!clientEmail(c)),
+    [clients],
+  );
+
+  const onEmailPress = () => {
+    const sel = mode === 'client' ? (clients.find(x => x.id === clientId) ?? null) : null;
+    if (sel && clientEmail(sel)) { void emailTo(sel); return; }
+    // State mode, or a client with no address on file — ask who it goes to.
+    setEmailPickQuery('');
+    setEmailPickOpen(true);
   };
 
   if (!business) return null;
@@ -478,8 +568,18 @@ export default function FacturasPreciosPage() {
                 </View>
               ) : null}
 
+              {/* Email sits ABOVE Print: sending it is the usual intent, and
+                  printing is what you do when email will not reach them. */}
+              <Pressable onPress={onEmailPress} disabled={busy || !emailableClients.length}
+                className="mt-4 py-3.5 rounded-2xl border border-border bg-card items-center active:opacity-80 disabled:opacity-50">
+                <View className="flex-row items-center gap-2">
+                  <Mail size={16} color={c.primary} />
+                  <Text className="text-sm font-semibold text-primary">{t.emailBtn}</Text>
+                </View>
+              </Pressable>
+
               <Pressable onPress={generate} disabled={busy}
-                className="mt-4 py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
+                className="mt-2 py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
                 {busy ? <ActivityIndicator color="#fff" /> : (
                   <View className="flex-row items-center gap-2">
                     <Printer size={16} color="#fff" />
@@ -491,6 +591,60 @@ export default function FacturasPreciosPage() {
             </View>
           </View>
         </KeyboardAvoidingView>
+      </RNModal>
+
+      {/* Who gets this sheet. Only reached from state mode, or a client with
+          no usable address — in client mode the recipient is already known and
+          we skip straight to the composer. */}
+      <RNModal visible={emailPickOpen} transparent animationType="fade" onRequestClose={() => setEmailPickOpen(false)}>
+        <View className="flex-1 justify-end">
+          <Pressable
+            style={[SHEET_BACKDROP, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]}
+            onPress={() => setEmailPickOpen(false)}
+          />
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10" style={{ maxHeight: '80%' }}>
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-lg font-bold text-ink">{t.emailPickTitle}</Text>
+              <Pressable onPress={() => setEmailPickOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                <X size={20} color={c.muted} />
+              </Pressable>
+            </View>
+
+            <View className="flex-row items-center rounded-xl border border-border bg-surface px-3 mb-3">
+              <Search size={15} color={c.faint} />
+              <TextInput
+                value={emailPickQuery}
+                onChangeText={setEmailPickQuery}
+                placeholder={t.searchClientPlaceholder}
+                placeholderTextColor={c.faint}
+                className="flex-1 px-2 py-2.5 text-sm text-ink"
+              />
+            </View>
+
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {(() => {
+                const q = emailPickQuery.trim().toLowerCase();
+                const list = q
+                  ? emailableClients.filter(x =>
+                      `${x.first_name ?? ''} ${x.last_name ?? ''}`.toLowerCase().includes(q) ||
+                      (x.company ?? '').toLowerCase().includes(q))
+                  : emailableClients;
+                if (!list.length) {
+                  return <Text className="text-sm text-muted py-6 text-center">{t.noClientMatches}</Text>;
+                }
+                return list.map(x => (
+                  <Pressable key={x.id} onPress={() => { void emailTo(x); }} disabled={busy}
+                    className="py-3 border-b border-border-soft active:opacity-70 disabled:opacity-50">
+                    <Text className="text-sm font-medium text-ink" numberOfLines={1}>
+                      {clientName(x)}{x.state ? ` (${x.state})` : ''}
+                    </Text>
+                    <Text className="text-xs text-muted mt-0.5" numberOfLines={1}>{clientEmail(x)}</Text>
+                  </Pressable>
+                ));
+              })()}
+            </ScrollView>
+          </View>
+        </View>
       </RNModal>
     </SafeAreaView>
   );
