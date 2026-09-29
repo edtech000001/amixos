@@ -35,7 +35,7 @@ import {
   Share2,
 } from 'lucide-react-native';
 import * as Print from 'expo-print';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { buildClientCsv, buildClientHtml } from '@amixos/shared/lib/clientShare';
 import { parsePolicyAgents, agentFor, buildPolicyEmail, type PolicyDocKind } from '@amixos/shared/lib/policyAgents';

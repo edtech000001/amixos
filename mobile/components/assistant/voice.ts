@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 
 // Shared voice plumbing for Ami (reply reader + call mode). All native audio
@@ -13,6 +13,8 @@ try {
   Speech = null;
 }
 
+// expo-av is deprecated and REMOVED in SDK 55 — move playback to expo-audio
+// before the next SDK upgrade.
 export let AV: typeof import('expo-av') | null = null;
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -21,7 +23,7 @@ try {
   AV = null;
 }
 
-// Pinned to 0.2.25 — the last release before 1.0.0 moved to the SDK 52 API.
+// 3.x (SDK 54 API): listeners attach to ExpoSpeechRecognitionModule itself.
 export let SpeechRecognition: typeof import('expo-speech-recognition') | null = null;
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires

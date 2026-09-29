@@ -3,11 +3,9 @@
 // native iOS/Android config blocks at build time — app.json itself can't
 // reference process.env.
 //
-// Everything else still lives in app.json; we just spread it and add the
-// fields that need env interpolation.
-const base = require('./app.json').expo;
-
-module.exports = () => ({
+// Everything else still lives in app.json — Expo loads it and passes it in
+// as `config`; we spread it and add the fields that need env interpolation.
+module.exports = ({ config: base }) => ({
   ...base,
   // NO ios.config.googleMapsApiKey. modules/map/MapScreen.tsx passes no
   // `provider` prop, so react-native-maps uses the platform default — Apple

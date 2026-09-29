@@ -20,7 +20,8 @@
         "buildType": "apk"
       },
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "image": "latest"
       }
     },
     "preview": {
@@ -35,6 +36,9 @@
       },
       "android": {
         "buildType": "apk"
+      },
+      "ios": {
+        "image": "latest"
       }
     },
     "simulator": {
@@ -48,7 +52,8 @@
         "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "AIzaSyAmrsisBGhkAOt4pbwzFHVB18lwO_widvc"
       },
       "ios": {
-        "simulator": true
+        "simulator": true,
+        "image": "latest"
       }
     },
     "production": {
@@ -60,6 +65,9 @@
         "EXPO_PUBLIC_API_URL": "https://amixos-api-i4vvds35bq-uc.a.run.app",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "314622478971-jpfm8nmg9aidtneg2qjfdq0f9e8lptpl.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "AIzaSyAmrsisBGhkAOt4pbwzFHVB18lwO_widvc"
+      },
+      "ios": {
+        "image": "latest"
       }
     }
   },

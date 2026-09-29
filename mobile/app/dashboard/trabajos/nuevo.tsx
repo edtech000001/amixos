@@ -1678,7 +1678,7 @@ export default function NuevoTrabajoRoute() {
         if (!isOnlineNow()) {
           try {
             // eslint-disable-next-line @typescript-eslint/no-var-requires
-            const FileSystem = require('expo-file-system');
+            const FileSystem = require('expo-file-system/legacy');
             const durable = `${FileSystem.documentDirectory}offline_photo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.jpg`;
             await FileSystem.copyAsync({ from: pendingPhotos[i].uri, to: durable });
             uploadUri = durable;

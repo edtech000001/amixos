@@ -51,7 +51,7 @@ async function applyOp(op: OutboxOp): Promise<void> {
     if (insErr && !isDuplicateError(insErr)) throw insErr;
     // Best-effort cleanup of the durable copy now that it's uploaded.
     try {
-      const FileSystem = require('expo-file-system');
+      const FileSystem = require('expo-file-system/legacy');
       await FileSystem.deleteAsync(op.localUri, { idempotent: true });
     } catch {
       /* expo-file-system missing or already gone — harmless */

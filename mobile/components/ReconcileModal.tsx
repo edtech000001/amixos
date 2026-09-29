@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal as RNModal, View, Text, Pressable, ScrollView, ActivityIndicator, SafeAreaView } from 'react-native';
+import { Modal as RNModal, View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import { Toggle } from '@amixos/shared/ui';
 import { useThemeColors } from '@/lib/ThemeProvider';

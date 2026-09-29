@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ReactElement, type ReactNode } from 'react';
 import Sortable from 'react-native-sortables';
 import { useSettingsScrollRef } from '@/components/SettingsPageWrapper';
 
@@ -42,7 +42,7 @@ export function SortableList<T extends { id: string }>({
       dragActivationDelay={200}
       scrollableRef={scrollRef ?? undefined}
       onDragEnd={({ data }) => onReorder(data)}
-      renderItem={({ item, index }) => renderItem(item, index, { drag: noop, isActive: false }) as JSX.Element}
+      renderItem={({ item, index }) => renderItem(item, index, { drag: noop, isActive: false }) as ReactElement}
     />
   );
 }

@@ -86,7 +86,7 @@ export function useVoiceCall({
       };
       const maxTimer = setTimeout(requestStop, MAX_TURN_MS);
       subs = [
-        speech.ExpoSpeechRecognitionModuleEmitter.addListener(
+        speech.ExpoSpeechRecognitionModule.addListener(
           'result',
           (ev: { results?: { transcript: string }[] }) => {
             const text = ev?.results?.[0]?.transcript;
@@ -98,8 +98,8 @@ export function useVoiceCall({
             silenceTimer = setTimeout(requestStop, SILENCE_MS);
           },
         ),
-        speech.ExpoSpeechRecognitionModuleEmitter.addListener('end', finish),
-        speech.ExpoSpeechRecognitionModuleEmitter.addListener('error', finish),
+        speech.ExpoSpeechRecognitionModule.addListener('end', finish),
+        speech.ExpoSpeechRecognitionModule.addListener('error', finish),
       ];
       try {
         speech.ExpoSpeechRecognitionModule.start({
