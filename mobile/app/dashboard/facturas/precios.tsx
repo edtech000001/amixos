@@ -560,11 +560,20 @@ export default function FacturasPreciosPage() {
 
               {/* Email sits ABOVE Print: sending it is the usual intent, and
                   printing is what you do when email will not reach them. */}
+              {/* Explicit muted styling rather than `disabled:opacity-50` —
+                  that variant does not reliably reach a Pressable under
+                  NativeWind, so a dead button looked tappable. */}
               <Pressable onPress={onEmailPress} disabled={busy || !emailableClients.length}
-                className="mt-4 py-3.5 rounded-2xl border border-border bg-card items-center active:opacity-80 disabled:opacity-50">
+                className={`mt-4 py-3.5 rounded-2xl border items-center ${
+                  emailableClients.length && !busy
+                    ? 'border-border bg-card active:opacity-80'
+                    : 'border-border-soft bg-card opacity-50'
+                }`}>
                 <View className="flex-row items-center gap-2">
-                  <Mail size={16} color={c.primary} />
-                  <Text className="text-sm font-semibold text-primary">{t.emailBtn}</Text>
+                  <Mail size={16} color={emailableClients.length ? c.primary : c.faint} />
+                  <Text className={`text-sm font-semibold ${emailableClients.length ? 'text-primary' : 'text-faint'}`}>
+                    {t.emailBtn}
+                  </Text>
                 </View>
               </Pressable>
 
@@ -578,63 +587,64 @@ export default function FacturasPreciosPage() {
                 )}
               </Pressable>
               </ScrollView>
+
+              {/* Who gets this sheet. An absolute overlay INSIDE this modal,
+                  not a second RNModal: iOS silently refuses to present one
+                  modal over another and the button just looks dead — the rule
+                  in CLAUDE.md, and the reason the manual-payment worker picker
+                  in PayrollScreen is built this way. Reached from state mode,
+                  or a client with no usable address; in client mode the
+                  recipient is already known. */}
+              {emailPickOpen ? (
+                <View
+                  style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+                  className="bg-card rounded-t-3xl px-5 pt-5 pb-10"
+                >
+                  <View className="flex-row items-center justify-between mb-3">
+                    <Text className="text-lg font-bold text-ink">{t.emailPickTitle}</Text>
+                    <Pressable onPress={() => setEmailPickOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                      <X size={20} color={c.muted} />
+                    </Pressable>
+                  </View>
+
+                  <View className="flex-row items-center rounded-xl border border-border bg-surface px-3 mb-3">
+                    <Search size={15} color={c.faint} />
+                    <TextInput
+                      value={emailPickQuery}
+                      onChangeText={setEmailPickQuery}
+                      placeholder={t.searchClientPlaceholder}
+                      placeholderTextColor={c.faint}
+                      className="flex-1 px-2 py-2.5 text-sm text-ink"
+                    />
+                  </View>
+
+                  <ScrollView keyboardShouldPersistTaps="handled">
+                    {(() => {
+                      const q = emailPickQuery.trim().toLowerCase();
+                      const list = q
+                        ? emailableClients.filter(x =>
+                            `${x.first_name ?? ''} ${x.last_name ?? ''}`.toLowerCase().includes(q) ||
+                            (x.company ?? '').toLowerCase().includes(q))
+                        : emailableClients;
+                      if (!list.length) {
+                        return <Text className="text-sm text-muted py-6 text-center">{t.noClientMatches}</Text>;
+                      }
+                      return list.map(x => (
+                        <Pressable key={x.id} onPress={() => { void emailTo(x); }} disabled={busy}
+                          className="py-3 border-b border-border-soft active:opacity-70">
+                          <Text className="text-sm font-medium text-ink" numberOfLines={1}>
+                            {clientName(x)}{x.state ? ` (${x.state})` : ''}
+                          </Text>
+                          <Text className="text-xs text-muted mt-0.5" numberOfLines={1}>{clientEmail(x)}</Text>
+                        </Pressable>
+                      ));
+                    })()}
+                  </ScrollView>
+                </View>
+              ) : null}
             </View>
           </View>
         </KeyboardAvoidingView>
-      </RNModal>
-
-      {/* Who gets this sheet. Only reached from state mode, or a client with
-          no usable address — in client mode the recipient is already known and
-          we skip straight to the composer. */}
-      <RNModal visible={emailPickOpen} transparent animationType="fade" onRequestClose={() => setEmailPickOpen(false)}>
-        <View className="flex-1 justify-end">
-          <Pressable
-            style={[SHEET_BACKDROP, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]}
-            onPress={() => setEmailPickOpen(false)}
-          />
-          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10" style={{ maxHeight: '80%' }}>
-            <View className="flex-row items-center justify-between mb-3">
-              <Text className="text-lg font-bold text-ink">{t.emailPickTitle}</Text>
-              <Pressable onPress={() => setEmailPickOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                <X size={20} color={c.muted} />
-              </Pressable>
-            </View>
-
-            <View className="flex-row items-center rounded-xl border border-border bg-surface px-3 mb-3">
-              <Search size={15} color={c.faint} />
-              <TextInput
-                value={emailPickQuery}
-                onChangeText={setEmailPickQuery}
-                placeholder={t.searchClientPlaceholder}
-                placeholderTextColor={c.faint}
-                className="flex-1 px-2 py-2.5 text-sm text-ink"
-              />
-            </View>
-
-            <ScrollView keyboardShouldPersistTaps="handled">
-              {(() => {
-                const q = emailPickQuery.trim().toLowerCase();
-                const list = q
-                  ? emailableClients.filter(x =>
-                      `${x.first_name ?? ''} ${x.last_name ?? ''}`.toLowerCase().includes(q) ||
-                      (x.company ?? '').toLowerCase().includes(q))
-                  : emailableClients;
-                if (!list.length) {
-                  return <Text className="text-sm text-muted py-6 text-center">{t.noClientMatches}</Text>;
-                }
-                return list.map(x => (
-                  <Pressable key={x.id} onPress={() => { void emailTo(x); }} disabled={busy}
-                    className="py-3 border-b border-border-soft active:opacity-70 disabled:opacity-50">
-                    <Text className="text-sm font-medium text-ink" numberOfLines={1}>
-                      {clientName(x)}{x.state ? ` (${x.state})` : ''}
-                    </Text>
-                    <Text className="text-xs text-muted mt-0.5" numberOfLines={1}>{clientEmail(x)}</Text>
-                  </Pressable>
-                ));
-              })()}
-            </ScrollView>
-          </View>
-        </View>
       </RNModal>
     </SafeAreaView>
   );

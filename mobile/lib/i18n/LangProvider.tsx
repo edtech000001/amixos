@@ -21,6 +21,18 @@ export { useLang } from '@amixos/shared';
 // Read the device's preferred locale without pulling in expo-localization
 // (avoids a native rebuild). Falls back to DEFAULT_LOCALE if the platform
 // doesn't expose anything usable.
+/**
+ * The phone's language, used ONLY to seed the very first launch.
+ *
+ * Two sources, because the first one can come back empty. SettingsManager and
+ * I18nManager are legacy bridge modules; when they are unavailable this
+ * returned '' and fell through to DEFAULT_LOCALE — which is 'es'. A silent
+ * failure therefore looked exactly like a deliberate Spanish default, on an
+ * English phone, with nothing to indicate which had happened.
+ *
+ * Intl is the fallback: Hermes ships it, it needs no native module and no
+ * dependency, and it reports the same locale the OS gives the app.
+ */
 function getDeviceLocale(): Locale {
   let raw = '';
   if (Platform.OS === 'ios') {
@@ -29,6 +41,15 @@ function getDeviceLocale(): Locale {
   } else {
     raw = NativeModules.I18nManager?.localeIdentifier || '';
   }
+
+  if (!raw) {
+    try {
+      raw = Intl.DateTimeFormat().resolvedOptions().locale || '';
+    } catch {
+      raw = '';
+    }
+  }
+
   const code = String(raw).toLowerCase().split(/[_-]/)[0];
   return isLocale(code) ? (code as Locale) : DEFAULT_LOCALE;
 }
