@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 
 // Shared voice plumbing for Ami (reply reader + call mode). All native audio
@@ -13,15 +13,17 @@ try {
   Speech = null;
 }
 
-export let AV: typeof import('expo-av') | null = null;
+// Cloud-voice playback. expo-audio replaced expo-av (deprecated in SDK 54,
+// removed in 55).
+export let AudioLib: typeof import('expo-audio') | null = null;
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  AV = require('expo-av');
+  AudioLib = require('expo-audio');
 } catch {
-  AV = null;
+  AudioLib = null;
 }
 
-// Pinned to 0.2.25 — the last release before 1.0.0 moved to the SDK 52 API.
+// 3.x (SDK 54 API): listeners attach to ExpoSpeechRecognitionModule itself.
 export let SpeechRecognition: typeof import('expo-speech-recognition') | null = null;
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -60,9 +62,9 @@ export async function fetchTtsFileUri(
 /** Audio mode for playback: silent-switch override + main speaker (not the
  * quiet earpiece route iOS picks while a recording session lingers). */
 export async function setPlaybackAudioMode() {
-  if (!AV) return;
-  await AV.Audio.setAudioModeAsync({
-    playsInSilentModeIOS: true,
-    allowsRecordingIOS: false,
+  if (!AudioLib) return;
+  await AudioLib.setAudioModeAsync({
+    playsInSilentMode: true,
+    allowsRecording: false,
   });
 }

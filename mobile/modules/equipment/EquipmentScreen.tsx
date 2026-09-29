@@ -805,7 +805,7 @@ export default function EquipmentScreen() {
     let uploadUri = uri;
     if (!isOnlineNow()) {
       try {
-        const FileSystem = require('expo-file-system');
+        const FileSystem = require('expo-file-system/legacy');
         const durable = `${FileSystem.documentDirectory}offline_equip_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
         await FileSystem.copyAsync({ from: uri, to: durable });
         uploadUri = durable;

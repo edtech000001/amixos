@@ -38,7 +38,7 @@ export async function readClipboardImageToFile(): Promise<string | null> {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const Clipboard = require('expo-clipboard') as typeof import('expo-clipboard');
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const FileSystem = require('expo-file-system') as typeof import('expo-file-system');
+    const FileSystem = require('expo-file-system/legacy') as typeof import('expo-file-system/legacy');
 
     // Match the picker's quality 0.6 so a pasted photo isn't heavier than a
     // picked one.

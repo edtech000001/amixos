@@ -4,7 +4,7 @@ import { X, Camera, ImagePlus, ClipboardPaste, RotateCw } from 'lucide-react-nat
 import { hasClipboardImage, readClipboardImageToFile } from '@/lib/clipboardPhoto';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { signedUrl } from '@amixos/shared/lib/storageUrls';
 import { INVOICE_PAYMENT_BUCKET, paymentPhotoPath } from '@amixos/shared/lib/invoicePayments';

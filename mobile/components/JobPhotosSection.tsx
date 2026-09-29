@@ -156,7 +156,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
       let uploadUri = sourceUri;
       if (!durable && !isOnlineNow()) {
         try {
-          const FileSystem = require('expo-file-system');
+          const FileSystem = require('expo-file-system/legacy');
           const durableUri = `${FileSystem.documentDirectory}offline_photo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.jpg`;
           await FileSystem.copyAsync({ from: sourceUri, to: durableUri });
           uploadUri = durableUri;

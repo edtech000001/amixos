@@ -25,6 +25,7 @@ import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 import { create } from 'zustand';
 import * as Application from 'expo-application';
+import { useUpdates } from 'expo-updates';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLeaveGuardStore } from '@/lib/leaveGuardStore';
 
@@ -93,7 +94,10 @@ function getUpdates(): typeof import('expo-updates') | null {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const Updates = require('expo-updates') as typeof import('expo-updates');
-    return Updates.isEnabled ? Updates : null;
+    // A dev build running from Metro can't take OTA updates. SDK 51 reported
+    // isEnabled=false there; SDK 54 reports true and then checkForUpdateAsync
+    // throws — which surfaced as "couldn't check, check your connection".
+    return Updates.isEnabled && !__DEV__ ? Updates : null;
   } catch {
     return null;
   }
@@ -137,13 +141,10 @@ const useUpdateStore = create<UpdateStore>((set, get) => ({
         // checkForUpdateAsync (it reports no update because the newest one is
         // already local). Without this, the very case this feature exists for
         // — someone who never restarts — would never be prompted.
-        let pending = false;
-        try {
-          const ctx = await Updates.getNativeStateMachineContextAsync();
-          pending = ctx.isUpdatePending;
-        } catch {
-          /* older native runtime — fall through to the normal check */
-        }
+        // expo-updates 29 dropped getNativeStateMachineContextAsync; the
+        // already-downloaded case is now fed in by useUpdates() in
+        // useAppUpdate below, which sets otaReady directly.
+        const pending = get().otaReady;
         if (pending) {
           foundOta = true;
           set({ otaReady: true });
@@ -232,6 +233,14 @@ export function useAppUpdate(): AppUpdateState {
   // Any focused form registers a leave guard. While one is up, someone is
   // mid-entry and must not be shown a restart prompt.
   const formFocused = useLeaveGuardStore(st => st.request !== null);
+
+  // A bundle expo-updates downloaded on its own at launch is invisible to
+  // checkForUpdateAsync (the newest one is already local) — the native state
+  // machine still reports it as pending, so surface that as "ready".
+  const { isUpdatePending } = useUpdates();
+  useEffect(() => {
+    if (isUpdatePending) useUpdateStore.setState({ otaReady: true });
+  }, [isUpdatePending]);
 
   useEffect(() => {
     if (pollingOwner !== 0) return;
