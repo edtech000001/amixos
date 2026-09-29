@@ -975,7 +975,14 @@ export function buildInvoiceViewModel(
     const qty = Number(l.qty) || 0;
     const rate = Number(l.rate) || 0;
     return {
-      description: l.service_date ? `${name} · ${fmtDate(l.service_date)}` : name,
+      // service_date is NOT rendered. It is set only on pass-through lines
+      // (invoiceBillThrough.ts copies the source line's date, falling back to
+      // its linked job's date), so printing it made two invoices from the same
+      // business look formatted differently — some lines dated, some not —
+      // with nothing the sender could do about it. The date stays on the line
+      // and still shows in-app on the invoice detail screen, where it earns
+      // its place reconciling re-billed work against someone else's invoice.
+      description: name,
       qty: String(qty),
       rate: fmtMoney(rate),
       total: fmtMoney(qty * rate),
