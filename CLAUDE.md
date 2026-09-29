@@ -104,6 +104,9 @@ Related iOS rule: never open a second `RNModal` while one is visible — iOS sil
 
 Any new `.sql` file in `supabase/migrations/` must be run manually in the Supabase SQL Editor. Check whether columns already exist before running.
 
+- New migrations go at the top level of `supabase/migrations/`. Once the user confirms they ran one, `git mv` it into `supabase/migrations/Done/` — the top level should only hold migrations still waiting to be run.
+- Number new files after the highest number across BOTH the top level and `Done/`.
+
 ## Mobile Dev Quickstart
 
 From `mobile/`:

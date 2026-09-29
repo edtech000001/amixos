@@ -3,7 +3,7 @@
 // (e.g. "Lexington", "Georgia"); jobs belong to one location, workers can be
 // assigned to many (home + borrowed), and reports roll up across all of them.
 //
-// See supabase/migrations/104_locations.sql for the schema.
+// See supabase/migrations/Done/104_locations.sql for the schema.
 
 import { fetchAll } from './supabaseFetch';
 
