@@ -11,7 +11,23 @@
 // shake registering as four.
 
 import { useEffect, useRef } from 'react';
-import { Accelerometer } from 'expo-sensors';
+
+// Lazily required, like MailComposer in facturas/[id].tsx. A dev client built
+// before expo-sensors was added has no ExpoSensors native module, and a
+// top-level import would take the whole dashboard down with
+// "Cannot find native module" rather than just losing the gesture — the same
+// failure that produced commit 7c01875 for expo-asset. Shake detection is a
+// convenience; it must never be the reason the app will not open.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function loadAccelerometer(): any | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    const mod = require('expo-sensors');
+    return mod?.Accelerometer ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /** Total acceleration (in g) past which a sample counts as a jolt. 1g is
  *  gravity at rest, so this is 0.8g of actual movement. */
@@ -32,25 +48,35 @@ export function useShake(onShake: () => void, enabled = true) {
   useEffect(() => {
     if (!enabled) return;
 
+    const Accelerometer = loadAccelerometer();
+    if (!Accelerometer) return;
+
     let jolts: number[] = [];
     let lastFired = 0;
 
-    Accelerometer.setUpdateInterval(100);
-    const sub = Accelerometer.addListener(({ x, y, z }) => {
-      const magnitude = Math.sqrt(x * x + y * y + z * z);
-      if (magnitude < THRESHOLD) return;
+    // Guarded as a unit: on a client where the module resolves but the native
+    // side is absent, it is addListener that throws, not the require.
+    let sub: { remove: () => void } | null = null;
+    try {
+      Accelerometer.setUpdateInterval(100);
+      sub = Accelerometer.addListener(({ x, y, z }: { x: number; y: number; z: number }) => {
+        const magnitude = Math.sqrt(x * x + y * y + z * z);
+        if (magnitude < THRESHOLD) return;
 
-      const now = Date.now();
-      if (now - lastFired < COOLDOWN_MS) return;
+        const now = Date.now();
+        if (now - lastFired < COOLDOWN_MS) return;
 
-      jolts = [...jolts.filter(ts => now - ts < WINDOW_MS), now];
-      if (jolts.length >= JOLTS_REQUIRED) {
-        jolts = [];
-        lastFired = now;
-        handler.current();
-      }
-    });
+        jolts = [...jolts.filter(ts => now - ts < WINDOW_MS), now];
+        if (jolts.length >= JOLTS_REQUIRED) {
+          jolts = [];
+          lastFired = now;
+          handler.current();
+        }
+      });
+    } catch {
+      sub = null;
+    }
 
-    return () => sub.remove();
+    return () => sub?.remove();
   }, [enabled]);
 }
