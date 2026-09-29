@@ -81,9 +81,23 @@ export default function GenerarPreciosPage() {
   // updates live; saved from the Customize modal. Only re-seed from the business
   // when the business itself changes — NOT on every reference churn (a post-save
   // refetch would otherwise snap the freshly-saved value back).
+  // Which sections/prices this sheet leaves out. Declared up here because
+  // printedSections reads them — they are the live config for the sheet, not
+  // just scratch state for the Customize modal.
+  const [draftHiddenCats, setDraftHiddenCats] = useState<string[]>([]);
+  const [draftHiddenItems, setDraftHiddenItems] = useState<string[]>([]);
   const [template, setTemplate] = useState<PriceSheetTemplateConfig>(() => normalizePriceSheetTemplate(business?.price_sheet_template));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { setTemplate(normalizePriceSheetTemplate(business?.price_sheet_template)); }, [business?.id]);
+  useEffect(() => {
+    const tpl = normalizePriceSheetTemplate(business?.price_sheet_template);
+    setTemplate(tpl);
+    // Seed the exclusion drafts here too, NOT only in openCustomize. They are
+    // what the sheet actually prints now, so they have to be valid before the
+    // Customize modal has ever been opened — otherwise an empty draft would
+    // read as "nothing hidden" and quietly ignore the saved default.
+    setDraftHiddenCats(tpl.hiddenCategories);
+    setDraftHiddenItems(tpl.hiddenItemIds);
+  }, [business?.id]);
   const accent = template.accentColor;
 
   useEffect(() => {
@@ -158,22 +172,27 @@ export default function GenerarPreciosPage() {
     return by;
   }, [items]);
 
-  // What actually prints, after the template's exclusions. The customize modal
-  // reads `sectionItems` (everything, so you can un-hide) while the sheet reads
-  // this — otherwise the eye toggles would be decorative.
+  // What actually prints, after the exclusions. Reads the DRAFTS, not the
+  // saved template: hiding a section is a choice about THIS sheet, and it used
+  // to do nothing until you pressed Save — which then hid that section for
+  // every client forever. Save still exists, and now means "make this my
+  // default"; the drafts reset from that default whenever the page loads.
+  //
+  // The customize modal reads `sectionItems` (everything, so you can un-hide)
+  // while the sheet reads this.
   const printedSections = useMemo(() => {
     const by = new Map<string, PriceSheetItem[]>();
     // Array.from, not a for..of over the Map — this project's TS target does
     // not allow iterating a Map directly.
     for (const [key, list] of Array.from(sectionItems.entries())) {
-      if (template.hiddenCategories.includes(key)) continue;
-      const kept = list.filter(i => !template.hiddenItemIds.includes(i.id));
+      if (draftHiddenCats.includes(key)) continue;
+      const kept = list.filter(i => !draftHiddenItems.includes(i.id));
       // A section whose every price is hidden prints as a bare heading, which
       // reads as a mistake — drop the heading too.
       if (kept.length) by.set(key, kept);
     }
     return by;
-  }, [sectionItems, template.hiddenCategories, template.hiddenItemIds]);
+  }, [sectionItems, draftHiddenCats, draftHiddenItems]);
 
   // Sections the user can reorder (named categories + Additional charges);
   // uncategorized is excluded (it always sinks last).
@@ -251,8 +270,6 @@ export default function GenerarPreciosPage() {
   const [draftOrder, setDraftOrder] = useState<string[]>([]);
   // Exclusions, not inclusions: a category or price added later prints by
   // default. An inclusion list would silently drop everything new.
-  const [draftHiddenCats, setDraftHiddenCats] = useState<string[]>([]);
-  const [draftHiddenItems, setDraftHiddenItems] = useState<string[]>([]);
   const [expandedCat, setExpandedCat] = useState<string | null>(null);
   const [savingTpl, setSavingTpl] = useState(false);
 
@@ -264,8 +281,9 @@ export default function GenerarPreciosPage() {
     // Ordered over ALL sections, not just printed ones — a hidden section must
     // stay listed or there is no way to turn it back on.
     setDraftOrder(orderedSectionKeys.filter(k => k !== UNCAT));
-    setDraftHiddenCats(template.hiddenCategories);
-    setDraftHiddenItems(template.hiddenItemIds);
+    // Exclusions are deliberately NOT re-seeded here — they are live state
+    // now, and resetting them on every reopen would throw away the choice the
+    // user just made for this sheet.
     setExpandedCat(null);
     setCustomizeOpen(true);
   };

@@ -98,6 +98,16 @@ export default function FacturasPreciosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientParam]);
 
+  // Reopening the Generate sheet starts from the saved default again. Without
+  // this, hiding a section for one customer silently carried into the next
+  // sheet, with the panel collapsed so there was nothing to notice.
+  useEffect(() => {
+    if (!genOpen || !template) return;
+    setDraftHiddenCats(template.hiddenCategories);
+    setDraftHiddenItems(template.hiddenItemIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [genOpen]);
+
   useEffect(() => {
     if (!business || !genOpen || clients.length) return;
     void fetchAllById<ClientLite>((afterId, pageSize) => {
@@ -118,7 +128,14 @@ export default function FacturasPreciosPage() {
       setItems(((itemRows ?? []) as PriceSheetRow[]).map(rowToPriceSheetItem));
       const bz = (bizRow ?? {}) as NonNullable<typeof biz>;
       setBiz(bz);
-      setTemplate(normalizePriceSheetTemplate(bz.price_sheet_template));
+      const tpl0 = normalizePriceSheetTemplate(bz.price_sheet_template);
+      setTemplate(tpl0);
+      // Seed the exclusion drafts here too, NOT only in openCustomize. They
+      // are what the sheet prints now, so they must be valid before Customize
+      // has ever been expanded — an empty draft would read as "nothing
+      // hidden" and quietly ignore the saved default.
+      setDraftHiddenCats(tpl0.hiddenCategories);
+      setDraftHiddenItems(tpl0.hiddenItemIds);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [business?.id, genOpen]);
@@ -153,8 +170,9 @@ export default function FacturasPreciosPage() {
     setDraftDesign(tpl.design);
     setDraftAccent(tpl.accentColor);
     setDraftOrder(sectionKeys);
-    setDraftHiddenCats(tpl.hiddenCategories);
-    setDraftHiddenItems(tpl.hiddenItemIds);
+    // Exclusions are deliberately NOT re-seeded here — they are live state
+    // now, and resetting them on every reopen would discard the choice just
+    // made for this sheet.
     setExpandedCat(null);
     setCustomizeOpen(true);
   };
@@ -221,7 +239,14 @@ export default function FacturasPreciosPage() {
           b.phone ?? '',
           b.email ?? '',
         ],
-        template: template ?? b.price_sheet_template,
+        // Exclusions come from the live drafts, not the saved template: the
+        // eye toggles used to do nothing until Save, and Save then hid that
+        // section for every client forever.
+        template: {
+          ...(template ?? normalizePriceSheetTemplate(b.price_sheet_template)),
+          hiddenCategories: draftHiddenCats,
+          hiddenItemIds: draftHiddenItems,
+        },
         labels: {
           sheetTitle: t.sheetTitle,
           generatedOn: t.generatedOn,
