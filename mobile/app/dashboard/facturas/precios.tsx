@@ -286,7 +286,16 @@ export default function FacturasPreciosPage() {
               <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <View className="flex-row gap-2 mb-4">
                 {(['client', 'state'] as const).map(m => (
-                  <Pressable key={m} onPress={() => setMode(m)}
+                  <Pressable key={m} onPress={() => {
+                  // Switching to state mode carries the selected client's state
+                  // across: picking a client already answered "which state",
+                  // and re-picking it from a 50-item list is busywork. Only
+                  // seeds when the field is still empty, so a state chosen by
+                  // hand is never overwritten by toggling back and forth.
+                    const sel = clients.find(x => x.id === clientId) ?? null;
+                    if (m === 'state' && !stateCode && sel?.state) setStateCode(sel.state);
+                    setMode(m);
+                  }}
                     className={`px-3.5 py-2 rounded-full border ${mode === m ? 'bg-primary border-primary' : 'bg-card border-border'}`}>
                     <Text className={`text-sm font-medium ${mode === m ? 'text-white' : 'text-ink'}`}>
                       {m === 'client' ? t.forClient : t.forState}

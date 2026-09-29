@@ -306,7 +306,15 @@ export default function GenerarPreciosPage() {
             <div className="flex gap-2">
               <div className="inline-flex gap-1 bg-border-soft p-1 rounded-xl">
                 {(['client', 'state'] as const).map(m => (
-                  <button key={m} type="button" onClick={() => setMode(m)}
+                  <button key={m} type="button" onClick={() => {
+                  // Switching to state mode carries the selected client's state
+                  // across: picking a client already answered "which state",
+                  // and re-picking it from a 50-item list is busywork. Only
+                  // seeds when the field is still empty, so a state chosen by
+                  // hand is never overwritten by toggling back and forth.
+                    if (m === 'state' && !stateCode && selectedClient?.state) setStateCode(selectedClient.state);
+                    setMode(m);
+                  }}
                     className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${mode === m ? 'bg-card shadow-sm text-ink' : 'text-muted'}`}>
                     {m === 'client' ? t.forClient : t.forState}
                   </button>
