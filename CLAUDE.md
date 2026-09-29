@@ -128,5 +128,6 @@ Mobile is on **Expo SDK 54** (RN 0.81, React 19, expo-router 6 / React Navigatio
 - `babel.config.js` adds expo-router's babel plugin explicitly (the hoisted preset can't see mobile's expo-router).
 - React 19 ignores `defaultProps` on function components — a library relying on it silently loses its defaults (react-native-map-clustering 3.x crashed the map).
 - NativeWind 4.2 only applies `className` to registered components: lucide icons are registered in `mobile/app/_layout.tsx`. A new third-party component styled via `className` needs `cssInterop` there too.
+- Add Expo packages with `npx expo install <pkg>` from `mobile/`, never plain `npm install`. Watch libraries whose peer dependency is `"*"`: npm resolves it to the NEWEST Expo SDK's version (expo-audio pulled in SDK 57's expo-asset → "Cannot find native module 'ExpoAsset'"). Root `package.json` `overrides` pins `expo-asset`; check with `npx expo-modules-autolinking resolve --platform ios --json` that every linked module matches the SDK.
 - File system: import from `expo-file-system/legacy` (the default export is the new API). Audio: `expo-audio` (expo-av is gone).
 - `runtimeVersion` is `2.0.0` (native change) — OTA updates only reach builds made on SDK 54.
