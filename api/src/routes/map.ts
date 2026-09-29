@@ -2,6 +2,59 @@ import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { supabase } from '../config/supabase';
 import { geocodeMissingClients, geocodeMissingEmployees, geocodeMissingJobs, geocodePlace } from '../lib/geocoding';
+import { fetchAll, type SupabasePageResult } from '../lib/supabaseFetch';
+
+/**
+ * Hands a PostgREST builder to fetchAll<T> under our own row type.
+ *
+ * Needed because supabase-js infers an embedded many-to-one relation
+ * (jobs → clients, job_assignments → employees/jobs) as an ARRAY, while
+ * PostgREST actually returns a single object. The code before this used
+ * `as unknown as` inline at each call site for the same reason; this keeps
+ * that one lie in a single named place instead of three.
+ */
+const asPage = <T>(q: unknown) => q as PromiseLike<SupabasePageResult<T>>;
+
+// Row shapes for the /pins reads. Named rather than inline so fetchAll<T> and
+// the mapping below agree on one definition instead of two that can drift.
+type ClientRow = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  company: string | null;
+  phone_cell: string | null;
+  phone_office: string | null;
+  email_office: string | null;
+  email_home: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip_code: string | null;
+  lat: number;
+  lng: number;
+  custom_fields: Record<string, unknown> | null;
+};
+
+type JobRow = {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: string;
+  scheduled_date: string | null;
+  job_address: string | null;
+  job_city: string | null;
+  job_state: string | null;
+  job_lat: number;
+  job_lng: number;
+  custom_fields: Record<string, unknown> | null;
+  clients: { first_name: string; last_name: string } | null;
+};
+
+type AssignmentRow = {
+  employees: { id: string; first_name: string; last_name: string; role: string | null } | null;
+  jobs: { id: string; title: string; job_lat: number | null; job_lng: number | null; business_id: string; scheduled_date: string | null } | null;
+};
 
 export const mapRouter = Router();
 mapRouter.use(authenticate);
@@ -109,27 +162,42 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
 
   const today = new Date().toISOString().split('T')[0];
 
-  const [clientsRes, jobsRes, assignmentsRes] = await Promise.all([
-    supabase
-      .from('clients')
-      .select('id, first_name, last_name, company, phone_cell, phone_office, email_office, email_home, address, city, state, zip_code, lat, lng, custom_fields')
-      .eq('business_id', businessId)
-      .not('lat', 'is', null)
-      .not('lng', 'is', null),
-    supabase
-      .from('jobs')
-      .select('id, title, description, status, priority, scheduled_date, job_address, job_city, job_state, job_lat, job_lng, custom_fields, clients(first_name, last_name)')
-      .eq('business_id', businessId)
-      .not('job_lat', 'is', null)
-      .not('job_lng', 'is', null)
-      .not('status', 'in', '("cancelled","declined")'),
+  // ALL THREE PAGINATE. PostgREST caps .select() at 1000 rows silently, and
+  // this endpoint draws the whole map — a truncated read does not error, it
+  // just stops rendering pins past the cap, which reads as "that client was
+  // never geocoded" rather than "the query got cut". Prime Solutions was at
+  // 847 clients when this was written; jobs and assignments cross 1000 sooner
+  // still, since they accumulate per client over time.
+  //
+  // The v_client_last_contact read below already looped — the rule was applied
+  // to one query out of four.
+  const [clientRows, jobRows, assignmentRows] = await Promise.all([
+    fetchAll<ClientRow>((from, to) =>
+      asPage<ClientRow>(supabase
+        .from('clients')
+        .select('id, first_name, last_name, company, phone_cell, phone_office, email_office, email_home, address, city, state, zip_code, lat, lng, custom_fields')
+        .eq('business_id', businessId)
+        .not('lat', 'is', null)
+        .not('lng', 'is', null)
+        .range(from, to))),
+    fetchAll<JobRow>((from, to) =>
+      asPage<JobRow>(supabase
+        .from('jobs')
+        .select('id, title, description, status, priority, scheduled_date, job_address, job_city, job_state, job_lat, job_lng, custom_fields, clients(first_name, last_name)')
+        .eq('business_id', businessId)
+        .not('job_lat', 'is', null)
+        .not('job_lng', 'is', null)
+        .not('status', 'in', '("cancelled","declined")')
+        .range(from, to))),
     // Employees assigned to a job scheduled TODAY with coords. One query
     // joins employees → assignments → jobs so we have everything in hand.
-    supabase
-      .from('job_assignments')
-      .select('id, employees(id, first_name, last_name, role), jobs(id, title, job_lat, job_lng, scheduled_date, business_id)')
-      .eq('jobs.business_id', businessId)
-      .eq('jobs.scheduled_date', today),
+    fetchAll<AssignmentRow>((from, to) =>
+      asPage<AssignmentRow>(supabase
+        .from('job_assignments')
+        .select('id, employees(id, first_name, last_name, role), jobs(id, title, job_lat, job_lng, scheduled_date, business_id)')
+        .eq('jobs.business_id', businessId)
+        .eq('jobs.scheduled_date', today)
+        .range(from, to))),
   ]);
 
   // Most-recent contact per client. Read from the v_client_last_contact
@@ -153,23 +221,7 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
     }
   }
 
-  const clients: ClientPin[] = ((clientsRes.data ?? []) as Array<{
-    id: string;
-    first_name: string;
-    last_name: string;
-    company: string | null;
-    phone_cell: string | null;
-    phone_office: string | null;
-    email_office: string | null;
-    email_home: string | null;
-    address: string | null;
-    city: string | null;
-    state: string | null;
-    zip_code: string | null;
-    lat: number;
-    lng: number;
-    custom_fields: Record<string, unknown> | null;
-  }>).map(c => ({
+  const clients: ClientPin[] = clientRows.map(c => ({
     id: c.id,
     type: 'client',
     lat: c.lat,
@@ -189,21 +241,7 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
     last_contacted_at: lastContactByClient.get(c.id) ?? null,
   }));
 
-  const jobs: JobPin[] = ((jobsRes.data ?? []) as unknown as Array<{
-    id: string;
-    title: string;
-    description: string | null;
-    status: string;
-    priority: string;
-    scheduled_date: string | null;
-    job_address: string | null;
-    job_city: string | null;
-    job_state: string | null;
-    job_lat: number;
-    job_lng: number;
-    custom_fields: Record<string, unknown> | null;
-    clients: { first_name: string; last_name: string } | null;
-  }>).map(j => ({
+  const jobs: JobPin[] = jobRows.map(j => ({
     id: j.id,
     type: 'job',
     lat: j.job_lat,
@@ -225,10 +263,7 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
   // join didn't yield a valid job/employee.
   const seen = new Set<string>();
   const employees: EmployeePin[] = [];
-  for (const row of ((assignmentsRes.data ?? []) as unknown as Array<{
-    employees: { id: string; first_name: string; last_name: string; role: string | null } | null;
-    jobs: { id: string; title: string; job_lat: number | null; job_lng: number | null; business_id: string; scheduled_date: string | null } | null;
-  }>)) {
+  for (const row of assignmentRows) {
     const e = row.employees;
     const j = row.jobs;
     if (!e || !j || j.business_id !== businessId) continue;
