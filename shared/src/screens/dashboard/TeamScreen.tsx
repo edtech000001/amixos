@@ -110,7 +110,10 @@ export function TeamScreen({
 
   return (
     <View className="flex-1">
-    <ScrollView contentContainerClassName="px-5 pt-5 pb-32">
+    <ScrollView contentContainerClassName="px-5 pt-5 pb-32"
+      automaticallyAdjustKeyboardInsets
+      keyboardDismissMode="interactive"
+    >
       {/* Heading */}
       <View className="flex-row items-start justify-between mb-5">
         <View className="flex-1 mr-3">

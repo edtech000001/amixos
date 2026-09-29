@@ -220,7 +220,10 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
       ) : groups.length === 0 ? (
         <Text className="text-sm text-faint text-center py-16 px-6">{t.historyEmpty}</Text>
       ) : (
-        <ScrollView contentContainerClassName={`px-5 py-5 ${selectMode ? 'pb-40' : 'pb-24'}`}>
+        <ScrollView contentContainerClassName={`px-5 py-5 ${selectMode ? 'pb-40' : 'pb-24'}`}
+          automaticallyAdjustKeyboardInsets
+          keyboardDismissMode="interactive"
+        >
           {groups.map(([periodStart, list]) => (
             <View key={periodStart} className="mb-5">
               <View className="flex-row items-center justify-between mb-1.5">
@@ -309,7 +312,10 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
                 {detail.breakdown.jobs.length > 0 ? (
                   <>
                     <Text className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">{t.projectsHeading}</Text>
-                    <ScrollView className="max-h-72" nestedScrollEnabled>
+                    <ScrollView className="max-h-72" nestedScrollEnabled
+                      automaticallyAdjustKeyboardInsets
+                      keyboardDismissMode="interactive"
+                    >
                       <View className="gap-2">
                         {detail.breakdown.jobs.map((j, i) => (
                           <View key={j.jobId ?? i} className="flex-row items-center gap-3 rounded-2xl border border-border-soft px-3 py-2.5">

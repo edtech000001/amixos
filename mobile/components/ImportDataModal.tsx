@@ -521,7 +521,10 @@ export function ImportDataModal({ open, mode, businessId, onClose, onDone }: Imp
             <Text className="text-xs font-semibold text-faint uppercase mb-2">
               {tr('Vista previa · primeras', 'Preview · first')} {Math.min(5, rows.length)} {tr('de', 'of')} {rows.length}
             </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator className="border border-border-soft rounded-xl bg-card">
+            <ScrollView horizontal showsHorizontalScrollIndicator className="border border-border-soft rounded-xl bg-card"
+              automaticallyAdjustKeyboardInsets
+              keyboardDismissMode="interactive"
+            >
               <View>
                 <View className="flex-row bg-surface border-b border-border-soft">
                   {allImportFields.filter(f => colMap[f.key]).map(f => (

@@ -773,7 +773,10 @@ export default function EmpleadoDetailRoute() {
         </View>
       </View>
 
-      <ScrollView contentContainerClassName="px-5 py-5 pb-44 gap-5" keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerClassName="px-5 py-5 pb-44 gap-5" keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="interactive"
+      >
         {/* Avatar hero */}
         <View className="items-center gap-2 py-1">
           <View className={`w-24 h-24 rounded-full items-center justify-center ${employee.active ? 'bg-primary/10' : 'bg-border-soft'}`}>
@@ -1139,7 +1142,10 @@ export default function EmpleadoDetailRoute() {
                 <X size={20} color={c.faint} />
               </Pressable>
             </View>
-            <ScrollView contentContainerClassName="px-5 py-5 pb-10">
+            <ScrollView contentContainerClassName="px-5 py-5 pb-10"
+              automaticallyAdjustKeyboardInsets
+              keyboardDismissMode="interactive"
+            >
               <EmployeeHistoryView supabase={supabase} employeeId={employee.id} />
             </ScrollView>
           </View>

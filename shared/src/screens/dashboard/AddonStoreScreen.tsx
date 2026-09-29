@@ -107,7 +107,10 @@ export function AddonStoreScreen({
       : [{ key: category, label: null, items: filtered }];
 
   return (
-    <ScrollView contentContainerClassName="px-5 pt-5 pb-32">
+    <ScrollView contentContainerClassName="px-5 pt-5 pb-32"
+      automaticallyAdjustKeyboardInsets
+      keyboardDismissMode="interactive"
+    >
       {/* Heading */}
       <View className="mb-4">
         <Text className="text-2xl font-bold text-ink">{t.heading}</Text>
@@ -133,6 +136,8 @@ export function AddonStoreScreen({
         showsHorizontalScrollIndicator={false}
         contentContainerClassName="gap-2 pb-1 pr-5"
         className="mb-3 -mx-5 px-5"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="interactive"
       >
         {CATEGORIES.map(c => {
           const active = category === c.key;

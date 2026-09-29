@@ -206,7 +206,10 @@ function FontDropdown({ value, onChange, t }: { value: InvoiceFont; onChange: (f
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
           />
           <View className="bg-card rounded-2xl overflow-hidden" style={{ maxHeight: '75%' }}>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false}
+              automaticallyAdjustKeyboardInsets
+              keyboardDismissMode="interactive"
+            >
               {ALL_FONTS.map(f => (
                 <Pressable key={f} onPress={() => { onChange(f); setOpen(false); }} className={`px-4 py-3 border-b border-border-soft ${value === f ? 'bg-primary/10' : ''}`}>
                   <Text className={`text-base ${value === f ? 'text-primary font-semibold' : 'text-ink'}`} style={{ fontFamily: fontFamilyFor(f) }}>{t.fonts[f]}</Text>
@@ -279,7 +282,10 @@ function ThemeCarousel({ pageW, currentId, onSelect, value, branding, sample, t 
         renderItem={({ item: id }) => {
           const pvm = buildInvoiceViewModel(applyPreset(id, value), sample, branding);
           return (
-            <ScrollView style={{ width: pageW }} contentContainerStyle={{ padding: 20, alignItems: 'center' }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ width: pageW }} contentContainerStyle={{ padding: 20, alignItems: 'center' }} showsVerticalScrollIndicator={false}
+              automaticallyAdjustKeyboardInsets
+              keyboardDismissMode="interactive"
+            >
               <PresetPreview vm={pvm} width={pageW - 40} />
             </ScrollView>
           );

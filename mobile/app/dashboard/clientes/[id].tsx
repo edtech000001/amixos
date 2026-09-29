@@ -675,7 +675,10 @@ export default function ClienteDetailRoute() {
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-        <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }}>
+        <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }}
+          automaticallyAdjustKeyboardInsets
+          keyboardDismissMode="interactive"
+        >
           <SkeletonBlock className="h-7 w-52" />
           <SkeletonStats count={3} />
           <SkeletonCard lines={5} />
@@ -878,7 +881,10 @@ export default function ClienteDetailRoute() {
         </View>
       </RNModal>
 
-      <ScrollView contentContainerClassName="px-5 pt-5 pb-44">
+      <ScrollView contentContainerClassName="px-5 pt-5 pb-44"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="interactive"
+      >
         {/* Header card: avatar + name + company */}
         <View className="flex-row items-center gap-4 mb-5">
           <View className="w-14 h-14 rounded-full bg-primary/10 items-center justify-center">

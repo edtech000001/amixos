@@ -606,7 +606,10 @@ export function ClientsListScreen({
                 <X size={22} color={c.faint} />
               </Pressable>
             </View>
-            <ScrollView className="max-h-96" keyboardShouldPersistTaps="handled">
+            <ScrollView className="max-h-96" keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets
+              keyboardDismissMode="interactive"
+            >
               <View className="flex-row flex-wrap gap-2">
                 {groupOptions.map(o => {
                   const selected = groupBy === o.key;

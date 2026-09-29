@@ -379,7 +379,10 @@ export function CalendarScreen({
     <View className="flex-1 bg-surface">
       {/* Padding lives on an inner View (not contentContainerClassName) so it
           applies on web too, where react-native-web doesn't run NativeWind. */}
-      <ScrollView className="flex-1" ref={scrollRef}>
+      <ScrollView className="flex-1" ref={scrollRef}
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="interactive"
+      >
        <View className="px-5 pt-6 pb-44 lg:px-8">
         {/* Header — on web the add button lives here; on native the FAB
             (bottom-right, thumb reach) is the single add affordance. */}

@@ -1280,7 +1280,10 @@ export function JobsListScreen({
               </Pressable>
             </View>
 
-            <ScrollView>
+            <ScrollView
+              automaticallyAdjustKeyboardInsets
+              keyboardDismissMode="interactive"
+            >
             <Text className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-1.5">
               {t.sort.sortByTitle}
             </Text>

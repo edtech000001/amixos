@@ -79,16 +79,33 @@ export function LoginScreen({
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      // Match the hero gradient's bottom stop so the area below the floating
-      // card blends seamlessly with the gradient above it.
-      style={{ flex: 1, backgroundColor: '#3B82F6' }}
-    >
+    <View style={{ flex: 1 }}>
+      {/* ONE gradient, behind everything.
+          It used to live inside HeroHeader with a flat #3B82F6 on the root
+          "matching the gradient's bottom stop". It cannot: the gradient runs
+          DIAGONALLY (0,0 → 100,100), so its bottom edge is deep indigo on the
+          left and #3B82F6 only at the bottom-right corner. One flat colour
+          therefore mismatched the whole left side, and the card's rounded top
+          corners cut a window straight onto the seam — worse on the left,
+          which is exactly how it looked. */}
+      <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="xMidYMid slice" pointerEvents="none">
+        <Defs>
+          <SvgLinearGradient id="heroGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <Stop offset="0%" stopColor="#1E40AF" />
+            <Stop offset="55%" stopColor="#2563EB" />
+            <Stop offset="100%" stopColor="#3B82F6" />
+          </SvgLinearGradient>
+        </Defs>
+        <Rect width="100%" height="100%" fill="url(#heroGrad)" />
+      </Svg>
+
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerClassName="flex-grow"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="interactive"
       >
         <HeroHeader />
 
@@ -192,27 +209,16 @@ export function LoginScreen({
           </View>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
 function HeroHeader() {
   return (
     <View style={{ height: 300, position: 'relative' }}>
-      {/* Deeper, more sophisticated gradient — three stops for a softer transition
-          (deep indigo → indigo → violet). Reads more "premium financial app"
-          than the previous two-stop punchy purple. */}
-      <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="xMidYMid slice" pointerEvents="none">
-        <Defs>
-          <SvgLinearGradient id="heroGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#1E40AF" />
-            <Stop offset="55%" stopColor="#2563EB" />
-            <Stop offset="100%" stopColor="#3B82F6" />
-          </SvgLinearGradient>
-        </Defs>
-        <Rect width="100%" height="100%" fill="url(#heroGrad)" />
-      </Svg>
-
+      {/* The gradient lives on the root now, spanning the whole screen, so the
+          hero and the area around the floating card are one continuous surface
+          with no seam to line up. */}
       <View className="flex-1 items-center justify-center pb-12 pt-10">
         <View
           className="w-20 h-20 rounded-3xl bg-card items-center justify-center mb-4"

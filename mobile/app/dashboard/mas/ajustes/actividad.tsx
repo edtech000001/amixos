@@ -151,7 +151,10 @@ export default function ActividadPage() {
         ) : null}
       </View>
 
-      <ScrollView className="flex-1" contentContainerClassName="px-5 pt-4 pb-44" keyboardShouldPersistTaps="handled">
+      <ScrollView className="flex-1" contentContainerClassName="px-5 pt-4 pb-44" keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="interactive"
+      >
         {loading && rows.length === 0 ? (
           <View>
             {[0, 1, 2, 3, 4].map(i => <SkeletonRow key={i} />)}

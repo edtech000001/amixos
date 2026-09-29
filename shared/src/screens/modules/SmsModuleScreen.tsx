@@ -150,7 +150,10 @@ export function SmsModuleScreen({
 
   return (
     <View className="flex-1 bg-surface">
-      <ScrollView className="flex-1">
+      <ScrollView className="flex-1"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="interactive"
+      >
         <View className="px-5 pt-6 pb-16 lg:px-8 max-w-2xl">
           {/* Header */}
           {onBack ? (

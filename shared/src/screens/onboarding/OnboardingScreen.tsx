@@ -724,7 +724,10 @@ function StepLocation({ address, city, state, postalCode, operatingHours, onChan
           </Pressable>
           {pickerOpen && (
             <View className="rounded-xl border border-border bg-card max-h-64 overflow-hidden">
-              <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+              <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled"
+                automaticallyAdjustKeyboardInsets
+                keyboardDismissMode="interactive"
+              >
                 {US_STATES.map((s) => (
                   <Pressable
                     key={s}
