@@ -57,6 +57,21 @@ export type CommonDict = {
   listLoadFailed: string;
   /** Consent gate shown before the dashboard when a user has not accepted the
    *  current terms/privacy version (migration 239). */
+  /** Shake-to-report (migration 241). Lives in common because both the shake
+   *  sheet and the Settings entry point render it. */
+  bugReport: {
+    title: string;
+    subtitle: string;
+    placeholder: string;
+    send: string;
+    sending: string;
+    cancel: string;
+    sent: string;
+    errorEmpty: string;
+    errorFailed: string;
+    contextNote: string;
+    disableHint: string;
+  };
   legalConsent: {
     title: string;
     subtitleNew: string;
@@ -205,6 +220,19 @@ export const common: Record<Locale, CommonDict> = {
     dropOrPasteImageHint: 'También puedes arrastrar una foto aquí o pegarla con {{keys}}',
     dropImagesHere: 'Suelta las fotos aquí',
     listLoadFailed: 'No se pudo cargar la lista.',
+    bugReport: {
+      title: '¿Encontraste un problema?',
+      subtitle: 'Cuéntanos qué pasó. No necesitas detalles técnicos.',
+      placeholder: '¿Qué estabas haciendo cuando falló?',
+      send: 'Enviar reporte',
+      sending: 'Enviando…',
+      cancel: 'Cancelar',
+      sent: '¡Gracias! Recibimos tu reporte.',
+      errorEmpty: 'Escribe qué pasó antes de enviar.',
+      errorFailed: 'No pudimos enviar el reporte. Intenta de nuevo.',
+      contextNote: 'Adjuntamos la pantalla donde estabas y la versión de la app.',
+      disableHint: 'Puedes desactivar esto en Ajustes → Soporte.',
+    },
     legalConsent: {
       title: 'Antes de continuar',
       subtitleNew: 'Lee y acepta nuestros Términos de Servicio y Aviso de Privacidad.',
@@ -337,6 +365,19 @@ export const common: Record<Locale, CommonDict> = {
     dropOrPasteImageHint: 'You can also drag a photo here or paste it with {{keys}}',
     dropImagesHere: 'Drop photos here',
     listLoadFailed: "Couldn't load the list.",
+    bugReport: {
+      title: 'Found a problem?',
+      subtitle: 'Tell us what happened. No technical details needed.',
+      placeholder: 'What were you doing when it broke?',
+      send: 'Send report',
+      sending: 'Sending…',
+      cancel: 'Cancel',
+      sent: 'Thanks! We got your report.',
+      errorEmpty: 'Write what happened before sending.',
+      errorFailed: "We couldn't send the report. Try again.",
+      contextNote: 'We attach the screen you were on and the app version.',
+      disableHint: 'You can turn this off in Settings → Support.',
+    },
     legalConsent: {
       title: 'Before you continue',
       subtitleNew: 'Read and accept our Terms of Service and Privacy Policy.',

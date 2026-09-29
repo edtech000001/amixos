@@ -16,6 +16,7 @@ import { OfflineSyncBanner } from '@/components/OfflineSyncBanner';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { BillingGate } from '@/components/BillingGate';
 import { PolicyConsentGate } from '@/components/PolicyConsentGate';
+import { ShakeToReport } from '@/components/ShakeToReport';
 import { AccountDeletionGate } from '@/components/AccountDeletionGate';
 import { BusinessDeletionBanner } from '@/components/BusinessDeletionBanner';
 import { AssistantWidget } from '@/components/assistant/AssistantWidget';
@@ -238,6 +239,7 @@ function DashboardTabs() {
       <AccountDeletionGate />
       <BillingGate />
       <PolicyConsentGate />
+      <ShakeToReport />
     </>
   );
 }

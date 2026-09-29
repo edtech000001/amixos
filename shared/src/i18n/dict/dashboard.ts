@@ -2088,6 +2088,12 @@ export type DashboardDict = {
       heading: string;
       subtitle: string;
       contactBtn: string;
+      /** Shake-to-report (241): manual entry point + the opt-out. */
+      bugHeading: string;
+      bugBody: string;
+      bugBtn: string;
+      shakeToggle: string;
+      shakeToggleHint: string;
       emailSubject: string;
       noMailApp: string;
       /** Legal links, shown with support so there is one place to find them
@@ -5362,6 +5368,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         heading: 'Soporte y comentarios',
         subtitle: '¿Tienes un problema o una idea? Escríbenos y te ayudamos.',
         contactBtn: 'Enviar correo',
+        bugHeading: 'Reportar un problema',
+        bugBody: 'Agita el teléfono en cualquier pantalla para reportar algo que no funcionó.',
+        bugBtn: 'Reportar un problema',
+        shakeToggle: 'Agitar para reportar',
+        shakeToggleHint: 'Desactívalo si se abre solo.',
         emailSubject: 'Amixos — Soporte / Comentarios',
         legalHeading: 'Legal',
         privacy: 'Aviso de privacidad',
@@ -8637,6 +8648,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         heading: 'Support & feedback',
         subtitle: 'Got a problem or an idea? Email us and we\'ll help.',
         contactBtn: 'Email us',
+        bugHeading: 'Report a problem',
+        bugBody: 'Shake your phone on any screen to report something that did not work.',
+        bugBtn: 'Report a problem',
+        shakeToggle: 'Shake to report',
+        shakeToggleHint: 'Turn this off if it opens on its own.',
         emailSubject: 'Amixos — Support / Feedback',
         noMailApp: "Couldn't open your mail app. Email us at {{email}}.",
         legalHeading: 'Legal',
