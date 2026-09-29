@@ -2,9 +2,8 @@ import { useMemo, useState, type ReactNode } from 'react';
 import {
   View,
   Text,
-  KeyboardAvoidingView,
   ScrollView,
-  Platform,
+  useWindowDimensions,
   Pressable,
   ActivityIndicator,
   StyleSheet,
@@ -78,6 +77,19 @@ export function LoginScreen({
     }
   };
 
+  // The hero was a hard 300px, which pushed the card past the bottom on
+  // anything smaller than a Pro Max and made the whole screen scroll. It is
+  // the one flexible piece here — the card's height is set by its contents —
+  // so it absorbs the difference.
+  //
+  // Clamped, not a bare percentage: below ~190px the logo and wordmark start
+  // colliding with the card, and above ~290px a tall phone gets a wall of
+  // blue. The ScrollView stays as a safety net for small devices and large
+  // accessibility text, where something has to give and scrolling beats
+  // clipping.
+  const { height: screenH } = useWindowDimensions();
+  const heroHeight = Math.max(190, Math.min(290, screenH * 0.30));
+
   return (
     <View style={{ flex: 1 }}>
       {/* ONE gradient, behind everything.
@@ -107,14 +119,14 @@ export function LoginScreen({
         automaticallyAdjustKeyboardInsets
         keyboardDismissMode="interactive"
       >
-        <HeroHeader />
+        <HeroHeader height={heroHeight} />
 
         <View
           className="bg-card"
           style={{
             marginHorizontal: 12,
             marginTop: -36,
-            marginBottom: 24,
+            marginBottom: 16,
             paddingHorizontal: 24,
             paddingTop: 32,
             paddingBottom: 28,
@@ -213,13 +225,13 @@ export function LoginScreen({
   );
 }
 
-function HeroHeader() {
+function HeroHeader({ height }: { height: number }) {
   return (
-    <View style={{ height: 300, position: 'relative' }}>
+    <View style={{ height, position: 'relative' }}>
       {/* The gradient lives on the root now, spanning the whole screen, so the
           hero and the area around the floating card are one continuous surface
           with no seam to line up. */}
-      <View className="flex-1 items-center justify-center pb-12 pt-10">
+      <View className="flex-1 items-center justify-center pb-10 pt-6">
         <View
           className="w-20 h-20 rounded-3xl bg-card items-center justify-center mb-4"
           style={{
