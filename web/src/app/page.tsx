@@ -23,7 +23,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
   return (
     <div className="border-b border-gray-100 last:border-0">
       <button onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between py-4 text-left gap-4 hover:text-indigo-600 transition-colors">
+        className="w-full flex items-center justify-between py-4 text-left gap-4 hover:text-blue-600 transition-colors">
         <span className="text-sm font-semibold text-gray-900">{q}</span>
         <ChevronDown size={16} className={`text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}/>
       </button>
@@ -39,7 +39,7 @@ function AppMockup({ t }: { t: LandingDict }) {
       {/* Phone frame */}
       <div className="bg-white rounded-3xl shadow-2xl border border-gray-200 overflow-hidden">
         {/* Top bar */}
-        <div className="bg-indigo-600 px-4 pt-4 pb-6">
+        <div className="bg-blue-600 px-4 pt-4 pb-6">
           <div className="flex items-center justify-between mb-3">
             <span className="text-white font-bold text-sm">Amixos</span>
             <div className="w-7 h-7 rounded-full bg-white/20"/>
@@ -67,8 +67,8 @@ function AppMockup({ t }: { t: LandingDict }) {
           ].map(item => (
             <div key={item.name} className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center">
-                  <span className="text-indigo-600 text-xs font-bold">{item.name.charAt(0)}</span>
+                <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center">
+                  <span className="text-blue-600 text-xs font-bold">{item.name.charAt(0)}</span>
                 </div>
                 <div>
                   <p className="text-xs font-semibold text-gray-900">{item.name}</p>
@@ -92,8 +92,8 @@ function AppMockup({ t }: { t: LandingDict }) {
             { Icon: LayoutGrid, label: t.mockup.dock.more },
           ].map(({ Icon, label, active }) => (
             <div key={label} className="flex flex-col items-center gap-1 w-12">
-              <Icon size={17} className={active ? 'text-indigo-600' : 'text-gray-400'} strokeWidth={2}/>
-              <span className={`text-[9px] font-medium ${active ? 'text-indigo-600' : 'text-gray-400'}`}>{label}</span>
+              <Icon size={17} className={active ? 'text-blue-600' : 'text-gray-400'} strokeWidth={2}/>
+              <span className={`text-[9px] font-medium ${active ? 'text-blue-600' : 'text-gray-400'}`}>{label}</span>
             </div>
           ))}
         </div>
@@ -105,7 +105,7 @@ function AppMockup({ t }: { t: LandingDict }) {
       </div>
       <div className="absolute -left-6 bottom-20 bg-white rounded-2xl shadow-lg px-3 py-2 border border-gray-100">
         <p className="text-xs font-semibold text-gray-900">6 {t.mockup.activeEmployees}</p>
-        <p className="text-xs text-indigo-600">{t.mockup.activeToday}</p>
+        <p className="text-xs text-blue-600">{t.mockup.activeToday}</p>
       </div>
     </div>
   );
@@ -163,7 +163,7 @@ export default function LandingPage() {
               rather than speeding it. */}
           <div className="hidden md:flex items-center gap-6">
             <button onClick={() => setLocale(nextLocale)}
-              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-indigo-600 transition-colors font-medium">
+              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-blue-600 transition-colors font-medium">
               <Globe size={15}/>
               {otherLocaleLabel}
             </button>
@@ -180,7 +180,7 @@ export default function LandingPage() {
               {t.nav.login}
             </Link>
             <Link href="/auth/register"
-              className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
+              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
               {t.nav.cta}
             </Link>
           </div>
@@ -216,7 +216,7 @@ export default function LandingPage() {
 
             <Link href="/auth/login" className="text-sm font-medium text-gray-700" onClick={() => setMobileMenu(false)}>{t.nav.login}</Link>
             <Link href="/auth/register" onClick={() => setMobileMenu(false)}
-              className="bg-indigo-600 text-white text-sm font-semibold px-4 py-3 rounded-xl text-center transition-colors">
+              className="bg-blue-600 text-white text-sm font-semibold px-4 py-3 rounded-xl text-center transition-colors">
               {t.nav.cta}
             </Link>
           </div>
@@ -224,16 +224,16 @@ export default function LandingPage() {
       </nav>
 
       {/* ── Hero ───────────────────────────────────────────────────────────── */}
-      <section className="pt-24 pb-20 px-5 bg-gradient-to-b from-indigo-50 via-white to-white">
+      <section className="pt-24 pb-20 px-5 bg-gradient-to-b from-blue-50 via-white to-white">
         <div className="max-w-6xl mx-auto">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div className="text-center md:text-left">
-              <div className="inline-flex items-center gap-2 bg-indigo-100 text-indigo-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
+              <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
                 {t.hero.tag}
               </div>
               <h1 className="text-5xl md:text-6xl font-black text-gray-900 leading-tight mb-4">
                 {t.hero.h1_1}<br/>
-                <span className="text-indigo-600">{t.hero.h1_2}</span>
+                <span className="text-blue-600">{t.hero.h1_2}</span>
               </h1>
               <p className="text-lg text-gray-500 leading-relaxed mb-8 max-w-md mx-auto md:mx-0">
                 {t.hero.sub}
@@ -241,7 +241,7 @@ export default function LandingPage() {
               <div className="flex flex-col sm:flex-row gap-3">
                 <Link
                   href="/auth/register"
-                  className="inline-flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-7 py-3.5 rounded-xl transition-colors shadow-lg shadow-indigo-600/20"
+                  className="inline-flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-semibold px-7 py-3.5 rounded-xl transition-colors shadow-lg shadow-blue-600/20"
                 >
                   {t.hero.ctaPrimary}
                 </Link>
@@ -279,7 +279,7 @@ export default function LandingPage() {
       {/* ── Problem ────────────────────────────────────────────────────────── */}
       <section className="py-20 px-5">
         <div className="max-w-3xl mx-auto text-center">
-          <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-3">{t.problem.tag}</p>
+          <p className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-3">{t.problem.tag}</p>
           <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-10">{t.problem.h}</h2>
           <div className="flex flex-col gap-3 text-left">
             {t.problem.items.map(item => (
@@ -296,7 +296,7 @@ export default function LandingPage() {
       <section className="py-20 px-5 bg-gray-50">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-12">
-            <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-3">{t.solution.tag}</p>
+            <p className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-3">{t.solution.tag}</p>
             <h2 className="text-3xl md:text-4xl font-black text-gray-900">{t.solution.h}</h2>
           </div>
           <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-5">
@@ -315,13 +315,13 @@ export default function LandingPage() {
       <section className="py-20 px-5">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
-            <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-3">{t.how.tag}</p>
+            <p className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-3">{t.how.tag}</p>
             <h2 className="text-3xl md:text-4xl font-black text-gray-900">{t.how.h}</h2>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {t.how.steps.map(step => (
               <div key={step.n} className="relative text-center">
-                <div className="w-14 h-14 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-2xl font-black mx-auto mb-4">
+                <div className="w-14 h-14 bg-blue-600 text-white rounded-2xl flex items-center justify-center text-2xl font-black mx-auto mb-4">
                   {step.n}
                 </div>
                 <h3 className="text-base font-bold text-gray-900 mb-2">{step.title}</h3>
@@ -333,21 +333,21 @@ export default function LandingPage() {
       </section>
 
       {/* ── Founder story ──────────────────────────────────────────────────── */}
-      <section className="py-20 px-5 bg-gradient-to-br from-indigo-600 to-indigo-800">
+      <section className="py-20 px-5 bg-gradient-to-br from-blue-600 to-blue-800">
         <div className="max-w-3xl mx-auto text-center">
-          <p className="text-xs font-bold text-indigo-300 uppercase tracking-widest mb-3">{t.story.tag}</p>
+          <p className="text-xs font-bold text-blue-300 uppercase tracking-widest mb-3">{t.story.tag}</p>
           <h2 className="text-3xl md:text-4xl font-black text-white mb-8">{t.story.h}</h2>
           <div className="bg-white/10 border border-white/20 rounded-2xl p-8 text-left backdrop-blur-sm">
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-14 h-14 rounded-full bg-indigo-400 flex items-center justify-center text-white font-black text-xl">E</div>
+              <div className="w-14 h-14 rounded-full bg-blue-400 flex items-center justify-center text-white font-black text-xl">E</div>
               <div>
                 <p className="text-white font-bold">Edvin Ramirez</p>
-                <p className="text-indigo-200 text-sm">{t.story.role}</p>
+                <p className="text-blue-200 text-sm">{t.story.role}</p>
               </div>
             </div>
             <div className="space-y-4">
               {[t.story.p1, t.story.p2, t.story.p3].map((p, i) => (
-                <p key={i} className="text-indigo-100 text-sm leading-relaxed">{p}</p>
+                <p key={i} className="text-blue-100 text-sm leading-relaxed">{p}</p>
               ))}
             </div>
           </div>
@@ -362,7 +362,7 @@ export default function LandingPage() {
       <section id="pricing" className="py-20 px-5 scroll-mt-16">
         <div className="max-w-6xl mx-auto">
           <div className="text-center">
-            <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-3">{t.pricing.tag}</p>
+            <p className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-3">{t.pricing.tag}</p>
             <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-3">{t.pricing.h}</h2>
             <p className="text-gray-500 text-sm mb-8">{t.pricing.sub}</p>
           </div>
@@ -376,7 +376,7 @@ export default function LandingPage() {
                   type="button"
                   onClick={() => setPeriod(p)}
                   className={`px-5 py-2 text-sm font-semibold rounded-full transition-colors ${
-                    period === p ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-gray-900'
+                    period === p ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-900'
                   }`}
                 >
                   {p === 'monthly' ? t.pricing.monthly : t.pricing.annual}
@@ -397,12 +397,12 @@ export default function LandingPage() {
                   key={plan.key}
                   className={`relative flex flex-col h-full rounded-3xl p-6 bg-white transition-shadow ${
                     plan.recommended
-                      ? 'border-2 border-indigo-600 shadow-xl'
+                      ? 'border-2 border-blue-600 shadow-xl'
                       : 'border border-gray-200 shadow-sm hover:shadow-md'
                   }`}
                 >
                   {plan.recommended && (
-                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap bg-indigo-600 text-white text-[11px] font-bold px-3 py-1 rounded-full">
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap bg-blue-600 text-white text-[11px] font-bold px-3 py-1 rounded-full">
                       {t.pricing.popular}
                     </span>
                   )}
@@ -442,7 +442,7 @@ export default function LandingPage() {
                     href={plan.custom ? '#contacto' : '/auth/register'}
                     className={`text-center text-sm font-semibold px-4 py-3 rounded-xl transition-colors ${
                       plan.recommended
-                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
                         : 'border border-gray-200 text-gray-700 hover:border-gray-300'
                     }`}
                   >
@@ -463,7 +463,7 @@ export default function LandingPage() {
       <section className="py-20 px-5 bg-gray-50">
         <div className="max-w-2xl mx-auto">
           <div className="text-center mb-10">
-            <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-3">{t.faq.tag}</p>
+            <p className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-3">{t.faq.tag}</p>
             <h2 className="text-3xl font-black text-gray-900">{t.faq.h}</h2>
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 divide-y divide-gray-100">
@@ -481,7 +481,7 @@ export default function LandingPage() {
       <section id="contacto" className="py-20 px-5 bg-gray-50 scroll-mt-16">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-10">
-            <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-3">{t.contact.tag}</p>
+            <p className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-3">{t.contact.tag}</p>
             <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-3">{t.contact.h}</h2>
             <p className="text-gray-500 text-sm">{t.contact.sub}</p>
           </div>
@@ -490,10 +490,10 @@ export default function LandingPage() {
               href={`mailto:${SUPPORT_EMAIL}`}
               className="group bg-white rounded-2xl border border-gray-100 p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
             >
-              <Mail size={22} className="text-indigo-600 mb-3"/>
+              <Mail size={22} className="text-blue-600 mb-3"/>
               <h3 className="text-base font-bold text-gray-900 mb-1">{t.contact.supportTitle}</h3>
               <p className="text-sm text-gray-500 leading-relaxed mb-3">{t.contact.supportBody}</p>
-              <span className="text-sm font-semibold text-indigo-600 group-hover:underline break-all">
+              <span className="text-sm font-semibold text-blue-600 group-hover:underline break-all">
                 {SUPPORT_EMAIL}
               </span>
             </a>
@@ -501,10 +501,10 @@ export default function LandingPage() {
               href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(t.contact.salesSubject)}`}
               className="group bg-white rounded-2xl border border-gray-100 p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
             >
-              <Building2 size={22} className="text-indigo-600 mb-3"/>
+              <Building2 size={22} className="text-blue-600 mb-3"/>
               <h3 className="text-base font-bold text-gray-900 mb-1">{t.contact.salesTitle}</h3>
               <p className="text-sm text-gray-500 leading-relaxed mb-3">{t.contact.salesBody}</p>
-              <span className="text-sm font-semibold text-indigo-600 group-hover:underline break-all">
+              <span className="text-sm font-semibold text-blue-600 group-hover:underline break-all">
                 {SUPPORT_EMAIL}
               </span>
             </a>
@@ -519,7 +519,7 @@ export default function LandingPage() {
           <p className="text-gray-500 mb-8">{t.finalCta.sub}</p>
           <Link
             href="/auth/register"
-            className="inline-flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-8 py-4 rounded-xl transition-colors shadow-lg shadow-indigo-600/20"
+            className="inline-flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-4 rounded-xl transition-colors shadow-lg shadow-blue-600/20"
           >
             {t.finalCta.cta}
           </Link>
