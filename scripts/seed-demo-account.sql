@@ -13,6 +13,20 @@
 
 begin;
 
+-- Wipe the demo business's data first, so the whole file can be re-run without
+-- duplicating anything. Order follows the foreign keys: job_items hangs off
+-- jobs, and jobs/invoices reference clients. Everything is scoped to the one
+-- demo business id — no other tenant is touched.
+delete from public.job_items
+ where job_id in (select id from public.jobs
+                   where business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8');
+delete from public.calendar_events where business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
+delete from public.invoices        where business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
+delete from public.jobs            where business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
+delete from public.inventory_items where business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
+delete from public.employees       where business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
+delete from public.clients         where business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
+
 -- ── Clients ────────────────────────────────────────────────────────────────
 -- Spread across the alphabet so the A–Z index has several letters to land on,
 -- and mixed company/person so both row layouts are visible.
@@ -68,6 +82,16 @@ commit;
 -- The block above commits on its own. If anything below fails, ONLY this part
 -- rolls back — re-run from here, not from the top, or you will duplicate the
 -- clients, employees and inventory.
+
+-- Clear anything a previous attempt left behind, so this part can be re-run
+-- safely. invoices.invoice_number is unique per business, so a half-finished
+-- run otherwise fails on INV-1001 forever. Order follows the foreign keys.
+delete from public.job_items
+ where job_id in (select id from public.jobs
+                   where business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8');
+delete from public.calendar_events where business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
+delete from public.invoices        where business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
+delete from public.jobs            where business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
 
 -- ── Jobs ───────────────────────────────────────────────────────────────────
 -- Spread across the pipeline so every tab has rows: proposal → sent →
