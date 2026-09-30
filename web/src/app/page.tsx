@@ -4,10 +4,11 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   CheckCircle2, ChevronDown, Menu, X, Home, Users, ClipboardList, FileText, LayoutGrid,
-  Globe, Star, Zap, Shield, Smartphone,
+  Globe, Star, Zap, Shield, Smartphone, Mail, Building2,
 } from 'lucide-react';
 import { useLang } from '@/i18n/LangProvider';
 import { Logo } from '@amixos/shared/ui/Logo';
+import { SUPPORT_EMAIL } from '@amixos/shared/lib/support';
 import type { LandingDict } from '@amixos/shared';
 import type { Locale } from '@amixos/shared';
 import {
@@ -144,6 +145,12 @@ export default function LandingPage() {
               <Globe size={15}/>
               {otherLocaleLabel}
             </button>
+            <a href="#pricing" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+              {t.pricing.tag}
+            </a>
+            <a href="#contacto" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+              {t.contact.tag}
+            </a>
             <Link href="/auth/login" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
               {t.nav.login}
             </Link>
@@ -166,6 +173,8 @@ export default function LandingPage() {
               className="flex items-center gap-2 text-sm text-gray-600 font-medium">
               <Globe size={15}/> {t.nav.switchLang}
             </button>
+            <a href="#pricing" className="text-sm font-medium text-gray-700" onClick={() => setMobileMenu(false)}>{t.pricing.tag}</a>
+            <a href="#contacto" className="text-sm font-medium text-gray-700" onClick={() => setMobileMenu(false)}>{t.contact.tag}</a>
             <Link href="/auth/login" className="text-sm font-medium text-gray-700" onClick={() => setMobileMenu(false)}>{t.nav.login}</Link>
             <Link href="/auth/register" onClick={() => setMobileMenu(false)}
               className="bg-indigo-600 text-white text-sm font-semibold px-4 py-3 rounded-xl text-center transition-colors">
@@ -391,7 +400,7 @@ export default function LandingPage() {
                   </div>
 
                   <Link
-                    href={plan.custom ? '/contrato' : '/auth/register'}
+                    href={plan.custom ? '#contacto' : '/auth/register'}
                     className={`text-center text-sm font-semibold px-4 py-3 rounded-xl transition-colors ${
                       plan.recommended
                         ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
@@ -424,6 +433,46 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Contact ────────────────────────────────────────────────────────── */}
+      {/* Deliberately mailto rather than a form: a public form on a marketing
+          page is a spam target that needs its own rate limiting and captcha
+          verification, and this reaches the same inbox. SUPPORT_EMAIL is the
+          shared constant the in-app Settings card uses, so there is one
+          address to change. */}
+      <section id="contacto" className="py-20 px-5 bg-gray-50 scroll-mt-16">
+        <div className="max-w-3xl mx-auto">
+          <div className="text-center mb-10">
+            <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-3">{t.contact.tag}</p>
+            <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-3">{t.contact.h}</h2>
+            <p className="text-gray-500 text-sm">{t.contact.sub}</p>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-5">
+            <a
+              href={`mailto:${SUPPORT_EMAIL}`}
+              className="group bg-white rounded-2xl border border-gray-100 p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
+            >
+              <Mail size={22} className="text-indigo-600 mb-3"/>
+              <h3 className="text-base font-bold text-gray-900 mb-1">{t.contact.supportTitle}</h3>
+              <p className="text-sm text-gray-500 leading-relaxed mb-3">{t.contact.supportBody}</p>
+              <span className="text-sm font-semibold text-indigo-600 group-hover:underline break-all">
+                {SUPPORT_EMAIL}
+              </span>
+            </a>
+            <a
+              href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(t.contact.salesSubject)}`}
+              className="group bg-white rounded-2xl border border-gray-100 p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all"
+            >
+              <Building2 size={22} className="text-indigo-600 mb-3"/>
+              <h3 className="text-base font-bold text-gray-900 mb-1">{t.contact.salesTitle}</h3>
+              <p className="text-sm text-gray-500 leading-relaxed mb-3">{t.contact.salesBody}</p>
+              <span className="text-sm font-semibold text-indigo-600 group-hover:underline break-all">
+                {SUPPORT_EMAIL}
+              </span>
+            </a>
+          </div>
+        </div>
+      </section>
+
       {/* ── Final CTA ──────────────────────────────────────────────────────── */}
       <section className="py-20 px-5">
         <div className="max-w-2xl mx-auto text-center">
@@ -449,6 +498,9 @@ export default function LandingPage() {
           <div className="flex items-center gap-6 text-xs text-gray-400">
             <Link href="/auth/login" className="hover:text-gray-700 transition-colors">{t.nav.login}</Link>
             <Link href="/auth/register" className="hover:text-gray-700 transition-colors">{t.nav.cta}</Link>
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="hover:text-gray-700 transition-colors">{t.contact.tag}</a>
+            <Link href="/terms" className="hover:text-gray-700 transition-colors">{t.footer.terms}</Link>
+            <Link href="/privacy" className="hover:text-gray-700 transition-colors">{t.footer.privacy}</Link>
             <button onClick={() => setLocale(nextLocale)} className="hover:text-gray-700 transition-colors">
               {otherLocaleLabel}
             </button>

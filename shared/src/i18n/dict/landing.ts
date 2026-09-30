@@ -93,9 +93,21 @@ export const landing: Record<Locale, LandingDict> = {
       sub: 'Únete a los dueños de negocios hispanos que ya están transformando cómo administran su operación.',
       cta: 'Crear mi cuenta gratis →',
     },
+    contact: {
+      tag: 'Contacto',
+      h: '¿Tienes preguntas?',
+      sub: 'Escríbenos y te respondemos en español, normalmente el mismo día.',
+      supportTitle: 'Soporte',
+      supportBody: '¿Dudas sobre la app, tu cuenta o tu plan?',
+      salesTitle: 'Empresas y equipos grandes',
+      salesBody: '¿Más de 40 personas o necesitas algo a la medida?',
+      salesSubject: 'Quiero información sobre Amixos para mi empresa',
+    },
     footer: {
       tagline: 'Donde los negocios prosperan.',
       rights: 'Todos los derechos reservados.',
+      terms: 'Términos',
+      privacy: 'Privacidad',
     },
     mockup: {
       welcome: 'Bienvenido, Edvin',
@@ -205,9 +217,21 @@ export const landing: Record<Locale, LandingDict> = {
       sub: 'Join the Hispanic business owners already transforming how they run their operation.',
       cta: 'Create my free account →',
     },
+    contact: {
+      tag: 'Contact',
+      h: 'Questions?',
+      sub: 'Write to us and we will get back to you, usually the same day.',
+      supportTitle: 'Support',
+      supportBody: 'Questions about the app, your account or your plan?',
+      salesTitle: 'Enterprise & large teams',
+      salesBody: 'More than 40 people, or need something custom?',
+      salesSubject: 'I would like information about Amixos for my company',
+    },
     footer: {
       tagline: 'Where businesses thrive.',
       rights: 'All rights reserved.',
+      terms: 'Terms',
+      privacy: 'Privacy',
     },
     mockup: {
       welcome: 'Welcome, Edvin',
@@ -250,7 +274,13 @@ export type LandingDict = {
   };
   faq: { tag: string; h: string; items: { q: string; a: string }[] };
   finalCta: { h: string; sub: string; cta: string };
-  footer: { tagline: string; rights: string };
+  contact: {
+    tag: string; h: string; sub: string;
+    supportTitle: string; supportBody: string;
+    salesTitle: string; salesBody: string;
+    salesSubject: string;
+  };
+  footer: { tagline: string; rights: string; terms: string; privacy: string };
   mockup: {
     welcome: string; monthlyIncome: string; clients: string; invoices: string; employees: string;
     recent: string; paid: string; sent: string; draft: string;
