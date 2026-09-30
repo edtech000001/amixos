@@ -312,8 +312,7 @@ export function EmployeesScreen({
             placeholderTextColor={c.faint}
             autoCapitalize="none"
             autoCorrect={false}
-            className="flex-1 px-2.5 py-2.5 text-sm text-ink"
-          />
+            className="flex-1 px-2.5 py-2.5 text-ink" style={{ fontSize: 14 }} />
           {search ? (
             <Pressable onPress={() => setSearch('')} hitSlop={8}>
               <X size={16} color={c.faint} />
@@ -485,8 +484,7 @@ export function EmployeesScreen({
           placeholderTextColor={c.faint}
           autoCapitalize="none"
           autoCorrect={false}
-          className="flex-1 ml-2 text-sm text-ink"
-        />
+          className="flex-1 ml-2 text-ink" style={{ fontSize: 14 }} />
         {tsSearch ? (
           <Pressable onPress={() => setTsSearch('')} hitSlop={8}>
             <X size={16} color={c.faint} />
@@ -695,8 +693,7 @@ export function EmployeesScreen({
                             placeholderTextColor={c.faint}
                             autoCapitalize="none"
                             autoCorrect={false}
-                            className="mb-1.5 rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink"
-                          />
+                            className="mb-1.5 rounded-xl border border-border bg-card px-3 py-2 text-ink" style={{ fontSize: 14 }} />
                         ) : null}
                         <ScrollView className="max-h-64" nestedScrollEnabled>
                           {shown.map(([v, count]) => {

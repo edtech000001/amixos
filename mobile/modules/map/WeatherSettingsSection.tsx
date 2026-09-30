@@ -114,8 +114,7 @@ export function WeatherSettingsSection({ config, onChange }: Props) {
               onChange({ ...config, retention_days: isNaN(n) ? 15 : Math.max(1, Math.min(90, n)) });
             }}
             keyboardType="number-pad"
-            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-ink"
-          />
+            className="rounded-lg border border-border bg-card px-3 py-2 text-ink" style={{ fontSize: 14 }} />
           <Text className="text-[10px] text-faint mt-1">{t.retentionSubtitle}</Text>
         </View>
 
@@ -129,8 +128,7 @@ export function WeatherSettingsSection({ config, onChange }: Props) {
               onChange({ ...config, proximity_radius_miles: isNaN(n) ? 50 : Math.max(1, Math.min(500, n)) });
             }}
             keyboardType="number-pad"
-            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-ink"
-          />
+            className="rounded-lg border border-border bg-card px-3 py-2 text-ink" style={{ fontSize: 14 }} />
           <Text className="text-[10px] text-faint mt-1">{t.proximityRadiusSubtitle}</Text>
         </View>
 
@@ -146,8 +144,7 @@ export function WeatherSettingsSection({ config, onChange }: Props) {
             autoCorrect={false}
             placeholder={t.excludedStatesPlaceholder}
             placeholderTextColor={c.faint}
-            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-ink"
-          />
+            className="rounded-lg border border-border bg-card px-3 py-2 text-ink" style={{ fontSize: 14 }} />
         </View>
 
         {/* Events — collapsible. Collapsed by default so the long NOAA list
@@ -235,8 +232,7 @@ export function WeatherSettingsSection({ config, onChange }: Props) {
                           keyboardType="number-pad"
                           placeholder="—"
                           placeholderTextColor={c.faint}
-                          className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-ink"
-                        />
+                          className="rounded-lg border border-border bg-card px-3 py-2 text-ink" style={{ fontSize: 14 }} />
                       </View>
                     ) : null}
                   </View>
@@ -338,10 +334,9 @@ function EventPicker({
                 onChangeText={setQuery}
                 placeholder={t.eventPickerSearchPlaceholder}
                 placeholderTextColor={c.faint}
-                className="flex-1 text-sm text-ink"
+                className="flex-1 text-ink"
                 autoCorrect={false}
-                autoCapitalize="none"
-              />
+                autoCapitalize="none" style={{ fontSize: 14 }} />
             </View>
           </View>
 

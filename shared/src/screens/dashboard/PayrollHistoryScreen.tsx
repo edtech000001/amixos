@@ -181,8 +181,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
             placeholderTextColor={c.faint}
             autoCapitalize="none"
             autoCorrect={false}
-            className="flex-1 px-2.5 py-2.5 text-sm text-ink"
-          />
+            className="flex-1 px-2.5 py-2.5 text-ink" style={{ fontSize: 14 }} />
         </View>
         {/* Date range — same calendar sheet as the invoices list. */}
         <Pressable

@@ -369,8 +369,8 @@ export function ClientFormModal({
               placeholderTextColor={c.faint}
               value={form.notes}
               onChangeText={v => set('notes', v)}
-              className="text-sm text-ink py-2"
-              style={{ textAlignVertical: 'top', minHeight: 60 }}
+              className="text-ink py-2"
+              style={[{ fontSize: 14 }, { textAlignVertical: 'top', minHeight: 60 }]}
             />
           </View>
         </View>

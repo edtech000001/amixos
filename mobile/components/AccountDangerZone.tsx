@@ -173,8 +173,7 @@ export function AccountDangerZone() {
                 autoCapitalize="characters"
                 autoCorrect={false}
                 placeholderTextColor={c.faint}
-                className="rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink"
-              />
+                className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={{ fontSize: 16 }} />
               {error ? <Text className="text-xs text-red-500">{error}</Text> : null}
               <View className="flex-row gap-2">
                 <Pressable onPress={() => setTarget(null)} className="flex-1 py-3 rounded-2xl items-center border border-border active:bg-surface">

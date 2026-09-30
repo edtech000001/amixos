@@ -159,8 +159,7 @@ export function Select({
                       autoFocus
                       autoCorrect={false}
                       autoCapitalize="none"
-                      className="flex-1 text-base text-ink py-1"
-                    />
+                      className="flex-1 text-ink py-1" style={{ fontSize: 16 }} />
                     {query.length > 0 ? (
                       <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear">
                         <X size={16} color={c.faint} />

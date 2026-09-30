@@ -616,8 +616,7 @@ export default function TrabajosTab() {
               onChangeText={setClientSearch}
               placeholder={locale === 'es' ? 'Buscar cliente…' : 'Search a client…'}
               placeholderTextColor="#6B7280"
-              className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink mb-2"
-            />
+              className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink mb-2" style={{ fontSize: 14 }} />
             {/* Fixed height so the sheet doesn't resize as results change. */}
             <ScrollView style={{ height: 320 }}>
               {clientResults.length === 0 ? (

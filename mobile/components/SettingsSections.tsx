@@ -1119,8 +1119,8 @@ export function FacturasSection() {
               placeholderTextColor={c.faint}
               value={notes}
               onChangeText={setNotes}
-              className="text-base text-ink py-2"
-              style={{ textAlignVertical: 'top', minHeight: 70 }}
+              className="text-ink py-2"
+              style={[{ fontSize: 16 }, { textAlignVertical: 'top', minHeight: 70 }]}
             />
           </View>
         </View>
@@ -1181,8 +1181,8 @@ export function FacturasSection() {
               value={emailBody}
               onChangeText={setEmailBody}
               onSelectionChange={e => { emailSelRef.current.body = { s: e.nativeEvent.selection.start, e: e.nativeEvent.selection.end }; }}
-              className="text-base text-ink py-2"
-              style={{ textAlignVertical: 'top', minHeight: 90 }}
+              className="text-ink py-2"
+              style={[{ fontSize: 16 }, { textAlignVertical: 'top', minHeight: 90 }]}
             />
           </View>
           {emailTokenChips('body')}
@@ -2299,8 +2299,7 @@ export function JobAlertsSection() {
                           const n = parseInt(txt.replace(/[^0-9]/g, ''), 10);
                           updateLevel(idx, { days: Number.isFinite(n) ? Math.max(0, n) : 0 });
                         }}
-                        className="w-14 px-2 py-1.5 text-sm text-ink rounded-lg border border-border bg-card text-center"
-                      />
+                        className="w-14 px-2 py-1.5 text-ink rounded-lg border border-border bg-card text-center" style={{ fontSize: 14 }} />
                       <Text className="text-xs text-muted">
                         {level.days === 1 ? t.jobAlerts.daysSuffixOne : t.jobAlerts.daysSuffixMany}
                       </Text>
@@ -4405,8 +4404,8 @@ function GoogleSyncSection() {
             multiline
             placeholder={t.templatePlaceholder}
             placeholderTextColor={c.faint}
-            className="border border-border rounded-xl px-3 py-2 text-sm text-ink bg-card"
-            style={{ minHeight: 100, textAlignVertical: 'top' }}
+            className="border border-border rounded-xl px-3 py-2 text-ink bg-card"
+            style={[{ fontSize: 14 }, { minHeight: 100, textAlignVertical: 'top' }]}
           />
           {availableFields.length > 0 ? (
             <View className="flex-row flex-wrap gap-1.5 pt-1">

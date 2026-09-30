@@ -1385,8 +1385,7 @@ export default function FacturaDetailRoute() {
               onChangeText={setManualDesc}
               placeholder={jobsT.manualDescPlaceholder}
               placeholderTextColor={c.faint}
-              className="bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-ink mb-2"
-            />
+              className="bg-card border border-border rounded-xl px-3 py-2.5 text-ink mb-2" style={{ fontSize: 14 }} />
             <View className="flex-row gap-2 mb-4">
               <TextInput
                 value={formatNumberGrouped(manualQty)}
@@ -1394,8 +1393,7 @@ export default function FacturaDetailRoute() {
                 keyboardType="decimal-pad"
                 placeholder={tj.new.colQty}
                 placeholderTextColor={c.faint}
-                className="flex-1 bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-center text-ink"
-              />
+                className="flex-1 bg-card border border-border rounded-xl px-3 py-2.5 text-center text-ink" style={{ fontSize: 14 }} />
               <Pressable
                 onPress={() => setManualRate(toggleSign(manualRate))}
                 className={`w-11 items-center justify-center rounded-xl border active:opacity-80 ${
@@ -1412,8 +1410,7 @@ export default function FacturaDetailRoute() {
                   keyboardType="decimal-pad"
                   placeholder={tj.detail.colUnitPriceShort}
                   placeholderTextColor={c.faint}
-                  className="bg-card border border-border rounded-xl pl-6 pr-3 py-2.5 text-sm text-ink"
-                />
+                  className="bg-card border border-border rounded-xl pl-6 pr-3 py-2.5 text-ink" style={{ fontSize: 14 }} />
               </View>
             </View>
             <View className="mb-4">
@@ -1428,8 +1425,7 @@ export default function FacturaDetailRoute() {
               onChangeText={setAddSearch}
               placeholder={jobsT.addSearchPlaceholder}
               placeholderTextColor={c.faint}
-              className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink mb-2"
-            />
+              className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink mb-2" style={{ fontSize: 14 }} />
             {addCandidates.length === 0 ? (
               <Text className="text-sm text-faint pb-2">{jobsT.addEmpty}</Text>
             ) : (
@@ -1495,8 +1491,7 @@ export default function FacturaDetailRoute() {
               onChangeText={setEditDesc}
               placeholder={jobsT.manualDescPlaceholder}
               placeholderTextColor={c.faint}
-              className="bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-ink mb-2"
-            />
+              className="bg-card border border-border rounded-xl px-3 py-2.5 text-ink mb-2" style={{ fontSize: 14 }} />
             <View className="flex-row gap-2 mb-4">
               <TextInput
                 value={formatNumberGrouped(editQty)}
@@ -1504,8 +1499,7 @@ export default function FacturaDetailRoute() {
                 keyboardType="decimal-pad"
                 placeholder={tj.new.colQty}
                 placeholderTextColor={c.faint}
-                className="flex-1 bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-center text-ink"
-              />
+                className="flex-1 bg-card border border-border rounded-xl px-3 py-2.5 text-center text-ink" style={{ fontSize: 14 }} />
               <Pressable
                 onPress={() => setEditRate(toggleSign(editRate))}
                 className={`w-11 items-center justify-center rounded-xl border active:opacity-80 ${
@@ -1522,8 +1516,7 @@ export default function FacturaDetailRoute() {
                   keyboardType="decimal-pad"
                   placeholder={tj.detail.colUnitPriceShort}
                   placeholderTextColor={c.faint}
-                  className="bg-card border border-border rounded-xl pl-6 pr-3 py-2.5 text-sm text-ink"
-                />
+                  className="bg-card border border-border rounded-xl pl-6 pr-3 py-2.5 text-ink" style={{ fontSize: 14 }} />
               </View>
             </View>
             {editIsManual ? (
@@ -1628,8 +1621,7 @@ export default function FacturaDetailRoute() {
                 onChangeText={setPayMethodOther}
                 placeholder={tInv.payments.otherPlaceholder}
                 placeholderTextColor={c.faint}
-                className="bg-card border border-border rounded-2xl px-4 py-3.5 text-base text-ink mt-2"
-              />
+                className="bg-card border border-border rounded-2xl px-4 py-3.5 text-ink mt-2" style={{ fontSize: 16 }} />
             ) : null}
 
             <View className="mt-4">

@@ -2004,16 +2004,15 @@ export default function JobDetailRoute() {
                     onChangeText={v => updateRow(r.id, 'description', v)}
                     placeholder={t.new.colDescription}
                     placeholderTextColor={c.faint}
-                    className="bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-ink"
-                  />
+                    className="bg-card border border-border rounded-xl px-3 py-2.5 text-ink" style={{ fontSize: 14 }} />
                   <View className="flex-row gap-2">
                     <View className="flex-1">
                       <Text className="text-[11px] text-faint mb-1">{t.new.colQty}</Text>
-                      <TextInput value={r.quantity} onChangeText={v => updateRow(r.id, 'quantity', v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" className="bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-ink" />
+                      <TextInput value={r.quantity} onChangeText={v => updateRow(r.id, 'quantity', v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" className="bg-card border border-border rounded-xl px-3 py-2.5 text-ink" style={{ fontSize: 14 }} />
                     </View>
                     <View className="flex-1">
                       <Text className="text-[11px] text-faint mb-1">{td.colUnitPriceShort}</Text>
-                      <TextInput value={r.unit_price} onChangeText={v => updateRow(r.id, 'unit_price', v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" className="bg-card border border-border rounded-xl px-3 py-2.5 text-sm text-ink" />
+                      <TextInput value={r.unit_price} onChangeText={v => updateRow(r.id, 'unit_price', v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" className="bg-card border border-border rounded-xl px-3 py-2.5 text-ink" style={{ fontSize: 14 }} />
                     </View>
                   </View>
                 </View>
@@ -2216,8 +2215,7 @@ export default function JobDetailRoute() {
                   onChangeText={setOnsiteName}
                   placeholder={full.proposal.namePlaceholder}
                   placeholderTextColor={c.faint}
-                  className="bg-surface border border-border rounded-xl px-3.5 py-3 text-sm text-ink"
-                />
+                  className="bg-surface border border-border rounded-xl px-3.5 py-3 text-ink" style={{ fontSize: 14 }} />
               </View>
               <View>
                 <Text className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-1.5">{full.proposal.signLabel}</Text>

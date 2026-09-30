@@ -290,8 +290,7 @@ export default function EmpleadoDetailRoute() {
                         placeholder={t.modal.overtimeDefaultPlaceholder}
                         placeholderTextColor={c.faint}
                         keyboardType="decimal-pad"
-                        className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink"
-                      />
+                        className="rounded-xl border border-border bg-card px-3 py-2 text-ink" style={{ fontSize: 14 }} />
                     </View>
                     <View className="flex-1">
                       <Text className="text-xs text-muted mb-1">{t.modal.overtimeMultiplierLabel}</Text>
@@ -301,8 +300,7 @@ export default function EmpleadoDetailRoute() {
                         placeholder={t.modal.overtimeDefaultPlaceholder}
                         placeholderTextColor={c.faint}
                         keyboardType="decimal-pad"
-                        className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink"
-                      />
+                        className="rounded-xl border border-border bg-card px-3 py-2 text-ink" style={{ fontSize: 14 }} />
                     </View>
                   </View>
                 ) : null}
@@ -1245,8 +1243,8 @@ function CustomFieldInput({
           multiline
           numberOfLines={4}
           placeholderTextColor={c.faint}
-          className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[90px]"
-          style={{ textAlignVertical: 'top' }}
+          className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[90px]"
+          style={[{ fontSize: 16 }, { textAlignVertical: 'top' }]}
         />
       </View>
     );

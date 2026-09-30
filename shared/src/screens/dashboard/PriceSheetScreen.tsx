@@ -379,7 +379,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
       <View className="flex-row items-center rounded-2xl border border-border bg-card px-3 mb-4">
         <Search size={16} color={c.faint} />
         <TextInput value={search} onChangeText={setSearch} placeholder={t.searchPlaceholder} placeholderTextColor={c.faint}
-          autoCapitalize="none" autoCorrect={false} className="flex-1 py-2.5 pl-2 text-sm text-ink" />
+          autoCapitalize="none" autoCorrect={false} className="flex-1 py-2.5 pl-2 text-ink" style={{ fontSize: 14 }} />
         {search ? <Pressable onPress={() => setSearch('')} hitSlop={8}><X size={16} color={c.faint} /></Pressable> : null}
       </View>
 
@@ -492,7 +492,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
                 <Pressable onPress={Keyboard.dismiss} accessible={false} className="flex-1">
                 <Text className="text-sm font-semibold text-ink mb-1">{t.nameLabel}</Text>
                 <TextInput value={draft.name} onChangeText={v => setDraftKey('name', v)} placeholder={t.namePlaceholder} placeholderTextColor={c.faint}
-                  className="mb-3 rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
+                  className="mb-3 rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={{ fontSize: 16 }} />
 
                 <View className="mb-3">
                   <AutocompleteInput browse label={t.categoryLabel} value={draft.category}
@@ -547,7 +547,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
                 <View className="flex-row items-center rounded-xl border border-border bg-card px-3 mb-4">
                   <Text className="text-faint">$</Text>
                   <TextInput value={draft.rate} onChangeText={v => setDraftKey('rate', v.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={c.faint}
-                    className="flex-1 py-2.5 pl-1 text-base text-ink" />
+                    className="flex-1 py-2.5 pl-1 text-ink" style={{ fontSize: 16 }} />
                 </View>
 
                 {/* Per-CLIENT price overrides — the picked client always pays
@@ -572,7 +572,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
                         <Text className="text-faint">$</Text>
                         <TextInput value={cr.rate}
                           onChangeText={(v) => setDraftKey('clientRates', draft.clientRates.map((x, j) => (j === idx ? { ...x, rate: v.replace(/[^0-9.]/g, '') } : x)))}
-                          keyboardType="decimal-pad" placeholder={String(draft.rate || '0.00')} placeholderTextColor={c.faint} className="flex-1 py-2.5 pl-1 text-base text-ink" />
+                          keyboardType="decimal-pad" placeholder={String(draft.rate || '0.00')} placeholderTextColor={c.faint} className="flex-1 py-2.5 pl-1 text-ink" style={{ fontSize: 16 }} />
                       </View>
                       <Pressable onPress={() => setDraftKey('clientRates', draft.clientRates.filter((_, j) => j !== idx))} className="p-1.5">
                         <X size={16} color={c.faint} />
@@ -588,7 +588,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
                   <Text className="text-sm font-semibold text-ink mb-1">{t.matchTermsLabel}</Text>
                   <Text className="text-[11px] text-faint mb-1.5">{t.matchTermsHint}</Text>
                   <TextInput value={draft.matchTerms} onChangeText={v => setDraftKey('matchTerms', v)} placeholder={t.matchTermsPlaceholder} placeholderTextColor={c.faint}
-                    multiline numberOfLines={2} className="rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" style={{ minHeight: 56, textAlignVertical: 'top' }} />
+                    multiline numberOfLines={2} className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={[{ fontSize: 16 }, { minHeight: 56, textAlignVertical: 'top' }]} />
                 </View>
 
                 <View className="mb-4">
@@ -614,7 +614,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
                       <View className="flex-1 flex-row items-center rounded-xl border border-border bg-card px-3">
                         <Text className="text-faint">$</Text>
                         <TextInput value={sr.rate} onChangeText={v => { const next = [...draft.stateRates]; next[i] = { ...sr, rate: v.replace(/[^0-9.]/g, '') }; setDraftKey('stateRates', next); }}
-                          keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={c.faint} className="flex-1 py-2.5 pl-1 text-base text-ink" />
+                          keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={c.faint} className="flex-1 py-2.5 pl-1 text-ink" style={{ fontSize: 16 }} />
                       </View>
                       <Pressable onPress={() => setDraftKey('stateRates', draft.stateRates.filter((_, j) => j !== i))} className="p-1.5"><X size={16} color={c.faint} /></Pressable>
                     </View>
@@ -640,7 +640,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
                 <View className="flex-row items-center rounded-2xl border border-border bg-card px-3 mb-3">
                   <Search size={16} color={c.faint} />
                   <TextInput value={stateQuery} onChangeText={setStateQuery} placeholder={t.searchPlaceholder} placeholderTextColor={c.faint}
-                    autoFocus autoCorrect={false} autoCapitalize="none" className="flex-1 py-2.5 pl-2 text-base text-ink" />
+                    autoFocus autoCorrect={false} autoCapitalize="none" className="flex-1 py-2.5 pl-2 text-ink" style={{ fontSize: 16 }} />
                 </View>
                 <ScrollView keyboardShouldPersistTaps="handled" className="mb-4">
                   {filteredStates.map(s => {

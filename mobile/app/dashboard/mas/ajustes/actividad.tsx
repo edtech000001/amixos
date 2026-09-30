@@ -145,8 +145,7 @@ export default function ActividadPage() {
               placeholderTextColor={c.faint}
               autoCapitalize="none"
               autoCorrect={false}
-              className="flex-1 text-sm text-ink"
-            />
+              className="flex-1 text-ink" style={{ fontSize: 14 }} />
           </View>
         ) : null}
       </View>

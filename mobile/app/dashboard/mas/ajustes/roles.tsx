@@ -368,8 +368,7 @@ export default function RolesScreen() {
               placeholder={t.roleNamePlaceholder}
               placeholderTextColor={c.faint}
               autoFocus
-              className="rounded-2xl border border-border bg-surface px-4 py-3.5 text-base text-ink"
-            />
+              className="rounded-2xl border border-border bg-surface px-4 py-3.5 text-ink" style={{ fontSize: 16 }} />
             {sheetMode === 'create' ? (
               <>
                 <Text className="text-sm font-semibold text-ink mt-4 mb-2">{t.baseRoleLabel}</Text>

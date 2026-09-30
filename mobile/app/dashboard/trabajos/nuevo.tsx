@@ -946,8 +946,8 @@ export default function NuevoTrabajoRoute() {
             placeholderTextColor={c.faint}
             multiline
             numberOfLines={3}
-            className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[80px]"
-            style={{ textAlignVertical: 'top' }}
+            className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[80px]"
+            style={[{ fontSize: 16 }, { textAlignVertical: 'top' }]}
           />
         </View>
       );
@@ -988,8 +988,7 @@ export default function NuevoTrabajoRoute() {
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="url"
-              className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink"
-            />
+              className="rounded-2xl border border-border bg-card px-4 py-3 text-ink" style={{ fontSize: 16 }} />
             {mapLinkUnrecognized ? (
               <Text className="text-xs text-amber-600">{t.mapLinkHint}</Text>
             ) : null}
@@ -1009,10 +1008,7 @@ export default function NuevoTrabajoRoute() {
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="numbers-and-punctuation"
-              className={`rounded-2xl border bg-card px-4 py-3 text-base text-ink ${
-                coordsInvalid ? 'border-red-300' : 'border-border'
-              }`}
-            />
+              className={`rounded-2xl border bg-card px-4 py-3 text-ink ${ coordsInvalid ? 'border-red-300' : 'border-border' }`} style={{ fontSize: 16 }} />
             {coordsInvalid ? (
               <Text className="text-xs text-red-500">{t.coordinatesInvalid}</Text>
             ) : null}
@@ -1331,8 +1327,8 @@ export default function NuevoTrabajoRoute() {
             placeholderTextColor={c.faint}
             multiline
             numberOfLines={4}
-            className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[100px]"
-            style={{ textAlignVertical: 'top' }}
+            className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[100px]"
+            style={[{ fontSize: 16 }, { textAlignVertical: 'top' }]}
           />
         </View>
       );
@@ -1353,8 +1349,8 @@ export default function NuevoTrabajoRoute() {
             placeholderTextColor={c.faint}
             multiline
             numberOfLines={3}
-            className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[80px]"
-            style={{ textAlignVertical: 'top' }}
+            className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[80px]"
+            style={[{ fontSize: 16 }, { textAlignVertical: 'top' }]}
           />
         </View>
       );
@@ -2278,8 +2274,8 @@ export default function NuevoTrabajoRoute() {
                   placeholderTextColor={c.faint}
                   multiline
                   numberOfLines={3}
-                  className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[80px]"
-                  style={{ textAlignVertical: 'top' }}
+                  className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[80px]"
+                  style={[{ fontSize: 16 }, { textAlignVertical: 'top' }]}
                 />
               </View>
             ) : null}
@@ -2495,8 +2491,7 @@ export default function NuevoTrabajoRoute() {
                   onChangeText={setClientSearch}
                   placeholder={t.clientSearchPlaceholder}
                   placeholderTextColor={c.faint}
-                  className="flex-1 py-2.5 pl-2 text-sm text-ink"
-                />
+                  className="flex-1 py-2.5 pl-2 text-ink" style={{ fontSize: 14 }} />
               </View>
             </View>
             <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
@@ -2699,8 +2694,7 @@ export default function NuevoTrabajoRoute() {
                   onChangeText={setLeadSearch}
                   placeholder={t.workerSearchPlaceholder}
                   placeholderTextColor={c.faint}
-                  className="flex-1 py-2.5 pl-2 text-sm text-ink"
-                />
+                  className="flex-1 py-2.5 pl-2 text-ink" style={{ fontSize: 14 }} />
               </View>
             </View>
             <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
@@ -2799,8 +2793,7 @@ export default function NuevoTrabajoRoute() {
                   onChangeText={setCrewSearch}
                   placeholder={t.workerSearchPlaceholder}
                   placeholderTextColor={c.faint}
-                  className="flex-1 py-2.5 pl-2 text-sm text-ink"
-                />
+                  className="flex-1 py-2.5 pl-2 text-ink" style={{ fontSize: 14 }} />
               </View>
             </View>
             <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
@@ -2893,8 +2886,7 @@ export default function NuevoTrabajoRoute() {
                   onChangeText={setDriverSearch}
                   placeholder={t.workerSearchPlaceholder}
                   placeholderTextColor={c.faint}
-                  className="flex-1 py-2.5 pl-2 text-sm text-ink"
-                />
+                  className="flex-1 py-2.5 pl-2 text-ink" style={{ fontSize: 14 }} />
               </View>
             </View>
             <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
@@ -2994,8 +2986,8 @@ function CustomFieldInput({
           multiline
           numberOfLines={4}
           placeholderTextColor={c.faint}
-          className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[90px]"
-          style={{ textAlignVertical: 'top' }}
+          className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[90px]"
+          style={[{ fontSize: 16 }, { textAlignVertical: 'top' }]}
         />
       </View>
     );

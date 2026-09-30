@@ -878,7 +878,7 @@ export default function MapScreen() {
             onChangeText={setSearch}
             placeholder={t.searchPlaceholder}
             placeholderTextColor={c.faint}
-            className="flex-1 text-sm text-ink"
+            className="flex-1 text-ink"
             autoCorrect={false}
             autoCapitalize="none"
             // The map fills the rest of the screen, so there was nothing to
@@ -888,8 +888,7 @@ export default function MapScreen() {
             // dismisses now (see ClusteredMapView onPress).
             returnKeyType="search"
             onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-          />
+            onBlur={() => setSearchFocused(false)} style={{ fontSize: 14 }} />
           {search ? (
             <>
               <Text className="text-[10px] text-muted">

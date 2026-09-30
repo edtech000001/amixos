@@ -125,8 +125,7 @@ export function AddonStoreScreen({
           onChangeText={setSearch}
           placeholder={t.searchPlaceholder}
           placeholderTextColor={c.faint}
-          className="flex-1 text-sm text-ink"
-        />
+          className="flex-1 text-ink" style={{ fontSize: 14 }} />
       </View>
 
       {/* Category filter chips. Horizontal scroll so we can grow the

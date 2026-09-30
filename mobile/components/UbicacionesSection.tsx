@@ -83,8 +83,7 @@ export function UbicacionesSection() {
             value={newName} onChangeText={setNewName}
             placeholder={es ? 'Nombre (ej. Lexington)' : 'Name (e.g. Lexington)'}
             placeholderTextColor={c.faint}
-            className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm text-ink"
-          />
+            className="flex-1 rounded-xl border border-border px-4 py-2.5 text-ink" style={{ fontSize: 14 }} />
           {/* Always rendered (faded when empty/busy) so the row keeps a stable
               shape and the name field doesn't look orphaned at half width. */}
           <Pressable onPress={addLocation} disabled={!newName.trim() || busy}

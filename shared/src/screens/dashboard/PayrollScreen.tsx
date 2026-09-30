@@ -831,7 +831,7 @@ export function PayrollScreen({
                   <Text className="text-sm font-semibold text-ink mb-2">{t.checkNumberLabel}</Text>
                   <TextInput value={manualCheck} onChangeText={setManualCheck} placeholder={t.checkNumberPlaceholder}
                     placeholderTextColor={c.faint} keyboardType="number-pad"
-                    className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink" />
+                    className="rounded-2xl border border-border bg-card px-4 py-3 text-ink" style={{ fontSize: 16 }} />
                 </View>
               ) : null}
 
@@ -839,14 +839,14 @@ export function PayrollScreen({
                 <Text className="text-sm font-semibold text-ink mb-2">{t.amountLabel}</Text>
                 <TextInput value={formatMoneyInput(manualAmount)} onChangeText={v => setManualAmount(v.replace(/,/g, '').replace(/[^0-9.]/g, ''))} placeholder="0.00"
                   placeholderTextColor={c.faint} keyboardType="decimal-pad"
-                  className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink" />
+                  className="rounded-2xl border border-border bg-card px-4 py-3 text-ink" style={{ fontSize: 16 }} />
               </View>
 
               <View className="mb-4">
                 <Text className="text-sm font-semibold text-ink mb-2">{t.hoursCoveredLabel}</Text>
                 <TextInput value={manualHours} onChangeText={v => setManualHours(v.replace(/[^0-9.]/g, ''))} placeholder="0"
                   placeholderTextColor={c.faint} keyboardType="decimal-pad"
-                  className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink" />
+                  className="rounded-2xl border border-border bg-card px-4 py-3 text-ink" style={{ fontSize: 16 }} />
               </View>
 
               <Pressable onPress={confirmManual} disabled={busy || !manualWorker || !(parseFloat(manualAmount) > 0)}
@@ -933,8 +933,7 @@ export function PayrollScreen({
                   onChangeText={setWorkerSearch}
                   placeholder={t.manualSelectWorker}
                   placeholderTextColor={c.faint}
-                  className="flex-1 py-2.5 pl-2 text-sm text-ink"
-                />
+                  className="flex-1 py-2.5 pl-2 text-ink" style={{ fontSize: 14 }} />
               </View>
             </View>
             <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
@@ -1003,8 +1002,7 @@ export function PayrollScreen({
                     value={draftCustomDays}
                     onChangeText={setDraftCustomDays}
                     keyboardType="number-pad"
-                    className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink"
-                  />
+                    className="rounded-xl border border-border bg-card px-3 py-2 text-ink" style={{ fontSize: 14 }} />
                 </View>
               ) : null}
 
@@ -1041,8 +1039,7 @@ export function PayrollScreen({
                         });
                       }}
                       keyboardType="decimal-pad"
-                      className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink"
-                    />
+                      className="rounded-xl border border-border bg-card px-3 py-2 text-ink" style={{ fontSize: 14 }} />
                   </View>
                 ) : null}
               </View>
@@ -1118,8 +1115,7 @@ export function PayrollScreen({
                         placeholder={t.formulaNumberPlaceholder}
                         placeholderTextColor={c.faint}
                         keyboardType="decimal-pad"
-                        className="w-24 h-8 rounded-lg border border-border px-2 text-xs text-ink"
-                      />
+                        className="w-24 h-8 rounded-lg border border-border px-2 text-ink" style={{ fontSize: 12 }} />
                       <Pressable onPress={addNumEntry} disabled={!numEntry}
                         className={`h-8 px-3 rounded-lg border border-border items-center justify-center ${numEntry ? 'active:bg-surface' : 'opacity-40'}`}>
                         <Text className="text-xs font-semibold text-ink">{t.formulaAddNumber}</Text>
@@ -1275,8 +1271,7 @@ export function PayrollScreen({
                   placeholder={t.checkNumberPlaceholder}
                   placeholderTextColor={c.faint}
                   keyboardType="number-pad"
-                  className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink"
-                />
+                  className="rounded-2xl border border-border bg-card px-4 py-3 text-ink" style={{ fontSize: 16 }} />
               </View>
             ) : null}
 
@@ -1289,8 +1284,7 @@ export function PayrollScreen({
                 placeholder="0.00"
                 placeholderTextColor={c.faint}
                 keyboardType="decimal-pad"
-                className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink"
-              />
+                className="rounded-2xl border border-border bg-card px-4 py-3 text-ink" style={{ fontSize: 16 }} />
             </View>
 
             {/* Loan tracker — outstanding balance + deduct from this check.
@@ -1308,7 +1302,7 @@ export function PayrollScreen({
                     <Text className="text-xs text-muted mb-1">{t.loanDeductLabel}</Text>
                     <TextInput value={formatMoneyInput(loanDeduct)} onChangeText={v => setLoanDeduct(v.replace(/,/g, '').replace(/[^0-9.]/g, ''))}
                       placeholder="0.00" placeholderTextColor={c.faint} keyboardType="decimal-pad"
-                      className="rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
+                      className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={{ fontSize: 16 }} />
                     {(parseFloat(loanDeduct) || 0) > 0 ? (
                       <Text className="text-xs text-muted mt-1.5">{t.loanNetToPay}: <Text className="font-bold text-ink">{fmt(netToPay)}</Text></Text>
                     ) : null}
@@ -1347,9 +1341,9 @@ export function PayrollScreen({
                     <Text className="text-sm font-semibold text-ink">{editingEntry ? t.loanEditTitle : t.loanNewTitle}</Text>
                     <TextInput value={formatMoneyInput(loanAmount)} onChangeText={v => setLoanAmount(v.replace(/,/g, '').replace(/[^0-9.]/g, ''))}
                       placeholder={t.loanAmountPlaceholder} placeholderTextColor={c.faint} keyboardType="decimal-pad"
-                      className="rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
+                      className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={{ fontSize: 16 }} />
                     <TextInput value={loanNote} onChangeText={setLoanNote} placeholder={t.loanNotePlaceholder} placeholderTextColor={c.faint}
-                      className="rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
+                      className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={{ fontSize: 16 }} />
                     <DatePicker label={t.loanDateLabel} value={loanDate} onChange={setLoanDate} />
                     <View className="flex-row gap-2 mt-1">
                       <Pressable onPress={resetLoanForms} className="flex-1 py-2.5 rounded-xl bg-border-soft items-center"><Text className="text-sm font-semibold text-muted">{full.common.buttons.cancel}</Text></Pressable>
@@ -1518,9 +1512,9 @@ export function PayrollScreen({
                     <Text className="text-sm font-semibold text-ink">{editingEntry ? t.loanEditTitle : showAddPayment ? t.loanPaymentNewTitle : t.loanNewTitle}</Text>
                     <TextInput value={formatMoneyInput(loanAmount)} onChangeText={v => setLoanAmount(v.replace(/,/g, '').replace(/[^0-9.]/g, ''))}
                       placeholder={t.loanAmountPlaceholder} placeholderTextColor={c.faint} keyboardType="decimal-pad"
-                      className="rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
+                      className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={{ fontSize: 16 }} />
                     <TextInput value={loanNote} onChangeText={setLoanNote} placeholder={t.loanNotePlaceholder} placeholderTextColor={c.faint}
-                      className="rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink" />
+                      className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={{ fontSize: 16 }} />
                     <DatePicker label={t.loanDateLabel} value={loanDate} onChange={setLoanDate} />
                     <View className="flex-row gap-2 mt-1">
                       <Pressable onPress={resetLoanForms} className="flex-1 py-2.5 rounded-xl bg-border-soft items-center"><Text className="text-sm font-semibold text-muted">{full.common.buttons.cancel}</Text></Pressable>
@@ -1583,7 +1577,7 @@ export function PayrollScreen({
                 <View className="flex-row items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 mb-3">
                   <Search size={16} color={c.faint} />
                   <TextInput value={loanSearch} onChangeText={setLoanSearch} placeholder={t.loanSearchPlaceholder} placeholderTextColor={c.faint}
-                    className="flex-1 text-base text-ink p-0" />
+                    className="flex-1 text-ink p-0" style={{ fontSize: 16 }} />
                 </View>
                 <ScrollView className="flex-1">
                   {loanPickList.length === 0 ? (
@@ -1611,7 +1605,7 @@ export function PayrollScreen({
                   <View className="flex-row items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 mb-3">
                     <Search size={16} color={c.faint} />
                     <TextInput value={loanSearch} onChangeText={setLoanSearch} placeholder={t.loanSearchPlaceholder} placeholderTextColor={c.faint}
-                      className="flex-1 text-base text-ink p-0" />
+                      className="flex-1 text-ink p-0" style={{ fontSize: 16 }} />
                   </View>
                 ) : null}
                 <ScrollView className="flex-1">

@@ -133,8 +133,8 @@ export function BugReportSheet({
                 maxLength={BUG_REPORT_MAX}
                 placeholder={t.placeholder}
                 placeholderTextColor={c.faint}
-                className="rounded-xl border border-border bg-surface px-3 py-3 text-sm text-ink"
-                style={{ minHeight: 120, textAlignVertical: 'top' }}
+                className="rounded-xl border border-border bg-surface px-3 py-3 text-ink"
+                style={[{ fontSize: 14 }, { minHeight: 120, textAlignVertical: 'top' }]}
               />
 
               <Text className="text-xs text-faint mt-2">{t.contextNote}</Text>

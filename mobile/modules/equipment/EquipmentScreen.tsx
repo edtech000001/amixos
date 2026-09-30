@@ -238,8 +238,7 @@ function InlinePicker({
                 placeholderTextColor={c.faint}
                 autoFocus
                 autoCorrect={false}
-                className="flex-1 py-1 text-sm text-ink"
-              />
+                className="flex-1 py-1 text-ink" style={{ fontSize: 14 }} />
             </View>
           ) : null}
           <ScrollView className="max-h-56" nestedScrollEnabled keyboardShouldPersistTaps="handled">
@@ -1019,8 +1018,7 @@ export default function EquipmentScreen() {
             onChangeText={setSearch}
             placeholder={t.searchPlaceholder}
             placeholderTextColor={c.faint}
-            className="flex-1 py-2.5 pl-2 text-sm text-ink"
-          />
+            className="flex-1 py-2.5 pl-2 text-ink" style={{ fontSize: 14 }} />
           {search.length > 0 ? (
             <Pressable onPress={() => setSearch('')} hitSlop={8} className="pl-1">
               <X size={16} color={c.faint} />

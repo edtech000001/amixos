@@ -222,8 +222,7 @@ export function InvoiceRemindersCard({ supabase, businessId, invoiceId, canEdit,
             placeholder={t.notePlaceholder}
             placeholderTextColor={c.faint}
             multiline
-            className="mb-3 rounded-xl border border-border bg-card px-3 py-2.5 text-base text-ink min-h-[64px]"
-          />
+            className="mb-3 rounded-xl border border-border bg-card px-3 py-2.5 text-ink min-h-[64px]" style={{ fontSize: 16 }} />
 
           {error ? <Text className="text-xs text-red-500 mb-2">{error}</Text> : null}
 

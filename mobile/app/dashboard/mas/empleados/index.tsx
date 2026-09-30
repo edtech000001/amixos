@@ -969,8 +969,7 @@ export default function EmpleadosRoute() {
                         keyboardType="decimal-pad"
                         placeholder={t.timesheetModal.hoursPlaceholder}
                         placeholderTextColor={c.faint}
-                        className="flex-1 text-center text-base font-semibold text-ink py-2.5"
-                      />
+                        className="flex-1 text-center font-semibold text-ink py-2.5" style={{ fontSize: 16 }} />
                       <Pressable
                         onPress={() => setHours((tsForm.hours_worked || 0) + 1)}
                         hitSlop={6}
@@ -1035,8 +1034,7 @@ export default function EmpleadosRoute() {
                         onChangeText={setEmpSearch}
                         placeholder={t.timesheetModal.selectEmployee}
                         placeholderTextColor={c.faint}
-                        className="flex-1 py-2.5 pl-2 text-sm text-ink"
-                      />
+                        className="flex-1 py-2.5 pl-2 text-ink" style={{ fontSize: 14 }} />
                     </View>
                   </View>
                   <ScrollView keyboardShouldPersistTaps="handled">

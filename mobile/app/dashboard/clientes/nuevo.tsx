@@ -245,8 +245,8 @@ export default function NuevoClienteRoute() {
             multiline
             numberOfLines={4}
             placeholderTextColor={c.faint}
-            className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[90px]"
-            style={{ textAlignVertical: 'top' }}
+            className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[90px]"
+            style={[{ fontSize: 16 }, { textAlignVertical: 'top' }]}
           />
         </View>
       );
@@ -506,8 +506,8 @@ export default function NuevoClienteRoute() {
               placeholderTextColor={c.faint}
               value={notes}
               onChangeText={setNotes}
-              className="text-sm text-ink py-2"
-              style={{ textAlignVertical: 'top', minHeight: 60 }}
+              className="text-ink py-2"
+              style={[{ fontSize: 14 }, { textAlignVertical: 'top', minHeight: 60 }]}
             />
           </View>
         );

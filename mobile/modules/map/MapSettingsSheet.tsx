@@ -751,8 +751,7 @@ export function MapSettingsSheet({
                                             onChangeText={v => updateRule(layer, idx, { value: v })}
                                             placeholder={t.ruleValuePlaceholder}
                                             placeholderTextColor={c.faint}
-                                            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-ink"
-                                          />
+                                            className="rounded-lg border border-border bg-card px-3 py-2 text-ink" style={{ fontSize: 14 }} />
                                         )}
                                       </View>
                                     </View>
@@ -1100,10 +1099,9 @@ function StylePickerModal({
                   onChangeText={setQuery}
                   placeholder={t.iconSearchPlaceholder}
                   placeholderTextColor={c.faint}
-                  className="flex-1 text-sm text-ink"
+                  className="flex-1 text-ink"
                   autoCorrect={false}
-                  autoCapitalize="none"
-                />
+                  autoCapitalize="none" style={{ fontSize: 14 }} />
                 {query ? (
                   <Pressable onPress={() => setQuery('')} hitSlop={6}>
                     <X size={14} color={c.faint} />

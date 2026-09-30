@@ -276,9 +276,8 @@ export function BillThroughSheet({
                         onChangeText={setQuery}
                         placeholder={t.searchPlaceholder}
                         placeholderTextColor={c.faint}
-                        className="flex-1 py-2.5 text-sm text-ink"
-                        autoCorrect={false}
-                      />
+                        className="flex-1 py-2.5 text-ink"
+                        autoCorrect={false} style={{ fontSize: 14 }} />
                     </View>
                     {results.filter(r => !matches?.some(m => m.id === r.id)).map(r => clientRow(r))}
                     {sourceClientId ? row('copy', () => { setCopyClient(true); setClient(null); setInvoice('new'); setStep('lines'); }, (

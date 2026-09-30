@@ -154,8 +154,7 @@ export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmi
               onChangeText={setTitle}
               placeholder={f.jobTitlePlaceholder}
               placeholderTextColor={c.faint}
-              className="border border-border rounded-xl px-4 py-3 text-base text-ink mb-4"
-            />
+              className="border border-border rounded-xl px-4 py-3 text-ink mb-4" style={{ fontSize: 16 }} />
 
             {/* Location geostamp (auto-captured) */}
             <View className="flex-row items-center gap-2 mb-4 px-3 py-2.5 rounded-xl bg-surface border border-border-soft">
@@ -178,8 +177,7 @@ export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmi
                 onChangeText={setSearch}
                 placeholder={f.clientSearch}
                 placeholderTextColor={c.faint}
-                className="flex-1 px-2 py-3 text-base text-ink"
-              />
+                className="flex-1 px-2 py-3 text-ink" style={{ fontSize: 16 }} />
             </View>
             <View className="border border-border-soft rounded-xl overflow-hidden mb-4 max-h-56">
               <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
@@ -219,8 +217,8 @@ export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmi
               value={notes}
               onChangeText={setNotes}
               multiline
-              className="border border-border rounded-xl px-4 py-3 text-base text-ink mb-4 min-h-[72px]"
-              style={{ textAlignVertical: 'top' }}
+              className="border border-border rounded-xl px-4 py-3 text-ink mb-4 min-h-[72px]"
+              style={[{ fontSize: 16 }, { textAlignVertical: 'top' }]}
             />
 
             {error ? (

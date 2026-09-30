@@ -2728,7 +2728,7 @@ export default function RentalsScreen() {
             <View className="flex-row items-center rounded-2xl border border-border bg-card px-3">
               <Search size={14} color={c.faint} />
               <TextInput value={search} onChangeText={setSearch} placeholder={t.searchPlaceholder}
-                placeholderTextColor={c.faint} className="flex-1 py-2.5 pl-2 text-sm text-ink" />
+                placeholderTextColor={c.faint} className="flex-1 py-2.5 pl-2 text-ink" style={{ fontSize: 14 }} />
               {search.length > 0 ? (
                 <Pressable onPress={() => setSearch('')} hitSlop={8} className="pl-1">
                   <X size={16} color={c.faint} />

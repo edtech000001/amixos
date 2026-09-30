@@ -631,8 +631,7 @@ export default function FacturasPreciosPage() {
                       onChangeText={setEmailPickQuery}
                       placeholder={t.searchClientPlaceholder}
                       placeholderTextColor={c.faint}
-                      className="flex-1 px-2 py-2.5 text-sm text-ink"
-                    />
+                      className="flex-1 px-2 py-2.5 text-ink" style={{ fontSize: 14 }} />
                   </View>
 
                   <ScrollView keyboardShouldPersistTaps="handled">

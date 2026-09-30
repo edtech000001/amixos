@@ -546,8 +546,8 @@ export function InvoiceDesigner({
                 multiline
                 value={value.text[key] ?? ''}
                 onChangeText={txt => onChange(setText(value, key, txt))}
-                className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink"
-                style={{ minHeight: 52, textAlignVertical: 'top' }}
+                className="rounded-xl border border-border bg-card px-3 py-2 text-ink"
+                style={[{ fontSize: 14 }, { minHeight: 52, textAlignVertical: 'top' }]}
               />
             </View>
           ))}

@@ -381,8 +381,8 @@ export default function NuevaFacturaRoute() {
             multiline
             numberOfLines={4}
             placeholderTextColor={c.faint}
-            className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[90px]"
-            style={{ textAlignVertical: 'top' }}
+            className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[90px]"
+            style={[{ fontSize: 16 }, { textAlignVertical: 'top' }]}
           />
         </View>
       );
@@ -760,8 +760,8 @@ export default function NuevaFacturaRoute() {
                     // but cap the height (then it scrolls) so the row can't be
                     // stretched into an endless box.
                     multiline
-                    className="rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-ink"
-                    style={{ minHeight: 40, maxHeight: 120, textAlignVertical: 'top' }}
+                    className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink"
+                    style={[{ fontSize: 14 }, { minHeight: 40, maxHeight: 120, textAlignVertical: 'top' }]}
                   />
                   <View className="flex-row items-end gap-2 mt-2">
                     <View className="flex-1">
@@ -776,8 +776,7 @@ export default function NuevaFacturaRoute() {
                         keyboardType="decimal-pad"
                         placeholder="1"
                         placeholderTextColor={c.faint}
-                        className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink text-center"
-                      />
+                        className="rounded-xl border border-border bg-card px-3 py-2 text-ink text-center" style={{ fontSize: 14 }} />
                     </View>
                     <View className="flex-1">
                       <Text className="text-[10px] text-faint mb-1">{t.colRate}</Text>
@@ -791,8 +790,7 @@ export default function NuevaFacturaRoute() {
                         keyboardType="decimal-pad"
                         placeholder="0.00"
                         placeholderTextColor={c.faint}
-                        className="rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink text-right"
-                      />
+                        className="rounded-xl border border-border bg-card px-3 py-2 text-ink text-right" style={{ fontSize: 14 }} />
                     </View>
                   </View>
                   {/* Total gets its own row: sharing one with qty + price
@@ -835,8 +833,7 @@ export default function NuevaFacturaRoute() {
                     keyboardType="decimal-pad"
                     placeholder="0"
                     placeholderTextColor={c.faint}
-                    className="w-24 rounded-xl border border-border bg-card px-3 py-1.5 text-sm text-ink text-right"
-                  />
+                    className="w-24 rounded-xl border border-border bg-card px-3 py-1.5 text-ink text-right" style={{ fontSize: 14 }} />
                 </View>
                 <View className="flex-row justify-between items-center pt-2 border-t border-border-soft">
                   <Text className="text-base font-bold text-ink">{t.total}</Text>
@@ -891,8 +888,8 @@ export default function NuevaFacturaRoute() {
                           placeholderTextColor={c.faint}
                           multiline
                           numberOfLines={3}
-                          className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[80px]"
-                          style={{ textAlignVertical: 'top' }}
+                          className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[80px]"
+                          style={[{ fontSize: 16 }, { textAlignVertical: 'top' }]}
                         />
                       )}
                     </View>
@@ -913,8 +910,8 @@ export default function NuevaFacturaRoute() {
               placeholderTextColor={c.faint}
               multiline
               numberOfLines={3}
-              className="rounded-2xl border border-border bg-card px-4 py-3 text-base text-ink min-h-[80px]"
-              style={{ textAlignVertical: 'top' }}
+              className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[80px]"
+              style={[{ fontSize: 16 }, { textAlignVertical: 'top' }]}
             />
           </Section>
 
@@ -997,8 +994,7 @@ export default function NuevaFacturaRoute() {
                   placeholder={t.selectClient}
                   placeholderTextColor={c.faint}
                   autoFocus
-                  className="flex-1 py-2.5 pl-2 text-sm text-ink"
-                />
+                  className="flex-1 py-2.5 pl-2 text-ink" style={{ fontSize: 14 }} />
               </View>
             </View>
             <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
