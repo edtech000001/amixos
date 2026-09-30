@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import {
   View, Text, Pressable, TextInput, ScrollView, ActivityIndicator,
-  Modal as RNModal, Platform,
+  Modal as RNModal, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
@@ -77,7 +77,20 @@ export function BugReportSheet({
 
   return (
     <RNModal visible={visible} transparent animationType="fade" onRequestClose={close}>
-      <View className="flex-1 justify-end">
+      {/* KeyboardAvoidingView, not the ScrollView's automaticallyAdjustKeyboardInsets:
+          insets only pad INSIDE the scroll view, which does nothing for a card
+          anchored to the bottom of the screen — the keyboard still covered the
+          whole sheet, title included. Padding the container lifts the card
+          itself. The two must not both be on (see CLAUDE.md), so the inset prop
+          is gone.
+
+          Still the documented sheet structure: plain container with
+          justify-end, absolutely-positioned backdrop FIRST, card as a plain
+          sibling after it. */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1, justifyContent: 'flex-end' }}
+      >
         <Pressable
           style={[SHEET_BACKDROP, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]}
           onPress={close}
@@ -100,11 +113,6 @@ export function BugReportSheet({
           ) : (
             <ScrollView
               keyboardShouldPersistTaps="handled"
-              // The field is multiline and Send sits below it, so the keyboard
-              // covers both. Insets scroll the focused input into view; a
-              // bottom sheet has no room to re-centre the way a full screen
-              // does.
-              automaticallyAdjustKeyboardInsets
               keyboardDismissMode="interactive"
             >
               <Text className="text-sm text-muted mb-3">{t.subtitle}</Text>
@@ -145,7 +153,7 @@ export function BugReportSheet({
             </ScrollView>
           )}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </RNModal>
   );
 }
