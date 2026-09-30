@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { createSupabaseAdminClient } from '@/lib/supabase-admin';
-import { stripe } from '@/lib/stripe';
+import { stripe, stripeLocaleFor, syncCustomerLocale } from '@/lib/stripe';
 import { priceIdFor } from '@/lib/billingPrices';
 import type { BillingPeriod, PlanKey } from '@amixos/shared/lib/plans';
 
@@ -67,11 +67,15 @@ export async function POST(req: Request) {
     if (!biz) return NextResponse.json({ error: 'Business not found' }, { status: 404 });
 
     // Reuse or create the Stripe customer for this business.
+    const locale = stripeLocaleFor(user);
     let customerId = biz.stripe_customer_id as string | null;
-    if (!customerId) {
+    if (customerId) {
+      await syncCustomerLocale(customerId, locale);
+    } else {
       const customer = await stripe.customers.create({
         email: user.email ?? undefined,
         name: biz.name ?? undefined,
+        preferred_locales: [locale],
         metadata: { business_id: businessId, user_id: user.id },
       });
       customerId = customer.id;
@@ -91,6 +95,7 @@ export async function POST(req: Request) {
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
+      locale,
       line_items: [{ price: priceId, quantity: 1 }],
       client_reference_id: businessId,
       subscription_data: {

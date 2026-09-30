@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { createSupabaseAdminClient } from '@/lib/supabase-admin';
-import { stripe } from '@/lib/stripe';
+import { stripe, stripeLocaleFor, syncCustomerLocale } from '@/lib/stripe';
 
 // POST /api/billing/portal — open the Stripe Billing Portal so an owner/admin
 // can update the card, switch plan, or cancel. Body: { businessId }.
@@ -53,8 +53,11 @@ export async function POST(req: Request) {
     }
 
     const origin = req.headers.get('origin') ?? new URL(req.url).origin;
+    const locale = stripeLocaleFor(user);
+    await syncCustomerLocale(biz.stripe_customer_id, locale);
     const session = await stripe.billingPortal.sessions.create({
       customer: biz.stripe_customer_id,
+      locale,
       return_url: `${origin}/dashboard/ajustes?tab=cuenta`,
     });
 
