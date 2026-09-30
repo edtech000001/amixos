@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 import { stripe } from '@/lib/stripe';
 import { createSupabaseAdminClient } from '@/lib/supabase-admin';
+import { planForPriceId } from '@/lib/billingPrices';
 
 // Stripe needs the raw, unparsed body to verify the signature.
 export const runtime = 'nodejs';
@@ -32,8 +33,19 @@ export async function POST(req: Request) {
   const syncSubscription = async (sub: Stripe.Subscription) => {
     const businessId = sub.metadata?.business_id;
     if (!businessId) return;
-    const plan = sub.metadata?.plan ?? null;
-    const period = sub.metadata?.period ?? null;
+    // The plan comes from the PRICE being paid for, not the metadata: metadata
+    // is stamped once at checkout, and a plan switch in the Stripe Billing
+    // Portal changes the price but never touches it — so an upgraded customer
+    // kept their old plan's limits (e.g. seats) while paying for the new one.
+    // Metadata stays as the fallback for a price we don't recognise (a custom
+    // 'empresa' price created by hand in Stripe).
+    const priceId = sub.items?.data?.[0]?.price?.id ?? null;
+    const fromPrice = planForPriceId(priceId);
+    if (!fromPrice && priceId) {
+      console.warn('[billing/webhook] unrecognised price, falling back to metadata', priceId, businessId);
+    }
+    const plan = fromPrice?.plan ?? sub.metadata?.plan ?? null;
+    const period = fromPrice?.period ?? sub.metadata?.period ?? null;
     // current_period_end moved off the top-level Subscription onto its items in
     // recent Stripe API versions — read either, tolerate absence.
     const subAny = sub as unknown as {

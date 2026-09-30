@@ -26,3 +26,16 @@ export function priceIdFor(plan: PlanKey, period: BillingPeriod): string | null 
   if (plan === 'empresa') return null;
   return PRICE_ENV[plan]?.[period] ?? null;
 }
+
+/** Reverse of priceIdFor: which plan + period a Stripe Price id is. Null for a
+ *  price that isn't one of the 8 configured ones (e.g. a custom 'empresa'
+ *  deal set up by hand in Stripe). */
+export function planForPriceId(priceId: string | null | undefined): { plan: PlanKey; period: BillingPeriod } | null {
+  if (!priceId) return null;
+  for (const [plan, periods] of Object.entries(PRICE_ENV) as [Exclude<PlanKey, 'empresa'>, Record<BillingPeriod, string | undefined>][]) {
+    for (const [period, id] of Object.entries(periods) as [BillingPeriod, string | undefined][]) {
+      if (id && id === priceId) return { plan, period };
+    }
+  }
+  return null;
+}
