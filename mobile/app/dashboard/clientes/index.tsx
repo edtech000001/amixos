@@ -84,13 +84,18 @@ export default function ClientesTab() {
   const [loadError, setLoadError] = useState(false);
   const loadSeqRef = useRef(0);
   const cursorRef = useRef<ClientsCursor | null>(null);
-  const paramsRef = useRef<{ businessId: string; search: string } | null>(null);
+  const paramsRef = useRef<{ businessId: string; search: string; startAtLetter?: string | null } | null>(null);
   const loadAllRef = useRef(false);
+  // A letter jump replaces the first page with one starting elsewhere, so the
+  // view is no longer the default that SWR caches. Without this, the cached
+  // first page is restored on the next focus/revalidate and the jump silently
+  // undoes itself.
+  const [jumpLetter, setJumpLetter] = useState<string | null>(null);
 
   // ── SWR default view (no search, name grouping): instant from cache ───────
   const [filters, setFilters] = useState<{ search: string; groupBy: string } | null>(null);
   const isDefaultFilters = (f: { search: string; groupBy: string }) => !f.search && !clientGroupNeedsAll(f.groupBy);
-  const defaultActive = !!business && !!filters && isDefaultFilters(filters);
+  const defaultActive = !!business && !!filters && isDefaultFilters(filters) && !jumpLetter;
 
   // Branch scoping: clients restricted to OTHER branches are hidden (small set).
   const excludeIds = useMemo(() => {
@@ -115,7 +120,10 @@ export default function ClientesTab() {
     void fetchClientLocations(supabase, business.id).then(setClientLocations).catch(() => {});
   };
 
-  const runQuery = async (base: { businessId: string; search: string }, loadAll = false) => {
+  const runQuery = async (
+    base: { businessId: string; search: string; startAtLetter?: string | null },
+    loadAll = false,
+  ) => {
     const seq = ++loadSeqRef.current;
     paramsRef.current = base;
     loadAllRef.current = loadAll;
@@ -211,6 +219,7 @@ export default function ClientesTab() {
   const handleFiltersChange = (f: { search: string; groupBy: string }) => {
     if (!business) return;
     setFilters(f);
+    setJumpLetter(null); // searching or regrouping starts from the top again
     if (isDefaultFilters(f)) return; // SWR owns the default view
     void runQuery({ businessId: business.id, search: f.search }, clientGroupNeedsAll(f.groupBy));
   };
@@ -351,6 +360,14 @@ export default function ClientesTab() {
     <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       <LocationSwitcher />
       <ClientsListScreen
+        onJumpToLetter={letter => {
+          const base = paramsRef.current ?? (business ? { businessId: business.id, search: '' } : null);
+          if (!base) return;
+          setJumpLetter(letter);
+          // Same search, new starting point. loadAll stays false: a jump only
+          // makes sense in the paged alphabetical mode.
+          void runQuery({ ...base, startAtLetter: letter }, false);
+        }}
         loading={loading}
         clients={items}
         customFieldTemplates={templates}

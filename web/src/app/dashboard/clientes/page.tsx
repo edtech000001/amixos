@@ -125,13 +125,16 @@ export default function ClientesPage() {
   const cursorRef = useRef<ClientsCursor | null>(null);
   // The last base params (search) so a re-run (branch switch, mutation) reuses
   // them; excludeIds is injected fresh each call from the ref below.
-  const paramsRef = useRef<{ businessId: string; search: string } | null>(null);
+  const paramsRef = useRef<{ businessId: string; search: string; startAtLetter?: string | null } | null>(null);
+  // See the mobile route: a jump replaces the first page, so SWR must stop
+  // owning the view or the cached page is restored on the next revalidate.
+  const [jumpLetter, setJumpLetter] = useState<string | null>(null);
   const loadAllRef = useRef(false);
 
   // ── SWR default view (no search, name grouping): instant from cache ───────
   const [filters, setFilters] = useState<{ search: string; groupBy: string } | null>(null);
   const isDefaultFilters = (f: { search: string; groupBy: string }) => !f.search && !clientGroupNeedsAll(f.groupBy);
-  const defaultActive = !!business && !!filters && isDefaultFilters(filters);
+  const defaultActive = !!business && !!filters && isDefaultFilters(filters) && !jumpLetter;
 
   // Branch scoping: clients restricted to OTHER branches are hidden. Restricted
   // clients (any link) minus those at the active branch. Small set (only
@@ -157,7 +160,10 @@ export default function ClientesPage() {
   };
   useEffect(() => { void loadMeta(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [business, locale]);
 
-  const runQuery = async (base: { businessId: string; search: string }, loadAll = false) => {
+  const runQuery = async (
+    base: { businessId: string; search: string; startAtLetter?: string | null },
+    loadAll = false,
+  ) => {
     const seq = ++loadSeqRef.current;
     paramsRef.current = base;
     loadAllRef.current = loadAll;
@@ -266,6 +272,7 @@ export default function ClientesPage() {
   const handleFiltersChange = (f: { search: string; groupBy: string }) => {
     if (!business) return;
     setFilters(f);
+    setJumpLetter(null); // searching or regrouping starts from the top again
     if (isDefaultFilters(f)) return; // SWR owns the default view
     void runQuery({ businessId: business.id, search: f.search }, clientGroupNeedsAll(f.groupBy));
   };
@@ -600,6 +607,12 @@ export default function ClientesPage() {
       loadingMore={loadingMore}
       onLoadMore={loadMore}
       onFiltersChange={handleFiltersChange}
+      onJumpToLetter={letter => {
+        const base = paramsRef.current ?? (business ? { businessId: business.id, search: '' } : null);
+        if (!base) return;
+        setJumpLetter(letter);
+        void runQuery({ ...base, startAtLetter: letter }, false);
+      }}
     />
   );
 }

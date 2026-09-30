@@ -25,8 +25,8 @@ import { fullNameOrArms } from './nameSearch';
 type AnySupabase = { from: (table: string) => any };
 
 export interface ClientsCursor {
-  lastName: string;
   firstName: string;
+  lastName: string;
   id: string;
 }
 
@@ -39,6 +39,11 @@ export interface ClientsQueryParams {
   excludeIds?: string[];
   /** Keyset cursor from the previous page's last row; null for the first page. */
   cursor?: ClientsCursor | null;
+  /** Start the page at this section letter — 'A'–'Z', or '#' for names that do
+   *  not begin with a letter. Powers the A–Z index, which otherwise can only
+   *  reach letters that happen to be in the loaded pages. Ignored when a
+   *  cursor is supplied (paging within an already-jumped-to letter). */
+  startAtLetter?: string | null;
   pageSize?: number;
 }
 
@@ -118,16 +123,28 @@ export async function fetchClientsPage<T extends { id: string; first_name: strin
 
   if (params.cursor) {
     const c = params.cursor;
-    const ln = quoteVal(c.lastName);
     const fn = quoteVal(c.firstName);
+    const ln = quoteVal(c.lastName);
     q = q.or(
-      `last_name.gt.${ln},` +
-      `and(last_name.eq.${ln},first_name.gt.${fn}),` +
-      `and(last_name.eq.${ln},first_name.eq.${fn},id.gt.${c.id})`,
+      `first_name.gt.${fn},` +
+      `and(first_name.eq.${fn},last_name.gt.${ln}),` +
+      `and(first_name.eq.${fn},last_name.eq.${ln},id.gt.${c.id})`,
     );
+  } else if (params.startAtLetter) {
+    // '#' is everything that does not start with a letter. Those sort before
+    // 'A', so the bucket is exactly `< 'A'` — and because it is a closed range
+    // rather than an open one, tapping '#' shows that group alone instead of
+    // the whole list.
+    q = params.startAtLetter === '#'
+      ? q.lt('first_name', 'A')
+      : q.gte('first_name', params.startAtLetter);
   }
 
-  q = q.order('last_name', { ascending: true }).order('first_name', { ascending: true })
+  // Ordered by first_name to match how the list actually groups rows —
+  // clientSectionLetter() reads the first character of "first last", so paging
+  // by last_name handed back pages that had to be re-sorted on arrival and
+  // could never line up with the A–Z index.
+  q = q.order('first_name', { ascending: true }).order('last_name', { ascending: true })
     .order('id', { ascending: true }).limit(pageSize);
 
   const { data, error } = await q;
@@ -136,7 +153,7 @@ export async function fetchClientsPage<T extends { id: string; first_name: strin
   const last = clients[clients.length - 1] as any;
   const nextCursor =
     clients.length === pageSize && last
-      ? { lastName: last.last_name, firstName: last.first_name, id: last.id }
+      ? { firstName: last.first_name, lastName: last.last_name, id: last.id }
       : null;
   return { clients, nextCursor };
 }

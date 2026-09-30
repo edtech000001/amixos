@@ -94,7 +94,17 @@ export interface ClientsListScreenProps {
   loadError?: boolean;
   onRetryLoad?: () => void;
   onFiltersChange?: (f: { search: string; groupBy: ClientGroupKey }) => void;
+  /** Server mode only: reload the list starting at `letter` ('#' = names that
+   *  do not begin with A–Z). Without this the A–Z index can only reach rows
+   *  that happen to be loaded, which with 50-row pages is the first two or
+   *  three letters. */
+  onJumpToLetter?: (letter: string) => void;
 }
+
+/** The index is the whole alphabet in server mode, not just the letters that
+ *  turned up in the loaded pages — the point of the control is to reach rows
+ *  you have NOT loaded. '#' collects anything not starting with A–Z. */
+const FULL_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').concat('#');
 
 type Section = ClientSection<ClientListItem>;
 
@@ -135,6 +145,7 @@ export function ClientsListScreen({
   loadError = false,
   onRetryLoad,
   onFiltersChange,
+  onJumpToLetter,
 }: ClientsListScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.clients;
@@ -213,9 +224,10 @@ export function ClientsListScreen({
     () => groupClients(filtered, groupBy, searching, { emptyLabel, formatState: s => usStateName(s, locale) }),
     [filtered, groupBy, searching, emptyLabel, locale],
   );
+  const serverJump = serverMode && !!onJumpToLetter;
   const letters = useMemo(
-    () => sections.map(s => s.title).filter(Boolean),
-    [sections],
+    () => (serverJump ? FULL_ALPHABET : sections.map(s => s.title).filter(Boolean)),
+    [serverJump, sections],
   );
 
   // Selection mode: entered via the header Seleccionar button (same pattern
@@ -332,9 +344,20 @@ export function ClientsListScreen({
   );
 
   const jumpToLetterIndex = (letterIdx: number) => {
-    const target = headerIndexByLetter.get(letters[letterIdx]);
-    if (target == null) return;
-    listRef.current?.scrollToIndex({ index: target, viewPosition: 0, animated: false });
+    const letter = letters[letterIdx];
+    const target = headerIndexByLetter.get(letter);
+    if (target != null) {
+      listRef.current?.scrollToIndex({ index: target, viewPosition: 0, animated: false });
+      return;
+    }
+    // Not in the loaded pages. In server mode that is the normal case for most
+    // of the alphabet, so refetch from there and go back to the top — the new
+    // first row IS the letter. Client-side mode has everything loaded already,
+    // so a miss there means the letter genuinely has no clients: do nothing
+    // rather than scrolling somewhere arbitrary.
+    if (!serverJump) return;
+    onJumpToLetter?.(letter);
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
   };
 
   // Leading list row — title, search, bulk bar, and the loading / empty
