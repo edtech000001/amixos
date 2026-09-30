@@ -97,8 +97,10 @@ export function ForgotPasswordScreen({ onResetEmail, onBackToLogin, captchaSlot 
               </View>
             ) : (
               <>
-                <Text className="text-xl font-semibold text-ink mb-2">{t.forgot.heading}</Text>
-                <Text className="text-sm text-muted mb-6">{t.forgot.sub}</Text>
+                <Text className="text-xl font-semibold text-ink text-center mb-2">
+                  {t.forgot.heading}
+                </Text>
+                <Text className="text-sm text-muted text-center mb-6">{t.forgot.sub}</Text>
 
                 <View className="flex-col gap-4">
                   <Controller
@@ -112,6 +114,7 @@ export function ForgotPasswordScreen({ onResetEmail, onBackToLogin, captchaSlot 
                         autoComplete="email"
                         placeholder={t.forgot.emailPlaceholder}
                         leftIcon={<Mail size={18} color={c.faint} />}
+                        centerText
                         error={errors.email?.message}
                         value={value ?? ''}
                         onChangeText={onChange}

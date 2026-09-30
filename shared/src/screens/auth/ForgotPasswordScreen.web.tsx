@@ -55,8 +55,8 @@ export function ForgotPasswordScreen({ onResetEmail, onBackToLogin, captchaSlot 
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/5 to-white flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-gray-100 p-8">
-        <h1 className="text-3xl font-bold text-gray-900">{t.forgot.heading}</h1>
-        <p className="text-sm text-gray-500 mt-1 mb-8">{t.forgot.tagline}</p>
+        <h1 className="text-3xl font-bold text-gray-900 text-center">{t.forgot.heading}</h1>
+        <p className="text-sm text-gray-500 mt-1 mb-8 text-center">{t.forgot.tagline}</p>
 
         {success ? (
           <div className="flex flex-col items-center gap-4 py-6">
@@ -72,7 +72,7 @@ export function ForgotPasswordScreen({ onResetEmail, onBackToLogin, captchaSlot 
           </div>
         ) : (
           <>
-            <p className="text-sm text-gray-500 mb-6">{t.forgot.sub}</p>
+            <p className="text-sm text-gray-500 mb-6 text-center">{t.forgot.sub}</p>
             <form onSubmit={onSubmit} className="flex flex-col gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.forgot.email}</label>
@@ -83,7 +83,7 @@ export function ForgotPasswordScreen({ onResetEmail, onBackToLogin, captchaSlot 
                     autoComplete="email"
                     placeholder={t.forgot.emailPlaceholder}
                     {...register('email')}
-                    className={`w-full rounded-xl border bg-white pl-10 pr-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary ${
+                    className={`w-full rounded-xl border bg-white px-10 py-3 text-sm text-center text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary ${
                       errors.email ? 'border-red-300' : 'border-gray-200'
                     }`}
                   />

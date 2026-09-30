@@ -16,15 +16,21 @@ interface InputProps extends TextInputProps {
   // text — tapping it calls onClear. Used for search bars.
   onClear?: () => void;
   containerClassName?: string;
+  /** Centre the FIELD's text within the BOX (the label stays left-aligned).
+   *  A left icon sits outside the TextInput's flex-1 track, so plain
+   *  textAlign:'center' lands the text right of centre by the icon's width —
+   *  this measures the icon and mirrors it as a spacer on the other side. */
+  centerText?: boolean;
 }
 
 export const Input = forwardRef<TextInput, InputProps>(function Input(
-  { label, error, hint, leftIcon, rightIcon, onClear, containerClassName, className, editable = true, onFocus, onBlur, ...rest },
+  { label, error, hint, leftIcon, rightIcon, onClear, containerClassName, className, centerText, editable = true, onFocus, onBlur, ...rest },
   ref,
 ) {
   const c = useThemeColors();
   const showClear = !!onClear && typeof rest.value === 'string' && rest.value.length > 0;
   const [focused, setFocused] = useState(false);
+  const [iconWidth, setIconWidth] = useState(0);
 
   const handleFocus = (e: NativeSyntheticEvent<TextInputFocusEventData>) => {
     setFocused(true);
@@ -58,7 +64,14 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
           elevation: 1,
         }}
       >
-        {leftIcon && <View className="mr-3">{leftIcon}</View>}
+        {leftIcon && (
+          <View
+            className="mr-3"
+            onLayout={centerText ? e => setIconWidth(e.nativeEvent.layout.width) : undefined}
+          >
+            {leftIcon}
+          </View>
+        )}
         <TextInput
           ref={ref}
           editable={editable}
@@ -69,8 +82,14 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
             'flex-1 py-3.5 text-base text-ink',
             className,
           )}
+          textAlign={centerText ? 'center' : undefined}
           {...rest}
         />
+        {/* Mirrors the left icon (its width + the mr-3 gap) so the centred
+            text is centred on the BOX, not on the leftover track. */}
+        {centerText && leftIcon && !showClear && !rightIcon ? (
+          <View style={{ width: iconWidth + 12 }} />
+        ) : null}
         {showClear ? (
           <Pressable onPress={onClear} hitSlop={8} accessibilityLabel="Clear" className="ml-2">
             <X size={16} color={c.faint} />
