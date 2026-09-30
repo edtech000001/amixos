@@ -24,6 +24,8 @@ import crypto from 'crypto';
 import Stripe from 'stripe';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { supabase } from '../config/supabase';
+import { sendEmail } from '../lib/email';
+import { lapsedDeletionHtml, lapsedDeletionSubject, lapsedDeletionText } from '../lib/emails/lapsedDeletion';
 
 export const accountRouter = Router();
 
@@ -244,6 +246,11 @@ accountRouter.post('/purge-due', async (req, res) => {
   const secretOk = gotBuf.length === expectedBuf.length && crypto.timingSafeEqual(gotBuf, expectedBuf);
   if (!secretOk) return res.status(401).json({ success: false, message: 'invalid cron secret' });
 
+  // Lapsed businesses (migration 243): schedule the ones ~11 months unpaid,
+  // un-schedule any that paid again, and send the 30/7/1-day warnings. Runs
+  // BEFORE the purge below so a business due today is handled by the same run.
+  const lapse = await sweepLapsedBusinesses();
+
   // Businesses about to disappear: the ones scheduled directly, plus those
   // owned by an account whose window has closed.
   const nowIso = new Date().toISOString();
@@ -288,5 +295,57 @@ accountRouter.post('/purge-due', async (req, res) => {
     businessesPurged: ((purgedBiz ?? []) as unknown[]).length,
     accountsPurged: ((purgedUsers ?? []) as unknown[]).length,
     filesRemoved,
+    lapsedNoticesSent: lapse.sent,
+    lapsedNoticesFailed: lapse.failed,
   });
 });
+
+/**
+ * The lapsed-business half of the daily job. The SQL function does the
+ * scheduling and says which warnings are due; this sends them to each
+ * business OWNER and records the ones that went out — a failed send stays
+ * unrecorded and is retried tomorrow. Never throws: before migration 243 runs
+ * the RPC doesn't exist, and that must not break the account purge.
+ */
+async function sweepLapsedBusinesses(): Promise<{ sent: number; failed: number }> {
+  const { data, error } = await supabase.rpc('sweep_lapsed_businesses');
+  if (error) {
+    console.warn('[purge-due] lapsed sweep skipped:', error.message);
+    return { sent: 0, failed: 0 };
+  }
+  const frontendUrl = (process.env.FRONTEND_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+  const renewUrl = `${frontendUrl}/dashboard/ajustes?tab=cuenta`;
+  let sent = 0;
+  let failed = 0;
+  for (const row of (data ?? []) as {
+    business_id: string; business_name: string | null; owner_id: string | null; purge_after: string; notice_days: number;
+  }[]) {
+    if (!row.owner_id) continue;
+    const { data: owner } = await supabase.auth.admin.getUserById(row.owner_id);
+    const user = owner?.user;
+    if (!user?.email) continue;
+    const email = user.email;
+    const locale = (user.user_metadata as { locale?: string } | undefined)?.locale ?? null;
+    const mail = {
+      businessName: row.business_name,
+      days: row.notice_days,
+      purgeAfter: new Date(row.purge_after),
+      renewUrl,
+      locale,
+    };
+    const res = await sendEmail({
+      to: email,
+      subject: lapsedDeletionSubject(mail),
+      html: lapsedDeletionHtml(mail),
+      text: lapsedDeletionText(mail),
+    });
+    if (res.ok) {
+      sent++;
+      await supabase.rpc('mark_lapse_notice_sent', { p_business_id: row.business_id, p_days: row.notice_days });
+    } else {
+      failed++;
+      console.warn('[purge-due] lapse notice not sent', row.business_id, res.reason);
+    }
+  }
+  return { sent, failed };
+}

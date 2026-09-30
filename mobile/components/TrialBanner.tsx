@@ -22,6 +22,7 @@ export function TrialBanner() {
   const router = useRouter();
   const c = useThemeColors();
   const business = useAuthStore((s) => s.business);
+  const currentRole = useAuthStore((s) => s.currentRole);
 
   if (!business) return null;
 
@@ -37,7 +38,10 @@ export function TrialBanner() {
   // Additional businesses (no trial granted) land at 'none' — prompt to pick a
   // plan instead of leaving them silently un-activated.
   const needsPlan = sub.subscription_status === 'none';
-  if (!trialing && !expired && !needsPlan) return null;
+  // Card payment failed (Stripe is retrying; access continues meanwhile).
+  // Only owners/admins can fix billing, so only they see it.
+  const pastDue = sub.subscription_status === 'past_due' && (currentRole === 'owner' || currentRole === 'admin');
+  if (!trialing && !expired && !needsPlan && !pastDue) return null;
 
   // iOS: App Store guideline 3.1.1 bars in-app links to an external purchase
   // flow for digital subs — navigate INTERNALLY to the account screen instead.
@@ -52,6 +56,21 @@ export function TrialBanner() {
     ).catch(() => {});
   };
 
+  if (pastDue) {
+    return (
+      <Pressable
+        onPress={open}
+        className="mx-4 mb-3 flex-row items-center gap-2.5 rounded-2xl border border-red-300 bg-red-500/10 px-4 py-3 active:opacity-80"
+      >
+        <AlertTriangle size={18} color={c.danger} />
+        <Text className="flex-1 text-sm font-semibold text-red-700">
+          {en
+            ? "We couldn't charge your subscription · Update your card to keep access"
+            : 'No pudimos cobrar tu suscripción · Actualiza tu tarjeta para no perder el acceso'}
+        </Text>
+      </Pressable>
+    );
+  }
   if (expired || needsPlan) {
     return (
       <Pressable

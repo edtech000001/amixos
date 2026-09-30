@@ -3244,7 +3244,7 @@ export default function AjustesPage() {
                   <h2 className="text-base font-semibold text-ink mb-1">{t.account.businessesHeading}</h2>
                   <Button
                     variant="secondary"
-                    onClick={() => router.push('/onboarding')}
+                    onClick={() => router.push('/onboarding?adding=1')}
                     className="shrink-0 flex items-center gap-1.5"
                   >
                     <Plus size={16} />

@@ -192,7 +192,20 @@ export function OnboardingScreen({ onPickLogo, onFinish, onLogout, onCancel, onD
       {/* Escape hatch — mirrors OnboardingScreen.tsx. Without it there is no
           way off this screen: no nav, no sign out, and the account may not be
           the one the user meant to use. */}
-      {(onCancel || onLogout || onDeleteAccount) && (
+      {/* Adding ANOTHER business (onCancel): signed in, with a business to go
+          back to — a plain back arrow, no sign-out/delete. */}
+      {onCancel ? (
+        <div className="w-full max-w-lg flex items-center mb-4">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex items-center gap-1 -ml-2 px-2 py-1.5 rounded-lg text-sm font-semibold text-ink hover:bg-border-soft transition-colors"
+          >
+            <ChevronLeft size={18} />
+            {full.common.buttons.back}
+          </button>
+        </div>
+      ) : (onLogout || onDeleteAccount) && (
         <div className="w-full max-w-lg flex justify-end items-center gap-2 mb-4">
           {/* Deletion only on the sign-out variant: with onCancel the user
               still HAS a business to go back to, and that deletion belongs in

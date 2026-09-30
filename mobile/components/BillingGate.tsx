@@ -119,6 +119,13 @@ export function BillingGate() {
           {business.name}
         </Text>
         <Text className="text-base text-muted text-center mt-2">{body}</Text>
+        {/* Retention policy (migration 243) — said up front, so the warning
+            emails 11 months from now aren't the first they hear of it. */}
+        <Text className="text-xs text-faint text-center mt-2">
+          {en
+            ? 'We keep your data for 12 months after your subscription ends. Renew any time and everything is right where you left it.'
+            : 'Guardamos tu información 12 meses después de que termina tu suscripción. Renueva en cualquier momento y todo sigue igual.'}
+        </Text>
 
         {isAdmin ? (
           <Pressable

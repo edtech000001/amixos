@@ -64,6 +64,22 @@ export async function POST(req: Request) {
         current_period_end: periodEndUnix ? new Date(periodEndUnix * 1000).toISOString() : null,
       })
       .eq('id', businessId);
+    await trackLapse(businessId, sub.status);
+  };
+
+  // 12-month retention clock (migration 243). Kept OUT of the update above on
+  // purpose: before 243 runs the column doesn't exist, and one unknown column
+  // would fail the whole status sync. These are best-effort — errors ignored.
+  const trackLapse = async (businessId: string, status: string) => {
+    if (status === 'active' || status === 'past_due' || status === 'trialing') {
+      // Access is back: stop the clock and cancel any lapsed-deletion schedule.
+      await admin.from('businesses').update({ lapsed_at: null }).eq('id', businessId);
+      await admin.from('business_deletions').delete().eq('business_id', businessId).eq('lapsed', true);
+    } else {
+      // Access ended: start the clock — once; a later event mustn't reset it.
+      await admin.from('businesses').update({ lapsed_at: new Date().toISOString() })
+        .eq('id', businessId).is('lapsed_at', null);
+    }
   };
 
   try {
@@ -80,6 +96,7 @@ export async function POST(req: Request) {
             .from('businesses')
             .update({ subscription_status: 'canceled' })
             .eq('id', businessId);
+          await trackLapse(businessId, 'canceled');
         }
         break;
       }

@@ -3742,7 +3742,7 @@ export function AccountSection() {
 
         {/* Create another business — reuses the existing onboarding flow. */}
         <Pressable
-          onPress={() => router.push('/onboarding')}
+          onPress={() => router.push('/onboarding?adding=1' as never)}
           className="flex-row items-center gap-3 px-4 py-3 rounded-xl border border-primary/20 bg-primary/5 active:opacity-70"
         >
           <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center shrink-0">

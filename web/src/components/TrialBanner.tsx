@@ -12,10 +12,12 @@ import { useLang } from '@/i18n/LangProvider';
 
 const SETTINGS_HREF = '/dashboard/ajustes?tab=cuenta';
 
-// Slim banner shown ONLY while the active business is trialing or its trial
-// has expired. Active / past_due / canceled / none → renders nothing.
+// Slim banner shown while the active business is trialing, its trial has
+// expired, it has no plan yet, or its card payment FAILED (past_due — Stripe is
+// retrying; access continues meanwhile). Active / canceled → nothing (canceled
+// is handled by BillingGate).
 export function TrialBanner() {
-  const { business } = useApp();
+  const { business, currentRole } = useApp();
   const { locale } = useLang();
   const es = locale === 'es';
 
@@ -35,6 +37,22 @@ export function TrialBanner() {
   // plan instead of leaving them in a silent un-activated state.
   const needsPlan = sub.subscription_status === 'none';
 
+  // Card payment failed. Only owners/admins can fix billing, so only they see
+  // it — no point alarming the crew. Nothing else told them until Stripe gave
+  // up and the business locked.
+  const pastDue = sub.subscription_status === 'past_due' && (currentRole === 'owner' || currentRole === 'admin');
+  if (pastDue) {
+    return (
+      <Link
+        href={SETTINGS_HREF}
+        className="block px-4 py-2 text-center text-sm font-semibold transition-colors bg-red-500/10 text-red-700 hover:bg-red-100 border-b border-red-200"
+      >
+        {es
+          ? 'No pudimos cobrar tu suscripción · Actualiza tu tarjeta para no perder el acceso'
+          : "We couldn't charge your subscription · Update your card to keep access"}
+      </Link>
+    );
+  }
   if (!trialing && !expired && !needsPlan) return null;
 
   const attention = expired || needsPlan;

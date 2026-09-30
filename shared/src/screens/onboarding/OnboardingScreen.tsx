@@ -306,7 +306,21 @@ export function OnboardingScreen({ onPickLogo, onFinish, onLogout, onCancel, onD
     >
       {/* Escape hatch — sign out / use a different account. Onboarding has no
           other way back to login for a wrong-provider sign-in. */}
-      {(onCancel || onLogout || onDeleteAccount) && (
+      {/* Adding ANOTHER business (onCancel): the user is signed in with a
+          business to go back to — a plain back arrow, no sign-out/delete. */}
+      {onCancel ? (
+        <View className="w-full max-w-lg flex-row items-center mb-4">
+          <Pressable
+            onPress={onCancel}
+            hitSlop={12}
+            accessibilityLabel={full.common.buttons.back}
+            className="flex-row items-center gap-1 -ml-2 py-2 pr-3 rounded-lg active:opacity-60"
+          >
+            <ChevronLeft size={22} color={c.ink} />
+            <Text className="text-base font-semibold text-ink">{full.common.buttons.back}</Text>
+          </Pressable>
+        </View>
+      ) : (onLogout || onDeleteAccount) && (
         <View className="w-full max-w-lg flex-row justify-end items-center gap-2 mb-4">
           {/* Deleting the account is only offered on the sign-out variant: with
               onCancel the user still HAS a business to go back to, and that

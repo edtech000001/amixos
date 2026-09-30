@@ -91,6 +91,13 @@ export function BillingGate() {
             OTHER business) reads as "you're still on that one". */}
         <p className="mt-1 text-base font-semibold text-primary">{business.name}</p>
         {body && <p className="mt-2 text-sm text-muted">{body}</p>}
+        {/* Retention policy (migration 243) — said up front, so the warning
+            emails 11 months from now aren't the first they hear of it. */}
+        <p className="mt-2 text-xs text-faint">
+          {es
+            ? 'Guardamos tu información 12 meses después de que termina tu suscripción. Renueva en cualquier momento y todo sigue igual.'
+            : 'We keep your data for 12 months after your subscription ends. Renew any time and everything is right where you left it.'}
+        </p>
 
         {canManage ? (
           <Button variant="primary" fullWidth className="mt-6" onClick={() => setOpen(true)}>

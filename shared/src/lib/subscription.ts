@@ -65,8 +65,14 @@ export function isTrialExpired(s: SubscriptionInfo, now = Date.now()): boolean {
   return s.subscription_status === 'trialing' && !isInTrial(s, now);
 }
 
-/** The active paid plan key, or null while trialing / unsubscribed. */
+/** The active paid plan key, or null while trialing / lapsed / unsubscribed.
+ *  Mirrors activePlanKey() in api/src/lib/planLimits.ts — the app and the
+ *  server must agree on seat limits. (This list used to omit 'corporativo',
+ *  so a 40-seat Corporativo business showed no plan and the app capped
+ *  invites at the 10-seat trial allowance while the API allowed 40.) */
 export function activePlanKey(s: SubscriptionInfo): PlanKey | null {
-  const valid: PlanKey[] = ['basico', 'profesional', 'negocio', 'empresa'];
-  return s.plan && (valid as string[]).includes(s.plan) ? (s.plan as PlanKey) : null;
+  const live = s.subscription_status === 'active' || s.subscription_status === 'past_due';
+  if (!live || !s.plan) return null;
+  const valid: PlanKey[] = ['basico', 'profesional', 'negocio', 'corporativo', 'empresa'];
+  return (valid as string[]).includes(s.plan) ? (s.plan as PlanKey) : null;
 }
