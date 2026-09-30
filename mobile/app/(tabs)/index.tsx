@@ -22,6 +22,7 @@ import {
 } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import type { SplashSlide } from '@amixos/shared';
+import { Logo } from '@amixos/shared/ui/Logo';
 
 const ICONS: Record<SplashSlide['key'], LucideIcon> = {
   welcome: Sparkles,
@@ -85,22 +86,10 @@ export default function SplashScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-card" edges={['top', 'bottom']}>
+      {/* Real wordmark, not the old "a"-in-a-box placeholder. Ink follows the
+         theme so it stays readable on both palettes. */}
       <View className="items-center pt-4 pb-2">
-        <View
-          className="w-16 h-16 rounded-2xl bg-primary/10 items-center justify-center mb-3"
-          style={{
-            shadowColor: '#4F46E5',
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.12,
-            shadowRadius: 12,
-            elevation: 4,
-          }}
-        >
-          <Text className="text-3xl font-extrabold text-primary">a</Text>
-        </View>
-        <Text className="text-xl font-extrabold text-ink tracking-tight">
-          Amixos
-        </Text>
+        <Logo variant="side" width={172} />
       </View>
 
       <View className="flex-1">

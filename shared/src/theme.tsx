@@ -49,3 +49,13 @@ export const ThemeColorsProvider = ThemeColorsContext.Provider;
 export function useThemeColors(): ThemeColors {
   return useContext(ThemeColorsContext);
 }
+
+/** Whether the dark palette is active.
+ *
+ *  Derived from the palette rather than stored separately so there is exactly
+ *  one source of truth — the platform providers only ever pass LIGHT_COLORS or
+ *  DARK_COLORS, and a second boolean would be one more thing to keep in sync.
+ *  Used by <Logo> to pick white ink over dark ink. */
+export function useIsDarkTheme(): boolean {
+  return useContext(ThemeColorsContext).card === DARK_COLORS.card;
+}
