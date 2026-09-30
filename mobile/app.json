@@ -83,6 +83,12 @@
           "microphonePermission": "Amixos usa el micrófono para que puedas hablar con Ami, tu asistente de negocio.",
           "speechRecognitionPermission": "Amixos usa el reconocimiento de voz para entender lo que le dices a Ami."
         }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.314622478971-jpfm8nmg9aidtneg2qjfdq0f9e8lptpl"
+        }
       ]
     ],
     "experiments": {

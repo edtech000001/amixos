@@ -2,6 +2,12 @@ import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import {
+  GoogleSignin,
+  statusCodes,
+  isSuccessResponse,
+  isErrorWithCode,
+} from '@react-native-google-signin/google-signin';
 import type { Provider } from '@supabase/supabase-js';
 import { createSupabaseClient } from './supabase';
 
@@ -18,8 +24,76 @@ function getRedirectUri(): string {
   return AuthSession.makeRedirectUri({ scheme: 'amixos', path: REDIRECT_PATH });
 }
 
+let googleConfigured = false;
+
+/** Configure once, lazily — calling this at module scope would run before the
+ *  native module is ready on a cold start. */
+function configureGoogle(iosClientId: string) {
+  if (googleConfigured) return;
+  GoogleSignin.configure({ iosClientId });
+  googleConfigured = true;
+}
+
+/**
+ * Native Google Sign In.
+ *
+ * The browser flow works, but iOS shows an ASWebAuthenticationSession consent
+ * sheet naming the host the session opens — which is the raw Supabase project
+ * domain ("dmyfamhkqikzypdinbnl.supabase.co"), not Amixos. That prompt cannot
+ * be relabelled: it is the real origin, and a Supabase custom domain would only
+ * change the wording, not remove the sheet.
+ *
+ * Going native skips the browser entirely: Google hands back an ID token and
+ * Supabase verifies it directly, exactly as Apple already works here. No
+ * consent sheet, no browser bounce.
+ *
+ * Supabase must list this client ID under Authentication → Providers → Google →
+ * "Authorized Client IDs", or it rejects the token's audience.
+ *
+ * Falls back to the browser flow when the native module is unavailable
+ * (Android without Play Services) so sign-in never becomes a dead button.
+ */
 export async function signInWithGoogle(): Promise<OAuthResult> {
-  return signInWithBrowserOAuth('google');
+  const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+
+  // Android has no client ID configured yet, so it stays on the browser flow.
+  if (Platform.OS !== 'ios' || !iosClientId) {
+    return signInWithBrowserOAuth('google');
+  }
+
+  try {
+    configureGoogle(iosClientId);
+    await GoogleSignin.hasPlayServices();
+    const response = await GoogleSignin.signIn();
+
+    if (!isSuccessResponse(response)) {
+      // The user backed out of the native sheet.
+      return { ok: false, reason: 'cancelled' };
+    }
+
+    const idToken = response.data.idToken;
+    if (!idToken) {
+      return { ok: false, reason: 'generic', message: 'No ID token from Google' };
+    }
+
+    const supabase = createSupabaseClient();
+    const { error } = await supabase.auth.signInWithIdToken({
+      provider: 'google',
+      token: idToken,
+    });
+    if (error) return mapOAuthError(error.message);
+    return { ok: true };
+  } catch (err) {
+    if (isErrorWithCode(err)) {
+      if (err.code === statusCodes.SIGN_IN_CANCELLED) {
+        return { ok: false, reason: 'cancelled' };
+      }
+      if (err.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        return signInWithBrowserOAuth('google');
+      }
+    }
+    return { ok: false, reason: 'generic', message: err instanceof Error ? err.message : undefined };
+  }
 }
 
 // Browser-based OAuth via Supabase. Works on iOS + Android. Requires the
