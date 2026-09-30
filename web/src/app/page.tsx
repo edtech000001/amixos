@@ -122,6 +122,15 @@ export default function LandingPage() {
   const nextLocale = locales[(idx + 1) % locales.length];
   const otherLocaleLabel = labels[nextLocale];
 
+  // A fixed overlay over a scrollable body lets the page slide around behind
+  // the menu on iOS, which is most of what made it feel unfinished.
+  useEffect(() => {
+    if (!mobileMenu) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [mobileMenu]);
+
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', onScroll);
@@ -132,7 +141,9 @@ export default function LandingPage() {
     <div className="min-h-screen bg-white text-gray-900 font-sans">
 
       {/* ── Navbar ─────────────────────────────────────────────────────────── */}
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 ${scrolled ? 'bg-white/95 backdrop-blur-sm shadow-sm border-b border-gray-100' : 'bg-transparent'}`}>
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 ${
+        mobileMenu || scrolled ? 'bg-white/95 backdrop-blur-sm shadow-sm border-b border-gray-100' : 'bg-transparent'
+      }`}>
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
           <Link href="/" aria-label="Amixos" className="flex items-center">
             <Logo variant="side" width={132} ink="black" />
@@ -178,9 +189,20 @@ export default function LandingPage() {
           </button>
         </div>
 
-        {/* Mobile menu */}
+        {/* Mobile menu.
+            The panel used to drop straight onto the page with nothing behind
+            it, so the hero showed through underneath and the two read as one
+            confusing surface. A dimmed backdrop separates them, closes on tap,
+            and the body scroll lock below stops the page drifting behind it. */}
         {mobileMenu && (
-          <div className="md:hidden bg-white border-t border-gray-100 px-5 py-4 flex flex-col gap-4">
+          <div
+            className="md:hidden fixed inset-0 top-16 bg-gray-900/40 backdrop-blur-[2px] amixos-fade-in"
+            onClick={() => setMobileMenu(false)}
+            aria-hidden
+          />
+        )}
+        {mobileMenu && (
+          <div className="md:hidden relative bg-white border-t border-gray-100 shadow-xl px-5 py-4 flex flex-col gap-4">
             <button onClick={() => setLocale(nextLocale)}
               className="flex items-center gap-2 text-sm text-gray-600 font-medium">
               <Globe size={15}/> {t.nav.switchLang}
@@ -203,7 +225,7 @@ export default function LandingPage() {
       <section className="pt-24 pb-20 px-5 bg-gradient-to-b from-indigo-50 via-white to-white">
         <div className="max-w-6xl mx-auto">
           <div className="grid md:grid-cols-2 gap-12 items-center">
-            <div>
+            <div className="text-center md:text-left">
               <div className="inline-flex items-center gap-2 bg-indigo-100 text-indigo-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
                 {t.hero.tag}
               </div>
@@ -211,7 +233,7 @@ export default function LandingPage() {
                 {t.hero.h1_1}<br/>
                 <span className="text-indigo-600">{t.hero.h1_2}</span>
               </h1>
-              <p className="text-lg text-gray-500 leading-relaxed mb-8 max-w-md">
+              <p className="text-lg text-gray-500 leading-relaxed mb-8 max-w-md mx-auto md:mx-0">
                 {t.hero.sub}
               </p>
               <div className="flex flex-col sm:flex-row gap-3">
