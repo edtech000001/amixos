@@ -18,6 +18,13 @@ import { View } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 const SITE_KEY = process.env.EXPO_PUBLIC_TURNSTILE_SITE_KEY;
+
+// EXPO_PUBLIC_* is inlined by Babel at TRANSFORM time and Metro caches
+// transforms, so a bundle built before the key existed keeps `undefined` and
+// this component silently renders nothing. Say so out loud in dev.
+if (__DEV__) {
+  console.log('[captcha] site key:', SITE_KEY ? `${SITE_KEY.slice(0, 8)}… (len ${SITE_KEY.length})` : 'UNDEFINED — run: npx expo start --clear');
+}
 // Must be one of the hostnames registered on the Turnstile widget.
 const ORIGIN = 'https://amixos.com';
 
@@ -33,7 +40,7 @@ const page = (siteKey: string) => `<!DOCTYPE html>
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstileCallback&render=explicit" async defer></script>
     <style>
       html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
       #box { display: flex; justify-content: center; }
@@ -63,6 +70,10 @@ const page = (siteKey: string) => `<!DOCTYPE html>
       };
       // api.js may already have loaded by the time this runs.
       if (window.turnstile) window.onloadTurnstileCallback();
+      // ...and if it never arrives, report it rather than failing silently.
+      setTimeout(function () {
+        if (!window.turnstile) post({ type: 'error', value: 'turnstile script did not load' });
+      }, 8000);
     </script>
   </body>
 </html>`;
@@ -96,13 +107,24 @@ export const Captcha = forwardRef<CaptchaHandle, CaptchaProps>(function Captcha(
         // which shows as a bright rectangle on the dark auth screens.
         style={{ backgroundColor: 'transparent' }}
         scrollEnabled={false}
+        onError={e => __DEV__ && console.log('[captcha] webview error:', e.nativeEvent.description)}
+        onHttpError={e => __DEV__ && console.log('[captcha] http error:', e.nativeEvent.statusCode, e.nativeEvent.url)}
         onMessage={e => {
           try {
             const msg = JSON.parse(e.nativeEvent.data) as
               | { type: 'token'; value: string | null }
-              | { type: 'height'; value: number };
-            if (msg.type === 'token') onToken(msg.value);
-            else setHeight(msg.value);
+              | { type: 'height'; value: number }
+              | { type: 'error'; value: string };
+            if (msg.type === 'error') {
+              if (__DEV__) console.log('[captcha]', msg.value);
+              onToken(null);
+            } else if (msg.type === 'token') {
+              if (__DEV__) console.log('[captcha] token:', msg.value ? `${msg.value.slice(0, 12)}…` : 'null (challenge failed)');
+              onToken(msg.value);
+            } else {
+              if (__DEV__) console.log('[captcha] height:', msg.value);
+              setHeight(msg.value);
+            }
           } catch {
             // Malformed message — ignore rather than crash the auth screen.
           }
