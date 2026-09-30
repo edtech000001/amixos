@@ -64,6 +64,14 @@ function configureGoogle(mod: GoogleSigninModule, iosClientId: string) {
  * Supabase must list this client ID under Authentication → Providers → Google →
  * "Authorized Client IDs", or it rejects the token's audience.
  *
+ * ⚠️ "Skip nonce checks" must ALSO be on for that provider. The Google iOS SDK
+ * puts a nonce in the ID token and never exposes it — @react-native-google-signin
+ * 16.x has no nonce parameter on configure() or signIn(), so there is nothing to
+ * pass through. Supabase then sees a token with a nonce and a request without
+ * one and fails with "Passed nonce and nonce in id_token should either both
+ * exist or not". Turning that check back on breaks native Google sign-in; the
+ * signature check, the audience check and the token lifetime all still apply.
+ *
  * Falls back to the browser flow when the native module is unavailable
  * (Android without Play Services) so sign-in never becomes a dead button.
  */
