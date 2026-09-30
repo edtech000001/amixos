@@ -8,8 +8,8 @@
 import type { LegalDoc } from './types';
 
 const ENTITY = 'Prime Solutions LLC';
-const UPDATED_ES = 'Última actualización: 22 de septiembre de 2026';
-const UPDATED_EN = 'Last updated: September 22, 2026';
+const UPDATED_ES = 'Última actualización: 30 de septiembre de 2026';
+const UPDATED_EN = 'Last updated: September 30, 2026';
 
 export const termsOfService: LegalDoc = {
   es: {
@@ -70,6 +70,7 @@ export const termsOfService: LegalDoc = {
           'Puedes eliminar tu cuenta o tu negocio desde **Ajustes → Cuenta → Zona de peligro**, sin pedirnos permiso.',
           'Cuando lo haces: tu suscripción se cancela de inmediato, pierdes el acceso, y **todo se borra definitivamente 30 días después**. Durante esos 30 días puedes iniciar sesión y restaurarla. La suscripción cancelada no se restaura sola: tendrás que elegir un plan de nuevo.',
           'Si eres dueño de un negocio con más personas, primero debes transferirlo o eliminarlo; así nadie pierde su información sin que el dueño lo decida.',
+          '**Si tu suscripción termina y no la renuevas**, conservamos la información del negocio **12 meses** (sin acceso, pero intacta: si renuevas, todo sigue igual). Antes de borrarla le avisamos al dueño por correo **30, 7 y 1 días antes**. Si no renueva, **se borra definitivamente** al cumplirse los 12 meses.',
         ],
       },
       {
@@ -165,6 +166,7 @@ export const termsOfService: LegalDoc = {
           'You can delete your account or your business from **Settings → Account → Danger zone**, without asking us.',
           'When you do: your subscription is cancelled immediately, you lose access, and **everything is permanently erased 30 days later**. During those 30 days you can sign in and restore it. A cancelled subscription does not come back on its own — you would choose a plan again.',
           'If you own a business with other people in it, you must transfer or delete that business first, so nobody loses their information without the owner deciding it.',
+          '**If your subscription ends and you don\'t renew**, we keep the business\'s information for **12 months** (locked, but intact: renew and everything is where you left it). Before erasing it we email the owner **30, 7 and 1 days ahead**. If it isn\'t renewed, **it is permanently erased** once the 12 months are up.',
         ],
       },
       {

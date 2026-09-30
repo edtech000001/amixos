@@ -8,8 +8,8 @@
 import type { LegalDoc } from './types';
 
 const ENTITY = 'Prime Solutions LLC';
-const UPDATED_ES = 'Última actualización: 22 de septiembre de 2026';
-const UPDATED_EN = 'Last updated: September 22, 2026';
+const UPDATED_ES = 'Última actualización: 30 de septiembre de 2026';
+const UPDATED_EN = 'Last updated: September 30, 2026';
 
 export const privacyPolicy: LegalDoc = {
   es: {
@@ -75,6 +75,7 @@ export const privacyPolicy: LegalDoc = {
         heading: '6. Cuánto tiempo guardamos tus datos',
         body: [
           'Mientras tu cuenta esté activa. Cuando eliminas tu cuenta o tu negocio desde la app, marcamos la eliminación y **borramos todo de forma definitiva 30 días después**. Durante esos 30 días puedes iniciar sesión y restaurar la cuenta.',
+          '**Si tu suscripción termina y no la renuevas**, conservamos la información del negocio **12 meses** (sin acceso, pero intacta: si renuevas, todo sigue igual). Antes de borrarla le avisamos al dueño por correo **30, 7 y 1 días antes**. Si no renueva, **se borra definitivamente** al cumplirse los 12 meses.',
           'Después del borrado no podemos recuperar la información. Podemos conservar registros mínimos de facturación que la ley exige (por ejemplo, comprobantes de cobro).',
         ],
       },
@@ -171,6 +172,7 @@ export const privacyPolicy: LegalDoc = {
         heading: '6. How long we keep it',
         body: [
           'For as long as your account is active. When you delete your account or your business from the app, we mark it for deletion and **permanently erase everything 30 days later**. During those 30 days you can sign in and restore the account.',
+          '**If your subscription ends and you don\'t renew**, we keep the business\'s information for **12 months** (locked, but intact: renew and everything is where you left it). Before erasing it we email the owner **30, 7 and 1 days ahead**. If it isn\'t renewed, **it is permanently erased** once the 12 months are up.',
           'After erasure we cannot recover it. We may keep minimal billing records that the law requires us to retain.',
         ],
       },

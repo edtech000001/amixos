@@ -28,8 +28,11 @@ export interface PolicyVersion {
 }
 
 export const POLICY_VERSIONS: Record<PolicyDoc, PolicyVersion> = {
-  privacy: { version: '2026-09-22', material: false },
-  terms:   { version: '2026-09-22', material: false },
+  // 2026-09-30: unpaid businesses kept 12 months, then erased after 30/7/1-day
+  // warnings (migration 243). Material: a new way data gets deleted without
+  // the owner asking.
+  privacy: { version: '2026-09-30', material: true },
+  terms:   { version: '2026-09-30', material: true },
 };
 
 export const POLICY_DOCS: PolicyDoc[] = ['privacy', 'terms'];
