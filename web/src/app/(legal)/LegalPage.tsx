@@ -11,8 +11,9 @@
 // EN toggle exists because App Review reads English and has to be able to
 // check that the policy matches what the app does.
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 
 // Types and text both come from shared/ — the consent gate inside the apps
@@ -21,17 +22,42 @@ import type { Lang, LegalContent, LegalDoc } from '@amixos/shared/legal/types';
 export type { Lang, LegalContent } from '@amixos/shared/legal/types';
 
 export function LegalPage({ content }: { content: LegalDoc }) {
+  const router = useRouter();
   const [lang, setLang] = useState<Lang>('es');
   const c = content[lang];
+
+  // The arrow used to be a hard link to "/", which sent anyone who opened the
+  // terms from a form back to the marketing page with their work gone. Go back
+  // where they came from when there is a there to go back to; a direct open
+  // (App Store Connect, a shared link) has no history, so that still offers
+  // the home page instead of a dead button.
+  const [canGoBack, setCanGoBack] = useState(false);
+  useEffect(() => setCanGoBack(window.history.length > 1), []);
+
+  // These labels stay inline rather than coming from the i18n bundle: this
+  // page deliberately has no app dependencies so it renders even when
+  // everything else is broken.
+  const backLabel = canGoBack ? (lang === 'en' ? 'Back' : 'Volver') : 'Amixos';
 
   return (
     <div className="min-h-screen bg-white text-gray-900">
       <div className="mx-auto max-w-3xl px-6 py-12">
         <div className="flex items-center justify-between gap-4 mb-10">
-          <Link href="/" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900">
-            <ArrowLeft size={16} />
-            Amixos
-          </Link>
+          {canGoBack ? (
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900"
+            >
+              <ArrowLeft size={16} />
+              {backLabel}
+            </button>
+          ) : (
+            <Link href="/" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900">
+              <ArrowLeft size={16} />
+              {backLabel}
+            </Link>
+          )}
           <div className="inline-flex rounded-full border border-gray-200 p-0.5">
             {(['es', 'en'] as Lang[]).map((l) => (
               <button

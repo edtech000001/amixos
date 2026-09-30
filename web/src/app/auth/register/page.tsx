@@ -78,8 +78,12 @@ export default function RegisterPage() {
     <RegisterScreen
       onRegister={handleRegister}
       onLoginPress={() => router.push(`/auth/login${nextSuffix}`)}
-      onTermsPress={() => router.push('/terms')}
-      onPrivacyPress={() => router.push('/privacy')}
+      // New tab, not router.push: navigating away mid-signup throws away
+      // everything typed AND burns the single-use captcha token, so coming
+      // back means refilling the form and re-solving the challenge. Native
+      // already behaves this way (it opens the system browser).
+      onTermsPress={() => window.open('/terms', '_blank', 'noopener,noreferrer')}
+      onPrivacyPress={() => window.open('/privacy', '_blank', 'noopener,noreferrer')}
       oauthSlot={<OAuthButtons mode="register" />}
       captchaSlot={<Captcha ref={captcha} onToken={setCaptchaToken} />}
     />
