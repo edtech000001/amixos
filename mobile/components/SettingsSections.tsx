@@ -3488,6 +3488,8 @@ export function AccountSection() {
   const [showNewPw, setShowNewPw] = useState(false);
   const [savingPw, setSavingPw] = useState(false);
   const [pwMsg, setPwMsg] = useState<{ text: string; isError: boolean } | null>(null);
+  // Collapsed until asked for — the fields aren't sitting there on every visit.
+  const [pwOpen, setPwOpen] = useState(false);
 
   // ── Profile name (first/last) — lives in public.profiles, editable here.
   const [firstName, setFirstName] = useState('');
@@ -3571,6 +3573,7 @@ export function AccountSection() {
       setPwMsg({ text: t.password.successMsg, isError: false });
       setCurrentPw('');
       setNewPw('');
+      setPwOpen(false);
     }
   };
 
@@ -3598,6 +3601,20 @@ export function AccountSection() {
         current_period_end: business.current_period_end,
       }
     : null;
+
+  // When a canceled plan ends (migration 244) — its own query, not the app-wide
+  // business select, so the column missing can't break loading.
+  const [planEndsAt, setPlanEndsAt] = useState<string | null>(null);
+  useEffect(() => {
+    if (!business?.id) return;
+    let cancelled = false;
+    void supabase.from('businesses').select('subscription_cancel_at').eq('id', business.id).single()
+      .then(({ data }: { data: { subscription_cancel_at?: string | null } | null }) => {
+        if (!cancelled) setPlanEndsAt(data?.subscription_cancel_at ?? null);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id, business?.subscription_status, business?.current_period_end]);
 
   const subState = (() => {
     if (!sub) return null;
@@ -3635,9 +3652,19 @@ export function AccountSection() {
         : locale === 'en' ? 'Custom plan' : 'Plan personalizado';
       const shownName = planName ?? fallbackName;
       const detail = period ? `${shownName} · ${period}` : shownName;
+      // Canceled, still active until the paid period runs out. States the date
+      // only — no "renew" prompt: App Store 3.1.1 bars steering to purchases
+      // outside the app (web Ajustes carries the renew hint).
+      const ending = planEndsAt
+        ? (() => {
+            const d = new Date(planEndsAt).toLocaleDateString(locale === 'en' ? 'en-US' : 'es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+            return locale === 'en' ? `Canceled — your plan ends on ${d}` : `Cancelado — tu plan termina el ${d}`;
+          })()
+        : null;
       return {
         title: locale === 'en' ? 'Plan' : 'Plan',
         detail,
+        ending,
         action: 'web' as const,
       };
     }
@@ -3768,6 +3795,9 @@ export function AccountSection() {
             {subState.detail ? (
               <Text className="text-xs text-muted mt-0.5">{subState.detail}</Text>
             ) : null}
+            {'ending' in subState && subState.ending ? (
+              <Text className="text-xs font-medium text-amber-600 mt-1">{subState.ending}</Text>
+            ) : null}
           </View>
 
           {/* Always available — a subscribed account can still browse the
@@ -3825,6 +3855,15 @@ export function AccountSection() {
           title={t.password.heading}
           subtitle={t.password.subtitle}
         />
+        {!pwOpen ? (
+          <>
+            <StatusMsg msg={pwMsg} />
+            <Button variant="secondary" onPress={() => { setPwMsg(null); setPwOpen(true); }} fullWidth>
+              <Text className="text-ink font-semibold">{t.password.heading}</Text>
+            </Button>
+          </>
+        ) : (
+        <>
         <Input
           label={t.password.currentPasswordLabel}
           placeholder={t.password.currentPasswordPlaceholder}
@@ -3867,6 +3906,16 @@ export function AccountSection() {
         <Button onPress={onSavePassword} loading={savingPw} fullWidth>
           <Text className="text-white font-semibold">{t.password.saveBtn}</Text>
         </Button>
+        <Button
+          variant="secondary"
+          onPress={() => { setPwOpen(false); setCurrentPw(''); setNewPw(''); setPwMsg(null); }}
+          disabled={savingPw}
+          fullWidth
+        >
+          <Text className="text-ink font-semibold">{full.common.buttons.cancel}</Text>
+        </Button>
+        </>
+        )}
       </View>
 
       {/* Account + business deletion (App Store 5.1.1(v)). */}

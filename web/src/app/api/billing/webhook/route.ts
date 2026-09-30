@@ -65,6 +65,18 @@ export async function POST(req: Request) {
       })
       .eq('id', businessId);
     await trackLapse(businessId, sub.status);
+
+    // When a canceled-but-still-active plan ends (migration 244), for the
+    // "Your plan ends on …" notice. Newer API versions set cancel_at; older
+    // ones only flag cancel_at_period_end, where the end IS the period end.
+    // Separate + best-effort, like trackLapse: before 244 runs the column
+    // doesn't exist and must not fail the status sync above.
+    const subCancel = sub as unknown as { cancel_at?: number | null; cancel_at_period_end?: boolean };
+    const cancelAtUnix = subCancel.cancel_at ?? (subCancel.cancel_at_period_end ? periodEndUnix : null);
+    await admin
+      .from('businesses')
+      .update({ subscription_cancel_at: cancelAtUnix ? new Date(cancelAtUnix * 1000).toISOString() : null })
+      .eq('id', businessId);
   };
 
   // 12-month retention clock (migration 243). Kept OUT of the update above on

@@ -1012,16 +1012,6 @@ export function JobsListScreen({
                 ? t.countFound.replace('{{count}}', String(total))
                 : t.countTotal.replace('{{count}}', String(total));
             })()}
-            {pendingValue > 0 ? (
-              <Text className="text-blue-600 font-medium">
-                {' · '}{t.pendingValue.replace('{{amount}}', fmt(pendingValue))}
-              </Text>
-            ) : null}
-            {inProgressRevenue > 0 ? (
-              <Text className="text-amber-600 font-medium">
-                {' · '}{t.inProgressValue.replace('{{amount}}', fmt(inProgressRevenue))}
-              </Text>
-            ) : null}
           </Text>
         </View>
         {/* Filter controls live up here so the search bar gets the full width. */}
@@ -1082,6 +1072,22 @@ export function JobsListScreen({
           ) : null}
         </View>
       </View>
+      {/* Money summary on its own full-width line — squeezed next to the
+          header icons it wrapped into a ragged block above the search. */}
+      {pendingValue > 0 || inProgressRevenue > 0 ? (
+        <View className="flex-row flex-wrap items-center gap-x-3 gap-y-1 -mt-3 mb-4">
+          {pendingValue > 0 ? (
+            <Text className="text-sm text-blue-600 font-medium">
+              {t.pendingValue.replace('{{amount}}', fmt(pendingValue))}
+            </Text>
+          ) : null}
+          {inProgressRevenue > 0 ? (
+            <Text className="text-sm text-amber-600 font-medium">
+              {t.inProgressValue.replace('{{amount}}', fmt(inProgressRevenue))}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
 
       {/* Fetch failed — say so instead of showing stale rows silently. */}
       {loadError ? (

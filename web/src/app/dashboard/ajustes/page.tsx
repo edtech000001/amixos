@@ -217,6 +217,19 @@ export default function AjustesPage() {
   const [pricingOpen, setPricingOpen] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
+  // When a canceled plan ends (migration 244) — its own query, not the app-wide
+  // business select, so the column missing can't break loading.
+  const [planEndsAt, setPlanEndsAt] = useState<string | null>(null);
+  useEffect(() => {
+    if (!business?.id) return;
+    let cancelled = false;
+    void supabase.from('businesses').select('subscription_cancel_at').eq('id', business.id).single()
+      .then(({ data }) => {
+        if (!cancelled) setPlanEndsAt((data as { subscription_cancel_at?: string | null } | null)?.subscription_cancel_at ?? null);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id, business?.subscription_status, business?.current_period_end]);
 
   async function openBillingPortal() {
     if (!business) return;
@@ -430,6 +443,8 @@ export default function AjustesPage() {
   const [savingPw, setSavingPw] = useState(false);
   const [pwMsg, setPwMsg] = useState('');
   const [pwMsgIsError, setPwMsgIsError] = useState(false);
+  // Collapsed until asked for — the fields aren't sitting there on every visit.
+  const [pwOpen, setPwOpen] = useState(false);
 
   // ── Profile name (first/last) — lives in public.profiles, editable here.
   const [firstName, setFirstName] = useState('');
@@ -1023,7 +1038,7 @@ export default function AjustesPage() {
     });
     setPwMsgIsError(!!error);
     setPwMsg(error ? passwordErrorText(error) : t.password.successMsg);
-    if (!error) { setCurrentPw(''); setNewPw(''); }
+    if (!error) { setCurrentPw(''); setNewPw(''); setPwOpen(false); }
     setSavingPw(false);
   };
 
@@ -3329,6 +3344,13 @@ export default function AjustesPage() {
                   // they can start a real subscription instead.
                   if (planKey) {
                     action = 'manage';
+                    // Canceled, still active until the paid period runs out.
+                    if (planEndsAt) {
+                      const d = new Date(planEndsAt).toLocaleDateString(es ? 'es-MX' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+                      subtitle = es
+                        ? `Cancelaste tu plan — termina el ${d}. Renueva desde "Administrar suscripción" para no perder el acceso.`
+                        : `You canceled your plan — it ends on ${d}. Renew from "Manage subscription" to keep access.`;
+                    }
                   } else {
                     action = 'plans';
                     subtitle = es
@@ -3352,7 +3374,9 @@ export default function AjustesPage() {
                         {es ? 'Suscripción' : 'Subscription'}
                       </h2>
                       <p className="text-sm text-muted">{heading}</p>
-                      {subtitle && <p className="text-xs text-faint mt-0.5">{subtitle}</p>}
+                      {subtitle && (
+                        <p className={`text-xs mt-0.5 ${planEndsAt && status === 'active' ? 'text-amber-600 font-medium' : 'text-faint'}`}>{subtitle}</p>
+                      )}
                       {portalError && (
                         <p className="text-xs text-red-500 mt-2">{portalError}</p>
                       )}
@@ -3402,6 +3426,15 @@ export default function AjustesPage() {
               <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">
                 <h2 className="text-base font-semibold text-ink mb-1">{t.password.heading}</h2>
                 <p className="text-xs text-faint mb-4">{t.password.subtitle}</p>
+                {!pwOpen ? (
+                  <>
+                    {pwMsg && <p className={`text-xs mb-3 ${pwMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{pwMsg}</p>}
+                    <Button variant="secondary" onClick={() => { setPwMsg(''); setPwOpen(true); }}>
+                      {t.password.heading}
+                    </Button>
+                  </>
+                ) : (
+                <>
                 <div className="max-w-md flex flex-col gap-3">
                   <Input
                     label={t.password.currentPasswordLabel}
@@ -3443,11 +3476,20 @@ export default function AjustesPage() {
                     submit is the worse way to learn it. */}
                 <p className="text-xs mt-2 text-faint">{t.password.requirementsHint}</p>
                 {pwMsg && <p className={`text-xs mt-3 ${pwMsgIsError ? 'text-red-500' : 'text-emerald-600'}`}>{pwMsg}</p>}
-                <div className="mt-5">
+                <div className="mt-5 flex items-center gap-2">
                   <Button onClick={savePassword} loading={savingPw} disabled={!currentPw || !newPw}>
                     <Save size={14} className="mr-1.5"/> {t.password.saveBtn}
                   </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => { setPwOpen(false); setCurrentPw(''); setNewPw(''); setPwMsg(''); }}
+                    disabled={savingPw}
+                  >
+                    {full.common.buttons.cancel}
+                  </Button>
                 </div>
+                </>
+                )}
               </div>
 
               {/* Account + business deletion (App Store 5.1.1(v)). */}
