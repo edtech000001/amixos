@@ -149,7 +149,12 @@ function DashboardTabs() {
   const offset = bannerVisible ? bannerHeight : 0;
 
   return (
-    <>
+    // bg-surface on the root, because the offset below leaves the band from
+    // y=0 to the banner height painted by nothing: the banner stack starts at
+    // insets.top, and the content's own background starts at marginTop. That
+    // gap showed as a white strip under the status bar. Only visible once a
+    // banner stays up — the sync ones come and go too fast to notice.
+    <View className="flex-1 bg-surface">
       <View
         pointerEvents="box-none"
         onLayout={e => setBannerHeight(e.nativeEvent.layout.height)}
@@ -246,6 +251,6 @@ function DashboardTabs() {
       <BillingGate />
       <PolicyConsentGate />
       <ShakeToReport />
-    </>
+    </View>
   );
 }
