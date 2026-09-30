@@ -94,7 +94,7 @@ export const landing: Record<Locale, LandingDict> = {
       cta: 'Crear mi cuenta gratis →',
     },
     footer: {
-      tagline: 'Donde negocios prosperan.',
+      tagline: 'Donde los negocios prosperan.',
       rights: 'Todos los derechos reservados.',
     },
     mockup: {
