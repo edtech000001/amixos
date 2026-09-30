@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
 import type { Provider } from '@supabase/supabase-js';
 import { createSupabaseClient } from './supabase';
 
@@ -64,13 +65,18 @@ function configureGoogle(mod: GoogleSigninModule, iosClientId: string) {
  * Supabase must list this client ID under Authentication → Providers → Google →
  * "Authorized Client IDs", or it rejects the token's audience.
  *
- * ⚠️ "Skip nonce checks" must ALSO be on for that provider. The Google iOS SDK
- * puts a nonce in the ID token and never exposes it — @react-native-google-signin
- * 16.x has no nonce parameter on configure() or signIn(), so there is nothing to
- * pass through. Supabase then sees a token with a nonce and a request without
- * one and fails with "Passed nonce and nonce in id_token should either both
- * exist or not". Turning that check back on breaks native Google sign-in; the
- * signature check, the audience check and the token lifetime all still apply.
+ * Nonce: we supply our own, so Supabase's nonce check stays ON. The SDK mints
+ * one itself otherwise and never exposes it, which made Supabase reject the
+ * token ("Passed nonce and nonce in id_token should either both exist or not")
+ * unless "Skip nonce checks" was enabled — and that setting accepts any validly
+ * signed token for the audience, losing the binding between a token and the
+ * request that asked for it.
+ *
+ * @react-native-google-signin 16.1.5 has no nonce option, but Google's own
+ * GIDSignIn does; patches/@react-native-google-signin+google-signin+16.1.5.patch
+ * forwards it to the 5-arg overload. Google embeds the value verbatim, so the
+ * HASH goes to Google and the RAW value to Supabase, which hashes before
+ * comparing — the same split expo-apple-authentication already uses.
  *
  * Falls back to the browser flow when the native module is unavailable
  * (Android without Play Services) so sign-in never becomes a dead button.
@@ -91,7 +97,16 @@ export async function signInWithGoogle(): Promise<OAuthResult> {
   try {
     configureGoogle(mod, iosClientId);
     await mod.GoogleSignin.hasPlayServices();
-    const response = await mod.GoogleSignin.signIn();
+
+    // One nonce per attempt — reusing one would defeat the replay protection
+    // it exists to provide.
+    const rawNonce = Crypto.randomUUID();
+    const hashedNonce = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      rawNonce,
+    );
+
+    const response = await mod.GoogleSignin.signIn({ nonce: hashedNonce });
 
     if (!mod.isSuccessResponse(response)) {
       // The user backed out of the native sheet.
@@ -107,6 +122,7 @@ export async function signInWithGoogle(): Promise<OAuthResult> {
     const { error } = await supabase.auth.signInWithIdToken({
       provider: 'google',
       token: idToken,
+      nonce: rawNonce,
     });
     if (error) return mapOAuthError(error.message);
     return { ok: true };

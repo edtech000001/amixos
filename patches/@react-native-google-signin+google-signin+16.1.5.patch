@@ -1,0 +1,48 @@
+diff --git a/node_modules/@react-native-google-signin/google-signin/ios/RNGoogleSignin.mm b/node_modules/@react-native-google-signin/google-signin/ios/RNGoogleSignin.mm
+--- a/node_modules/@react-native-google-signin/google-signin/ios/RNGoogleSignin.mm
++++ b/node_modules/@react-native-google-signin/google-signin/ios/RNGoogleSignin.mm
+@@ -131,11 +131,15 @@
+ 
+       NSString* hint = options[@"loginHint"];
+       NSArray* scopes = self.scopes;
++      // PATCHED (amixos): forward a caller-supplied nonce. GIDSignIn embeds it
++      // in the ID token, which is what lets Supabase verify the token is bound
++      // to this request instead of requiring "Skip nonce checks".
++      NSString* nonce = options[@"nonce"];
+ 
+ #if DEBUG
+     @try {
+ #endif
+-      [GIDSignIn.sharedInstance signInWithPresentingViewController:presentingViewController hint:hint additionalScopes:scopes completion:^(GIDSignInResult * _Nullable signInResult, NSError * _Nullable error) {
++      [GIDSignIn.sharedInstance signInWithPresentingViewController:presentingViewController hint:hint additionalScopes:scopes nonce:nonce completion:^(GIDSignInResult * _Nullable signInResult, NSError * _Nullable error) {
+         [self handleCompletion:signInResult withError:error withResolver:resolve withRejector:reject fromCallsite:@"signIn"];
+       }];
+ #if DEBUG
+diff --git a/node_modules/@react-native-google-signin/google-signin/src/types.ts b/node_modules/@react-native-google-signin/google-signin/src/types.ts
+--- a/node_modules/@react-native-google-signin/google-signin/src/types.ts
++++ b/node_modules/@react-native-google-signin/google-signin/src/types.ts
+@@ -6,7 +6,9 @@
+    * iOS only. The user's ID, or email address, to be prefilled in the authentication UI if possible.
+    * [See docs here](https://developers.google.com/identity/sign-in/ios/reference/Classes/GIDSignIn#-signinwithpresentingviewcontroller:hint:completion:)
+    */
+-  loginHint?: string;
++  /** PATCHED (amixos): nonce embedded in the ID token, so Supabase can
++   *  verify it without disabling nonce checks. */
++  nonce?: string;
+ };
+ 
+ /**
+diff --git a/node_modules/@react-native-google-signin/google-signin/lib/typescript/src/types.d.ts b/node_modules/@react-native-google-signin/google-signin/lib/typescript/src/types.d.ts
+--- a/node_modules/@react-native-google-signin/google-signin/lib/typescript/src/types.d.ts
++++ b/node_modules/@react-native-google-signin/google-signin/lib/typescript/src/types.d.ts
+@@ -6,7 +6,9 @@
+      * iOS only. The user's ID, or email address, to be prefilled in the authentication UI if possible.
+      * [See docs here](https://developers.google.com/identity/sign-in/ios/reference/Classes/GIDSignIn#-signinwithpresentingviewcontroller:hint:completion:)
+      */
+-    loginHint?: string;
++    /** PATCHED (amixos): nonce embedded in the ID token, so Supabase can
++     *  verify it without disabling nonce checks. */
++    nonce?: string;
+ };
+ /**
+  * @group Original Google sign in
