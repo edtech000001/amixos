@@ -26,12 +26,24 @@ interface SaveState {
   hideHeaderButton?: boolean;
 }
 
+export interface SettingsStatus { text: string; isError: boolean }
+
 const SettingsPageContext = createContext<{
   registerSaveState: (state: SaveState | null) => void;
   // The page's scroll container — passed to SortableList so react-native-sortables
   // can auto-scroll while dragging (and so drag/scroll don't fight each other).
   scrollRef: AnimatedRef<Animated.ScrollView> | null;
-}>({ registerSaveState: () => {}, scrollRef: null });
+  /** Sections report save results here; the wrapper shows them under the
+   *  header, beside the Save button that caused them. */
+  reportStatus: ((s: SettingsStatus | null) => void) | null;
+}>({ registerSaveState: () => {}, scrollRef: null, reportStatus: null });
+
+/** Section-side: hand a save result to the wrapper. Returns null when there is
+ *  no wrapper above (a section rendered inline elsewhere), so the caller can
+ *  fall back to rendering the message itself. */
+export function useSettingsStatusReporter() {
+  return useContext(SettingsPageContext).reportStatus;
+}
 
 /** Section-side hook: the page scroll ref, for SortableList auto-scroll. */
 export function useSettingsScrollRef() {
@@ -81,9 +93,20 @@ export function SettingsPageWrapper({ title, children }: SettingsPageProps) {
   const tc = t.common.buttons;
   const ts = t.dashboard.settings;
   const [saveState, setSaveState] = useState<SaveState | null>(null);
+  const [status, setStatus] = useState<SettingsStatus | null>(null);
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
 
   const registerSaveState = useCallback((s: SaveState | null) => setSaveState(s), []);
+  const reportStatus = useCallback((s: SettingsStatus | null) => setStatus(s), []);
+
+  // Success clears itself — the point is a glance, not a thing to dismiss.
+  // Errors linger: they usually need reading and acting on.
+  useEffect(() => {
+    if (!status) return;
+    const ms = status.isError ? 6000 : 2500;
+    const id = setTimeout(() => setStatus(null), ms);
+    return () => clearTimeout(id);
+  }, [status]);
 
   const goBack = () => {
     if (saveState?.dirty) {
@@ -101,7 +124,7 @@ export function SettingsPageWrapper({ title, children }: SettingsPageProps) {
   };
 
   return (
-    <SettingsPageContext.Provider value={{ registerSaveState, scrollRef }}>
+    <SettingsPageContext.Provider value={{ registerSaveState, scrollRef, reportStatus }}>
       <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
         <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
           <Pressable
@@ -128,6 +151,25 @@ export function SettingsPageWrapper({ title, children }: SettingsPageProps) {
             </Pressable>
           ) : null}
         </View>
+        {/* Save result, directly under the header — next to the button that
+           caused it. It used to render at the BOTTOM of the section's content,
+           so on any page longer than a screen you tapped Save in the top-right
+           and got no feedback at all unless you scrolled to look for it. */}
+        {status ? (
+          <View className="px-6 pt-3">
+            <View
+              className={`rounded-xl px-4 py-3 ${
+                status.isError
+                  ? 'bg-red-500/10 border border-red-100'
+                  : 'bg-green-500/10 border border-green-100'
+              }`}
+            >
+              <Text className={`text-sm ${status.isError ? 'text-red-600' : 'text-green-700'}`}>
+                {status.text}
+              </Text>
+            </View>
+          </View>
+        ) : null}
         {/* A plain Animated.ScrollView. SortableList (react-native-sortables)
            drags only after a long-press, so a normal swipe scrolls the page;
            the scrollRef lets the list auto-scroll while you drag near an edge. */}

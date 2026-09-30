@@ -60,7 +60,7 @@ import {
   type SubscriptionInfo,
 } from '@amixos/shared/lib/subscription';
 import { PLANS } from '@amixos/shared/lib/plans';
-import { useSettingsSaveAction } from '@/components/SettingsPageWrapper';
+import { useSettingsSaveAction, useSettingsStatusReporter } from '@/components/SettingsPageWrapper';
 import { moveTemplate, parseFieldConfig, primaryFieldLabel, localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { diffById, isDirty, isTempId, newTempId } from '@amixos/shared/lib/draftList';
 import {
@@ -212,7 +212,28 @@ function SectionHeader({
   );
 }
 
+/**
+ * Save result for a settings section.
+ *
+ * Inside a SettingsPageWrapper this renders NOTHING here and hands the message
+ * to the wrapper, which shows it under the header next to the Save button.
+ * It used to render inline at the bottom of the section: on any page taller
+ * than the screen you tapped Save in the top-right and saw no confirmation at
+ * all unless you thought to scroll down and look for it.
+ *
+ * Outside a wrapper (a section embedded elsewhere) it still renders inline,
+ * so no call site loses its feedback.
+ */
 function StatusMsg({ msg }: { msg: { text: string; isError: boolean } | null }) {
+  const report = useSettingsStatusReporter();
+  useEffect(() => {
+    if (!report) return;
+    report(msg);
+    // Clear on unmount so a message cannot outlive the screen that produced it.
+    return () => report(null);
+  }, [report, msg?.text, msg?.isError]);
+
+  if (report) return null;
   if (!msg) return null;
   return (
     <View
