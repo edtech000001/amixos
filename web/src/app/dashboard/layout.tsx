@@ -10,6 +10,8 @@ import { BillingGate } from '@/components/BillingGate';
 import { PolicyConsentGate } from '@/components/PolicyConsentGate';
 import { AccountDeletionGate } from '@/components/AccountDeletionGate';
 import { BusinessDeletionBanner } from '@/components/BusinessDeletionBanner';
+import { useBusinessDeletionDate } from '@amixos/shared/lib/businessDeletion';
+import { createSupabaseClient } from '@/lib/supabase';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import ConfirmHost from '@/components/ConfirmHost';
 import { confirm as confirmDialog } from '@amixos/shared/ui/confirmBus';
@@ -40,6 +42,8 @@ const localStorageAdapter: SyncQueueStorage = {
 // Inner component so we can call useApp() inside the AppProvider.
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, business, impersonating } = useApp();
+  const supabase = useMemo(() => createSupabaseClient(), []);
+  const deletion = useBusinessDeletionDate(supabase, business?.id);
   const helpers = useMemo(() => ({
     getApiBaseUrl: () => getApiBaseUrl() || null,
     getJwt: () => getJwt().then(j => j || null).catch(() => null),
@@ -89,6 +93,10 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
               the loop alive while the user moves between pages. */}
           <div className="sticky top-0 z-30 print:hidden">
             <ImpersonationBanner />
+            <BusinessDeletionBanner
+              purgeAfter={deletion.purgeAfter}
+              onRestored={deletion.refresh}
+            />
             <GoogleSyncBanner />
           </div>
           <div className="contents print:hidden"><TrialBanner /></div>
@@ -99,7 +107,6 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           <Fragment key={impersonating ? `imp:${impersonating.userId}` : 'self'}>
             {children}
           </Fragment>
-          <BusinessDeletionBanner />
           <AccountDeletionGate />
           <BillingGate />
           <PolicyConsentGate />

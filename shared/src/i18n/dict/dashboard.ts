@@ -2036,6 +2036,10 @@ export type DashboardDict = {
         pendingTitle: string;
         pendingBody: string;
         pendingBusinessBanner: string;
+        /** Owner-only action on that banner — the only way to cancel a
+         *  scheduled business deletion from inside the app. */
+        restoreBusinessBtn: string;
+        restoreBusinessFailed: string;
         restoreBtn: string;
         restoreNote: string;
         signOutBtn: string;
@@ -5318,6 +5322,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
           pendingTitle: 'Tu cuenta está programada para eliminarse',
           pendingBody: 'Se elimina el {{date}} (en {{days}} días). Puedes restaurarla hasta entonces.',
           pendingBusinessBanner: 'Este negocio se eliminará el {{date}}.',
+          restoreBusinessBtn: 'Cancelar eliminación',
+          restoreBusinessFailed: 'No se pudo cancelar. Intenta de nuevo.',
           paywallLink: 'Eliminar negocio o cuenta',
           paywallHint: 'No necesitas un plan para eliminar tus datos.',
           restoreBtn: 'Restaurar cuenta',
@@ -8598,6 +8604,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
           pendingTitle: 'Your account is scheduled for deletion',
           pendingBody: "It's deleted on {{date}} ({{days}} days from now). You can restore it until then.",
           pendingBusinessBanner: 'This business will be deleted on {{date}}.',
+          restoreBusinessBtn: 'Cancel deletion',
+          restoreBusinessFailed: "That didn't go through. Try again.",
           paywallLink: 'Delete business or account',
           paywallHint: 'You do not need a plan to delete your data.',
           restoreBtn: 'Restore account',

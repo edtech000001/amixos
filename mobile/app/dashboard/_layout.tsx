@@ -19,6 +19,7 @@ import { PolicyConsentGate } from '@/components/PolicyConsentGate';
 import { ShakeToReport } from '@/components/ShakeToReport';
 import { AccountDeletionGate } from '@/components/AccountDeletionGate';
 import { BusinessDeletionBanner } from '@/components/BusinessDeletionBanner';
+import { useBusinessDeletionDate } from '@amixos/shared/lib/businessDeletion';
 import { AssistantWidget } from '@/components/assistant/AssistantWidget';
 import { startNetworkMonitor, onReconnect } from '@/lib/offline/network';
 import { prefetchForOffline } from '@/lib/offline/prefetch';
@@ -135,8 +136,13 @@ function DashboardTabs() {
   // (the "showing saved data" hint) — it also needs to push content down, not
   // just the Google banner. Without this it overlays the screen header.
   const offlineActive = useOutboxStore(s => s.ops.length > 0) || !useNetworkStore(s => s.isOnline);
+  // Scheduled-deletion warning rides in the same stack, so it has to count
+  // toward the offset — otherwise it overlays the screen header instead of
+  // pushing it down.
+  const deletion = useBusinessDeletionDate(supabase, business?.id);
   const [bannerHeight, setBannerHeight] = useState(0);
-  const bannerVisible = status.kind !== 'idle' || offlineActive || !!impersonating;
+  const bannerVisible =
+    status.kind !== 'idle' || offlineActive || !!impersonating || !!deletion.purgeAfter;
   // When the banner hides, drop the offset immediately. When it shows,
   // the next onLayout pass will update bannerHeight. Brief 0→correct
   // transition is fine — better than holding stale height after dismiss.
@@ -150,6 +156,7 @@ function DashboardTabs() {
         style={{ position: 'absolute', top: insets.top, left: 0, right: 0, zIndex: 1000 }}
       >
         <ImpersonationBanner />
+        <BusinessDeletionBanner purgeAfter={deletion.purgeAfter} onRestored={deletion.refresh} />
         <OfflineSyncBanner />
         <GoogleSyncBanner />
       </View>
@@ -235,7 +242,6 @@ function DashboardTabs() {
       {/* Full-screen overlay when the active business has no access (expired
          trial / canceled / 'none'). Self-hides otherwise. Sits ABOVE the tab
          bar via its own high zIndex/elevation. */}
-      <BusinessDeletionBanner />
       <AccountDeletionGate />
       <BillingGate />
       <PolicyConsentGate />
