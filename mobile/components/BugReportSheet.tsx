@@ -6,10 +6,10 @@
 // after it. The card must not live inside the backdrop or its ScrollView stops
 // receiving drags — a bug that has shipped here several times.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View, Text, Pressable, TextInput, ScrollView, ActivityIndicator,
-  Modal as RNModal, Platform, KeyboardAvoidingView,
+  Modal as RNModal, Platform, Keyboard,
 } from 'react-native';
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
@@ -40,6 +40,17 @@ export function BugReportSheet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+
+  // iOS reports the frame before the animation starts (keyboardWillShow), so
+  // the sheet travels with the keyboard instead of jumping after it.
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const onShow = Keyboard.addListener(showEvt, e => setKeyboardHeight(e.endCoordinates.height));
+    const onHide = Keyboard.addListener(hideEvt, () => setKeyboardHeight(0));
+    return () => { onShow.remove(); onHide.remove(); };
+  }, []);
 
   const close = () => {
     // Reset so the next shake starts clean rather than showing the last
@@ -77,20 +88,17 @@ export function BugReportSheet({
 
   return (
     <RNModal visible={visible} transparent animationType="fade" onRequestClose={close}>
-      {/* KeyboardAvoidingView, not the ScrollView's automaticallyAdjustKeyboardInsets:
-          insets only pad INSIDE the scroll view, which does nothing for a card
-          anchored to the bottom of the screen — the keyboard still covered the
-          whole sheet, title included. Padding the container lifts the card
-          itself. The two must not both be on (see CLAUDE.md), so the inset prop
-          is gone.
+      {/* The keyboard height is tracked by hand rather than with
+          KeyboardAvoidingView. A KAV inside an RNModal often never learns the
+          keyboard frame on iOS — the modal is its own native hierarchy — which
+          is why the first attempt at this looked right in code and still left
+          the sheet buried. Listening to the keyboard events and padding the
+          container works the same in and out of a modal.
 
           Still the documented sheet structure: plain container with
           justify-end, absolutely-positioned backdrop FIRST, card as a plain
           sibling after it. */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1, justifyContent: 'flex-end' }}
-      >
+      <View style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: keyboardHeight }}>
         <Pressable
           style={[SHEET_BACKDROP, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]}
           onPress={close}
@@ -153,7 +161,7 @@ export function BugReportSheet({
             </ScrollView>
           )}
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </RNModal>
   );
 }
