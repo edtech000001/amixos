@@ -179,12 +179,18 @@ join public.clients c
  and c.last_name = v.cli;
 
 -- ── Calendar ───────────────────────────────────────────────────────────────
+-- created_by is NOT NULL here (unlike jobs/invoices, where it is optional).
+-- Derived from the business rather than hardcoded, so this stays correct if the
+-- script is ever pointed at a different demo account.
 insert into public.calendar_events
-  (business_id, title, description, start_time, end_time, location, event_type, client_id)
+  (business_id, title, description, start_time, end_time, location, event_type,
+   client_id, created_by)
 select 'b9e348d6-3ea6-42dd-9697-0211b6b376b8', v.title, v.descr,
        (current_date + v.day)::timestamptz + v.start_h,
        (current_date + v.day)::timestamptz + v.end_h,
-       c.address, v.kind, c.id
+       c.address, v.kind, c.id,
+       (select owner_id from public.businesses
+         where id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8')
 from (values
   ('Poda de árboles — Fuentes',       'Tres robles.',                 2, interval '8 hours',  interval '12 hours', 'job'),
   ('Visita de cotización — Castillo', 'Medir muro de contención.',    3, interval '14 hours', interval '15 hours', 'appointment'),
