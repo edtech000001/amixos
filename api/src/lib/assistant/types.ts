@@ -7,6 +7,7 @@
 export const ASSISTANT_ENABLED_BUSINESS_IDS: string[] | null = [
   '47c79845-eb2b-498a-8eb1-94dbac56a5ae', // Prime Solutions
   '27e313fa-fd2f-44e8-b47d-31041a16b09f', // Champion Built
+  'b9e348d6-3ea6-42dd-9697-0211b6b376b8', // App Review demo account
 ];
 
 export function isAssistantEnabled(businessId: string): boolean {
