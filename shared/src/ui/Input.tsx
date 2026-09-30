@@ -79,7 +79,11 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
           onFocus={handleFocus}
           onBlur={handleBlur}
           className={clsx(
-            'flex-1 py-3.5 text-base text-ink',
+            // NOT `text-base`: that carries Tailwind's line-height (1.5rem), and
+            // a lineHeight on a TextInput makes iOS sit the text low in the box
+            // and clip descenders — the tail of a "g" was being cut off. Size is
+            // set in `style` below so no line-height comes with it.
+            'flex-1 py-3.5 text-ink',
             className,
           )}
           // The colour is ALSO set as a real style, not just via text-ink.
@@ -88,7 +92,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
           // its dots in the system default — black, which is invisible against
           // the dark theme. Only showed in dark mode, because in light mode the
           // default happens to match.
-          style={[{ color: c.ink }, style]}
+          style={[{ color: c.ink, fontSize: 16 }, style]}
           textAlign={centerText ? 'center' : undefined}
           {...rest}
         />

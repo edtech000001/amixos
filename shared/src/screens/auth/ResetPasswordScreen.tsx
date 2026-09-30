@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Lock, ArrowLeft, CheckCircle, AlertTriangle } from 'lucide-react-native';
+import { Lock, ArrowLeft, CheckCircle, AlertTriangle, Eye, EyeOff } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { Button } from '../../ui/Button';
@@ -62,6 +62,9 @@ export function ResetPasswordScreen({
   });
 
   const [error, setError] = useState('');
+  // Parity with the web screens, which have had this since they shipped.
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [done, setDone] = useState(false);
 
   const submit = async (data: FormData) => {
@@ -164,7 +167,16 @@ export function ResetPasswordScreen({
             <Input
               label={t.reset.newPassword}
               placeholder={t.reset.newPasswordPlaceholder}
-              secureTextEntry
+              secureTextEntry={!showPassword}
+              rightIcon={
+                <Pressable
+                  onPress={() => setShowPassword(v => !v)}
+                  hitSlop={8}
+                  accessibilityLabel={showPassword ? t.a11y.hidePassword : t.a11y.showPassword}
+                >
+                  {showPassword ? <EyeOff size={18} color={c.muted} /> : <Eye size={18} color={c.muted} />}
+                </Pressable>
+              }
               autoCapitalize="none"
               autoComplete="new-password"
               leftIcon={<Lock size={18} color={c.faint} />}
@@ -182,7 +194,16 @@ export function ResetPasswordScreen({
             <Input
               label={t.reset.confirmPassword}
               placeholder={t.reset.confirmPasswordPlaceholder}
-              secureTextEntry
+              secureTextEntry={!showConfirm}
+              rightIcon={
+                <Pressable
+                  onPress={() => setShowConfirm(v => !v)}
+                  hitSlop={8}
+                  accessibilityLabel={showConfirm ? t.a11y.hidePassword : t.a11y.showPassword}
+                >
+                  {showConfirm ? <EyeOff size={18} color={c.muted} /> : <Eye size={18} color={c.muted} />}
+                </Pressable>
+              }
               autoCapitalize="none"
               autoComplete="new-password"
               leftIcon={<Lock size={18} color={c.faint} />}

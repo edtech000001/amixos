@@ -11,7 +11,7 @@ import {
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Mail, Lock } from 'lucide-react-native';
+import { Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
 import Svg, {
   Defs,
   LinearGradient as SvgLinearGradient,
@@ -62,6 +62,10 @@ export function LoginScreen({
     resolver: zodResolver(loginSchema),
   });
   const [error, setError] = useState(initialError ?? '');
+  // Parity with the web screen, which has had this since it shipped.
+  // Recommended by NIST SP 800-63B: letting people check what they typed
+  // means fewer failed attempts and fewer resets.
+  const [showPassword, setShowPassword] = useState(false);
 
   const reasonToMessage = (reason: Extract<LoginAttemptResult, { ok: false }>['reason']): string => {
     switch (reason) {
@@ -176,9 +180,18 @@ export function LoginScreen({
                 render={({ field: { value, onChange, onBlur } }) => (
                   <Input
                     label={t.register.password}
-                    secureTextEntry
+                    secureTextEntry={!showPassword}
                     autoComplete="password"
-                    placeholder="••••••••"
+                    placeholder={t.register.passwordPlaceholder}
+                    rightIcon={
+                      <Pressable
+                        onPress={() => setShowPassword(v => !v)}
+                        hitSlop={8}
+                        accessibilityLabel={showPassword ? t.a11y.hidePassword : t.a11y.showPassword}
+                      >
+                        {showPassword ? <EyeOff size={18} color={c.muted} /> : <Eye size={18} color={c.muted} />}
+                      </Pressable>
+                    }
                     leftIcon={<Lock size={18} color={c.faint} />}
                     error={errors.password?.message}
                     value={value ?? ''}

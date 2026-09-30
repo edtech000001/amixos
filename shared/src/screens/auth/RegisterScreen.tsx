@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Mail, Lock, User } from 'lucide-react-native';
+import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { Button } from '../../ui/Button';
@@ -77,6 +77,9 @@ export function RegisterScreen({
     resolver: zodResolver(registerSchema),
   });
   const [error, setError] = useState('');
+  // Parity with the web screens, which have had this since they shipped.
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const onSubmit = async (data: RegisterForm) => {
     setError('');
@@ -184,8 +187,17 @@ export function RegisterScreen({
                 render={({ field: { value, onChange, onBlur } }) => (
                   <Input
                     label={t.register.password}
-                    secureTextEntry
+                    secureTextEntry={!showPassword}
                     placeholder={t.register.passwordPlaceholder}
+                    rightIcon={
+                      <Pressable
+                        onPress={() => setShowPassword(v => !v)}
+                        hitSlop={8}
+                        accessibilityLabel={showPassword ? t.a11y.hidePassword : t.a11y.showPassword}
+                      >
+                        {showPassword ? <EyeOff size={18} color={c.muted} /> : <Eye size={18} color={c.muted} />}
+                      </Pressable>
+                    }
                     leftIcon={<Lock size={18} color={c.faint} />}
                     error={errors.password?.message}
                     value={value ?? ''}
@@ -201,8 +213,17 @@ export function RegisterScreen({
                 render={({ field: { value, onChange, onBlur } }) => (
                   <Input
                     label={t.register.confirmPassword}
-                    secureTextEntry
+                    secureTextEntry={!showConfirm}
                     placeholder={t.register.confirmPasswordPlaceholder}
+                    rightIcon={
+                      <Pressable
+                        onPress={() => setShowConfirm(v => !v)}
+                        hitSlop={8}
+                        accessibilityLabel={showConfirm ? t.a11y.hidePassword : t.a11y.showPassword}
+                      >
+                        {showConfirm ? <EyeOff size={18} color={c.muted} /> : <Eye size={18} color={c.muted} />}
+                      </Pressable>
+                    }
                     leftIcon={<Lock size={18} color={c.faint} />}
                     error={errors.confirmPassword?.message}
                     value={value ?? ''}

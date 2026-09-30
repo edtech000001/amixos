@@ -107,6 +107,11 @@ export type AuthDict = {
   callback: {
     verifying: string;
   };
+  /** Screen-reader labels shared by every password field's show/hide toggle. */
+  a11y: {
+    showPassword: string;
+    hidePassword: string;
+  };
 };
 
 export const auth: Record<Locale, AuthDict> = {
@@ -146,7 +151,7 @@ export const auth: Record<Locale, AuthDict> = {
       password: 'Contraseña',
       passwordPlaceholder: 'Mínimo 8 caracteres',
       confirmPassword: 'Confirmar contraseña',
-      confirmPasswordPlaceholder: '••••••••',
+      confirmPasswordPlaceholder: 'Repite la contraseña',
       verificationNote: '📧 Al registrarte recibirás un correo de verificación. Revísalo antes de iniciar sesión.',
       submit: 'Crear cuenta',
       termsBefore: 'Al registrarte aceptas nuestros',
@@ -212,6 +217,10 @@ export const auth: Record<Locale, AuthDict> = {
       continueWith: 'Continuar con',
       registerWith: 'Registrarse con',
     },
+    a11y: {
+      showPassword: 'Mostrar contraseña',
+      hidePassword: 'Ocultar contraseña',
+    },
     callback: {
       verifying: 'Verificando...',
     },
@@ -252,7 +261,7 @@ export const auth: Record<Locale, AuthDict> = {
       password: 'Password',
       passwordPlaceholder: 'At least 8 characters',
       confirmPassword: 'Confirm password',
-      confirmPasswordPlaceholder: '••••••••',
+      confirmPasswordPlaceholder: 'Repeat the password',
       verificationNote: "📧 You'll get a verification email when you sign up. Check it before signing in.",
       submit: 'Create account',
       termsBefore: 'By signing up you agree to our',
@@ -317,6 +326,10 @@ export const auth: Record<Locale, AuthDict> = {
     oauth: {
       continueWith: 'Continue with',
       registerWith: 'Sign up with',
+    },
+    a11y: {
+      showPassword: 'Show password',
+      hidePassword: 'Hide password',
     },
     callback: {
       verifying: 'Verifying...',
