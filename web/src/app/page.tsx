@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useLang } from '@/i18n/LangProvider';
 import { Logo } from '@amixos/shared/ui/Logo';
+import { LightPageBackground } from '@/components/LightPageBackground';
 import { SUPPORT_EMAIL } from '@amixos/shared/lib/support';
 import type { LandingDict } from '@amixos/shared';
 import type { Locale } from '@amixos/shared';
@@ -139,6 +140,7 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white text-gray-900 font-sans">
+      <LightPageBackground />
 
       {/* ── Navbar ─────────────────────────────────────────────────────────── */}
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 ${

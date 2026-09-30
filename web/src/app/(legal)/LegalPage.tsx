@@ -15,6 +15,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
+import { LightPageBackground } from '@/components/LightPageBackground';
 
 // Types and text both come from shared/ — the consent gate inside the apps
 // renders the same documents, and they must not drift.
@@ -41,6 +42,7 @@ export function LegalPage({ content }: { content: LegalDoc }) {
 
   return (
     <div className="min-h-screen bg-white text-gray-900">
+      <LightPageBackground />
       <div className="mx-auto max-w-3xl px-6 py-12">
         <div className="flex items-center justify-between gap-4 mb-10">
           {canGoBack ? (

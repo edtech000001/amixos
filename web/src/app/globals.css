@@ -153,3 +153,12 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .amixos-fade-in { animation: none; }
 }
+
+/* Public light-only pages (landing, /terms, /privacy) — see
+   components/LightPageBackground.tsx. overscroll-behavior stops the
+   rubber-band region existing at all; the background is the belt to its
+   braces, for browsers that ignore it. */
+body.light-page {
+  background: #ffffff;
+  overscroll-behavior-y: none;
+}
