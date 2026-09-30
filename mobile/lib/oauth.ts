@@ -2,12 +2,6 @@ import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import {
-  GoogleSignin,
-  statusCodes,
-  isSuccessResponse,
-  isErrorWithCode,
-} from '@react-native-google-signin/google-signin';
 import type { Provider } from '@supabase/supabase-js';
 import { createSupabaseClient } from './supabase';
 
@@ -24,13 +18,33 @@ function getRedirectUri(): string {
   return AuthSession.makeRedirectUri({ scheme: 'amixos', path: REDIRECT_PATH });
 }
 
+// Loaded lazily, NOT imported at module scope. The package calls
+// TurboModuleRegistry.getEnforcing() while it evaluates, so a static import
+// throws on any binary built before the pod was linked — and because oauth.ts
+// is imported by the login screen, that throw took the whole sign-in screen
+// down instead of falling back to the browser flow. Requiring it inside a
+// try/catch keeps a missing module a degraded path rather than a crash.
+type GoogleSigninModule = typeof import('@react-native-google-signin/google-signin');
+let googleMod: GoogleSigninModule | null | undefined;
+
+function loadGoogleSignin(): GoogleSigninModule | null {
+  if (googleMod !== undefined) return googleMod;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    googleMod = require('@react-native-google-signin/google-signin') as GoogleSigninModule;
+  } catch {
+    googleMod = null;
+  }
+  return googleMod;
+}
+
 let googleConfigured = false;
 
 /** Configure once, lazily — calling this at module scope would run before the
  *  native module is ready on a cold start. */
-function configureGoogle(iosClientId: string) {
+function configureGoogle(mod: GoogleSigninModule, iosClientId: string) {
   if (googleConfigured) return;
-  GoogleSignin.configure({ iosClientId });
+  mod.GoogleSignin.configure({ iosClientId });
   googleConfigured = true;
 }
 
@@ -61,12 +75,17 @@ export async function signInWithGoogle(): Promise<OAuthResult> {
     return signInWithBrowserOAuth('google');
   }
 
-  try {
-    configureGoogle(iosClientId);
-    await GoogleSignin.hasPlayServices();
-    const response = await GoogleSignin.signIn();
+  // Binary predates the native module (e.g. a dev client built before it was
+  // added) — the browser flow still works, so use it rather than failing.
+  const mod = loadGoogleSignin();
+  if (!mod) return signInWithBrowserOAuth('google');
 
-    if (!isSuccessResponse(response)) {
+  try {
+    configureGoogle(mod, iosClientId);
+    await mod.GoogleSignin.hasPlayServices();
+    const response = await mod.GoogleSignin.signIn();
+
+    if (!mod.isSuccessResponse(response)) {
       // The user backed out of the native sheet.
       return { ok: false, reason: 'cancelled' };
     }
@@ -84,11 +103,11 @@ export async function signInWithGoogle(): Promise<OAuthResult> {
     if (error) return mapOAuthError(error.message);
     return { ok: true };
   } catch (err) {
-    if (isErrorWithCode(err)) {
-      if (err.code === statusCodes.SIGN_IN_CANCELLED) {
+    if (mod.isErrorWithCode(err)) {
+      if (err.code === mod.statusCodes.SIGN_IN_CANCELLED) {
         return { ok: false, reason: 'cancelled' };
       }
-      if (err.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+      if (err.code === mod.statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
         return signInWithBrowserOAuth('google');
       }
     }
