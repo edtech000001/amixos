@@ -102,8 +102,10 @@ join public.clients c
 -- Line items on the two biggest jobs, so a reviewer opening one sees a
 -- breakdown rather than a bare total. item_type is constrained to
 -- labor | material | equipment | other.
-insert into public.job_items (job_id, item_type, description, quantity, unit_price, total)
-select j.id, v.kind, v.descr, v.qty, v.price, v.qty * v.price
+-- `total` is a GENERATED column (quantity * unit_price) — Postgres rejects any
+-- explicit value, even the correct one.
+insert into public.job_items (job_id, item_type, description, quantity, unit_price)
+select j.id, v.kind, v.descr, v.qty, v.price
 from (values
   ('Instalación de riego — Fase 1', 'labor',     'Mano de obra — instalación',        48, 65.00),
   ('Instalación de riego — Fase 1', 'material',  'Tubería PVC 1" (10 ft)',            60, 14.00),
