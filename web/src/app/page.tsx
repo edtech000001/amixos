@@ -2,77 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { createSupabaseClient } from '@/lib/supabase';
 import {
-  CheckCircle2, ChevronDown, Menu, X,
-  Globe, ArrowRight, Star, Zap, Shield, Smartphone,
+  CheckCircle2, ChevronDown, Menu, X, Home, Users, ClipboardList, FileText, LayoutGrid,
+  Globe, Star, Zap, Shield, Smartphone,
 } from 'lucide-react';
 import { useLang } from '@/i18n/LangProvider';
+import { Logo } from '@amixos/shared/ui/Logo';
 import type { LandingDict } from '@amixos/shared';
-
-// ─── Waitlist Form ────────────────────────────────────────────────────────────
-function WaitlistForm({ compact = false }: { compact?: boolean }) {
-  const { t: full } = useLang();
-  const t = full.landing;
-  const supabase = createSupabaseClient();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [bizType, setBizType] = useState('');
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'dup' | 'error'>('idle');
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) return;
-    setStatus('loading');
-    const { error } = await supabase.from('waitlist').insert({
-      email: email.trim().toLowerCase(),
-      first_name: name.trim() || null,
-      business_type: bizType || null,
-      referrer: typeof window !== 'undefined' ? document.referrer || null : null,
-    });
-    if (!error) { setStatus('success'); return; }
-    if (error.code === '23505') { setStatus('dup'); return; }
-    setStatus('error');
-  };
-
-  if (status === 'success') {
-    return (
-      <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-4">
-        <CheckCircle2 size={22} className="text-emerald-500 shrink-0"/>
-        <p className="text-emerald-700 font-semibold">{t.form.success}</p>
-      </div>
-    );
-  }
-
-  return (
-    <form onSubmit={submit} className="flex flex-col gap-3 w-full">
-      {!compact && (
-        <>
-          <input type="text" placeholder={t.form.name} value={name}
-            onChange={e => setName(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white shadow-sm"/>
-          <select value={bizType} onChange={e => setBizType(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white shadow-sm appearance-none">
-            <option value="">{t.form.biz}</option>
-            {t.form.bizOpts.map(o => <option key={o} value={o}>{o}</option>)}
-          </select>
-        </>
-      )}
-      <div className="flex gap-2">
-        <input type="email" required placeholder={t.form.email} value={email}
-          onChange={e => setEmail(e.target.value)}
-          className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white shadow-sm"/>
-        <button type="submit" disabled={status === 'loading'}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-3 rounded-xl transition-colors whitespace-nowrap text-sm disabled:opacity-60">
-          {status === 'loading' ? '...' : compact ? t.form.ctaCompact : t.form.cta}
-        </button>
-      </div>
-      {status === 'dup' && <p className="text-xs text-orange-500">{t.form.dup}</p>}
-      {status === 'error' && <p className="text-xs text-red-500">{t.form.error}</p>}
-      {!compact && <p className="text-xs text-gray-400 text-center">{t.form.note}</p>}
-    </form>
-  );
-}
+import type { Locale } from '@amixos/shared';
+import {
+  PLANS, TRIAL_DAYS, formatPlanPrice, planMonthlyEquivalent,
+  type BillingPeriod,
+} from '@amixos/shared/lib/plans';
 
 // ─── FAQ Item ─────────────────────────────────────────────────────────────────
 function FaqItem({ q, a }: { q: string; a: string }) {
@@ -136,10 +77,22 @@ function AppMockup({ t }: { t: LandingDict }) {
             </div>
           ))}
         </div>
-        {/* Nav bar */}
-        <div className="border-t border-gray-100 px-4 py-3 flex justify-around">
-          {['🏠', '👥', '📄', '👷', '⚙️'].map(icon => (
-            <span key={icon} className="text-lg">{icon}</span>
+        {/* Dock — the real one: the five default apps from
+            mobile/lib/dockApps.ts, with the same lucide icons the app uses.
+            It used to be five emoji (including a hard-hat that maps to nothing
+            in the product), which is the tell that a screenshot is fake. */}
+        <div className="border-t border-gray-100 px-3 py-2.5 flex justify-around">
+          {[
+            { Icon: Home, label: t.mockup.dock.home, active: true },
+            { Icon: ClipboardList, label: t.mockup.dock.jobs },
+            { Icon: Users, label: t.mockup.dock.clients },
+            { Icon: FileText, label: t.mockup.dock.invoices },
+            { Icon: LayoutGrid, label: t.mockup.dock.more },
+          ].map(({ Icon, label, active }) => (
+            <div key={label} className="flex flex-col items-center gap-1 w-12">
+              <Icon size={17} className={active ? 'text-indigo-600' : 'text-gray-400'} strokeWidth={2}/>
+              <span className={`text-[9px] font-medium ${active ? 'text-indigo-600' : 'text-gray-400'}`}>{label}</span>
+            </div>
           ))}
         </div>
       </div>
@@ -161,6 +114,7 @@ export default function LandingPage() {
   const { t: full, locale, locales, labels, setLocale } = useLang();
   const t = full.landing;
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [period, setPeriod] = useState<BillingPeriod>('monthly');
   const [scrolled, setScrolled] = useState(false);
 
   const idx = locales.indexOf(locale);
@@ -179,12 +133,9 @@ export default function LandingPage() {
       {/* ── Navbar ─────────────────────────────────────────────────────────── */}
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 ${scrolled ? 'bg-white/95 backdrop-blur-sm shadow-sm border-b border-gray-100' : 'bg-transparent'}`}>
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-black text-sm">A</span>
-            </div>
-            <span className="font-black text-lg text-gray-900">Amixos</span>
-          </div>
+          <Link href="/" aria-label="Amixos" className="flex items-center">
+            <Logo variant="side" width={132} ink="black" />
+          </Link>
 
           {/* Desktop nav */}
           <div className="hidden md:flex items-center gap-6">
@@ -239,7 +190,21 @@ export default function LandingPage() {
               <p className="text-lg text-gray-500 leading-relaxed mb-8 max-w-md">
                 {t.hero.sub}
               </p>
-              <WaitlistForm/>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Link
+                  href="/auth/register"
+                  className="inline-flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-7 py-3.5 rounded-xl transition-colors shadow-lg shadow-indigo-600/20"
+                >
+                  {t.hero.ctaPrimary}
+                </Link>
+                <a
+                  href="#pricing"
+                  className="inline-flex items-center justify-center border border-gray-200 bg-white hover:border-gray-300 text-gray-700 font-semibold px-7 py-3.5 rounded-xl transition-colors"
+                >
+                  {t.hero.ctaSecondary}
+                </a>
+              </div>
+              <p className="text-xs text-gray-400 mt-3">{t.hero.note}</p>
             </div>
             <div className="hidden md:block">
               <AppMockup t={t}/>
@@ -342,26 +307,107 @@ export default function LandingPage() {
       </section>
 
       {/* ── Pricing ────────────────────────────────────────────────────────── */}
-      <section className="py-20 px-5">
-        <div className="max-w-md mx-auto text-center">
-          <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-3">{t.pricing.tag}</p>
-          <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-3">{t.pricing.h}</h2>
-          <p className="text-gray-500 text-sm mb-8">{t.pricing.sub}</p>
-          <div className="bg-white border-2 border-indigo-600 rounded-3xl p-8 shadow-xl">
-            <div className="flex items-end justify-center gap-1 mb-6">
-              <span className="text-5xl font-black text-indigo-600">$0</span>
-              <span className="text-gray-400 mb-2">{t.pricing.perMonth}</span>
-            </div>
-            <div className="flex flex-col gap-3 mb-8 text-left">
-              {t.pricing.features.map(f => (
-                <div key={f} className="flex items-center gap-2.5">
-                  <CheckCircle2 size={16} className="text-emerald-500 shrink-0"/>
-                  <span className="text-sm text-gray-700">{f}</span>
-                </div>
+      {/* Rendered straight from shared/lib/plans.ts — the same catalogue the
+          in-app upgrade modal reads, which is itself pinned to the Stripe
+          amounts. A hand-written price here would be a promise the checkout
+          does not keep the moment either side moves. */}
+      <section id="pricing" className="py-20 px-5 scroll-mt-16">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center">
+            <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-3">{t.pricing.tag}</p>
+            <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-3">{t.pricing.h}</h2>
+            <p className="text-gray-500 text-sm mb-8">{t.pricing.sub}</p>
+          </div>
+
+          {/* Billing toggle */}
+          <div className="flex items-center justify-center gap-3 mb-10">
+            <div className="inline-flex rounded-full border border-gray-200 bg-white p-1 shadow-sm">
+              {(['monthly', 'annual'] as BillingPeriod[]).map(p => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPeriod(p)}
+                  className={`px-5 py-2 text-sm font-semibold rounded-full transition-colors ${
+                    period === p ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  {p === 'monthly' ? t.pricing.monthly : t.pricing.annual}
+                </button>
               ))}
             </div>
-            <WaitlistForm compact/>
+            <span className="hidden sm:inline text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full">
+              {t.pricing.annualBadge}
+            </span>
           </div>
+
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 items-start">
+            {PLANS.map(plan => {
+              const copy = plan.copy[locale as Locale] ?? plan.copy.es;
+              const perMonth = planMonthlyEquivalent(plan, period);
+              return (
+                <div
+                  key={plan.key}
+                  className={`relative flex flex-col h-full rounded-3xl p-6 bg-white transition-shadow ${
+                    plan.recommended
+                      ? 'border-2 border-indigo-600 shadow-xl'
+                      : 'border border-gray-200 shadow-sm hover:shadow-md'
+                  }`}
+                >
+                  {plan.recommended && (
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap bg-indigo-600 text-white text-[11px] font-bold px-3 py-1 rounded-full">
+                      {t.pricing.popular}
+                    </span>
+                  )}
+
+                  <h3 className="text-lg font-black text-gray-900">{copy.name}</h3>
+                  <p className="text-xs text-gray-500 mt-1 mb-5 min-h-[32px]">{copy.tagline}</p>
+
+                  {plan.custom ? (
+                    <p className="text-3xl font-black text-gray-900 mb-1">—</p>
+                  ) : (
+                    <>
+                      <div className="flex items-end gap-1">
+                        <span className="text-4xl font-black text-gray-900">${formatPlanPrice(perMonth)}</span>
+                        <span className="text-gray-400 mb-1.5 text-sm">{t.pricing.perMonth}</span>
+                      </div>
+                      {/* Annual is shown as its monthly equivalent so the tiers stay
+                          comparable; the real charge is stated underneath so nobody
+                          is surprised by the amount on their card. */}
+                      <p className="text-xs text-gray-400 mt-1 h-4">
+                        {period === 'annual'
+                          ? t.pricing.billedAnnually.replace('{total}', formatPlanPrice(plan.annualTotal))
+                          : ''}
+                      </p>
+                    </>
+                  )}
+
+                  <div className="flex flex-col gap-2.5 my-6 flex-1">
+                    {copy.features.map(f => (
+                      <div key={f} className="flex items-start gap-2">
+                        <CheckCircle2 size={15} className="text-emerald-500 shrink-0 mt-0.5"/>
+                        <span className="text-sm text-gray-600 leading-snug">{f}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <Link
+                    href={plan.custom ? '/contrato' : '/auth/register'}
+                    className={`text-center text-sm font-semibold px-4 py-3 rounded-xl transition-colors ${
+                      plan.recommended
+                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                        : 'border border-gray-200 text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    {plan.custom ? t.pricing.ctaContact : t.pricing.ctaTrial}
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="text-center text-xs text-gray-400 mt-8">
+            {t.pricing.note.replace('{days}', String(TRIAL_DAYS))}
+          </p>
         </div>
       </section>
 
@@ -383,18 +429,21 @@ export default function LandingPage() {
         <div className="max-w-2xl mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-3">{t.finalCta.h}</h2>
           <p className="text-gray-500 mb-8">{t.finalCta.sub}</p>
-          <WaitlistForm/>
+          <Link
+            href="/auth/register"
+            className="inline-flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-8 py-4 rounded-xl transition-colors shadow-lg shadow-indigo-600/20"
+          >
+            {t.finalCta.cta}
+          </Link>
+          <p className="text-xs text-gray-400 mt-3">{t.hero.note}</p>
         </div>
       </section>
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <footer className="border-t border-gray-100 py-8 px-5">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-indigo-600 rounded-md flex items-center justify-center">
-              <span className="text-white font-black text-xs">A</span>
-            </div>
-            <span className="font-black text-gray-900">Amixos</span>
+          <div className="flex items-center gap-3">
+            <Logo variant="side" width={110} ink="black" />
             <span className="text-gray-400 text-sm">— {t.footer.tagline}</span>
           </div>
           <div className="flex items-center gap-6 text-xs text-gray-400">

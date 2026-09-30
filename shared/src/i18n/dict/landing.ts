@@ -8,22 +8,13 @@ export const landing: Record<Locale, LandingDict> = {
       switchLang: 'Switch to English',
     },
     hero: {
-      tag: '🚀 Acceso anticipado — gratis durante beta',
+      tag: '✨ Ya disponible — 14 días gratis',
       h1_1: 'Tu negocio.',
       h1_2: 'En tu idioma.',
       sub: 'Amixos es el sistema de administración de negocios diseñado para dueños de negocios hispanos en Estados Unidos. Clientes, facturas, empleados e inventario — todo en un solo lugar, en español.',
-    },
-    form: {
-      name: 'Tu nombre',
-      email: 'Tu correo',
-      biz: 'Tipo de negocio',
-      bizOpts: ['Construcción', 'Jardinería', 'Limpieza', 'Plomería', 'Electricidad', 'Otro'],
-      cta: 'Quiero acceso anticipado →',
-      ctaCompact: 'Unirme →',
-      note: 'Gratis durante el período beta. Sin tarjeta de crédito.',
-      success: '¡Listo! Te avisamos cuando esté disponible.',
-      dup: 'Ese correo ya está registrado.',
-      error: 'Error, intenta de nuevo.',
+      ctaPrimary: 'Empieza gratis →',
+      ctaSecondary: 'Ver planes',
+      note: '14 días gratis. Sin tarjeta de crédito.',
     },
     trust: {
       secureData: 'Datos seguros',
@@ -73,34 +64,34 @@ export const landing: Record<Locale, LandingDict> = {
       p3: 'Construí Amixos para mí primero. Ahora lo estoy abriendo para todos los dueños de negocios hispanos que merecen una herramienta que hable su idioma.',
     },
     pricing: {
-      tag: 'Precio',
-      h: 'Gratis durante el beta',
-      sub: 'Los primeros 500 usuarios en la lista de espera obtienen 6 meses gratis cuando lancemos.',
+      tag: 'Precios',
+      h: 'Un plan para cada etapa',
+      sub: 'Empieza con 14 días gratis. Sin tarjeta, sin contratos, cancela cuando quieras.',
       perMonth: '/mes',
-      features: [
-        'Clientes ilimitados',
-        'Facturas ilimitadas',
-        'Hasta 25 empleados',
-        'Inventario completo',
-        'Calendario',
-        'Soporte en español',
-      ],
-      cta: 'Asegurar mi lugar gratis →',
+      monthly: 'Mensual',
+      annual: 'Anual',
+      annualBadge: '2 meses gratis',
+      billedAnnually: 'facturado ${total}/año',
+      popular: 'Más popular',
+      ctaTrial: 'Empezar gratis',
+      ctaContact: 'Contáctanos',
+      note: 'Todos los planes incluyen 14 días gratis. Sin tarjeta de crédito.',
     },
     faq: {
       tag: 'Preguntas',
       h: 'Preguntas frecuentes',
       items: [
-        { q: '¿Cuándo estará disponible?', a: 'Estamos en beta activa ahora. Los usuarios en lista de espera serán los primeros en obtener acceso, gratis por 6 meses.' },
+        { q: '¿Puedo probarlo antes de pagar?', a: 'Sí. 14 días completos con todo incluido, sin tarjeta de crédito. Si no es para ti, no pagas nada.' },
         { q: '¿Necesito saber de computadoras?', a: 'No. Si puedes usar WhatsApp, puedes usar Amixos. Está diseñado para ser simple.' },
-        { q: '¿Funciona en el teléfono?', a: 'Sí. La versión web funciona en cualquier teléfono. La app móvil nativa está en desarrollo.' },
+        { q: '¿Funciona en el teléfono?', a: 'Sí. La versión web funciona en cualquier teléfono, y la app móvil para iPhone y Android llega muy pronto.' },
         { q: '¿Qué pasa con mis datos?', a: 'Tus datos son tuyos. Puedes exportarlos en cualquier momento. Nunca los vendemos.' },
         { q: '¿Hay contratos?', a: 'No. Mes a mes, cancela cuando quieras. Sin letra chica.' },
       ],
     },
     finalCta: {
       h: '¿Listo para ordenar tu negocio?',
-      sub: 'Únete a los primeros dueños de negocios hispanos que están transformando cómo administran su operación.',
+      sub: 'Únete a los dueños de negocios hispanos que ya están transformando cómo administran su operación.',
+      cta: 'Crear mi cuenta gratis →',
     },
     footer: {
       tagline: 'Donde negocios prosperan.',
@@ -113,6 +104,7 @@ export const landing: Record<Locale, LandingDict> = {
       invoices: 'Facturas',
       employees: 'Empleados',
       recent: 'Actividad reciente',
+      dock: { home: 'Inicio', jobs: 'Trabajos', clients: 'Clientes', invoices: 'Facturas', more: 'Más' },
       paid: 'Pagada',
       sent: 'Enviada',
       draft: 'Borrador',
@@ -128,22 +120,13 @@ export const landing: Record<Locale, LandingDict> = {
       switchLang: 'Cambiar a Español',
     },
     hero: {
-      tag: '🚀 Early access — free during beta',
+      tag: '✨ Now available — 14 days free',
       h1_1: 'Your business.',
       h1_2: 'Your language.',
       sub: 'Amixos is the business management platform built for Hispanic small business owners in the US. Clients, invoices, employees, and inventory — all in one place, bilingual.',
-    },
-    form: {
-      name: 'Your name',
-      email: 'Your email',
-      biz: 'Business type',
-      bizOpts: ['Construction', 'Landscaping', 'Cleaning', 'Plumbing', 'Electrical', 'Other'],
-      cta: 'Get early access →',
-      ctaCompact: 'Join →',
-      note: 'Free during beta. No credit card needed.',
-      success: "You're in! We'll notify you when it's ready.",
-      dup: 'That email is already registered.',
-      error: 'Error, try again.',
+      ctaPrimary: 'Start free →',
+      ctaSecondary: 'See plans',
+      note: '14 days free. No credit card required.',
     },
     trust: {
       secureData: 'Secure data',
@@ -194,33 +177,33 @@ export const landing: Record<Locale, LandingDict> = {
     },
     pricing: {
       tag: 'Pricing',
-      h: 'Free during beta',
-      sub: 'The first 500 users on the waitlist get 6 months free when we launch.',
+      h: 'A plan for every stage',
+      sub: 'Start with 14 days free. No card, no contracts, cancel anytime.',
       perMonth: '/mo',
-      features: [
-        'Unlimited clients',
-        'Unlimited invoices',
-        'Up to 25 employees',
-        'Full inventory',
-        'Calendar',
-        'Spanish-first support',
-      ],
-      cta: 'Secure my free spot →',
+      monthly: 'Monthly',
+      annual: 'Annual',
+      annualBadge: '2 months free',
+      billedAnnually: 'billed ${total}/yr',
+      popular: 'Most popular',
+      ctaTrial: 'Start free',
+      ctaContact: 'Contact us',
+      note: 'Every plan includes 14 days free. No credit card required.',
     },
     faq: {
       tag: 'FAQ',
       h: 'Frequently asked questions',
       items: [
-        { q: 'When will it be available?', a: "We're in active beta now. Waitlist users will be the first to get access, free for 6 months." },
+        { q: 'Can I try it before paying?', a: 'Yes. A full 14 days with everything included, no credit card. If it is not for you, you pay nothing.' },
         { q: 'Do I need to be tech-savvy?', a: "No. If you can use WhatsApp, you can use Amixos. It's designed to be simple." },
-        { q: 'Does it work on my phone?', a: 'Yes. The web version works on any phone. A native mobile app is in development.' },
+        { q: 'Does it work on my phone?', a: 'Yes. The web version works on any phone, and the iPhone and Android app is coming very soon.' },
         { q: 'What happens to my data?', a: 'Your data is yours. Export anytime. We never sell it.' },
         { q: 'Are there contracts?', a: 'No. Month to month, cancel anytime. No fine print.' },
       ],
     },
     finalCta: {
       h: 'Ready to get organized?',
-      sub: 'Join the first Hispanic business owners transforming how they run their operation.',
+      sub: 'Join the Hispanic business owners already transforming how they run their operation.',
+      cta: 'Create my free account →',
     },
     footer: {
       tagline: 'Where businesses thrive.',
@@ -233,6 +216,7 @@ export const landing: Record<Locale, LandingDict> = {
       invoices: 'Invoices',
       employees: 'Employees',
       recent: 'Recent activity',
+      dock: { home: 'Home', jobs: 'Jobs', clients: 'Clients', invoices: 'Invoices', more: 'More' },
       paid: 'Paid',
       sent: 'Sent',
       draft: 'Draft',
@@ -245,24 +229,32 @@ export const landing: Record<Locale, LandingDict> = {
 
 export type LandingDict = {
   nav: { login: string; cta: string; switchLang: string };
-  hero: { tag: string; h1_1: string; h1_2: string; sub: string };
-  form: {
-    name: string; email: string; biz: string; bizOpts: string[];
-    cta: string; ctaCompact: string; note: string;
-    success: string; dup: string; error: string;
+  hero: {
+    tag: string; h1_1: string; h1_2: string; sub: string;
+    ctaPrimary: string; ctaSecondary: string; note: string;
   };
   trust: { secureData: string; noContracts: string; spanishFirst: string; mobileReady: string; support: string };
   problem: { tag: string; h: string; items: string[] };
   solution: { tag: string; h: string; features: { icon: string; title: string; desc: string }[] };
   how: { tag: string; h: string; steps: { n: string; title: string; desc: string }[] };
   story: { tag: string; h: string; role: string; p1: string; p2: string; p3: string };
-  pricing: { tag: string; h: string; sub: string; perMonth: string; features: string[]; cta: string };
+  /** Plan names, prices and feature lists come from shared/lib/plans.ts — the
+   *  same catalogue the in-app pricing modal reads, so the site can never
+   *  advertise a tier or a price that Stripe does not have. Only the framing
+   *  around them lives here. */
+  pricing: {
+    tag: string; h: string; sub: string; perMonth: string;
+    monthly: string; annual: string; annualBadge: string;
+    billedAnnually: string; popular: string;
+    ctaTrial: string; ctaContact: string; note: string;
+  };
   faq: { tag: string; h: string; items: { q: string; a: string }[] };
-  finalCta: { h: string; sub: string };
+  finalCta: { h: string; sub: string; cta: string };
   footer: { tagline: string; rights: string };
   mockup: {
     welcome: string; monthlyIncome: string; clients: string; invoices: string; employees: string;
     recent: string; paid: string; sent: string; draft: string;
+    dock: { home: string; jobs: string; clients: string; invoices: string; more: string };
     newInvoice: string; activeEmployees: string; activeToday: string;
   };
 };
