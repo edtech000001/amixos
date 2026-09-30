@@ -142,8 +142,18 @@ export default function LandingPage() {
               Three groups, not one row of five: where to go on this page, then
               the account actions, with a rule between them. Flat, they all
               read as equal weight and "Iniciar sesión" gets lost next to
-              "Contacto" — they are different kinds of thing. */}
+              "Contacto" — they are different kinds of thing.
+
+              No icons on the text links on purpose: the globe earns its place
+              because "English" alone does not say what it does, but an icon
+              beside "Precios" or "Contacto" is decoration that slows the scan
+              rather than speeding it. */}
           <div className="hidden md:flex items-center gap-6">
+            <button onClick={() => setLocale(nextLocale)}
+              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-indigo-600 transition-colors font-medium">
+              <Globe size={15}/>
+              {otherLocaleLabel}
+            </button>
             <a href="#pricing" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
               {t.pricing.tag}
             </a>
@@ -151,13 +161,8 @@ export default function LandingPage() {
               {t.contact.tag}
             </a>
 
-            <span aria-hidden className="h-5 w-px bg-gray-200" />
+            <span aria-hidden className="h-5 w-px bg-gray-300" />
 
-            <button onClick={() => setLocale(nextLocale)}
-              className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-indigo-600 transition-colors font-medium">
-              <Globe size={15}/>
-              {otherLocaleLabel}
-            </button>
             <Link href="/auth/login" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
               {t.nav.login}
             </Link>
@@ -176,15 +181,15 @@ export default function LandingPage() {
         {/* Mobile menu */}
         {mobileMenu && (
           <div className="md:hidden bg-white border-t border-gray-100 px-5 py-4 flex flex-col gap-4">
-            <a href="#pricing" className="text-sm font-medium text-gray-700" onClick={() => setMobileMenu(false)}>{t.pricing.tag}</a>
-            <a href="#contacto" className="text-sm font-medium text-gray-700" onClick={() => setMobileMenu(false)}>{t.contact.tag}</a>
-
-            <span aria-hidden className="h-px w-full bg-gray-100" />
-
             <button onClick={() => setLocale(nextLocale)}
               className="flex items-center gap-2 text-sm text-gray-600 font-medium">
               <Globe size={15}/> {t.nav.switchLang}
             </button>
+            <a href="#pricing" className="text-sm font-medium text-gray-700" onClick={() => setMobileMenu(false)}>{t.pricing.tag}</a>
+            <a href="#contacto" className="text-sm font-medium text-gray-700" onClick={() => setMobileMenu(false)}>{t.contact.tag}</a>
+
+            <span aria-hidden className="h-px w-full bg-gray-200" />
+
             <Link href="/auth/login" className="text-sm font-medium text-gray-700" onClick={() => setMobileMenu(false)}>{t.nav.login}</Link>
             <Link href="/auth/register" onClick={() => setMobileMenu(false)}
               className="bg-indigo-600 text-white text-sm font-semibold px-4 py-3 rounded-xl text-center transition-colors">
