@@ -142,11 +142,20 @@ body {
 
 /* The browser default is a muted blue-grey that turns our grey body text
    (gray-500 and friends) into grey-on-grey. Tint with the brand colour and
-   force the ink colour so the text stays readable — and because both are
-   tokens, it follows light/dark without a second rule. */
+   force the ink colour so the text stays readable. Tokens, so it follows the
+   app's light and dark themes without a second rule. */
 ::selection {
   background: rgb(var(--color-primary) / 0.22);
   color: rgb(var(--color-ink));
+}
+
+/* The public pages are light-only, but the TOKENS still follow the OS theme —
+   so on a dark-mode machine --color-ink is near-white and the rule above
+   painted white text onto a pale tint. Literal values here, not tokens, for
+   the same reason those pages pin their own background. */
+body.light-page ::selection {
+  background: #2563EB;
+  color: #ffffff;
 }
 
 
