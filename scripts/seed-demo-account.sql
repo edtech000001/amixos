@@ -1,7 +1,10 @@
 -- Demo data for the App Review account (Prime Landscaping).
 --
--- Run ONCE in the Supabase SQL Editor. Re-running duplicates rows, so the
--- cleanup block at the bottom is there if you need to start over.
+-- Run the WHOLE file in the Supabase SQL Editor. It is idempotent: both parts
+-- begin by deleting the demo business's rows, so re-running resets rather than
+-- duplicating. Running only half of it is what causes trouble — a second Part 1
+-- leaves two clients per surname, and Part 2's joins then emit two rows per
+-- invoice number, which collides with the unique (business_id, invoice_number).
 --
 -- Everything is scoped to the one business id below. Nothing here touches any
 -- other tenant.
