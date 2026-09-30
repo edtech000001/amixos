@@ -7,9 +7,7 @@
     "dev:clean": "rm -rf .next && next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "android": "expo run:android",
-    "ios": "expo run:ios"
+    "lint": "next lint"
   },
   "dependencies": {
     "@amixos/shared": "*",
@@ -44,8 +42,7 @@
     "stripe": "^22.3.0",
     "tailwind-merge": "^2.3.0",
     "zod": "^3.23.4",
-    "zustand": "^4.5.2",
-    "expo": "~54.0.37"
+    "zustand": "^4.5.2"
   },
   "devDependencies": {
     "@types/node": "^20",
