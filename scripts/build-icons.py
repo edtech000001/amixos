@@ -94,7 +94,12 @@ print('Splash')
 save(fit(ASSETS / 'icon_only.png', size=512), ASSETS / 'splash-icon.png')
 
 print('Web (Next.js app-router conventions)')
-save(fit(ASSETS / 'icon.png', size=512, bg=LIGHT_BG), WEB / 'icon.png')
+# Favicon: the MARK on transparency, not the framed icon — a browser tab is
+# often dark, and the opaque light icon read as a white tile sitting in it.
+# Scaled to 92% because a 16px favicon has no room for the logo's padding.
+save(fit(ASSETS / 'icon_only.png', size=512, span=0.92), WEB / 'icon.png')
+# apple-icon is the iOS home-screen bookmark and must stay OPAQUE: iOS renders
+# transparency there as solid black rather than compositing it.
 save(fit(ASSETS / 'icon.png', size=180, bg=LIGHT_BG), WEB / 'apple-icon.png')
 
 
