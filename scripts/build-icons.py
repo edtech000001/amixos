@@ -20,6 +20,9 @@ Two rules drive the transforms:
   guaranteed to survive, and the raw mark spans ~72%, so it gets scaled down to
   fit the safe zone before it is written.
 """
+import os
+import tempfile
+
 from PIL import Image, ImageOps
 from pathlib import Path
 
@@ -67,8 +70,25 @@ def fit(src, size=SIZE, span=None, bg=None):
 
 
 def save(im, path):
+    """Write atomically.
+
+    A plain im.save() opens the target with 'wb', which truncates it to zero
+    before the encoder writes a byte. Metro watches these files, and reading
+    one inside that window caches a permanent
+    "TransformError ...: Empty file" that survives until the cache is cleared.
+    Writing to a temp file in the same directory and renaming means the path
+    only ever points at a complete image.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    im.save(path, 'PNG', optimize=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix='.tmp')
+    os.close(fd)
+    try:
+        im.save(tmp, 'PNG', optimize=True)
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
     mode = 'opaque' if im.mode == 'RGB' else 'alpha'
     print(f'  {path}  {im.size[0]}x{im.size[1]}  {mode}')
 
