@@ -24,7 +24,7 @@ interface InputProps extends TextInputProps {
 }
 
 export const Input = forwardRef<TextInput, InputProps>(function Input(
-  { label, error, hint, leftIcon, rightIcon, onClear, containerClassName, className, centerText, editable = true, onFocus, onBlur, ...rest },
+  { label, error, hint, leftIcon, rightIcon, onClear, containerClassName, className, centerText, editable = true, onFocus, onBlur, style, ...rest },
   ref,
 ) {
   const c = useThemeColors();
@@ -82,6 +82,13 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
             'flex-1 py-3.5 text-base text-ink',
             className,
           )}
+          // The colour is ALSO set as a real style, not just via text-ink.
+          // iOS AutoFill writes into the native field before the class-derived
+          // style reaches the inserted text, so an autofilled password rendered
+          // its dots in the system default — black, which is invisible against
+          // the dark theme. Only showed in dark mode, because in light mode the
+          // default happens to match.
+          style={[{ color: c.ink }, style]}
           textAlign={centerText ? 'center' : undefined}
           {...rest}
         />
