@@ -64,6 +64,11 @@ values
 commit;
 
 
+-- ══ PART 2 ═════════════════════════════════════════════════════════════════
+-- The block above commits on its own. If anything below fails, ONLY this part
+-- rolls back — re-run from here, not from the top, or you will duplicate the
+-- clients, employees and inventory.
+
 -- ── Jobs ───────────────────────────────────────────────────────────────────
 -- Spread across the pipeline so every tab has rows: proposal → sent →
 -- scheduled → in_progress → completed → invoiced. Status values come from
@@ -86,7 +91,9 @@ from (values
   ('Delgado',  'Instalación de césped',           'Zoysia en patio trasero, 1,200 ft².',                       'completed',   'normal', current_date - 4,  2150.00, 18),
   ('Vega',     'Limpieza de temporada',           'Retiro de hojas y preparación de invierno.',                'completed',   'low',    current_date - 9,   540.00,  6),
   ('Peña',     'Jardineras de entrada',           'Dos jardineras elevadas con plantas de temporada.',         'invoiced',    'normal', current_date - 14, 1275.00, 10),
-  ('Castillo', 'Cotización — muro de contención', 'Visita hecha, pendiente definir material.',                 'posible',     'low',    null,              null,    null)
+  -- total_amount is NOT NULL with a default of 0, so an explicit null is
+  -- rejected even though the column looks optional. 0 = not yet quoted.
+  ('Castillo', 'Cotización — muro de contención', 'Visita hecha, pendiente definir material.',                 'posible',     'low',    null,                 0.00,    null)
 ) as v(cli, title, descr, status, priority, sched, amount, hours)
 join public.clients c
   on c.business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8'
