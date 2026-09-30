@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, Modal as RNModal, ActivityIndicator, Platform, KeyboardAvoidingView, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronDown, ChevronLeft, ChevronUp, Printer, Sliders, X, GripVertical, Eye, EyeOff, Mail, Search } from 'lucide-react-native';
+import { ChevronDown, ChevronLeft, ChevronUp, Printer, Sliders, X, GripVertical, Eye, EyeOff, Mail, Search, Building2 } from 'lucide-react-native';
 import Sortable from 'react-native-sortables';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -35,6 +35,9 @@ import {
 } from '@amixos/shared/lib/priceSheetTemplate';
 import { buildPriceSheetHtml } from '@amixos/shared/lib/priceSheetHtml';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
+import { priceSyncTargets } from '@amixos/shared/lib/priceSheetSync';
+import { useAuthStore } from '@/lib/auth/store';
+import { PriceSyncSheet } from '@/components/PriceSyncSheet';
 
 interface ClientLite {
   id: string;
@@ -61,7 +64,10 @@ export default function FacturasPreciosPage() {
   // opens the generate sheet right away (mirrors web /precios/generar?client=).
   const { client: clientParam } = useLocalSearchParams<{ client?: string }>();
   const { t: full, locale } = useLang();
-  const { business, currentRole, refetchBusiness } = useApp();
+  const { business, currentRole, refetchBusiness, businesses } = useApp();
+  const rolesByBusiness = useAuthStore((s) => s.roles);
+  // "Copy prices to other companies" (migration 242).
+  const [syncOpen, setSyncOpen] = useState(false);
   const c = useThemeColors();
   const supabase = useMemo(() => createSupabaseClient(), []);
   const t = full.dashboard.settings.priceSheet;
@@ -389,6 +395,7 @@ export default function FacturasPreciosPage() {
   };
 
   if (!business) return null;
+  const syncTargets = priceSyncTargets(businesses, rolesByBusiness, business.id);
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
@@ -397,6 +404,11 @@ export default function FacturasPreciosPage() {
           <ChevronLeft size={22} color={c.ink} />
         </Pressable>
         <Text className="ml-2 flex-1 text-lg font-bold text-ink">{t.title}</Text>
+        {syncTargets.length && can.manageBusinessSettings(currentRole) ? (
+          <Pressable onPress={() => setSyncOpen(true)} hitSlop={8} className="p-2 rounded-lg active:bg-border-soft" accessibilityLabel={t.sync.btn}>
+            <Building2 size={20} color={c.muted} />
+          </Pressable>
+        ) : null}
         <Pressable onPress={() => setGenOpen(true)} hitSlop={8} className="p-2 rounded-lg active:bg-border-soft" accessibilityLabel={t.generateTitle}>
           <Printer size={20} color={c.muted} />
         </Pressable>
@@ -665,6 +677,13 @@ export default function FacturasPreciosPage() {
           </View>
         </KeyboardAvoidingView>
       </RNModal>
+      <PriceSyncSheet
+        open={syncOpen}
+        onClose={() => setSyncOpen(false)}
+        supabase={supabase}
+        sourceBusinessId={business.id}
+        targets={syncTargets}
+      />
     </SafeAreaView>
   );
 }

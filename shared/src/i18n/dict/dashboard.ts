@@ -1653,6 +1653,34 @@ export type DashboardDict = {
       clientTierLabel: string;
       clientTierNone: string;
       generateBtn: string;
+      /** Copy this price sheet to the user's other businesses (migration 242). */
+      sync: {
+        btn: string;
+        title: string;
+        subtitle: string;
+        pickTargets: string;
+        previewBtn: string;
+        previewing: string;
+        summary: string;
+        clientCopied: string;
+        clientSkipped: string;
+        skippedHeading: string;
+        skippedNone: string;
+        skippedAmbiguous: string;
+        skippedHint: string;
+        matchedBy: string;
+        howEmail: string;
+        howPhone: string;
+        howName: string;
+        howCompany: string;
+        showMatches: string;
+        warning: string;
+        confirmBtn: string;
+        running: string;
+        done: string;
+        failed: string;
+        back: string;
+      };
       generateTitle: string;
       forClient: string;
       forState: string;
@@ -4930,6 +4958,33 @@ export const dashboard: Record<Locale, DashboardDict> = {
         clientTierLabel: 'Nivel de precio',
         clientTierNone: 'Estándar (base)',
         generateBtn: 'Generar hoja',
+        sync: {
+          btn: 'Copiar a otras empresas',
+          title: 'Copiar precios a otras empresas',
+          subtitle: 'Las empresas elegidas quedarán con exactamente esta lista de precios. Sus precios actuales se reemplazan.',
+          pickTargets: 'Copiar a',
+          previewBtn: 'Ver qué cambia',
+          previewing: 'Revisando…',
+          summary: '{{updated}} actualizados · {{added}} nuevos · {{removed}} eliminados',
+          clientCopied: '{{count}} precios de clientes se copian',
+          clientSkipped: '{{count}} precios de clientes NO se copian',
+          skippedHeading: 'No se copian',
+          skippedNone: 'el cliente no existe en {{company}}',
+          skippedAmbiguous: '{{count}} clientes posibles en {{company}}',
+          skippedHint: 'Esos clientes tendrán el precio normal en esa empresa. Agrégalos (o corrige su correo/teléfono) y vuelve a copiar.',
+          matchedBy: 'por {{how}}',
+          howEmail: 'correo',
+          howPhone: 'teléfono',
+          howName: 'nombre',
+          howCompany: 'compañía',
+          showMatches: 'Ver clientes emparejados',
+          warning: 'Cualquier precio que hayas cambiado directamente en esas empresas se reemplaza.',
+          confirmBtn: 'Reemplazar precios en {{companies}}',
+          running: 'Copiando…',
+          done: 'Listo — precios copiados a {{companies}}.',
+          failed: 'No se pudo copiar: {{error}}',
+          back: 'Atrás',
+        },
         generateTitle: 'Generar hoja de precios',
         forClient: 'Cliente',
         forState: 'Estado',
@@ -8212,6 +8267,33 @@ export const dashboard: Record<Locale, DashboardDict> = {
         clientTierLabel: 'Price tier',
         clientTierNone: 'Standard (base)',
         generateBtn: 'Generate sheet',
+        sync: {
+          btn: 'Copy to other companies',
+          title: 'Copy prices to other companies',
+          subtitle: 'The chosen companies end up with exactly this price sheet. Their current prices are replaced.',
+          pickTargets: 'Copy to',
+          previewBtn: 'See what changes',
+          previewing: 'Checking…',
+          summary: '{{updated}} updated · {{added}} new · {{removed}} removed',
+          clientCopied: '{{count}} client prices copied',
+          clientSkipped: '{{count}} client prices NOT copied',
+          skippedHeading: 'Not copied',
+          skippedNone: 'client not found in {{company}}',
+          skippedAmbiguous: '{{count}} possible clients in {{company}}',
+          skippedHint: "Those clients get the normal price in that company. Add them there (or fix their email/phone) and copy again.",
+          matchedBy: 'by {{how}}',
+          howEmail: 'email',
+          howPhone: 'phone',
+          howName: 'name',
+          howCompany: 'company',
+          showMatches: 'Show matched clients',
+          warning: 'Any price you changed directly in those companies gets replaced.',
+          confirmBtn: 'Replace prices in {{companies}}',
+          running: 'Copying…',
+          done: 'Done — prices copied to {{companies}}.',
+          failed: "Couldn't copy: {{error}}",
+          back: 'Back',
+        },
         generateTitle: 'Generate price sheet',
         forClient: 'Client',
         forState: 'State',

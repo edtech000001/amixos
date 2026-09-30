@@ -11,7 +11,7 @@ import { loadCachedThenFresh, writeCacheAndStamp } from '../../lib/swrCache';
 import { useDataFingerprint } from '../../lib/dataFingerprint';
 import { SkeletonList } from '../../ui/Skeleton';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
-import { Plus, X, Trash2, Pencil, Copy, DollarSign, FileText, Search, ArrowUpDown, GripVertical, ChevronDown, Check } from 'lucide-react';
+import { Plus, X, Trash2, Pencil, Copy, DollarSign, FileText, Search, ArrowUpDown, GripVertical, ChevronDown, Check, Building2 } from 'lucide-react';
 import { SortableList } from '../../ui/SortableList';
 import { useLang } from '../../i18n';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
@@ -38,6 +38,9 @@ export interface PriceSheetScreenProps {
   canManage: boolean;
   /** When provided, shows a "Generate sheet" header button (client-facing
    *  price-sheet PDF). Web-only for now. */
+  /** Copy this price sheet to the user's other businesses (migration 242).
+   *  Hidden when not provided (no other business they administer). */
+  onCopyToOthers?: () => void;
   onGenerate?: () => void;
   /** businesses.price_section_order (migration 215) — the user's section order. */
   sectionOrder?: string[] | null;
@@ -72,7 +75,7 @@ const emptyDraft = (): Draft => ({
   id: null, name: '', category: '', pricingMode: 'per_unit', unitLabel: '', rate: '', stateRates: [], clientRates: [], matchTerms: '', isAddon: false, addonInline: false,
 });
 
-export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate, sectionOrder, onSectionOrderChange }: PriceSheetScreenProps) {
+export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate, onCopyToOthers, sectionOrder, onSectionOrderChange }: PriceSheetScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.settings.priceSheet;
 
@@ -354,6 +357,12 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate, 
               className="flex items-center gap-1.5 bg-card border border-border px-3 py-2.5 rounded-xl text-sm font-semibold text-muted hover:bg-surface"
             >
               <ArrowUpDown size={15} />
+            </button>
+          ) : null}
+          {onCopyToOthers && canManage ? (
+            <button type="button" onClick={onCopyToOthers}
+              className="flex items-center gap-1.5 bg-card border border-border px-4 py-2.5 rounded-xl text-sm font-semibold text-ink hover:bg-surface">
+              <Building2 size={16} /> {t.sync.btn}
             </button>
           ) : null}
           {onGenerate ? (

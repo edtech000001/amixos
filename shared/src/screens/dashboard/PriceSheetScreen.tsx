@@ -42,6 +42,8 @@ export interface PriceSheetScreenProps {
   canManage: boolean;
   /** Web-only "Generate sheet" action; ignored on mobile for now. */
   onGenerate?: () => void;
+  /** Web only — mobile's price screen header is route-owned (facturas/precios). */
+  onCopyToOthers?: () => void;
   /** businesses.price_section_order (migration 215) — the user's section order.
    *  Passed in rather than read here so the route's AppContext copy stays the
    *  single source, and the invoice sheet sees the same value. */
