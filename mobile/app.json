@@ -21,7 +21,11 @@
       },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSPhotoLibraryAddUsageDescription": "Amixos guarda en tus fotos las imágenes y documentos que eliges descargar desde la app, como el PDF de una factura o la foto de un comprobante."
+        "NSPhotoLibraryAddUsageDescription": "Amixos guarda en tus fotos las imágenes y documentos que eliges descargar desde la app, como el PDF de una factura o la foto de un comprobante.",
+        "CFBundleLocalizations": [
+          "es",
+          "en"
+        ]
       }
     },
     "android": {
@@ -107,6 +111,10 @@
     "runtimeVersion": "2.0.0",
     "updates": {
       "url": "https://u.expo.dev/183b523e-43ee-4c85-8bdd-1e1851020cab"
+    },
+    "locales": {
+      "es": "./locales/es.json",
+      "en": "./locales/en.json"
     }
   }
 }

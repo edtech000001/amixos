@@ -1,0 +1,10 @@
+{
+  "CFBundleDisplayName": "Amixos",
+  "NSLocationWhenInUseUsageDescription": "Amixos usa tu ubicación para registrar dónde se realizó un trabajo cuando lo agregas.",
+  "NSCameraUsageDescription": "Amixos usa la cámara para escanear el código VIN y tomar fotos del equipo.",
+  "NSContactsUsageDescription": "Amixos usa tus contactos para que puedas importar clientes desde tu teléfono.",
+  "NSPhotoLibraryUsageDescription": "Amixos usa tus fotos para que puedas adjuntar imágenes a trabajos, facturas y equipos.",
+  "NSPhotoLibraryAddUsageDescription": "Amixos guarda en tus fotos las imágenes y documentos que eliges descargar desde la app, como el PDF de una factura o la foto de un comprobante.",
+  "NSMicrophoneUsageDescription": "Amixos usa el micrófono para que puedas hablar con Ami, tu asistente de negocio.",
+  "NSSpeechRecognitionUsageDescription": "Amixos usa el reconocimiento de voz para entender lo que le dices a Ami."
+}
