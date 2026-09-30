@@ -13,7 +13,8 @@
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRteWZhbWhrcWlrenlwZGluYm5sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2MTY0NzIsImV4cCI6MjA4NzE5MjQ3Mn0.PU57Sbm7N3AzBNlZz3y2UUWHe4kmSp4Agfn4eXvm6FE",
         "EXPO_PUBLIC_API_URL": "https://amixos-api-i4vvds35bq-uc.a.run.app",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "314622478971-jpfm8nmg9aidtneg2qjfdq0f9e8lptpl.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "AIzaSyAmrsisBGhkAOt4pbwzFHVB18lwO_widvc"
+        "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "AIzaSyAmrsisBGhkAOt4pbwzFHVB18lwO_widvc",
+        "EXPO_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAFJvVnOAPARstqw1"
       },
       "android": {
         "gradleCommand": ":app:assembleDebug",
@@ -32,7 +33,8 @@
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRteWZhbWhrcWlrenlwZGluYm5sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2MTY0NzIsImV4cCI6MjA4NzE5MjQ3Mn0.PU57Sbm7N3AzBNlZz3y2UUWHe4kmSp4Agfn4eXvm6FE",
         "EXPO_PUBLIC_API_URL": "https://amixos-api-i4vvds35bq-uc.a.run.app",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "314622478971-jpfm8nmg9aidtneg2qjfdq0f9e8lptpl.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "AIzaSyAmrsisBGhkAOt4pbwzFHVB18lwO_widvc"
+        "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "AIzaSyAmrsisBGhkAOt4pbwzFHVB18lwO_widvc",
+        "EXPO_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAFJvVnOAPARstqw1"
       },
       "android": {
         "buildType": "apk"
@@ -49,7 +51,8 @@
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRteWZhbWhrcWlrenlwZGluYm5sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2MTY0NzIsImV4cCI6MjA4NzE5MjQ3Mn0.PU57Sbm7N3AzBNlZz3y2UUWHe4kmSp4Agfn4eXvm6FE",
         "EXPO_PUBLIC_API_URL": "https://amixos-api-i4vvds35bq-uc.a.run.app",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "314622478971-jpfm8nmg9aidtneg2qjfdq0f9e8lptpl.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "AIzaSyAmrsisBGhkAOt4pbwzFHVB18lwO_widvc"
+        "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "AIzaSyAmrsisBGhkAOt4pbwzFHVB18lwO_widvc",
+        "EXPO_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAFJvVnOAPARstqw1"
       },
       "ios": {
         "simulator": true,
@@ -64,7 +67,8 @@
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRteWZhbWhrcWlrenlwZGluYm5sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2MTY0NzIsImV4cCI6MjA4NzE5MjQ3Mn0.PU57Sbm7N3AzBNlZz3y2UUWHe4kmSp4Agfn4eXvm6FE",
         "EXPO_PUBLIC_API_URL": "https://amixos-api-i4vvds35bq-uc.a.run.app",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "314622478971-jpfm8nmg9aidtneg2qjfdq0f9e8lptpl.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "AIzaSyAmrsisBGhkAOt4pbwzFHVB18lwO_widvc"
+        "EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_KEY": "AIzaSyAmrsisBGhkAOt4pbwzFHVB18lwO_widvc",
+        "EXPO_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAFJvVnOAPARstqw1"
       },
       "ios": {
         "image": "latest"

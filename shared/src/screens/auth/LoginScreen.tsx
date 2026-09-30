@@ -21,6 +21,7 @@ import Svg, {
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { Input } from '../../ui/Input';
+import { Logo } from '../../ui/Logo';
 
 export type LoginAttemptResult =
   | { ok: true; needsOnboarding: boolean }
@@ -32,6 +33,10 @@ export interface LoginScreenProps {
   onForgotPasswordPress: () => void;
   onRegisterPress: () => void;
   oauthSlot?: ReactNode;
+  /** Captcha widget, supplied by the route wrapper (which owns the token and
+   *  passes it into the Supabase call). Rendered directly above the submit
+   *  button so a challenge appears where the user is already looking. */
+  captchaSlot?: ReactNode;
 }
 
 export function LoginScreen({
@@ -40,6 +45,7 @@ export function LoginScreen({
   onForgotPasswordPress,
   onRegisterPress,
   oauthSlot,
+  captchaSlot,
 }: LoginScreenProps) {
   const { t: full } = useLang();
   const t = full.auth;
@@ -188,6 +194,7 @@ export function LoginScreen({
                 </View>
               ) : null}
 
+              {captchaSlot}
               <GradientButton onPress={handleSubmit(onSubmit)} loading={isSubmitting}>
                 {t.login.submit}
               </GradientButton>
@@ -232,28 +239,10 @@ function HeroHeader({ height }: { height: number }) {
           hero and the area around the floating card are one continuous surface
           with no seam to line up. */}
       <View className="flex-1 items-center justify-center pb-10 pt-6">
-        <View
-          className="w-20 h-20 rounded-3xl bg-card items-center justify-center mb-4"
-          style={{
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 10 },
-            shadowOpacity: 0.25,
-            shadowRadius: 20,
-            elevation: 10,
-          }}
-        >
-          <Text className="text-4xl font-extrabold text-primary">a</Text>
-        </View>
-        <Text
-          className="text-white text-3xl font-extrabold tracking-tight"
-          style={{
-            textShadowColor: 'rgba(0,0,0,0.15)',
-            textShadowOffset: { width: 0, height: 2 },
-            textShadowRadius: 8,
-          }}
-        >
-          Amixos
-        </Text>
+        {/* ink="white" is NOT the theme's choice — this sits on the blue
+           gradient in both light and dark mode, so the theme-derived ink
+           would go black on a blue background in light mode. */}
+        <Logo variant="stacked" width={132} ink="white" />
       </View>
     </View>
   );

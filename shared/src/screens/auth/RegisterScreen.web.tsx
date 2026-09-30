@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import { useLang } from '../../i18n';
+import { Logo } from '../../ui/Logo';
 import { PASSWORD_MIN_LENGTH, passwordMeetsPolicy } from '../../lib/passwordErrors';
 
 export type RegisterAttemptResult =
@@ -22,6 +23,10 @@ export interface RegisterScreenProps {
   onTermsPress: () => void;
   onPrivacyPress: () => void;
   oauthSlot?: ReactNode;
+  /** Captcha widget, supplied by the route wrapper (which owns the token and
+   *  passes it into the Supabase call). Rendered directly above the submit
+   *  button so a challenge appears where the user is already looking. */
+  captchaSlot?: ReactNode;
 }
 
 export function RegisterScreen({
@@ -30,6 +35,7 @@ export function RegisterScreen({
   onTermsPress,
   onPrivacyPress,
   oauthSlot,
+  captchaSlot,
 }: RegisterScreenProps) {
   const { t: full } = useLang();
   const t = full.auth;
@@ -94,6 +100,11 @@ export function RegisterScreen({
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/5 to-white flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-gray-100 p-8">
+        {/* ink="black" for the same reason as the login card: this surface is
+           hardcoded white and does not follow the dark palette. */}
+        <div className="mb-5">
+          <Logo variant="side" width={130} ink="black" />
+        </div>
         <h1 className="text-3xl font-bold text-gray-900">{t.register.heading}</h1>
         <p className="text-sm text-gray-500 mt-1 mb-8">{t.register.sub}</p>
 
@@ -219,6 +230,7 @@ export function RegisterScreen({
             <p className="text-blue-600 text-xs">{t.register.verificationNote}</p>
           </div>
 
+          {captchaSlot}
           <button
             type="submit"
             disabled={isSubmitting}

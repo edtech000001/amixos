@@ -6,6 +6,7 @@
 
 import { useMemo, useState } from 'react';
 import { View, Text, KeyboardAvoidingView, ScrollView, Platform, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -14,6 +15,7 @@ import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
+import { Logo } from '../../ui/Logo';
 import { PASSWORD_MIN_LENGTH, passwordMeetsPolicy } from '../../lib/passwordErrors';
 
 export type ResetLinkState = 'verifying' | 'ready' | 'invalid';
@@ -40,6 +42,7 @@ export function ResetPasswordScreen({
   onRequestNewLink,
 }: ResetPasswordScreenProps) {
   const { t: full } = useLang();
+  const insets = useSafeAreaInsets();
   const t = full.auth;
   const c = useThemeColors();
 
@@ -83,15 +86,28 @@ export function ResetPasswordScreen({
       className="flex-1 bg-surface"
     >
       <ScrollView
-        contentContainerClassName="flex-grow justify-center px-5 py-10"
+        contentContainerClassName="flex-grow px-5"
+        // py-10 alone measured from the PHYSICAL top of the screen: this
+        // ScrollView has no SafeAreaView above it, so on a notched phone the
+        // ~59pt status bar swallowed the 40pt padding and the logo sat under
+        // the clock. Insets + a fixed gap keeps the same look on both.
+        contentContainerStyle={{
+          paddingTop: insets.top + 32,
+          paddingBottom: insets.bottom + 24,
+        }}
         keyboardShouldPersistTaps="handled"
       >
-        <View className="w-full max-w-md mx-auto">
+        <View className="w-full max-w-md mx-auto flex-1">
           <View className="items-center mb-8">
-            <Text className="text-3xl font-bold text-primary">{t.brand.name}</Text>
-            <Text className="text-muted mt-1 text-sm">{t.reset.tagline}</Text>
+            <Logo variant="stacked" width={96} />
           </View>
-          <View className="bg-card rounded-2xl border border-border-soft p-8">{children}</View>
+          {/* mt-auto here + mb-auto on the card centres the PAIR, so the
+             tagline reads as the card's lead-in instead of floating up
+             under the logo. The logo itself stays pinned to the top. */}
+          <Text className="text-muted text-base text-center mb-4 mt-auto">
+            {t.reset.tagline}
+          </Text>
+          <View className="bg-card rounded-2xl border border-border-soft p-8 mb-auto">{children}</View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

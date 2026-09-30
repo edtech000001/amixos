@@ -12,6 +12,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useLang } from '../../i18n';
+import { Logo } from '../../ui/Logo';
 
 export type LoginAttemptResult =
   | { ok: true; needsOnboarding: boolean }
@@ -23,6 +24,10 @@ export interface LoginScreenProps {
   onForgotPasswordPress: () => void;
   onRegisterPress: () => void;
   oauthSlot?: ReactNode;
+  /** Captcha widget, supplied by the route wrapper (which owns the token and
+   *  passes it into the Supabase call). Rendered directly above the submit
+   *  button so a challenge appears where the user is already looking. */
+  captchaSlot?: ReactNode;
 }
 
 export function LoginScreen({
@@ -31,6 +36,7 @@ export function LoginScreen({
   onForgotPasswordPress,
   onRegisterPress,
   oauthSlot,
+  captchaSlot,
 }: LoginScreenProps) {
   const { t: full } = useLang();
   const t = full.auth;
@@ -77,7 +83,12 @@ export function LoginScreen({
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/5 to-white flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-gray-100 p-8">
-        <p className="text-sm font-bold text-primary mb-4">Amixos</p>
+        {/* ink="black": this card is hardcoded white (bg-white / text-gray-900)
+           and does not follow the dark palette, so the theme-derived ink would
+           turn white-on-white for anyone with dark mode on. */}
+        <div className="mb-5">
+          <Logo variant="side" width={130} ink="black" />
+        </div>
         <h1 className="text-3xl font-bold text-gray-900">{t.login.heading}</h1>
         <p className="text-sm text-gray-500 mt-1 mb-8">{t.login.tagline}</p>
 
@@ -135,6 +146,7 @@ export function LoginScreen({
             </div>
           ) : null}
 
+          {captchaSlot}
           <button
             type="submit"
             disabled={isSubmitting}

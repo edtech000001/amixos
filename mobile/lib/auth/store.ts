@@ -244,7 +244,9 @@ interface AuthStore {
   status: AuthStatus;
   error: string | null;
 
-  login: (email: string, password: string) => Promise<LoginResult>;
+  /** captchaToken is required once Turnstile is enabled in Supabase; it is
+   *  optional here so the store keeps working while the switch is off. */
+  login: (email: string, password: string, captchaToken?: string | null) => Promise<LoginResult>;
   logout: () => Promise<void>;
   refetchBusiness: () => Promise<void>;
   // Switch the active workspace. Re-derives `business` and writes the new
@@ -348,10 +350,14 @@ export const useAuthStore = create<AuthStore>()(
       // login() does NOT set authenticated. It only kicks off the API call
       // and sets transient state. The SIGNED_IN event from
       // onAuthStateChange is the only thing that flips status to authenticated.
-      login: async (email, password) => {
+      login: async (email, password, captchaToken) => {
         set({ status: 'logging_in', error: null });
         try {
-          const { error } = await supabase.auth.signInWithPassword({ email, password });
+          const { error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+            options: { captchaToken: captchaToken ?? undefined },
+          });
           if (error) {
             const m = error.message;
             let reason: Extract<LoginResult, { ok: false }>['reason'] = 'generic';

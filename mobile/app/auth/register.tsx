@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Linking, Platform } from 'react-native';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -6,10 +7,13 @@ import { RegisterScreen, type RegisterAttemptResult } from '@amixos/shared/scree
 import { classifyPasswordError } from '@amixos/shared/lib/passwordErrors';
 import { recordAcceptanceQuietly } from '@amixos/shared/lib/policyConsent';
 import { OAuthButtons } from '@/components/OAuthButtons';
+import { Captcha, type CaptchaHandle } from '@/components/Captcha';
 
 export default function RegisterRoute() {
   const router = useRouter();
   const supabase = createSupabaseClient();
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captcha = useRef<CaptchaHandle>(null);
   const { locale } = useLang();
 
   const handleRegister = async (data: { firstName: string; lastName: string; email: string; password: string }): Promise<RegisterAttemptResult> => {
@@ -19,9 +23,15 @@ export default function RegisterRoute() {
       // locale lands in raw_user_meta_data → readable as {{ .Data.locale }}
       // in the Supabase email templates so confirm/reset emails can be
       // sent in the user's language.
-      options: { data: { first_name: data.firstName, last_name: data.lastName, locale } },
+      options: {
+        data: { first_name: data.firstName, last_name: data.lastName, locale },
+        captchaToken: captchaToken ?? undefined,
+      },
     });
     if (error) {
+      // Single-use token — a retry needs a fresh challenge or it fails on the
+      // captcha instead of on whatever the user actually needs to fix.
+      captcha.current?.reset();
       const m = error.message;
       if (m.includes('already registered') || m.includes('already been registered')) {
         return { ok: false, reason: 'already-registered' };
@@ -73,6 +83,7 @@ export default function RegisterRoute() {
       onTermsPress={() => openExternal('https://amixos.com/terms')}
       onPrivacyPress={() => openExternal('https://amixos.com/privacy')}
       oauthSlot={<OAuthButtons onSuccess={handleOAuthSuccess} />}
+      captchaSlot={<Captcha ref={captcha} onToken={setCaptchaToken} />}
     />
   );
 }

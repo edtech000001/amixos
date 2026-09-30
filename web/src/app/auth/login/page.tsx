@@ -2,9 +2,11 @@
 
 export const dynamic = 'force-dynamic';
 
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { OAuthButtons } from '@/components/auth/OAuthButtons';
+import { Captcha, type CaptchaHandle } from '@/components/auth/Captcha';
 import { LoginScreen, type LoginAttemptResult } from '@amixos/shared/screens/auth/LoginScreen';
 import { useLang } from '@/i18n/LangProvider';
 import { userNeedsOnboarding } from '@/lib/onboardingGate';
@@ -13,6 +15,8 @@ export default function LoginPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { t: full } = useLang();
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captcha = useRef<CaptchaHandle>(null);
 
   const urlError = typeof window !== 'undefined'
     ? new URLSearchParams(window.location.search).get('error')
@@ -21,8 +25,15 @@ export default function LoginPage() {
 
   const handleLogin = async (email: string, password: string): Promise<LoginAttemptResult> => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+        options: { captchaToken: captchaToken ?? undefined },
+      });
       if (error) {
+        // A Turnstile token is single-use: Cloudflare will not hand out the
+        // same one twice, so a retry after ANY failure needs a fresh widget.
+        captcha.current?.reset();
         const m = error.message;
         if (m.includes('Email not confirmed') || m.includes('email not confirmed')) return { ok: false, reason: 'email-not-confirmed' };
         if (m.includes('Invalid login credentials') || m.includes('invalid_credentials')) return { ok: false, reason: 'invalid-credentials' };
@@ -73,6 +84,7 @@ export default function LoginPage() {
       onForgotPasswordPress={() => router.push('/auth/forgot-password')}
       onRegisterPress={() => router.push(`/auth/register${nextSuffix}`)}
       oauthSlot={<OAuthButtons />}
+      captchaSlot={<Captcha ref={captcha} onToken={setCaptchaToken} />}
     />
   );
 }

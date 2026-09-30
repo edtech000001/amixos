@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { View, Text, KeyboardAvoidingView, ScrollView, Platform, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -8,6 +9,7 @@ import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
+import { Logo } from '../../ui/Logo';
 import { AuthBackground } from '../../ui/AuthBackground';
 import { PASSWORD_MIN_LENGTH, passwordMeetsPolicy } from '../../lib/passwordErrors';
 
@@ -26,6 +28,10 @@ export interface RegisterScreenProps {
   onPrivacyPress: () => void;
   /** Optional OAuth UI rendered above the email/password form (web only). */
   oauthSlot?: ReactNode;
+  /** Captcha widget, supplied by the route wrapper (which owns the token and
+   *  passes it into the Supabase call). Rendered directly above the submit
+   *  button so a challenge appears where the user is already looking. */
+  captchaSlot?: ReactNode;
 }
 
 export function RegisterScreen({
@@ -34,8 +40,10 @@ export function RegisterScreen({
   onTermsPress,
   onPrivacyPress,
   oauthSlot,
+  captchaSlot,
 }: RegisterScreenProps) {
   const { t: full } = useLang();
+  const insets = useSafeAreaInsets();
   const t = full.auth;
 
   // One place deciding what each rejection says, so the native and web forms
@@ -90,22 +98,21 @@ export function RegisterScreen({
     >
       <AuthBackground />
       <ScrollView
-        contentContainerClassName="flex-grow justify-center px-6 py-10"
+        contentContainerClassName="flex-grow justify-center px-6"
+        // py-10 alone measured from the PHYSICAL top of the screen: this
+        // ScrollView has no SafeAreaView above it, so on a notched phone the
+        // ~59pt status bar swallowed the 40pt padding and the logo sat under
+        // the clock. Insets + a fixed gap keeps the same look on both.
+        contentContainerStyle={{
+          paddingTop: insets.top + 24,
+          paddingBottom: insets.bottom + 24,
+        }}
         keyboardShouldPersistTaps="handled"
       >
         <View className="w-full max-w-md mx-auto">
           <View className="items-center mb-8">
-            <View
-              className="w-16 h-16 rounded-2xl bg-card items-center justify-center mb-4"
-              style={{
-                shadowColor: '#4F46E5',
-                shadowOffset: { width: 0, height: 8 },
-                shadowOpacity: 0.18,
-                shadowRadius: 16,
-                elevation: 6,
-              }}
-            >
-              <Text className="text-3xl font-extrabold text-primary">a</Text>
+            <View className="mb-4">
+              <Logo variant="stacked" width={96} />
             </View>
             <Text className="text-3xl font-extrabold text-ink tracking-tight">
               {t.register.heading}
@@ -215,6 +222,7 @@ export function RegisterScreen({
                 <Text className="text-blue-600 text-xs">{t.register.verificationNote}</Text>
               </View>
 
+              {captchaSlot}
               <Button onPress={handleSubmit(onSubmit)} loading={isSubmitting} fullWidth size="lg">
                 {t.register.submit}
               </Button>

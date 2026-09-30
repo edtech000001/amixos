@@ -16,6 +16,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@googlemaps/markerclusterer": "^2.5.3",
     "@hookform/resolvers": "^3.3.4",
+    "@marsidev/react-turnstile": "^1.6.1",
     "@react-google-maps/api": "^2.20.8",
     "@supabase/ssr": "^0.3.0",
     "@supabase/supabase-js": "^2.43.4",

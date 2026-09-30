@@ -2,10 +2,12 @@
 
 export const dynamic = 'force-dynamic';
 
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/i18n/LangProvider';
 import { OAuthButtons } from '@/components/auth/OAuthButtons';
+import { Captcha, type CaptchaHandle } from '@/components/auth/Captcha';
 import { RegisterScreen, type RegisterAttemptResult } from '@amixos/shared/screens/auth/RegisterScreen';
 import { classifyPasswordError } from '@amixos/shared/lib/passwordErrors';
 import { recordAcceptanceQuietly } from '@amixos/shared/lib/policyConsent';
@@ -13,6 +15,8 @@ import { recordAcceptanceQuietly } from '@amixos/shared/lib/policyConsent';
 export default function RegisterPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captcha = useRef<CaptchaHandle>(null);
   const { locale } = useLang();
 
   const handleRegister = async (data: { firstName: string; lastName: string; email: string; password: string }): Promise<RegisterAttemptResult> => {
@@ -20,9 +24,15 @@ export default function RegisterPage() {
       email: data.email,
       password: data.password,
       // locale → raw_user_meta_data → {{ .Data.locale }} in email templates.
-      options: { data: { first_name: data.firstName, last_name: data.lastName, locale } },
+      options: {
+        data: { first_name: data.firstName, last_name: data.lastName, locale },
+        captchaToken: captchaToken ?? undefined,
+      },
     });
     if (error) {
+      // Single-use token — a retry (wrong password rules, email taken, …)
+      // needs a fresh challenge or it fails again on the captcha instead.
+      captcha.current?.reset();
       const m = error.message;
       if (m.includes('already registered') || m.includes('already been registered')) {
         return { ok: false, reason: 'already-registered' };
@@ -71,6 +81,7 @@ export default function RegisterPage() {
       onTermsPress={() => router.push('/terms')}
       onPrivacyPress={() => router.push('/privacy')}
       oauthSlot={<OAuthButtons mode="register" />}
+      captchaSlot={<Captcha ref={captcha} onToken={setCaptchaToken} />}
     />
   );
 }

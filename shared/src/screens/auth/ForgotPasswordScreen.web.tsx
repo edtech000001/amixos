@@ -1,6 +1,6 @@
 // Web-only ForgotPasswordScreen — see LoginScreen.web.tsx for the why.
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -14,9 +14,13 @@ export interface ForgotPasswordScreenProps {
   >;
   /** Navigate back to the login screen. */
   onBackToLogin: () => void;
+  /** Captcha widget, supplied by the route wrapper (which owns the token and
+   *  passes it into the Supabase call). Rendered directly above the submit
+   *  button so a challenge appears where the user is already looking. */
+  captchaSlot?: ReactNode;
 }
 
-export function ForgotPasswordScreen({ onResetEmail, onBackToLogin }: ForgotPasswordScreenProps) {
+export function ForgotPasswordScreen({ onResetEmail, onBackToLogin, captchaSlot }: ForgotPasswordScreenProps) {
   const { t: full } = useLang();
   const t = full.auth;
 
@@ -95,6 +99,7 @@ export function ForgotPasswordScreen({ onResetEmail, onBackToLogin }: ForgotPass
                 </div>
               ) : null}
 
+              {captchaSlot}
               <button
                 type="submit"
                 disabled={isSubmitting}
