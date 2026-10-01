@@ -32,6 +32,7 @@ delete from public.calendar_events where business_id = 'b9e348d6-3ea6-42dd-9697-
 delete from public.invoices        where business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
 delete from public.jobs            where business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
 delete from public.inventory_items where business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
+delete from public.timesheets      where business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
 delete from public.employees       where business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
 delete from public.clients         where business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
 
@@ -56,17 +57,48 @@ values
   ('b9e348d6-3ea6-42dd-9697-0211b6b376b8','Tomás','Aguilar',null,'(512) 555-0171','taguilar@gmail.com','9 Hillcrest Dr','Georgetown','TX','78626',null);
 
 -- ── Employees ──────────────────────────────────────────────────────────────
--- show_in_roster so they appear in crew pickers; mixed pay types so payroll
--- has something to calculate.
+-- show_in_roster so they appear in crew pickers. All HOURLY on purpose: the
+-- app pays a salary as a fixed amount PER PAY PERIOD (shared/src/lib/
+-- payroll.ts), so the yearly figures this used to seed ($58,000 / $72,000)
+-- were paid every month — $130k payroll and a -4300% margin on screen.
 insert into public.employees
   (business_id, first_name, last_name, phone, email, role, pay_type, pay_rate,
    active, hire_date, city, state, show_in_roster, overtime_eligible)
 values
   ('b9e348d6-3ea6-42dd-9697-0211b6b376b8','Miguel','Torres','(512) 555-0201','miguel.torres@example.com','field','hourly',24.00,true,'2024-03-11','Austin','TX',true,true),
-  ('b9e348d6-3ea6-42dd-9697-0211b6b376b8','Ana','Ruiz','(512) 555-0202','ana.ruiz@example.com','office','salary',58000.00,true,'2023-09-05','Austin','TX',true,false),
+  ('b9e348d6-3ea6-42dd-9697-0211b6b376b8','Ana','Ruiz','(512) 555-0202','ana.ruiz@example.com','office','hourly',26.00,true,'2023-09-05','Austin','TX',true,false),
   ('b9e348d6-3ea6-42dd-9697-0211b6b376b8','Pedro','Lozano','(512) 555-0203','pedro.lozano@example.com','field','hourly',22.50,true,'2025-01-20','Round Rock','TX',true,true),
-  ('b9e348d6-3ea6-42dd-9697-0211b6b376b8','Rosa','García','(512) 555-0204','rosa.garcia@example.com','manager','salary',72000.00,true,'2022-06-14','Austin','TX',true,false),
+  ('b9e348d6-3ea6-42dd-9697-0211b6b376b8','Rosa','García','(512) 555-0204','rosa.garcia@example.com','manager','hourly',30.00,true,'2022-06-14','Austin','TX',true,false),
   ('b9e348d6-3ea6-42dd-9697-0211b6b376b8','Hugo','Beltrán','(512) 555-0205','hugo.beltran@example.com','field','hourly',21.00,true,'2025-07-02','Pflugerville','TX',true,true);
+
+-- ── Hours ──────────────────────────────────────────────────────────────────
+-- Today's hours (so the CURRENT pay period, Inicio's payroll card and Team →
+-- Hours are never empty, whatever day this runs) plus the previous four days
+-- for history. Re-running resets them (deleted above with the employees).
+-- clock_in/clock_out are set explicitly: clock_in defaults to now() and an
+-- entry with no clock_out counts as "clocked in" — Inicio showed 25 people
+-- "Active now".
+insert into public.timesheets (business_id, employee_id, worker_name, work_date, hours_worked, approved, clock_in, clock_out)
+select 'b9e348d6-3ea6-42dd-9697-0211b6b376b8', e.id, e.first_name || ' ' || e.last_name, current_date - d.n, d.h, true,
+       (current_date - d.n) + time '08:00', (current_date - d.n) + time '08:00' + d.h * interval '1 hour'
+from public.employees e
+join (values
+  ('Miguel', 0, 8.0), ('Pedro', 0, 8.0), ('Hugo', 0, 7.5), ('Rosa', 0, 6.0), ('Ana', 0, 4.0),
+  ('Miguel', 1, 8.0), ('Pedro', 1, 8.5), ('Hugo', 1, 8.0), ('Rosa', 1, 8.0), ('Ana', 1, 8.0),
+  ('Miguel', 2, 9.0), ('Pedro', 2, 8.0), ('Hugo', 2, 8.0), ('Rosa', 2, 8.0), ('Ana', 2, 8.0),
+  ('Miguel', 3, 8.0), ('Pedro', 3, 7.0), ('Hugo', 3, 8.0), ('Rosa', 3, 8.0), ('Ana', 3, 8.0),
+  ('Miguel', 4, 8.0), ('Pedro', 4, 8.0), ('Hugo', 4, 6.5), ('Rosa', 4, 8.0), ('Ana', 4, 8.0)
+) as d(first, n, h) on d.first = e.first_name
+where e.business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
+
+-- The sign-in account's own name. Team lists the owner from an employees row
+-- linked by user_id; with none, the app auto-creates one named from the
+-- account ("demo") — so seed it here, named.
+update public.profiles set first_name = 'Daniel', last_name = 'Moreno'
+where id = (select owner_id from public.businesses where id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8');
+insert into public.employees (business_id, user_id, first_name, last_name, role, active)
+select id, owner_id, 'Daniel', 'Moreno', 'owner', true
+from public.businesses where id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
 
 -- ── Inventory ──────────────────────────────────────────────────────────────
 -- Two items sit under their threshold on purpose, so the low-stock state is
@@ -181,7 +213,7 @@ from (values
    2180.00, 'Thank you for your business.', (now() - interval '6 days')),
   ('Vega',    'INV-1002', 'paid',    current_date - 15, current_date,
    '[{"description":"Seasonal cleanup","qty":6,"rate":90}]',
-   540.00, null, (now() - interval '2 days')),
+   540.00, null, (now() - interval '1 hour')),  -- always THIS month (Inicio's earnings card)
   ('Peña',    'INV-1003', 'sent',    current_date - 6,  current_date + 9,
    '[{"description":"Raised planters","qty":2,"rate":480},{"description":"Seasonal plants","qty":1,"rate":315}]',
    1275.00, 'Due in 15 days.', null),

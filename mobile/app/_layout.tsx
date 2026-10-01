@@ -3,7 +3,7 @@
 // of its Math.random fallback. Must precede all other imports.
 import 'react-native-get-random-values';
 import '../global.css';
-import { LogBox } from 'react-native';
+import { LogBox, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -12,13 +12,14 @@ import { cssInterop } from 'nativewind';
 import * as Lucide from 'lucide-react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { LangProvider } from '@/lib/i18n/LangProvider';
-import { ThemeProvider, useTheme } from '@/lib/ThemeProvider';
+import { ThemeProvider, useTheme, useThemeColors } from '@/lib/ThemeProvider';
 import { useProtectedRoute } from '@/lib/auth/gate';
 import { UpdateBanner } from '@/components/UpdateBanner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 // Importing the auth store at module load wires up the single
 // onAuthStateChange listener and the safety timeout.
 import '@/lib/auth/store';
+import { useWindowControlsInset } from '@/lib/useWindowControlsInset';
 
 // SafeAreaView from react-native-safe-area-context is a third-party component,
 // so NativeWind v4 does NOT auto-apply `className` to it. Screens using
@@ -83,9 +84,15 @@ if (_orig) {
 // (those hooks must be called inside the router tree).
 function AuthAwareApp() {
   useProtectedRoute();
+  // iPad in a resizable window: keep every screen's title clear of the window
+  // controls (lib/useWindowControlsInset). 0 everywhere else.
+  const controlsInset = useWindowControlsInset();
+  const c = useThemeColors();
   return (
     <>
-      <Stack screenOptions={{ headerShown: false }} />
+      <View style={{ flex: 1, paddingTop: controlsInset, backgroundColor: c.surface }}>
+        <Stack screenOptions={{ headerShown: false }} />
+      </View>
       {/* Sits above every screen. Renders nothing until an update is actually
           waiting, and hides itself while a form is focused. */}
       <UpdateBanner />

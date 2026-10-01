@@ -340,22 +340,26 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
             const now = Date.now();
             if (now - lastPressRef.current < 350) return;
             lastPressRef.current = now;
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
-            if (event.defaultPrevented) return;
             // Resolve focus + nested history from the LIVE navigator state —
             // the render-time `route`/`activeIndex` lag during transitions.
             const live = navigation.getState();
             const liveRoute = live.routes[live.index ?? 0];
             const liveActive = liveRoute?.key === route.key;
             // Already in this section → go to its list (see resetSection).
+            // NO 'tabPress' event here: the native stack's built-in handler
+            // for it pops to top too, so one tap popped twice — the second
+            // found nothing left ("POP_TO_TOP was not handled… any screen to
+            // go back to?") and also skipped the unsaved-changes guard.
             if (liveActive) {
               resetSection({ name: route.name, state: liveRoute?.state });
               return;
             }
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+            if (event.defaultPrevented) return;
             // Switching INTO a section restores its stack as you left it —
             // but a detail screen opened from ANOTHER section (?from=home/
             // map/invoice/…) is a visitor there: you never walked that
