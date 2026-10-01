@@ -87,7 +87,11 @@ export function LoginScreen({
            and does not follow the dark palette, so the theme-derived ink would
            turn white-on-white for anyone with dark mode on. */}
         <div className="mb-5">
-          <Logo variant="side" width={130} ink="black" />
+          {/* The logo goes back to the landing page — otherwise someone who
+              arrived on this page from a link has no way back to the site. */}
+          <a href="/" aria-label="Amixos" className="inline-block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+            <Logo variant="side" width={130} ink="black" />
+          </a>
         </div>
         <h1 className="text-3xl font-bold text-gray-900">{t.login.heading}</h1>
         <p className="text-sm text-gray-500 mt-1 mb-8">{t.login.tagline}</p>
