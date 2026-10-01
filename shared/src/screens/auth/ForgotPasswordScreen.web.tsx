@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Mail, CheckCircle2 } from 'lucide-react';
 import { useLang } from '../../i18n';
+import { Logo } from '../../ui/Logo';
 
 export interface ForgotPasswordScreenProps {
   /** Send the password reset email. Returns ok=true on success. */
@@ -55,6 +56,13 @@ export function ForgotPasswordScreen({ onResetEmail, onBackToLogin, captchaSlot 
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/5 to-white flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-gray-100 p-8">
+        {/* Branding matters most here: people arrive from a reset email and should
+            see it's really Amixos. Links back to the landing page. */}
+        <div className="flex justify-center mb-5">
+          <a href="/" aria-label="Amixos" className="inline-block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+            <Logo variant="side" width={130} ink="black" />
+          </a>
+        </div>
         <h1 className="text-3xl font-bold text-gray-900 text-center">{t.forgot.heading}</h1>
         <p className="text-sm text-gray-500 mt-1 mb-8 text-center">{t.forgot.tagline}</p>
 
@@ -83,7 +91,7 @@ export function ForgotPasswordScreen({ onResetEmail, onBackToLogin, captchaSlot 
                     autoComplete="email"
                     placeholder={t.forgot.emailPlaceholder}
                     {...register('email')}
-                    className={`w-full rounded-xl border bg-white px-10 py-3 text-sm text-center text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary ${
+                    className={`w-full rounded-xl border bg-white px-10 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary ${
                       errors.email ? 'border-red-300' : 'border-gray-200'
                     }`}
                   />

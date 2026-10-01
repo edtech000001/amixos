@@ -73,18 +73,13 @@ export function ForgotPasswordScreen({ onResetEmail, onBackToLogin, captchaSlot 
         }}
         keyboardShouldPersistTaps="handled"
       >
-        <View className="w-full max-w-md mx-auto flex-1">
-          <View className="items-center mb-8">
-            <Logo variant="stacked" width={96} />
-          </View>
-          {/* mt-auto here + mb-auto on the card centres the PAIR, so the
-             tagline reads as the card's lead-in instead of floating up
-             under the logo. The logo itself stays pinned to the top. */}
-          <Text className="text-muted text-base text-center mb-4 mt-auto">
-            {t.forgot.tagline}
-          </Text>
-
-          <View className="bg-card rounded-2xl border border-border-soft p-8 mb-auto">
+        <View className="w-full max-w-md mx-auto flex-1 justify-center">
+          {/* One card holding the logo, heading and form — mirrors the web
+             page, instead of a logo and tagline floating above the card. */}
+          <View className="bg-card rounded-3xl border border-border-soft p-8">
+            <View className="items-center mb-5">
+              <Logo variant="side" width={130} />
+            </View>
             {sent ? (
               <View className="items-center gap-4">
                 <CheckCircle size={48} color={c.success} />
@@ -97,9 +92,10 @@ export function ForgotPasswordScreen({ onResetEmail, onBackToLogin, captchaSlot 
               </View>
             ) : (
               <>
-                <Text className="text-xl font-semibold text-ink text-center mb-2">
+                <Text className="text-2xl font-bold text-ink text-center">
                   {t.forgot.heading}
                 </Text>
+                <Text className="text-sm text-muted text-center mt-1 mb-6">{t.forgot.tagline}</Text>
                 <Text className="text-sm text-muted text-center mb-6">{t.forgot.sub}</Text>
 
                 <View className="flex-col gap-4">
@@ -114,7 +110,6 @@ export function ForgotPasswordScreen({ onResetEmail, onBackToLogin, captchaSlot 
                         autoComplete="email"
                         placeholder={t.forgot.emailPlaceholder}
                         leftIcon={<Mail size={18} color={c.faint} />}
-                        centerText
                         error={errors.email?.message}
                         value={value ?? ''}
                         onChangeText={onChange}

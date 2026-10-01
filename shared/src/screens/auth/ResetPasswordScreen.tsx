@@ -100,17 +100,15 @@ export function ResetPasswordScreen({
         }}
         keyboardShouldPersistTaps="handled"
       >
-        <View className="w-full max-w-md mx-auto flex-1">
-          <View className="items-center mb-8">
-            <Logo variant="stacked" width={96} />
+        <View className="w-full max-w-md mx-auto flex-1 justify-center">
+          {/* One card holding the logo and the step — mirrors the web page
+             (and forgot-password), not a logo floating above the card. */}
+          <View className="bg-card rounded-3xl border border-border-soft p-8">
+            <View className="items-center mb-5">
+              <Logo variant="side" width={130} />
+            </View>
+            {children}
           </View>
-          {/* mt-auto here + mb-auto on the card centres the PAIR, so the
-             tagline reads as the card's lead-in instead of floating up
-             under the logo. The logo itself stays pinned to the top. */}
-          <Text className="text-muted text-base text-center mb-4 mt-auto">
-            {t.reset.tagline}
-          </Text>
-          <View className="bg-card rounded-2xl border border-border-soft p-8 mb-auto">{children}</View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -156,7 +154,8 @@ export function ResetPasswordScreen({
 
   return (
     <Shell>
-      <Text className="text-xl font-semibold text-ink mb-2">{t.reset.heading}</Text>
+      <Text className="text-xl font-semibold text-ink mb-1">{t.reset.heading}</Text>
+      <Text className="text-sm text-muted mb-3">{t.reset.tagline}</Text>
       <Text className="text-sm text-muted mb-6">{t.reset.sub}</Text>
 
       <View className="flex-col gap-4">

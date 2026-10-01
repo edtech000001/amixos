@@ -10,6 +10,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Lock, Eye, EyeOff, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useLang } from '../../i18n';
+import { Logo } from '../../ui/Logo';
 import { PASSWORD_MIN_LENGTH, passwordMeetsPolicy } from '../../lib/passwordErrors';
 
 export type ResetLinkState = 'verifying' | 'ready' | 'invalid';
@@ -78,6 +79,13 @@ export function ResetPasswordScreen({
   const Shell = ({ children }: { children: ReactNode }) => (
     <div className="min-h-screen bg-gradient-to-b from-primary/5 to-white flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-gray-100 p-8">
+        {/* Branding matters most here: people arrive from a reset email and should
+            see it's really Amixos. Links back to the landing page. */}
+        <div className="flex justify-center mb-5">
+          <a href="/" aria-label="Amixos" className="inline-block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+            <Logo variant="side" width={130} ink="black" />
+          </a>
+        </div>
         {children}
       </div>
     </div>
