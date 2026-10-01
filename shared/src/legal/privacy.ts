@@ -50,6 +50,7 @@ export const privacyPolicy: LegalDoc = {
           '- Para dar soporte cuando nos escribes.',
           '**No** usamos los datos de tus clientes para publicidad, no los vendemos y no los compartimos con otros negocios de la plataforma.',
           '**Cookies:** el sitio web solo usa las cookies necesarias para mantener tu sesión iniciada y recordar tus preferencias (negocio, ubicación e idioma). No usamos cookies de publicidad ni de analítica, y no rastreamos tu actividad en otras apps o sitios.',
+          'Como no rastreamos tu actividad en otros sitios, las señales de "No rastrear" (Do Not Track) de tu navegador no cambian nada en Amixos.',
         ],
       },
       {
@@ -75,6 +76,7 @@ export const privacyPolicy: LegalDoc = {
         heading: '5. Seguridad',
         body: [
           'Todo viaja cifrado (HTTPS) y se guarda en servidores con cifrado en reposo. Cada negocio está aislado a nivel de base de datos mediante políticas de seguridad por fila: los datos de un negocio no son accesibles desde otro. Dentro de tu negocio, tú decides qué puede ver cada rol.',
+          'Tu información se guarda y procesa en **Estados Unidos**.',
           'Ningún sistema es infalible. Si ocurre una violación de seguridad que te afecte, te avisaremos.',
         ],
       },
@@ -99,6 +101,7 @@ export const privacyPolicy: LegalDoc = {
         heading: '8. Los datos de tus clientes',
         body: [
           'La información que capturas sobre tus clientes es tuya; nosotros solo la procesamos para darte el servicio. Eres responsable de tener derecho a guardar esos datos y de cumplir las leyes que te apliquen al usarlos, incluyendo cuando envías correos o mensajes desde la app.',
+          '**Si eres cliente de un negocio que usa Amixos:** ese negocio decide qué información tuya guarda y cómo la usa, y nosotros la procesamos en su nombre. Para ver, corregir o borrar tu información, comunícate con ese negocio. Si nos escribes a nosotros, le haremos llegar tu solicitud.',
         ],
       },
       {
@@ -154,6 +157,7 @@ export const privacyPolicy: LegalDoc = {
           '- To help you when you contact support.',
           'We do **not** use your clients’ data for advertising, we do not sell it, and we do not share it with other businesses on the platform.',
           '**Cookies:** the website only uses the cookies needed to keep you signed in and remember your preferences (business, location and language). We do not use advertising or analytics cookies, and we do not track your activity across other apps or sites.',
+          'Because we do not track your activity across other sites, your browser\'s "Do Not Track" signal does not change anything in Amixos.',
         ],
       },
       {
@@ -179,6 +183,7 @@ export const privacyPolicy: LegalDoc = {
         heading: '5. Security',
         body: [
           'Everything travels encrypted (HTTPS) and is stored on servers with encryption at rest. Each business is isolated at the database level through row-level security policies: one business’s data is not reachable from another. Within your business, you decide what each role can see.',
+          'Your information is stored and processed in the **United States**.',
           'No system is perfect. If a breach affects you, we will tell you.',
         ],
       },
@@ -203,6 +208,7 @@ export const privacyPolicy: LegalDoc = {
         heading: '8. Your clients’ data',
         body: [
           'The information you record about your clients is yours; we only process it to provide the service. You are responsible for having the right to hold that data and for complying with the laws that apply to you when you use it, including when you send emails or messages from the app.',
+          '**If you are a client of a business that uses Amixos:** that business decides what information about you it keeps and how it uses it, and we process it on its behalf. To see, correct or delete your information, contact that business. If you write to us, we will pass your request on to them.',
         ],
       },
       {

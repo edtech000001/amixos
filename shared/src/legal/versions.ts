@@ -9,7 +9,7 @@
 // alone after an edit silently backdates everyone's consent to text they never
 // saw.
 //
-// `material` is the separate, deliberate decision. Terms section 12 promises
+// `material` is the separate, deliberate decision. Terms section 14 promises
 // an in-app notice for important changes and treats continued use as
 // acceptance of the rest — so a typo fix bumps the version quietly, and a real
 // change re-prompts. Without this split you either nag people over
@@ -31,16 +31,16 @@ export const POLICY_VERSIONS: Record<PolicyDoc, PolicyVersion> = {
   // 2026-09-30: unpaid businesses kept 12 months, then erased after 30/7/1-day
   // warnings (migration 243). Material: a new way data gets deleted without
   // the owner asking.
-  // 2026-09-30.2: disclosure update — full provider list (Resend, Turnstile,
-  // Google TTS, Twilio/ClickSend, Expo), cookies paragraph, accurate Contacts-
-  // sync / Ami / export wording. Stays MATERIAL: it supersedes the material
-  // 2026-09-30 release (12-month retention) that most users haven't accepted
-  // yet — flagging this one non-material would let them skip that prompt.
-  privacy: { version: '2026-09-30.2', material: true },
-  // 2026-09-30.2: adds indemnification (§10), binding arbitration with class
-  // waiver, small-claims exception and 30-day opt-out (§11), general terms
-  // (§13) and Douglas County venue (§14). Material.
-  terms:   { version: '2026-09-30.2', material: true },
+  // 2026-09-30.3: full provider list, cookies + Do-Not-Track, US data
+  // location, how a business's own clients make privacy requests. Material
+  // (supersedes the same-day 2026-09-30 retention release).
+  privacy: { version: '2026-09-30.3', material: true },
+  // 2026-09-30.3: arbitration + class waiver + opt-out (§13), indemnification
+  // (§12), Douglas County venue (§16), plus license/ownership (§9), AI (§10),
+  // conspicuous warranty disclaimer (§11), Apple EULA terms (§8), billing
+  // auto-renewal/proration/taxes/disputes (§3), survival, e-communications,
+  // language (English controls), third-party beneficiaries (§15). Material.
+  terms:   { version: '2026-09-30.3', material: true },
 };
 
 export const POLICY_DOCS: PolicyDoc[] = ['privacy', 'terms'];
