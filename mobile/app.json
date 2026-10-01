@@ -34,11 +34,6 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "monochromeImage": "./assets/monochrome-icon.png",
         "backgroundColor": "#F9F9FA"
-      },
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyAmrsisBGhkAOt4pbwzFHVB18lwO_widvc"
-        }
       }
     },
     "web": {

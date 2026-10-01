@@ -18,6 +18,7 @@ export const termsOfService: LegalDoc = {
     intro: [
       `Estos términos son el acuerdo entre tú y ${ENTITY} ("Amixos", "nosotros") por el uso de la aplicación Amixos. Al crear una cuenta, aceptas lo que sigue.`,
       'Están escritos para que se entiendan. Si algo no te queda claro, escríbenos a soporte@amixos.com antes de registrarte.',
+      '**Importante:** la sección 11 dice que los desacuerdos se resuelven por **arbitraje individual y obligatorio**, no en un juicio con jurado ni en una demanda colectiva. Puedes excluirte del arbitraje escribiéndonos dentro de los 30 días siguientes a aceptar estos términos.',
     ],
     sections: [
       {
@@ -50,7 +51,7 @@ export const termsOfService: LegalDoc = {
         body: [
           'Todo lo que capturas —clientes, trabajos, facturas, archivos— **te pertenece**. No reclamamos propiedad sobre ello.',
           'Nos das permiso para almacenarlo y procesarlo únicamente con el fin de darte el servicio (ver el Aviso de Privacidad).',
-          'Puedes exportar tu información a CSV o PDF desde la app en cualquier momento, incluso antes de cancelar.',
+          'Puedes descargar tus facturas y propuestas en PDF y exportar información desde la app en cualquier momento, incluso antes de cancelar. Si necesitas una copia completa de tus datos, escríbenos a soporte@amixos.com.',
         ],
       },
       {
@@ -94,15 +95,48 @@ export const termsOfService: LegalDoc = {
         ],
       },
       {
-        heading: '10. Cambios a estos términos',
+        heading: '10. Indemnización',
         body: [
-          'Podemos actualizar estos términos. Cambiaremos la fecha de arriba y, si el cambio es importante, te avisaremos dentro de la app. Si sigues usando Amixos después, aceptas la nueva versión.',
+          `Tú eres responsable de la información que guardas en Amixos y de cómo usas el servicio. Por eso aceptas defender, indemnizar y mantener libre de responsabilidad a ${ENTITY} y a su personal frente a reclamos, pérdidas y gastos (incluidos honorarios razonables de abogados) que resulten de:`,
+          '- la información que guardas, incluida la de tus clientes y empleados, y tu derecho a guardarla;',
+          '- tu uso del servicio, incluidos los correos y mensajes que envías a tus clientes desde la app;',
+          '- que no cumplas estos términos o la ley que te aplica.',
         ],
       },
       {
-        heading: '11. Ley aplicable y contacto',
+        heading: '11. Resolución de desacuerdos y arbitraje',
+        body: [
+          '**Primero, hablemos.** Si tienes un problema con Amixos, escríbenos a soporte@amixos.com explicando qué pasó y qué solución buscas. Ambas partes tenemos **30 días** para intentar resolverlo antes de iniciar un arbitraje.',
+          '**Arbitraje obligatorio.** Si no se resuelve, cualquier desacuerdo relacionado con estos términos o con el servicio se decide por **arbitraje individual y obligatorio** administrado por la American Arbitration Association (AAA) bajo sus reglas vigentes, y no en un tribunal. La Ley Federal de Arbitraje (Federal Arbitration Act) rige esta sección. El arbitraje puede hacerse por video o teléfono; si es presencial, será en el Condado de Douglas, Nebraska. La decisión del árbitro es final y puede presentarse ante cualquier tribunal competente.',
+          '**Costos.** Si inicias un arbitraje por un reclamo de menos de **$10,000**, nosotros pagamos las cuotas de presentación y administración de la AAA. Cada parte paga sus propios abogados, salvo que el árbitro o la ley digan otra cosa.',
+          '**Excepciones.** Cualquiera de las partes puede llevar un reclamo individual a un **tribunal de reclamos menores**, y puede pedir a un tribunal que detenga un uso no autorizado del servicio o de su propiedad intelectual.',
+          '**Sin demandas colectivas.** Los reclamos se presentan solo de forma **individual**, no como parte de una demanda colectiva, grupal o representativa, y ambas partes renuncian a un juicio con jurado. Si esta renuncia no pudiera aplicarse a un reclamo, ese reclamo se resolverá en un tribunal y no en arbitraje.',
+          '**Cómo excluirte.** Puedes excluirte de esta sección enviando un correo a soporte@amixos.com dentro de los **30 días** siguientes a aceptar estos términos por primera vez, con tu nombre, el correo de tu cuenta y la frase "Me excluyo del arbitraje". Excluirte no afecta ninguna otra parte de estos términos.',
+        ],
+      },
+      {
+        heading: '12. Cambios a estos términos',
+        body: [
+          'Podemos actualizar estos términos. Cambiaremos la fecha de arriba y, si el cambio es importante, te avisaremos dentro de la app. Si sigues usando Amixos después, aceptas la nueva versión.',
+          'Un cambio a la sección 11 (arbitraje) no se aplica a un desacuerdo que ya nos hayas notificado antes del cambio.',
+        ],
+      },
+      {
+        heading: '13. Condiciones generales',
+        body: [
+          '- **Suspensión:** podemos suspender o cerrar una cuenta que incumpla estos términos (sección 5), avisándote cuando sea posible.',
+          '- **Acuerdo completo:** estos términos y el Aviso de Privacidad son el acuerdo completo entre tú y Amixos sobre el servicio.',
+          '- **Divisibilidad:** si alguna parte no se puede aplicar, el resto sigue vigente.',
+          '- **Sin renuncia:** si no exigimos una parte de estos términos en algún momento, no renunciamos a exigirla después.',
+          '- **Cesión:** no puedes transferir tu cuenta ni estos términos sin nuestro permiso; nosotros podemos transferirlos si la empresa se vende o se fusiona.',
+          '- **Fuerza mayor:** no somos responsables por fallas causadas por hechos fuera de nuestro control razonable (desastres, cortes de internet o de proveedores).',
+        ],
+      },
+      {
+        heading: '14. Ley aplicable, jurisdicción y contacto',
         body: [
           'Este acuerdo se rige por las leyes del **Estado de Nebraska, Estados Unidos**, sin aplicar sus reglas de conflicto de leyes.',
+          'Cualquier asunto que no se resuelva por arbitraje (por ejemplo, si te excluiste o en reclamos menores) se presentará exclusivamente ante los tribunales estatales o federales del **Condado de Douglas, Nebraska**, y ambas partes aceptan su jurisdicción.',
           'Contacto: **soporte@amixos.com**.',
         ],
       },
@@ -114,6 +148,7 @@ export const termsOfService: LegalDoc = {
     intro: [
       `These terms are the agreement between you and ${ENTITY} ("Amixos", "we") for use of the Amixos application. By creating an account, you accept them.`,
       'They are written to be understood. If anything is unclear, email soporte@amixos.com before signing up.',
+      '**Important:** section 11 says disputes are resolved by **binding individual arbitration**, not by a jury trial or a class action. You can opt out of arbitration by emailing us within 30 days of accepting these terms.',
     ],
     sections: [
       {
@@ -146,7 +181,7 @@ export const termsOfService: LegalDoc = {
         body: [
           'Everything you enter — clients, jobs, invoices, files — **belongs to you**. We claim no ownership of it.',
           'You grant us permission to store and process it solely to provide the service (see the Privacy Policy).',
-          'You can export your information to CSV or PDF from the app at any time, including before cancelling.',
+          'You can download your invoices and proposals as PDFs and export information from the app at any time, including before cancelling. If you need a full copy of your data, email soporte@amixos.com.',
         ],
       },
       {
@@ -190,15 +225,48 @@ export const termsOfService: LegalDoc = {
         ],
       },
       {
-        heading: '10. Changes to these terms',
+        heading: '10. Indemnification',
         body: [
-          'We may update these terms. We will change the date above and, for significant changes, tell you inside the app. Continuing to use Amixos afterwards means you accept the new version.',
+          `You are responsible for the information you store in Amixos and for how you use the service. So you agree to defend, indemnify and hold harmless ${ENTITY} and its personnel from claims, losses and costs (including reasonable attorneys’ fees) arising from:`,
+          '- the information you store, including your clients’ and employees’, and your right to store it;',
+          '- your use of the service, including the emails and messages you send your clients from the app;',
+          '- your breach of these terms or of the law that applies to you.',
         ],
       },
       {
-        heading: '11. Governing law and contact',
+        heading: '11. Dispute resolution and arbitration',
+        body: [
+          '**Talk to us first.** If you have a problem with Amixos, email soporte@amixos.com describing what happened and the outcome you want. We both have **30 days** to try to resolve it before starting arbitration.',
+          '**Binding arbitration.** If it is not resolved, any dispute relating to these terms or the service is decided by **binding individual arbitration** administered by the American Arbitration Association (AAA) under its rules then in effect, not in court. The Federal Arbitration Act governs this section. Arbitration may be held by video or phone; if in person, it will be in Douglas County, Nebraska. The arbitrator’s decision is final and may be entered in any court with jurisdiction.',
+          '**Costs.** If you start arbitration for a claim under **$10,000**, we pay the AAA filing and administrative fees. Each side pays its own attorneys unless the arbitrator or the law says otherwise.',
+          '**Exceptions.** Either side may bring an individual claim in **small claims court**, and may ask a court to stop unauthorized use of the service or of its intellectual property.',
+          '**No class actions.** Claims may be brought only **individually**, not as part of a class, collective or representative action, and both sides waive a jury trial. If this waiver cannot be applied to a claim, that claim will be decided in court, not in arbitration.',
+          '**How to opt out.** You can opt out of this section by emailing soporte@amixos.com within **30 days** of first accepting these terms, with your name, your account email and the words "I opt out of arbitration". Opting out does not affect any other part of these terms.',
+        ],
+      },
+      {
+        heading: '12. Changes to these terms',
+        body: [
+          'We may update these terms. We will change the date above and, for significant changes, tell you inside the app. Continuing to use Amixos afterwards means you accept the new version.',
+          'A change to section 11 (arbitration) does not apply to a dispute you notified us about before the change.',
+        ],
+      },
+      {
+        heading: '13. General terms',
+        body: [
+          '- **Suspension:** we may suspend or close an account that breaches these terms (section 5), with notice when possible.',
+          '- **Entire agreement:** these terms and the Privacy Policy are the entire agreement between you and Amixos about the service.',
+          '- **Severability:** if any part cannot be enforced, the rest stays in effect.',
+          '- **No waiver:** if we do not enforce part of these terms at some point, we do not give up the right to enforce it later.',
+          '- **Assignment:** you may not transfer your account or these terms without our permission; we may transfer them if the company is sold or merged.',
+          '- **Force majeure:** we are not responsible for failures caused by events beyond our reasonable control (disasters, internet or provider outages).',
+        ],
+      },
+      {
+        heading: '14. Governing law, venue and contact',
         body: [
           'This agreement is governed by the laws of the **State of Nebraska, United States**, without regard to its conflict-of-law rules.',
+          'Any matter not resolved by arbitration (for example, if you opted out, or in small claims) will be brought exclusively in the state or federal courts of **Douglas County, Nebraska**, and both sides consent to their jurisdiction.',
           'Contact: **soporte@amixos.com**.',
         ],
       },
