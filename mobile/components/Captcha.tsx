@@ -6,6 +6,12 @@
 //  * `baseUrl` — a WebView fed raw HTML has an origin of about:blank, which
 //    Turnstile rejects as an unlisted hostname. Setting baseUrl makes the page
 //    report amixos.com, which IS in the widget's hostname allowlist.
+//  * reset REMOUNTS the WebView instead of reload(): with baseUrl set, a
+//    reload loads the real https://amixos.com (the landing page, smart-app
+//    banner and all) in the captcha box — and no new token ever arrives, so
+//    the next sign-in fails too. For the same reason the box may never
+//    navigate its top frame anywhere; links (Cloudflare Privacy/Help) open
+//    in the browser.
 //  * the widget reports its own height back over postMessage. Managed mode is
 //    usually invisible but escalates to an interactive challenge for traffic
 //    it does not like, and a fixed-height container would clip that challenge
@@ -14,7 +20,7 @@
 // Mirrors web/src/components/auth/Captcha.tsx.
 
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Linking, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 const SITE_KEY = process.env.EXPO_PUBLIC_TURNSTILE_SITE_KEY;
@@ -82,12 +88,17 @@ export const Captcha = forwardRef<CaptchaHandle, CaptchaProps>(function Captcha(
   { onToken },
   ref,
 ) {
-  const web = useRef<WebView>(null);
   const [height, setHeight] = useState(0);
+  // Bumped by reset() → new WebView key → a fresh widget (see header note).
+  const [instance, setInstance] = useState(0);
+  // The first top-frame load is our inline HTML (reported as the baseUrl);
+  // anything after that would navigate the box away from the widget.
+  const loaded = useRef(false);
 
   useImperativeHandle(ref, () => ({
     reset: () => {
-      web.current?.reload();
+      loaded.current = false;
+      setInstance(n => n + 1);
       onToken(null);
     },
   }));
@@ -99,9 +110,21 @@ export const Captcha = forwardRef<CaptchaHandle, CaptchaProps>(function Captcha(
   return (
     <View style={{ height, overflow: 'hidden' }}>
       <WebView
-        ref={web}
+        key={instance}
         source={{ html: page(SITE_KEY), baseUrl: ORIGIN }}
         originWhitelist={['*']}
+        onShouldStartLoadWithRequest={req => {
+          // Turnstile's own iframe (challenges.cloudflare.com) — always fine.
+          if (req.isTopFrame === false) return true;
+          if (req.url === 'about:blank') return true;
+          if (!loaded.current && req.url.startsWith(ORIGIN)) {
+            loaded.current = true;
+            return true;
+          }
+          // Anything else would replace the widget: open real links outside.
+          if (/^https?:/.test(req.url)) void Linking.openURL(req.url);
+          return false;
+        }}
         javaScriptEnabled
         // Android draws an opaque white box behind the WebView otherwise,
         // which shows as a bright rectangle on the dark auth screens.
