@@ -1,7 +1,5 @@
-import { useCallback, useState } from 'react';
 import { View, Text, Pressable, ScrollView, Linking } from 'react-native';
-import Animated, { FadeInRight } from 'react-native-reanimated';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ChevronRight,
@@ -26,6 +24,7 @@ import { useTheme, useThemeColors } from '@/lib/ThemeProvider';
 import { useApp } from '@/lib/AppContext';
 import { useAppUpdate } from '@/lib/updates/useAppUpdate';
 import { can } from '@amixos/shared/lib/permissions';
+import { useBackToMore } from '@/lib/sectionNav';
 
 // Build identifier for the footer — app version (app.json) + native build
 // number, PLUS the running OTA update's identity. The app version can't
@@ -67,6 +66,7 @@ interface SettingsItem {
 
 export default function AjustesIndex() {
   const router = useRouter();
+  const backToMore = useBackToMore();
   const { resolved, toggle } = useTheme();
   const c = useThemeColors();
   const { t: full, locale } = useLang();
@@ -166,25 +166,13 @@ export default function AjustesIndex() {
     },
   ];
 
-  // Forward entrance every time Settings gains focus — the Tabs switch
-  // itself doesn't animate, and the ambient transition read as a backwards
-  // swipe. FadeInRight (short slide + fade) rather than a full-width slide:
-  // the previous screen disappears instantly on a tab switch, so a
-  // full-width slide reads as a harsh "swap" instead of a push. Re-keying
-  // the wrapper replays the entrance per focus.
-  const [focusKey, setFocusKey] = useState(0);
-  useFocusEffect(useCallback(() => { setFocusKey((k) => k + 1); }, []));
-
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-      <Animated.View key={focusKey} entering={FadeInRight.duration(240)} className="flex-1">
       <ScrollView contentContainerClassName="px-6 pt-6 pb-36">
-        {/* Back to the Más menu (Ajustes is pushed from there, not a dock tab). */}
+        {/* Back to the Más menu — a native pop (Ajustes lives in the Más stack). */}
         <View className="flex-row items-center mb-5 -ml-2">
           <Pressable
-            // Explicit target: Ajustes shares a stack with the module store, so
-            // back() could land on a leftover store page instead of Más.
-            onPress={() => router.navigate('/dashboard/mas' as never)}
+            onPress={backToMore}
             hitSlop={12}
             className="p-2 rounded-lg active:bg-border-soft"
           >
@@ -254,7 +242,6 @@ export default function AjustesIndex() {
             something to point at: "tap this and tell me what it says". */}
         <UpdateCheckRow />
       </ScrollView>
-      </Animated.View>
     </SafeAreaView>
   );
 }

@@ -13,8 +13,7 @@ import { useApp } from '@/lib/AppContext';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 import { can } from '@amixos/shared/lib/permissions';
-import { eligibleDockApps, effectiveDockKeys } from '@/lib/dockApps';
-import { useDockStore } from '@/lib/dockStore';
+import { useDockApps } from '@/lib/useDockApps';
 
 interface MenuItem {
   key: string;
@@ -59,25 +58,30 @@ export default function MasMenu() {
         : true,
     };
   };
+  // Apps the user can pin to the dock but hasn't — surfaced here so removing
+  // one from the dock (Navegación) never makes it unreachable. Pinned apps —
+  // core or module — are reached via the dock, so they're omitted here.
+  const { eligible, pinned: pinnedKeys } = useDockApps();
+  const pinned = new Set(pinnedKeys);
+
   // Tool modules stay in the main group; INDUSTRY modules are full apps of
   // their own and get a labeled "Apps" group between the tools and Tienda.
-  const moduleItems: MenuItem[] = liveModules.filter(m => m.category !== 'industry').map(toModuleItem);
-  const appItems: MenuItem[] = liveModules.filter(m => m.category === 'industry').map(toModuleItem)
+  const unpinnedModules = liveModules.filter(m => !pinned.has(m.id));
+  const moduleItems: MenuItem[] = unpinnedModules.filter(m => m.category !== 'industry').map(toModuleItem);
+  const appItems: MenuItem[] = unpinnedModules.filter(m => m.category === 'industry').map(toModuleItem)
     .filter(item => item.show !== false);
 
-  // Apps the user can pin to the dock but hasn't — surfaced here so removing
-  // one from the dock (Navegación) never makes it unreachable. Pinned apps are
-  // reached via the dock, so they're omitted here.
-  const dockKeys = useDockStore(s => s.keys);
-  const pinned = new Set(effectiveDockKeys(dockKeys, currentRole));
-  const unpinnedItems: MenuItem[] = eligibleDockApps(currentRole)
-    .filter(a => !pinned.has(a.key))
+  const unpinnedItems: MenuItem[] = eligible
+    .filter(a => !a.moduleId && !pinned.has(a.key) && a.labelKey)
     .map(a => ({
       key: a.key,
-      label: sb[a.labelKey],
-      description: sb.descriptions[a.labelKey],
+      label: sb[a.labelKey!],
+      description: sb.descriptions[a.labelKey!],
       icon: a.Icon,
-      path: a.path,
+      // Unpinned apps open their copy INSIDE the Más stack (mas/<app>), so
+      // they slide in and swipe back like any Más page — the iOS "More"
+      // pattern. Pinned ones are dock tabs and aren't listed here.
+      path: `/dashboard/mas/${a.key}`,
     }));
 
   // Core tools + any enabled modules — the "what you do" group.

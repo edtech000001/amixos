@@ -9,7 +9,7 @@ import { AnimatedDock } from '@/components/AnimatedDock';
 import { useApp } from '@/lib/AppContext';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth/store';
-import { DOCK_APPS } from '@/lib/dockApps';
+import { DOCK_APPS, dockAppLabel } from '@/lib/dockApps';
 import { useDockStore } from '@/lib/dockStore';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { OfflineSyncBanner } from '@/components/OfflineSyncBanner';
@@ -204,45 +204,26 @@ function DashboardTabs() {
                 name={app.routeName}
                 options={{
                   href: eligible ? undefined : null,
-                  title: sb[app.labelKey],
+                  title: dockAppLabel(app, sb as unknown as Record<string, unknown>, t.dashboard.modules.list as unknown as Record<string, { name?: string } | undefined>),
                   tabBarIcon: ({ color, size }) => <Icon color={color} size={size} />,
                 }}
               />
             );
           })}
 
+          {/* Más — ONE tab with its own native stack (mas/_layout): the menu,
+             Ajustes, Tienda, modules, payroll, and the Más-stack copies of
+             apps that aren't pinned to the dock. Everything inside pushes and
+             pops natively. Each CRUD section (clientes, trabajos, facturas,
+             empleados) likewise has its own Stack, registered once via
+             DOCK_APPS above. */}
           <Tabs.Screen
-            name="mas/index"
+            name="mas"
             options={{
               title: sb.mas,
               tabBarIcon: ({ color, size }) => <LayoutGrid color={color} size={size} />,
             }}
           />
-
-          {/* Hidden routes (accessed via push, not via tab bar).
-
-             NOTE: each CRUD section (facturas, clientes, trabajos, mas/empleados)
-             now has its OWN Stack (_layout in the section folder), registered as
-             a single tab via the DOCK_APPS map above. Their list/detail/form
-             screens live INSIDE that stack — so they're NOT registered here.
-             This is what makes the dock remember where you left off: the Tabs
-             navigator keeps each section's stack mounted across dock switches.
-             It also drops the old `unmountOnBlur` that was wiping half-filled
-             forms when you tapped away. */}
-          <Tabs.Screen name="mas/equipo" options={{ href: null }} />
-          {/* Payroll — reached from Reports, not the dock. */}
-          <Tabs.Screen name="mas/nomina" options={{ href: null }} />
-          <Tabs.Screen name="mas/nomina-historial" options={{ href: null }} />
-          {/* Inventario is a MODULE (mas/inventario is a redirect to
-             mas/modulos/inventory) — kept off the dock; reached via Más only
-             when the module is enabled. */}
-          <Tabs.Screen name="mas/inventario" options={{ href: null }} />
-          {/* ajustes/ is a Stack with its own _layout — register the folder once. */}
-          <Tabs.Screen name="mas/ajustes" options={{ href: null }} />
-          {/* Module routes — dynamic [moduleId] page. Without href:null Expo
-             Router auto-discovers it and gives it a tab slot (showed up as an
-             empty 5th button on the dock). */}
-          <Tabs.Screen name="mas/modulos/[moduleId]" options={{ href: null }} />
         </Tabs>
       </View>
       {/* Ami — floating assistant FAB + chat sheet, over every dashboard

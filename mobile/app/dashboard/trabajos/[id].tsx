@@ -74,6 +74,7 @@ import { JobDocumentsSection } from '@/components/JobDocumentsSection';
 import { SignaturePad } from '@/components/SignaturePad';
 import { fetchClientOwnEmails, resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
+import { useAppHref, useSectionBase } from '@/lib/sectionNav';
 
 // Local-date helpers for the schedule sheet (avoid UTC parsing shifting the
 // picked day across midnight).
@@ -222,6 +223,10 @@ interface PipelineStep {
 
 export default function JobDetailRoute() {
   const router = useRouter();
+  // Section links stay in whichever stack this screen is in (its tab, or
+  // the Más stack when opened from the Más menu) — lib/sectionNav.
+  const sectionBase = useSectionBase('trabajos');
+  const appHref = useAppHref();
   const { id, from, invoice: fromInvoice, worker: fromWorker } =
     useLocalSearchParams<{ id: string; from?: string; invoice?: string; worker?: string }>();
   // ?from=map → back returns to the map module; ?from=calendar → back returns
@@ -230,9 +235,9 @@ export default function JobDetailRoute() {
   // dashboard. Otherwise default behavior (trabajos list).
   const goBack = () => {
     if (from === 'map') {
-      router.replace('/dashboard/mas/modulos/map' as never);
+      router.replace(appHref('map') as never);
     } else if (from === 'calendar') {
-      router.replace('/dashboard/mas/calendario' as never);
+      router.replace(appHref('calendario') as never);
     } else if (from === 'nomina') {
       router.replace(
         `/dashboard/mas/nomina${fromWorker ? `?worker=${fromWorker}` : ''}` as never,
@@ -250,7 +255,7 @@ export default function JobDetailRoute() {
       // would build a fresh list from scratch, resetting both.
       router.back();
     } else {
-      router.replace('/dashboard/trabajos' as never);
+      router.replace(`${sectionBase}` as never);
     }
   };
 
@@ -1058,7 +1063,7 @@ export default function JobDetailRoute() {
               text: tw.switchToTarget.replace('{{name}}', targetBiz.name),
               onPress: () => {
                 setActiveBusiness(targetBusinessId);
-                router.replace(`/dashboard/trabajos/${result.newJobId}` as never);
+                router.replace(`${sectionBase}/${result.newJobId}` as never);
               },
             }
           : null,
@@ -1083,7 +1088,7 @@ export default function JobDetailRoute() {
           await supabase.from('job_items').delete().eq('job_id', job.id);
           await supabase.from('job_assignments').delete().eq('job_id', job.id);
           const { error } = await supabase.from('jobs').delete().eq('id', job.id);
-          if (!error) router.replace('/dashboard/trabajos' as never);
+          if (!error) router.replace(`${sectionBase}` as never);
         },
       },
     ]);
@@ -1396,11 +1401,11 @@ export default function JobDetailRoute() {
                   { text: tc.buttons.cancel, style: 'cancel' },
                   {
                     text: td.duplicateTeamOption,
-                    onPress: () => router.push(`/dashboard/trabajos/nuevo?duplicate=${job.id}&copy=team` as never),
+                    onPress: () => router.push(`${sectionBase}/nuevo?duplicate=${job.id}&copy=team` as never),
                   },
                   {
                     text: td.duplicateFullOption,
-                    onPress: () => router.push(`/dashboard/trabajos/nuevo?duplicate=${job.id}` as never),
+                    onPress: () => router.push(`${sectionBase}/nuevo?duplicate=${job.id}` as never),
                   },
                 ])
               }
@@ -1412,7 +1417,7 @@ export default function JobDetailRoute() {
           ) : null}
           {can.editJobMetadata(currentRole) ? (
             <Pressable
-              onPress={() => router.push(`/dashboard/trabajos/nuevo?edit=${job.id}` as never)}
+              onPress={() => router.push(`${sectionBase}/nuevo?edit=${job.id}` as never)}
               hitSlop={8}
               className="p-2 rounded-lg active:bg-border-soft"
             >

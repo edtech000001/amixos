@@ -25,6 +25,7 @@ import {
 import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
 import { useMoreBack } from '@/lib/useMoreBack';
+import { useSectionBase } from '@/lib/sectionNav';
 
 interface InvoiceClient { first_name: string; last_name: string; company: string | null; state: string | null; }
 interface RawInvoice {
@@ -61,6 +62,9 @@ export default function FacturasTab() {
   const moreBack = useMoreBack('facturas');
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  // Section links stay in whichever stack this screen is in (its tab, or
+  // the Más stack when opened from the Más menu) — lib/sectionNav.
+  const sectionBase = useSectionBase('facturas');
   // ?status=sent|overdue|all — dashboard tiles deep-link here. 'all' clears
   // the saved filter, which is what "View all" has to do or it would land
   // on whatever was filtered last.
@@ -363,9 +367,9 @@ export default function FacturasTab() {
         payPeriod={business ? { frequency: business.payroll_frequency, anchorDate: business.payroll_anchor_date, customDays: business.payroll_custom_days } : undefined}
         loading={loading}
         invoices={invoices}
-        onInvoicePress={(id) => router.push(`/dashboard/facturas/${id}`)}
-        onNewInvoicePress={can.createInvoice(currentRole) ? () => router.push('/dashboard/facturas/nueva' as never) : undefined}
-        onPriceSheetPress={() => router.push('/dashboard/facturas/precios' as never)}
+        onInvoicePress={(id) => router.push(`${sectionBase}/${id}` as never)}
+        onNewInvoicePress={can.createInvoice(currentRole) ? () => router.push(`${sectionBase}/nueva` as never) : undefined}
+        onPriceSheetPress={() => router.push(`${sectionBase}/precios` as never)}
         onUpdateStatus={updateStatus}
         businessId={business?.id}
         serverMode

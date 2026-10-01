@@ -6,12 +6,12 @@
 // applied in app/dashboard/_layout.tsx by flipping each route's `href`.
 
 import { ClipboardList, Users, FileText, Calendar, UsersRound, BarChart3, type LucideIcon } from 'lucide-react-native';
+import { getModuleById } from '@amixos/shared/modules/registry';
 import { can } from '@amixos/shared/lib/permissions';
 import type { Role } from '@amixos/shared/lib/permissions';
 
-/** Keys of the labels we read from t.dashboard.sidebar for each app. Only
- *  CORE apps belong here — modules (Inventario, Mapa, Archivos, …) are gated by
- *  activation and live in the module system, never the static dock catalog. */
+/** Keys of the labels we read from t.dashboard.sidebar for each CORE app.
+ *  Module apps (moduleId set) take their label from the module dictionary. */
 export type DockLabelKey = 'trabajos' | 'clientes' | 'facturas' | 'calendario' | 'empleados' | 'reportes';
 
 export interface DockApp {
@@ -22,8 +22,12 @@ export interface DockApp {
   /** Navigation path used from the Más list (when the app isn't pinned). */
   path: string;
   Icon: LucideIcon;
-  /** i18n key under t.dashboard.sidebar (label) AND t.dashboard.sidebar.descriptions. */
-  labelKey: DockLabelKey;
+  /** CORE apps: i18n key under t.dashboard.sidebar (label) AND
+   *  t.dashboard.sidebar.descriptions. Omitted for module apps. */
+  labelKey?: DockLabelKey;
+  /** MODULE apps: the module this is. Pinnable only while the business has
+   *  that module enabled AND available (see useDockApps). */
+  moduleId?: string;
   /** In the default dock (when the user hasn't customized it). */
   defaultOn: boolean;
   /** Role gate — omitted = visible to everyone. */
@@ -40,9 +44,21 @@ export const DOCK_APPS: DockApp[] = [
   { key: 'clientes', routeName: 'clientes', path: '/dashboard/clientes', Icon: Users, labelKey: 'clientes', defaultOn: true, gate: can.seeAllClients },
   { key: 'trabajos', routeName: 'trabajos', path: '/dashboard/trabajos', Icon: ClipboardList, labelKey: 'trabajos', defaultOn: true },
   { key: 'facturas', routeName: 'facturas', path: '/dashboard/facturas', Icon: FileText, labelKey: 'facturas', defaultOn: true, gate: can.seeInvoices },
-  { key: 'calendario', routeName: 'mas/calendario', path: '/dashboard/mas/calendario', Icon: Calendar, labelKey: 'calendario', defaultOn: false, gate: can.seeAllJobs },
-  { key: 'empleados', routeName: 'mas/empleados', path: '/dashboard/mas/empleados', Icon: UsersRound, labelKey: 'empleados', defaultOn: false, gate: can.seeEmployees },
-  { key: 'reportes', routeName: 'mas/reportes', path: '/dashboard/mas/reportes', Icon: BarChart3, labelKey: 'reportes', defaultOn: false, gate: can.seeReports },
+  { key: 'calendario', routeName: 'calendario', path: '/dashboard/calendario', Icon: Calendar, labelKey: 'calendario', defaultOn: false, gate: can.seeAllJobs },
+  { key: 'empleados', routeName: 'empleados', path: '/dashboard/empleados', Icon: UsersRound, labelKey: 'empleados', defaultOn: false, gate: can.seeEmployees },
+  { key: 'reportes', routeName: 'reportes', path: '/dashboard/reportes', Icon: BarChart3, labelKey: 'reportes', defaultOn: false, gate: can.seeReports },
+  // Modules — only offered to businesses that have them enabled (and roles
+  // that can see them). Each has a dashboard-level tab route (app/dashboard/
+  // <key>.tsx) for when it's pinned; unpinned, Más opens mas/modulos/<id>.
+  ...(['map', 'files', 'equipment', 'inventory', 'rentals'] as const).map((id): DockApp => ({
+    key: id,
+    routeName: id,
+    path: `/dashboard/${id}`,
+    Icon: getModuleById(id)!.icon as LucideIcon,
+    moduleId: id,
+    defaultOn: false,
+    gate: id === 'equipment' ? can.viewEquipment : id === 'rentals' ? can.viewRentals : undefined,
+  })),
 ];
 
 /** Selectable middle apps: default 3 (Inicio + 3 + Más = 5), max 4 (= 6 total). */
@@ -63,9 +79,24 @@ export function parseDockKeys(raw: unknown): string[] | null {
   return out.length ? out : null;
 }
 
-/** Apps this role is allowed to see in the dock, in catalog order. */
-export function eligibleDockApps(role: Role | null): DockApp[] {
-  return DOCK_APPS.filter(a => !a.gate || a.gate(role));
+/** Apps this role is allowed to see in the dock, in catalog order. Module
+ *  apps also need their module live for the business (`liveModules`: ids of
+ *  enabled + available modules — pass it, or modules are never eligible). */
+export function eligibleDockApps(role: Role | null, liveModules?: ReadonlySet<string>): DockApp[] {
+  return DOCK_APPS.filter(a =>
+    (!a.gate || a.gate(role)) && (!a.moduleId || !!liveModules?.has(a.moduleId)));
+}
+
+/** Display name for a dock app: sidebar label for core apps, the module's
+ *  name for module apps. */
+export function dockAppLabel(
+  app: DockApp,
+  sidebar: Record<string, unknown>,
+  modules: Record<string, { name?: string } | undefined>,
+): string {
+  if (app.labelKey) return String(sidebar[app.labelKey] ?? app.key);
+  const def = app.moduleId ? getModuleById(app.moduleId) : null;
+  return (def && modules[def.i18nKey]?.name) || app.key;
 }
 
 /** Resolve the dock middle selection for a role: stored keys (or the default),
@@ -73,8 +104,8 @@ export function eligibleDockApps(role: Role | null): DockApp[] {
  *  STORED ORDER — the user drags to reorder in Ajustes → Navegación and the dock
  *  honors it. Falls back to default (catalog) order when nothing is stored.
  *  Always returns at least one app. */
-export function effectiveDockKeys(stored: string[] | null, role: Role | null): string[] {
-  const eligible = eligibleDockApps(role);
+export function effectiveDockKeys(stored: string[] | null, role: Role | null, liveModules?: ReadonlySet<string>): string[] {
+  const eligible = eligibleDockApps(role, liveModules);
   const eligibleKeys = new Set(eligible.map(a => a.key));
   const source = stored && stored.length ? stored : DEFAULT_DOCK_KEYS;
   // Keep the source order; drop ineligible/duplicate keys; cap at MAX.

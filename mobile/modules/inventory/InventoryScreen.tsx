@@ -49,8 +49,8 @@ const UNIT_DB_VALUES: Record<typeof UNIT_KEYS[number], string> = {
 };
 
 export default function InventoryModuleScreen() {
-  // Modules always open from Más — give the ← back to that menu.
-  const moreBack = useMoreBack();
+  // ← back to Más when opened from there; hidden when pinned to the dock.
+  const moreBack = useMoreBack('inventory');
   const { t: full, locale } = useLang();
   const t = full.dashboard.inventory;
   const tc = full.common;

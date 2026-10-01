@@ -14,6 +14,7 @@ import EquipmentScreen from '@/modules/equipment/EquipmentScreen';
 import ArchivosScreen from '@/modules/files/ArchivosScreen';
 import SmsScreen from '@/modules/sms/SmsScreen';
 import RentalsScreen from '@/modules/rentals/RentalsScreen';
+import { useBackToMore } from '@/lib/sectionNav';
 
 // Real module components register here. Unlike web, mobile can't lazy-
 // download chunks — Apple/Google forbid remote JS — so every module is
@@ -28,9 +29,19 @@ const MODULE_COMPONENTS: Record<string, ComponentType> = {
   rentals: RentalsScreen,
 };
 
+// Más-stack route: /dashboard/mas/modulos/<id> (module opened from the Más
+// menu, i.e. not pinned to the dock).
 export default function ModuleRoute() {
-  const router = useRouter();
   const { moduleId } = useLocalSearchParams<{ moduleId: string }>();
+  return <ModuleScreen moduleId={moduleId} />;
+}
+
+/** A module's screen. Rendered by the Más-stack route above AND by the
+ *  dashboard-level tab routes (app/dashboard/map.tsx, files.tsx, …) used when
+ *  the module is pinned to the dock. */
+export function ModuleScreen({ moduleId }: { moduleId: string | undefined }) {
+  const router = useRouter();
+  const backToMore = useBackToMore();
   const { t: full } = useLang();
   const c = useThemeColors();
   const { business } = useApp();
@@ -41,7 +52,7 @@ export default function ModuleRoute() {
     return (
       <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
         <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
-          <Pressable onPress={() => router.navigate('/dashboard/mas' as never)} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
+          <Pressable onPress={backToMore} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
             <ChevronLeft size={22} color={c.ink} />
           </Pressable>
         </View>
@@ -84,7 +95,7 @@ export default function ModuleRoute() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
         <Pressable
-          onPress={() => router.navigate('/dashboard/mas' as never)}
+          onPress={backToMore}
           hitSlop={12}
           className="p-2 -ml-2 rounded-lg active:bg-border-soft"
         >

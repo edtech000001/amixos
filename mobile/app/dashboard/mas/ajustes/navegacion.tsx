@@ -10,28 +10,29 @@ import { useDockStore } from '@/lib/dockStore';
 import { SortableList } from '@/components/SortableList';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import {
-  eligibleDockApps,
-  effectiveDockKeys,
+  dockAppLabel,
   MAX_DOCK_MIDDLE,
   MIN_DOCK_MIDDLE,
   type DockApp,
 } from '@/lib/dockApps';
+import { useDockApps } from '@/lib/useDockApps';
 
 export default function NavegacionSettings() {
   const router = useRouter();
   const { t: full } = useLang();
   const sb = full.dashboard.sidebar;
   const t = full.dashboard.settings.navigation;
-  const { currentRole, user } = useApp();
+  const { user } = useApp();
   const supabase = useMemo(() => createSupabaseClient(), []);
-  const keys = useDockStore(s => s.keys);
   const save = useDockStore(s => s.save);
   const [msg, setMsg] = useState<string | null>(null);
   const c = useThemeColors();
 
-  const eligible = useMemo(() => eligibleDockApps(currentRole), [currentRole]);
-  // The middle selection, in the user's saved order.
-  const selectedKeys = useMemo(() => effectiveDockKeys(keys, currentRole), [keys, currentRole]);
+  // Eligible apps include enabled modules (Map, Files, …) — same source as the
+  // dock and the Más menu (useDockApps), so the three always agree.
+  const { eligible, pinned: selectedKeys } = useDockApps();
+  const modulesDict = full.dashboard.modules.list as unknown as Record<string, { name?: string } | undefined>;
+  const label = (app: DockApp) => dockAppLabel(app, sb as unknown as Record<string, unknown>, modulesDict);
   const byKey = useMemo(() => new Map(eligible.map(a => [a.key, a])), [eligible]);
   // Selected apps as ordered DockApp objects (drag list); available = the rest.
   const selectedApps = useMemo(
@@ -119,7 +120,7 @@ export default function NavegacionSettings() {
                   <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
                     <Icon size={18} color={c.primary} />
                   </View>
-                  <Text className="flex-1 text-base font-semibold text-ink">{sb[app.labelKey]}</Text>
+                  <Text className="flex-1 text-base font-semibold text-ink">{label(app)}</Text>
                   <Pressable
                     onPress={() => removeApp(app)}
                     hitSlop={8}
@@ -154,7 +155,7 @@ export default function NavegacionSettings() {
                     <View className="w-10 h-10 rounded-xl bg-border-soft items-center justify-center">
                       <Icon size={18} color={c.muted} />
                     </View>
-                    <Text className="flex-1 text-base font-semibold text-ink">{sb[app.labelKey]}</Text>
+                    <Text className="flex-1 text-base font-semibold text-ink">{label(app)}</Text>
                     <View className="w-7 h-7 rounded-full bg-primary/10 items-center justify-center">
                       <Plus size={16} color={c.primary} strokeWidth={3} />
                     </View>

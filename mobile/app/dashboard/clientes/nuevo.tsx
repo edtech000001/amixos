@@ -40,6 +40,7 @@ import {
   clientFieldsInSection,
   type ClientFieldSection,
 } from '@amixos/shared/lib/clientFieldSections';
+import { useSectionBase } from '@/lib/sectionNav';
 
 interface FieldTemplate {
   id: string;
@@ -76,6 +77,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function NuevoClienteRoute() {
   const router = useRouter();
+  // Section links stay in whichever stack this screen is in (its tab, or
+  // the Más stack when opened from the Más menu) — lib/sectionNav.
+  const sectionBase = useSectionBase('clientes');
   const { edit } = useLocalSearchParams<{ edit?: string }>();
   const supabase = createSupabaseClient();
   const { business, locations, currentRole } = useApp();
@@ -97,8 +101,8 @@ export default function NuevoClienteRoute() {
     if (!currentRole) return;
     const allowed = editId ? can.editClient(currentRole) : can.createClient(currentRole);
     if (!allowed) {
-      if (editId) router.replace(`/dashboard/clientes/${editId}` as never);
-      else router.replace('/dashboard/clientes' as never);
+      if (editId) router.replace(`${sectionBase}/${editId}` as never);
+      else router.replace(`${sectionBase}` as never);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRole, editId]);
@@ -536,8 +540,8 @@ export default function NuevoClienteRoute() {
   };
 
   const goBack = () => {
-    if (editId) router.replace(`/dashboard/clientes/${editId}` as never);
-    else router.replace('/dashboard/clientes' as never);
+    if (editId) router.replace(`${sectionBase}/${editId}` as never);
+    else router.replace(`${sectionBase}` as never);
   };
 
   // Unsaved-changes guard on the back arrow + hardware back. `values` holds
@@ -638,7 +642,7 @@ export default function NuevoClienteRoute() {
         triggerGoogleSyncOrThrow('update', editId, { apiBaseUrl, jwt })
           .catch((e) => syncBanner.reportError(googleSyncErrorMessage(e, 'No se pudo actualizar el contacto en Google Contacts.')));
       })();
-      router.replace(`/dashboard/clientes/${editId}` as never);
+      router.replace(`${sectionBase}/${editId}` as never);
     } else {
       // Client-generated id so creating works offline (and we can navigate /
       // sync to it immediately). queuedInsert writes through online, or parks it
@@ -674,7 +678,7 @@ export default function NuevoClienteRoute() {
         // openable offline; it syncs on reconnect.
         void prependCached(`clients_list_${business.id}`, row);
         void writeCached(`client_${newId}`, row);
-        router.replace('/dashboard/clientes' as never);
+        router.replace(`${sectionBase}` as never);
       } else {
         if (multiLocation && branchLinksToSave.length > 0) {
           await setClientLocations(supabase, business.id, newId, branchLinksToSave, branchLinksToSave[0] ?? null);
@@ -686,7 +690,7 @@ export default function NuevoClienteRoute() {
           triggerGoogleSyncOrThrow('create', newId, { apiBaseUrl, jwt })
             .catch((e) => syncBanner.reportError(googleSyncErrorMessage(e, 'No se pudo agregar el contacto a Google Contacts.')));
         })();
-        router.replace(`/dashboard/clientes/${newId}` as never);
+        router.replace(`${sectionBase}/${newId}` as never);
       }
     }
   };

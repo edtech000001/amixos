@@ -13,6 +13,7 @@ import {
   type SmsConnectInput,
   type SmsSendInput,
 } from '@amixos/shared/screens/modules/SmsModuleScreen';
+import { useBackToMore } from '@/lib/sectionNav';
 
 interface ApiResult {
   ok: boolean;
@@ -22,6 +23,7 @@ interface ApiResult {
 
 export default function SmsScreen() {
   const router = useRouter();
+  const backToMore = useBackToMore();
   const supabase = createSupabaseClient();
   const { business, currentRole } = useApp();
   const [status, setStatus] = useState<SmsStatus | null>(null);
@@ -129,7 +131,7 @@ export default function SmsScreen() {
         onConnect={onConnect}
         onDisconnect={onDisconnect}
         onSend={onSend}
-        onBack={() => router.navigate('/dashboard/mas' as never)}
+        onBack={backToMore}
       />
     </SafeAreaView>
   );

@@ -9,13 +9,14 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { StackActions } from '@react-navigation/native';
+import { router } from 'expo-router';
 import { clearSectionVisitor, hasSectionVisitor } from '@/lib/sectionEntry';
 import { useLeaveGuardStore } from '@/lib/leaveGuardStore';
 import { useApp } from '@/lib/AppContext';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { useDockStore } from '@/lib/dockStore';
-import { DOCK_APPS, effectiveDockKeys } from '@/lib/dockApps';
+import { DOCK_APPS } from '@/lib/dockApps';
+import { useDockApps } from '@/lib/useDockApps';
 
 // Dock-eligible app routes → their stable key. Routes NOT in here (Inicio, Más,
 // pushed detail screens) are never selection-filtered.
@@ -25,7 +26,7 @@ const APP_KEY_BY_ROUTE = new Map(DOCK_APPS.map(a => [a.routeName, a.key]));
 // ordered by their position in the user's saved selection (orderedKeys).
 function dockRank(routeName: string, orderedKeys: string[]): number {
   if (routeName === 'index') return -1;
-  if (routeName === 'mas/index') return Number.MAX_SAFE_INTEGER;
+  if (routeName === 'mas') return Number.MAX_SAFE_INTEGER;
   const key = APP_KEY_BY_ROUTE.get(routeName);
   const i = key ? orderedKeys.indexOf(key) : -1;
   return i >= 0 ? i : orderedKeys.length; // unknown → just before Más
@@ -67,10 +68,10 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
   const ICON_INACTIVE = '#94A3B8';
   // The user's dock-app selection — applied here (not via route href) so
   // toggling apps is a cheap dock re-render, not a tab-navigator reconfigure.
-  const dockKeys = useDockStore(s => s.keys);
   // Ordered (not just a Set) so the dock renders apps in the user's chosen
   // order. orderedKeys is the middle selection; Inicio stays first, Más last.
-  const orderedKeys = effectiveDockKeys(dockKeys, currentRole);
+  // Includes pinned modules only while they're enabled (useDockApps).
+  const { pinned: orderedKeys } = useDockApps();
   const selectedApps = new Set(orderedKeys);
 
   // expo-router puts hidden screens (href: null) into state.routes too. It
@@ -91,18 +92,22 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
       } else if (style?.display === 'none') {
         return false;
       }
+      // Only routes the dock knows (Inicio, the dock apps, Más) get a slot.
+      // Anything else — e.g. a stale route left in navigator state after a
+      // route rename during Fast Refresh — would draw an empty, icon-less slot.
       const appKey = APP_KEY_BY_ROUTE.get(r.name);
+      if (!appKey && r.name !== 'index' && r.name !== 'mas') return false;
       if (appKey && !selectedApps.has(appKey)) return false;
       return true;
     })
     // Order: Inicio (index) first → middle apps in the user's saved order → Más
-    // (mas/index) last. state.routes is in catalog/registration order, so the
+    // (mas) last. state.routes is in catalog/registration order, so the
     // middle needs re-sorting to honor the user's drag-reorder.
     .sort((a, b) => dockRank(a.name, orderedKeys) - dockRank(b.name, orderedKeys));
 
   const activeRoute = state.routes[state.index];
   // Highlight the tab the active route belongs to. Several visible tabs can now
-  // share a path root (e.g. mas/index + mas/calendario), so we match by the
+  // share a path root, so we match by the
   // LONGEST shared path prefix, not just the first segment:
   //   - exact key match wins (the active route is itself a tab),
   //   - else the visible tab sharing the most leading segments (so
@@ -128,7 +133,7 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
     // fall back to the Más hub. A real app match (e.g. clientes/[id] → Clientes,
     // best 1 under a non-mas segment) is kept as-is.
     if (best === 0 || (best === 1 && aSegs[0] === 'mas')) {
-      const masIdx = visibleRoutes.findIndex(r => r.name === 'mas/index');
+      const masIdx = visibleRoutes.findIndex(r => r.name === 'mas');
       if (masIdx >= 0) matched = masIdx;
     }
   }
@@ -144,8 +149,13 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
   const resetSection = (r: { name: string; state?: unknown }) => {
     const navigate = () => {
       const nested = r.state as { key?: string; index?: number } | undefined;
-      if (nested?.key && (nested.index ?? 0) > 0) {
-        navigation.dispatch({ ...StackActions.popToTop(), target: nested.key });
+      if (nested?.key && (nested.index ?? 0) > 0 && router.canDismiss()) {
+        // The section being reset is the FOCUSED one (re-tap / bubble), so
+        // dismissAll pops its stack to the first screen with the native
+        // animation. A POP_TO_TOP dispatched from the tab navigator with
+        // `target` was never delivered ("The action 'POP_TO_TOP' was not
+        // handled") — actions bubble UP, not down into child stacks.
+        router.dismissAll();
       } else {
         (navigation.navigate as (name: string, params?: object) => void)(
           r.name,

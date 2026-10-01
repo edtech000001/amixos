@@ -9,11 +9,13 @@ import { Eye, X } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { ROLE_LABELS } from '@amixos/shared/lib/permissions';
+import { useAppHref } from '@/lib/sectionNav';
 
 export function ImpersonationBanner() {
   const { impersonating, stopImpersonation } = useApp();
   const { locale } = useLang();
   const router = useRouter();
+  const appHref = useAppHref();
   const [exiting, setExiting] = useState(false);
 
   if (!impersonating) return null;
@@ -28,7 +30,7 @@ export function ImpersonationBanner() {
     try {
       await stopImpersonation();
       // Land back on the team list, not wherever the member was viewing.
-      router.replace('/dashboard/mas/empleados');
+      router.replace(appHref('empleados') as never);
     } finally {
       setExiting(false);
     }

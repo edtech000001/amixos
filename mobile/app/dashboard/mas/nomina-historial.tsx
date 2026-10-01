@@ -96,9 +96,9 @@ export default function NominaHistorialScreen() {
       <PayrollHistoryScreen
         loading={loading}
         entries={entries}
-        // Explicit target: history is a hidden TAB screen, so router.back()
-        // pops out of the tab navigator (→ dashboard) instead of to Payroll.
-        onBack={() => router.push('/dashboard/mas/nomina' as never)}
+        // Native pop back to Payroll (both live in the Más stack); a deep
+        // link with nothing beneath opens Payroll instead.
+        onBack={() => (router.canGoBack() ? router.back() : router.replace('/dashboard/mas/nomina' as never))}
         onDeleteEntries={async (ids) => {
           if (!business) return;
           for (let i = 0; i < ids.length; i += 100) {

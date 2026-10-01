@@ -1,21 +1,20 @@
 import { useRouter } from 'expo-router';
-import { useApp } from '@/lib/AppContext';
-import { effectiveDockKeys } from '@/lib/dockApps';
-import { useDockStore } from '@/lib/dockStore';
+import { useDockApps } from '@/lib/useDockApps';
+import { useBackToMore, useInMoreStack } from '@/lib/sectionNav';
 
 /**
- * Back handler for screens the Más menu opens. Returns undefined when the
- * screen is pinned to the dock (you got there from the dock, so no arrow);
- * otherwise a handler that returns to the Más list.
- *
- * Explicit target, not router.back(): these are hidden TAB screens, and Más's
- * Settings + module store share one stack, so "back" could land on Inicio or
- * on a leftover store page instead of the menu.
+ * Back handler for the ← before a list screen's title (shared ScreenTitle).
+ *  - Inside the Más stack (opened from the Más menu): a native pop to the menu.
+ *  - On its dock tab while pinned: none — you got there from the dock.
+ *  - On its tab while NOT pinned (reached by a cross-link): back to Más,
+ *    since the dock shows no tab to return to.
  */
 export function useMoreBack(dockKey?: string): (() => void) | undefined {
   const router = useRouter();
-  const { currentRole } = useApp();
-  const dockKeys = useDockStore(s => s.keys);
-  if (dockKey && effectiveDockKeys(dockKeys, currentRole).includes(dockKey)) return undefined;
+  const inMore = useInMoreStack();
+  const backToMore = useBackToMore();
+  const { pinned } = useDockApps();
+  if (inMore) return backToMore;
+  if (dockKey && pinned.includes(dockKey)) return undefined;
   return () => router.navigate('/dashboard/mas' as never);
 }

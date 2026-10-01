@@ -21,6 +21,7 @@ import { BusinessSwitcher } from '@/components/BusinessSwitcher';
 import { LocationSwitcher } from '@/components/LocationSwitcher';
 import { FieldHomeContainer } from '@/components/FieldHomeContainer';
 import { TrialBanner } from '@/components/TrialBanner';
+import { useAppHref } from '@/lib/sectionNav';
 
 // Field crew get a purpose-built home (assigned jobs + clock in/out) instead
 // of the owner's widget grid. Branch once the role is known.
@@ -56,6 +57,7 @@ interface RawUpcomingJob {
 function OwnerDashboardHome() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const appHref = useAppHref();
   const supabase = createSupabaseClient();
   const { business, user, currentRole, activeLocationId, loading: appLoading } = useApp();
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -343,15 +345,15 @@ function OwnerDashboardHome() {
           router.push(`/dashboard/clientes/${id}` as never);
         }}
         onNewJobPress={() => router.push('/dashboard/trabajos/nuevo')}
-        onCalendarPress={() => router.push('/dashboard/mas/calendario')}
-        onPayrollPress={() => router.push('/dashboard/mas/nomina' as never)}
+        onCalendarPress={() => router.push(appHref('calendario') as never)}
+        onPayrollPress={() => { markSectionVisitor('mas'); router.push('/dashboard/mas/nomina' as never); }}
         onPendingInvoicesPress={() => router.push('/dashboard/facturas?status=sent' as never)}
         pendingInvoices={dash.data?.pending ?? []}
         topClients={dash.data?.topClients ?? []}
         overdueInvoices={dash.data?.overdue ?? []}
         onOverdueInvoicesPress={() => router.push('/dashboard/facturas?status=overdue' as never)}
         onClientsPress={() => { markSectionVisitor('clientes'); router.push('/dashboard/clientes' as never); }}
-        onReportsPress={(range) => router.push(`/dashboard/mas/reportes?range=${range}` as never)}
+        onReportsPress={(range) => router.push(`${appHref('reportes')}?range=${range}` as never)}
         payroll={payrollSwr.data ?? null}
       />
     </View>

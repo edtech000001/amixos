@@ -51,6 +51,7 @@ import {
   type InvoiceBranding,
 } from '@amixos/shared/lib/invoiceTemplate';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
+import { useSectionBase } from '@/lib/sectionNav';
 
 // Check first — the default and most common method for these businesses.
 const PAY_METHODS = ['check', 'cash', 'card', 'transfer', 'zelle', 'cashapp', 'venmo', 'paypal', 'moneyOrder', 'other'] as const;
@@ -119,6 +120,9 @@ export default function FacturaDetailRoute() {
   const params = useLocalSearchParams<{ id: string; from?: string; jobId?: string; clientId?: string }>();
   const id = String(params.id);
   const router = useRouter();
+  // Section links stay in whichever stack this screen is in (its tab, or
+  // the Más stack when opened from the Más menu) — lib/sectionNav.
+  const sectionBase = useSectionBase('facturas');
   // ?from=job&jobId=… or ?from=client&clientId=… → back returns to that
   // job/client (not the invoice list). We navigate explicitly because
   // facturas/[id] and trabajos/[id] share the same Tabs navigator, where
@@ -134,7 +138,7 @@ export default function FacturaDetailRoute() {
       // would build a fresh list from scratch, resetting both.
       router.back();
     } else {
-      router.replace('/dashboard/facturas' as never);
+      router.replace(`${sectionBase}` as never);
     }
   };
 
@@ -440,7 +444,7 @@ export default function FacturaDetailRoute() {
               title: tj.detail.unInvoiceDeleteEmpty.replace('{{number}}', inv.invoice_number),
               confirmText: tc.buttons.delete,
               destructive: true,
-              onConfirm: () => void (async () => { await supabase.from('invoices').delete().eq('id', inv.id); router.replace('/dashboard/facturas' as never); })(),
+              onConfirm: () => void (async () => { await supabase.from('invoices').delete().eq('id', inv.id); router.replace(`${sectionBase}` as never); })(),
               onCancel: () => void reloadInvoice(),
             });
             return;
@@ -1015,7 +1019,7 @@ export default function FacturaDetailRoute() {
         }
         // Payments cascade with the invoice — clear their photos too.
         removePaymentPhotos(payments.map((p) => p.photoPath));
-        router.replace('/dashboard/facturas' as never);
+        router.replace(`${sectionBase}` as never);
       })(),
     });
   };
@@ -1255,7 +1259,7 @@ export default function FacturaDetailRoute() {
         onUpdateStatus={updateStatus}
         onPrint={invoice ? exportPdf : undefined}
         onShareLink={invoice ? shareLink : undefined}
-        onEdit={invoice && canEdit ? () => router.replace(`/dashboard/facturas/nueva?edit=${id}` as never) : undefined}
+        onEdit={invoice && canEdit ? () => router.replace(`${sectionBase}/nueva?edit=${id}` as never) : undefined}
         onDelete={invoice && canDelete ? confirmDelete : undefined}
         onAutoprice={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? runAutoprice : undefined}
         // Delay past the more-actions sheet's dismissal — iOS refuses to
@@ -1310,7 +1314,7 @@ export default function FacturaDetailRoute() {
           onOpenTarget={(bizId, invId) => {
             setBillThroughOpen(false);
             setActiveBusiness(bizId);
-            router.replace(`/dashboard/facturas/${invId}` as never);
+            router.replace(`${sectionBase}/${invId}` as never);
           }}
         />
       ) : null}

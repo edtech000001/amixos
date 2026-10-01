@@ -27,6 +27,7 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { fetchClientLocations, clientIdsAtLocation, clientsWithAnyLocation, type ClientLocation } from '@amixos/shared/lib/locations';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useMoreBack } from '@/lib/useMoreBack';
+import { useSectionBase } from '@/lib/sectionNav';
 
 interface EmbeddedContact { name: string; role: string | null; is_primary: boolean | null }
 interface Client {
@@ -64,6 +65,9 @@ export default function ClientesTab() {
   const moreBack = useMoreBack('clientes');
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  // Section links stay in whichever stack this screen is in (its tab, or
+  // the Más stack when opened from the Más menu) — lib/sectionNav.
+  const sectionBase = useSectionBase('clientes');
   const supabase = createSupabaseClient();
   const { business, activeLocationId, currentRole } = useApp();
   const [clientLocations, setClientLocations] = useState<ClientLocation[]>([]);
@@ -275,10 +279,10 @@ export default function ClientesTab() {
     else setSelectedIds(new Set(filteredIds));
   };
 
-  const openDetail = (id: string) => router.push(`/dashboard/clientes/${id}` as never);
-  const openAdd = () => router.push('/dashboard/clientes/nuevo' as never);
+  const openDetail = (id: string) => router.push(`${sectionBase}/${id}` as never);
+  const openAdd = () => router.push(`${sectionBase}/nuevo` as never);
   const openEdit = (id: string) =>
-    router.push(`/dashboard/clientes/nuevo?edit=${id}` as never);
+    router.push(`${sectionBase}/nuevo?edit=${id}` as never);
 
   const remove = (id: string) => {
     if (!can.deleteClient(currentRole)) return;

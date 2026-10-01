@@ -25,6 +25,7 @@ import { createInvoicesFromJobs } from '@amixos/shared/lib/invoicing';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useMoreBack } from '@/lib/useMoreBack';
+import { useSectionBase } from '@/lib/sectionNav';
 
 interface RawJob {
   id: string;
@@ -73,6 +74,9 @@ export default function TrabajosTab() {
   const moreBack = useMoreBack('trabajos');
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  // Section links stay in whichever stack this screen is in (its tab, or
+  // the Más stack when opened from the Más menu) — lib/sectionNav.
+  const sectionBase = useSectionBase('trabajos');
   const supabase = createSupabaseClient();
   const { t: full, locale } = useLang();
   const { business, businesses, currentRole, activeLocationId } = useApp();
@@ -495,10 +499,10 @@ export default function TrabajosTab() {
         onJobPress={(id) => {
           // Opened from the section's own list — this one belongs here.
           clearSectionVisitor('trabajos');
-          router.push(`/dashboard/trabajos/${id}` as never);
+          router.push(`${sectionBase}/${id}` as never);
         }}
         onUpdateStatus={updateStatus}
-        onGenerateInvoice={(id) => router.push(`/dashboard/trabajos/${id}` as never)}
+        onGenerateInvoice={(id) => router.push(`${sectionBase}/${id}` as never)}
         onCreateInvoice={async (jobIds) => {
           if (!business) return;
           const jt = full.dashboard.jobs.new;
@@ -578,8 +582,8 @@ export default function TrabajosTab() {
         }
         onBulkChangeClient={can.editJobMetadata(currentRole) ? (ids => { setMoveClientIds(ids); setClientSearch(''); void loadMoveClients(''); }) : undefined}
         onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}
-        onNewJob={() => router.push('/dashboard/trabajos/nuevo' as never)}
-        onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta' as never)}
+        onNewJob={() => router.push(`${sectionBase}/nuevo` as never)}
+        onNewProposal={() => router.push(`${sectionBase}/nuevo?modo=propuesta` as never)}
         canCreate={can.createJob(currentRole)}
         canCreateInvoice={can.createInvoice(currentRole)}
         canViewInvoice={can.seeInvoices(currentRole)}

@@ -58,6 +58,7 @@ import { useContactOutcomePrompt } from '@/lib/useContactOutcomePrompt';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
+import { useAppHref, useSectionBase } from '@/lib/sectionNav';
 
 interface FieldTemplate {
   id: string;
@@ -164,6 +165,10 @@ const EMPTY_CONTACT = {
 
 export default function ClienteDetailRoute() {
   const router = useRouter();
+  // Section links stay in whichever stack this screen is in (its tab, or
+  // the Más stack when opened from the Más menu) — lib/sectionNav.
+  const sectionBase = useSectionBase('clientes');
+  const appHref = useAppHref();
   const c = useThemeColors();
   const { id, from, jobId, invoice } = useLocalSearchParams<{ id: string; from?: string; jobId?: string; invoice?: string }>();
   // Honor ?from=map so the back arrow returns to the map module instead of the
@@ -172,7 +177,7 @@ export default function ClienteDetailRoute() {
   // in the same Tabs navigator, where back() can land on the wrong tab root.
   const goBack = () => {
     if (from === 'map') {
-      router.replace('/dashboard/mas/modulos/map' as never);
+      router.replace(appHref('map') as never);
     } else if (from === 'job' && jobId) {
       router.replace(`/dashboard/trabajos/${jobId}` as never);
     } else if (from === 'invoice' && invoice) {
@@ -183,7 +188,7 @@ export default function ClienteDetailRoute() {
       // would build a fresh list from scratch, resetting both.
       router.back();
     } else {
-      router.replace('/dashboard/clientes' as never);
+      router.replace(`${sectionBase}` as never);
     }
   };
 
@@ -558,7 +563,7 @@ export default function ClienteDetailRoute() {
             }
           }
           await supabase.from('clients').delete().eq('id', client.id);
-          router.replace('/dashboard/clientes' as never);
+          router.replace(`${sectionBase}` as never);
         },
       },
     ]);
@@ -769,7 +774,7 @@ export default function ClienteDetailRoute() {
           </Pressable>
           {canEdit ? (
             <Pressable
-              onPress={() => router.push(`/dashboard/clientes/nuevo?edit=${client.id}` as never)}
+              onPress={() => router.push(`${sectionBase}/nuevo?edit=${client.id}` as never)}
               hitSlop={8}
               className="p-2 rounded-lg active:bg-border-soft"
             >

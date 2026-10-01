@@ -63,6 +63,7 @@ async function queueThumbnail(entryId: string): Promise<void> {
 const FILES_VIEW_KEY = 'amixos_files_view_mode';
 import { storageLimitBytes, storagePercent, formatBytes, wouldExceedStorage } from '@amixos/shared/lib/storageLimits';
 import { gridColumns } from '@/lib/gridColumns';
+import { useMoreBack } from '@/lib/useMoreBack';
 
 interface Crumb { categoryId: string | null; folderId: string | null; label: string }
 
@@ -75,6 +76,9 @@ type Sheet =
 
 export default function ArchivosScreen() {
   const router = useRouter();
+  // ← back to Más when opened from there; hidden when this module is pinned
+  // to the dock and opened from it (same rule as the core apps).
+  const moreBack = useMoreBack('files');
   const supabase = createSupabaseClient();
   // List vs grid, remembered per device. Starts as 'list' and swaps in the
   // stored value once read, so the first paint is never the wrong layout for
@@ -252,10 +256,9 @@ export default function ArchivosScreen() {
     folders.filter(f => f.category_id === categoryId && f.parent_folder_id === folderId).length +
     entries.filter(e => e.category_id === categoryId && e.folder_id === folderId).length;
 
-  // Header arrow = leave the module (always). Folder navigation has its own
+  // Header arrow (moreBack) = leave the module. Folder navigation has its own
   // up-arrow in the breadcrumb bar — mixing both into one button meant several
   // taps to exit from a deep folder, and 'back' changing meaning per depth.
-  const goBack = () => router.navigate('/dashboard/mas' as never);
   const folderUp = () => { setStack(s => s.slice(0, -1)); clearSelection(); };
   const enterCategory = (c: FileCategory) => setStack(s => [...s, { categoryId: c.id, folderId: null, label: c.name }]);
   const enterFolder = (f: FileFolder) => setStack(s => [...s, { categoryId: f.category_id, folderId: f.id, label: f.name }]);
@@ -373,9 +376,11 @@ export default function ArchivosScreen() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* App bar */}
       <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
-        <Pressable onPress={goBack} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
-          <ChevronLeft size={22} color={c.ink} />
-        </Pressable>
+        {moreBack ? (
+          <Pressable onPress={moreBack} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
+            <ChevronLeft size={22} color={c.ink} />
+          </Pressable>
+        ) : null}
         <Text className="ml-1 text-lg font-semibold text-ink flex-1" numberOfLines={1}>
           {atHome ? t.title : here.label}
         </Text>

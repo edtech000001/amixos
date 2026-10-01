@@ -43,6 +43,7 @@ import {
   MapSettingsSheet,
   type DeviceMapSettings,
 } from './MapSettingsSheet';
+import { useMoreBack } from '@/lib/useMoreBack';
 
 const DEFAULT_DEVICE_SETTINGS: DeviceMapSettings = {
   mapType: 'standard',
@@ -279,6 +280,9 @@ const DEFAULT_REGION: Region = {
 
 export default function MapScreen() {
   const router = useRouter();
+  // ← back to Más when opened from there; hidden when this module is pinned
+  // to the dock and opened from it (same rule as the core apps).
+  const moreBack = useMoreBack('map');
   const { business, user } = useApp();
   const insets = useSafeAreaInsets();
   const c = useThemeColors();
@@ -767,13 +771,15 @@ export default function MapScreen() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
-        <Pressable
-          onPress={() => router.navigate('/dashboard/mas' as never)}
-          hitSlop={12}
-          className="p-2 -ml-2 rounded-lg active:bg-border-soft"
-        >
-          <ChevronLeft size={22} color={c.ink} />
-        </Pressable>
+        {moreBack ? (
+          <Pressable
+            onPress={moreBack}
+            hitSlop={12}
+            className="p-2 -ml-2 rounded-lg active:bg-border-soft"
+          >
+            <ChevronLeft size={22} color={c.ink} />
+          </Pressable>
+        ) : null}
         <Text className="ml-1 flex-1 text-lg font-semibold text-ink">{moduleName}</Text>
         {/* Storm focus toggle — only shown when the alpha business has
            weather enabled, since it's useless otherwise. */}

@@ -68,6 +68,7 @@ import {
 import { JobPhotosSection } from '@/components/JobPhotosSection';
 import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
+import { useSectionBase } from '@/lib/sectionNav';
 
 interface Client {
   id: string;
@@ -142,6 +143,9 @@ function hoursFromTimes(start: string, end: string): number | null {
 
 export default function NuevoTrabajoRoute() {
   const router = useRouter();
+  // Section links stay in whichever stack this screen is in (its tab, or
+  // the Más stack when opened from the Más menu) — lib/sectionNav.
+  const sectionBase = useSectionBase('trabajos');
   const insets = useSafeAreaInsets();
   const { edit, duplicate, modo, client: clientParam, copy } = useLocalSearchParams<{ edit?: string; duplicate?: string; modo?: string; client?: string; copy?: string }>();
   const supabase = createSupabaseClient();
@@ -151,7 +155,7 @@ export default function NuevoTrabajoRoute() {
   // insert and they have no clients to pick). The entry points are hidden, but
   // guard the route too in case of a deep link.
   useEffect(() => {
-    if (currentRole && !can.createJob(currentRole)) router.replace('/dashboard/trabajos');
+    if (currentRole && !can.createJob(currentRole)) router.replace(`${sectionBase}` as never);
   }, [currentRole]);
   const { t: full, locale } = useLang();
   const t = full.dashboard.jobs.new;
@@ -2043,7 +2047,7 @@ export default function NuevoTrabajoRoute() {
         // go to the list (the detail's joined client data isn't available yet).
         void prependCached(`jobs_list_${business.id}`, optimisticJobRow);
         void writeCached(`job_${jobId}`, optimisticJobRow);
-        router.replace('/dashboard/trabajos' as never);
+        router.replace(`${sectionBase}` as never);
       } else if (editId && router.canGoBack()) {
         // Editing: pop the edit screen back to the ORIGINAL job detail (it
         // refetches on focus and keeps its own from/invoice params) instead of
@@ -2051,7 +2055,7 @@ export default function NuevoTrabajoRoute() {
         // button returned to the detail again rather than the list.
         router.back();
       } else {
-        router.replace(`/dashboard/trabajos/${jobId}` as never);
+        router.replace(`${sectionBase}/${jobId}` as never);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : t.errorSaveGeneric);
@@ -2069,9 +2073,9 @@ export default function NuevoTrabajoRoute() {
       // Back on the detail returned to the detail again instead of the list.
       router.back();
     } else if (sourceId) {
-      router.replace(`/dashboard/trabajos/${sourceId}` as never);
+      router.replace(`${sectionBase}/${sourceId}` as never);
     } else {
-      router.replace('/dashboard/trabajos' as never);
+      router.replace(`${sectionBase}` as never);
     }
   };
 

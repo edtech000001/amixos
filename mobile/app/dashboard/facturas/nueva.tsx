@@ -47,6 +47,7 @@ import {
   type InvoiceFieldSection,
 } from '@amixos/shared/lib/invoiceFieldSections';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
+import { useSectionBase } from '@/lib/sectionNav';
 
 interface Client {
   id: string;
@@ -104,6 +105,9 @@ function addDaysISO(iso: string, days: number): string {
 
 export default function NuevaFacturaRoute() {
   const router = useRouter();
+  // Section links stay in whichever stack this screen is in (its tab, or
+  // the Más stack when opened from the Más menu) — lib/sectionNav.
+  const sectionBase = useSectionBase('facturas');
   // `client` comes from the client detail page's New invoice action, which
   // has always passed it — nothing here read it, so the picker opened empty.
   const { edit, client: clientParam } = useLocalSearchParams<{ edit?: string; client?: string }>();
@@ -123,7 +127,7 @@ export default function NuevaFacturaRoute() {
   useEffect(() => {
     if (!business) return;
     const allowed = editId ? can.editInvoice(currentRole) : can.createInvoice(currentRole);
-    if (!allowed) router.replace('/dashboard/facturas' as never);
+    if (!allowed) router.replace(`${sectionBase}` as never);
   }, [business, currentRole, editId, router]);
 
   const [loadingEdit, setLoadingEdit] = useState(!!editId);
@@ -558,8 +562,8 @@ export default function NuevaFacturaRoute() {
     setLines((prev) => (prev.length <= 1 ? prev : prev.filter((l) => l.id !== id)));
 
   const goBack = () => {
-    if (editId) router.replace(`/dashboard/facturas/${editId}` as never);
-    else router.replace('/dashboard/facturas' as never);
+    if (editId) router.replace(`${sectionBase}/${editId}` as never);
+    else router.replace(`${sectionBase}` as never);
   };
 
   // Unsaved-changes guard on the back arrow + hardware back. `values` covers
@@ -673,7 +677,7 @@ export default function NuevaFacturaRoute() {
       );
     }
 
-    router.replace(`/dashboard/facturas/${invoiceId}` as never);
+    router.replace(`${sectionBase}/${invoiceId}` as never);
   };
 
   if (loadingEdit) {

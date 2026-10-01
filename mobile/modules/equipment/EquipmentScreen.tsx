@@ -97,6 +97,7 @@ import {
   type EquipmentQuickFilter,
 } from '@amixos/shared/lib/equipmentGroups';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useMoreBack } from '@/lib/useMoreBack';
 
 interface EmployeeOption {
   id: string;
@@ -306,6 +307,9 @@ function DetailCard({ rows, footer }: { rows: DetailRowData[]; footer?: ReactNod
 
 export default function EquipmentScreen() {
   const router = useRouter();
+  // ← back to Más when opened from there; hidden when this module is pinned
+  // to the dock and opened from it (same rule as the core apps).
+  const moreBack = useMoreBack('equipment');
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const supabase = createSupabaseClient();
@@ -988,9 +992,11 @@ export default function EquipmentScreen() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
-        <Pressable onPress={() => router.navigate('/dashboard/mas' as never)} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
-          <ChevronLeft size={22} color={c.ink} />
-        </Pressable>
+        {moreBack ? (
+          <Pressable onPress={moreBack} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
+            <ChevronLeft size={22} color={c.ink} />
+          </Pressable>
+        ) : null}
         <View className="ml-1 flex-1">
           <Text className="text-lg font-semibold text-ink">{t.title}</Text>
           <Text className="text-xs text-muted">
