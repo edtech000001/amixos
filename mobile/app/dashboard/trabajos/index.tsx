@@ -24,6 +24,7 @@ import { clientPickerDisplay } from '@amixos/shared/lib/clientSearch';
 import { createInvoicesFromJobs } from '@amixos/shared/lib/invoicing';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
+import { useMoreBack } from '@/lib/useMoreBack';
 
 interface RawJob {
   id: string;
@@ -68,6 +69,8 @@ function assignmentName(a: { worker_name: string | null }): string | null {
 }
 
 export default function TrabajosTab() {
+  // ← back to Más when opened from there (hidden when pinned to the dock).
+  const moreBack = useMoreBack('trabajos');
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const supabase = createSupabaseClient();
@@ -465,6 +468,7 @@ export default function TrabajosTab() {
     <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       <LocationSwitcher />
       <JobsListScreen
+        onBack={moreBack}
         onRequestSummary={async (jobIds) => {
           // paramsRef holds the filters the list is CURRENTLY showing, so the
           // summary always describes what's on screen — or, with jobIds (rows picked

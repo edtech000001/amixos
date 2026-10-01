@@ -58,6 +58,14 @@ export default function SplashScreen() {
     return () => clearInterval(id);
   }, [s.slides.length]);
 
+  // Rotation / Split View changes the page width, but the pager keeps its old
+  // pixel offset — so it lands mid-slide and the dots stop matching. Snap
+  // back to the current slide whenever the width changes.
+  useEffect(() => {
+    listRef.current?.scrollToOffset({ offset: index * width, animated: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [width]);
+
   const onScrollBeginDrag = () => {
     lastInteractionRef.current = Date.now();
   };
@@ -71,6 +79,8 @@ export default function SplashScreen() {
     const Icon = ICONS[item.key];
     return (
       <View style={{ width }} className="px-8 items-center justify-center">
+        {/* Capped so the copy doesn't run across a whole iPad screen. */}
+        <View className="items-center w-full" style={{ maxWidth: 520 }}>
         <View className="w-24 h-24 rounded-3xl bg-primary/10 items-center justify-center mb-8">
           <Icon color="#4F46E5" size={48} strokeWidth={1.75} />
         </View>
@@ -80,6 +90,7 @@ export default function SplashScreen() {
         <Text className="text-base text-muted text-center leading-6 px-2">
           {item.subtitle}
         </Text>
+        </View>
       </View>
     );
   };
@@ -112,7 +123,9 @@ export default function SplashScreen() {
         />
       </View>
 
-      <View className="px-6 pb-2">
+      {/* Same cap for the buttons: full width on a phone, a centered column
+          on iPad instead of 1,300pt-wide bars. */}
+      <View className="px-6 pb-2 w-full self-center" style={{ maxWidth: 480 }}>
         <View className="flex-row justify-center items-center mb-7" style={{ gap: 6 }}>
           {s.slides.map((_, i) => (
             <View

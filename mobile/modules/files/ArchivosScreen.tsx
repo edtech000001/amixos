@@ -10,7 +10,7 @@ import { useDataFingerprint } from '@amixos/shared/lib/dataFingerprint';
 import { SkeletonList } from '@amixos/shared/ui/Skeleton';
 import {
   View, Text, Pressable, ScrollView, ActivityIndicator, Alert, Linking,
-  Modal as RNModal, KeyboardAvoidingView, Platform, Image, Dimensions,
+  Modal as RNModal, KeyboardAvoidingView, Platform, Image, useWindowDimensions,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { hasClipboardImage, readClipboardImageToFile } from '@/lib/clipboardPhoto';
@@ -62,6 +62,7 @@ async function queueThumbnail(entryId: string): Promise<void> {
  *  independent per device but consistent in naming. */
 const FILES_VIEW_KEY = 'amixos_files_view_mode';
 import { storageLimitBytes, storagePercent, formatBytes, wouldExceedStorage } from '@amixos/shared/lib/storageLimits';
+import { gridColumns } from '@/lib/gridColumns';
 
 interface Crumb { categoryId: string | null; folderId: string | null; label: string }
 
@@ -82,7 +83,11 @@ export default function ArchivosScreen() {
   // Grid cards are half the content width. FramedCover needs a real pixel width
   // to compute the cover scale, so it is derived once rather than guessed:
   // screen minus the list's px-6 padding, minus the px-1 gutter on each card.
-  const cardWidth = Math.floor((Dimensions.get('window').width - 48) / 2) - 8;
+  // Grid columns follow the window (iPad rotation / Split View): 2 on a
+  // phone, 3–4 on iPad, so cards don't blow up to half a 13" screen.
+  const { width: winW } = useWindowDimensions();
+  const gridCols = gridColumns(winW);
+  const cardWidth = Math.floor((winW - 48) / gridCols) - 8;
   useEffect(() => {
     void kvGet(FILES_VIEW_KEY).then(v => { if (v === 'grid' || v === 'list') setViewMode(v); });
   }, []);
@@ -552,7 +557,7 @@ export default function ArchivosScreen() {
                   const officeOnly = !!category && !fileIsCrewVisible(e, category.crew_visible);
                   const picked = selectedEntries.has(e.id);
                   return (
-                    <View key={e.id} className="w-1/2 px-1 pb-2">
+                    <View key={e.id} className="px-1 pb-2" style={{ width: `${100 / gridCols}%` }}>
                       <Pressable
                         onPress={() => (canManage && selectionMode ? toggleEntry(e.id) : openEntry(e))}
                         onLongPress={canManage ? () => toggleEntry(e.id) : undefined}

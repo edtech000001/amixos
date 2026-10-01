@@ -16,6 +16,7 @@ import { INVOICES_FILTERS_KEY, parseInvoicesFilters } from '../../lib/invoicesFi
 import { useThemeColors } from '../../theme';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { reminderBadge } from '../../lib/invoiceReminders';
+import { ScreenTitle } from '../../ui/ScreenTitle';
 
 export interface InvoiceListItem {
   id: string;
@@ -39,6 +40,8 @@ export interface InvoiceListItem {
 }
 
 export interface InvoicesListScreenProps {
+  /** Mobile: shown as a ← before the title when opened from Más. */
+  onBack?: () => void;
   /** Business payroll config — powers the pay-period presets in the date
    *  filter (same quick chips as the jobs list). */
   payPeriod?: { frequency: unknown; anchorDate: unknown; customDays?: unknown };
@@ -112,6 +115,7 @@ function fmt(n: number) {
 }
 
 export function InvoicesListScreen({
+  onBack,
   payPeriod,
   loading,
   invoices,
@@ -362,7 +366,7 @@ export function InvoicesListScreen({
     <>
       <View className="flex-row items-start justify-between mb-5">
         <View className="flex-1">
-          <Text className="text-2xl font-bold text-ink">{t.title}</Text>
+          <ScreenTitle title={t.title} onBack={onBack} />
           <Text className="text-sm text-muted mt-0.5">
             {search.trim() || statuses.length || dateFrom || dateTo
               ? t.countFound.replace('{{count}}', String(serverMode ? (serverTotal ?? filtered.length) : filtered.length))

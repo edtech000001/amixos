@@ -70,6 +70,7 @@ import {
   parseJobsFilters,
 } from '../../lib/jobsFilters';
 import { SHEET_BACKDROP } from '../../ui/sheetBackdrop';
+import { ScreenTitle } from '../../ui/ScreenTitle';
 
 export interface JobListItem {
   id: string;
@@ -136,6 +137,8 @@ const TAB_ICON: Record<StatusTabKey, typeof List> = {
 };
 
 export interface JobsListScreenProps {
+  /** Mobile: shown as a ← before the title when opened from Más. */
+  onBack?: () => void;
   /** Opens the filtered-set summary — or, given jobIds, the summary of exactly
    *  those (select-mode picks). Resolves null when the tab selection
    *  can't be aggregated server-side (see jobSummaryFilterParams). Omit to
@@ -266,6 +269,7 @@ function isExpired(j: JobListItem) {
 type JobFlatSection = { title: string; data: JobListItem[] };
 
 export function JobsListScreen({
+  onBack,
   loading,
   jobs,
   initialTab = 'all',
@@ -1002,7 +1006,7 @@ export function JobsListScreen({
       {/* Header */}
       <View className="flex-row items-start justify-between mb-5">
         <View className="flex-1">
-          <Text className="text-2xl font-bold text-ink">{t.title}</Text>
+          <ScreenTitle title={t.title} onBack={onBack} />
           <Text className="text-sm text-muted mt-0.5">
             {(() => {
               const total = serverMode

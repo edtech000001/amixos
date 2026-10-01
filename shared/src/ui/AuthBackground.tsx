@@ -1,5 +1,5 @@
-import { StyleSheet } from 'react-native';
-import Svg, { Defs, LinearGradient, Stop, Rect, RadialGradient, Circle } from 'react-native-svg';
+import { Defs, LinearGradient, Stop, Rect, RadialGradient, Circle } from 'react-native-svg';
+import { FillSvg } from './FillSvg';
 import { useThemeColors } from '../theme';
 
 // Decorative backdrop for auth screens. Renders behind the scrollview so the
@@ -9,11 +9,9 @@ import { useThemeColors } from '../theme';
 export function AuthBackground() {
   const c = useThemeColors();
   return (
-    <Svg
-      style={StyleSheet.absoluteFill}
-      preserveAspectRatio="xMidYMid slice"
-      pointerEvents="none"
-    >
+    // FillSvg, not a stretched <Svg>: iOS sizes the stretched form once and
+    // left a bare strip on iPad in landscape / after rotating.
+    <FillSvg preserveAspectRatio="xMidYMid slice">
       <Defs>
         <LinearGradient id="authBgBase" x1="0%" y1="0%" x2="50%" y2="100%">
           <Stop offset="0%" stopColor={c.surface} />
@@ -26,6 +24,6 @@ export function AuthBackground() {
       </Defs>
       <Rect x="0" y="0" width="100%" height="100%" fill="url(#authBgBase)" />
       <Circle cx="90%" cy="15%" r="220" fill="url(#authBgBlob)" />
-    </Svg>
+    </FillSvg>
   );
 }

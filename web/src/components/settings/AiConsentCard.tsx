@@ -26,7 +26,7 @@ export function AiConsentCard() {
           <h2 className="text-base font-semibold text-ink">{t.settingTitle}</h2>
           <p className="text-xs text-faint mt-1">{t.settingHint}</p>
           <p className={`text-xs font-medium mt-2 ${consent.granted ? 'text-emerald-600' : 'text-muted'}`}>
-            {consent.granted ? t.settingOn : t.settingOff}
+            {consent.state === 'granted' ? t.settingOn : consent.state === 'off' ? t.settingOff : t.settingUnasked}
           </p>
         </div>
         <Toggle checked={consent.granted} onChange={next => void consent.set(next)} aria-label={t.settingTitle} />

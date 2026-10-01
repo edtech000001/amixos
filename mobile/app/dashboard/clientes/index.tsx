@@ -26,6 +26,7 @@ import { usePersistedSearch } from '@amixos/shared/lib/usePersistedSearch';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { fetchClientLocations, clientIdsAtLocation, clientsWithAnyLocation, type ClientLocation } from '@amixos/shared/lib/locations';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
+import { useMoreBack } from '@/lib/useMoreBack';
 
 interface EmbeddedContact { name: string; role: string | null; is_primary: boolean | null }
 interface Client {
@@ -59,6 +60,8 @@ function fmtPhone(raw: string): string {
 }
 
 export default function ClientesTab() {
+  // ← back to Más when opened from there (hidden when pinned to the dock).
+  const moreBack = useMoreBack('clientes');
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const supabase = createSupabaseClient();
@@ -360,6 +363,7 @@ export default function ClientesTab() {
     <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       <LocationSwitcher />
       <ClientsListScreen
+        onBack={moreBack}
         onJumpToLetter={letter => {
           const base = paramsRef.current ?? (business ? { businessId: business.id, search: '' } : null);
           if (!base) return;

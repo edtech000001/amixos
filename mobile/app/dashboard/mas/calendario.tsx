@@ -21,6 +21,7 @@ import {
 } from '@amixos/shared/lib/calendarModel';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { can } from '@amixos/shared/lib/permissions';
+import { useMoreBack } from '@/lib/useMoreBack';
 
 interface JobRow {
   id: string;
@@ -82,6 +83,8 @@ function dayEndISO(d: Date) {
 }
 
 export default function CalendarioRoute() {
+  // ← back to Más when opened from there (hidden when pinned to the dock).
+  const moreBack = useMoreBack('calendario');
   const supabase = createSupabaseClient();
   const router = useRouter();
   const { business, user, activeLocationId, currentRole } = useApp();
@@ -263,6 +266,7 @@ export default function CalendarioRoute() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <LocationSwitcher />
       <CalendarScreen
+        onBack={moreBack}
         items={items}
         loading={loading}
         clients={clients}

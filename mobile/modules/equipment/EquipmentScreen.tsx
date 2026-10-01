@@ -20,7 +20,7 @@ import {
   StyleSheet,
   FlatList,
   SectionList,
-  Dimensions,
+  useWindowDimensions,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
@@ -307,7 +307,7 @@ function DetailCard({ rows, footer }: { rows: DetailRowData[]; footer?: ReactNod
 export default function EquipmentScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width: screenW, height: screenH } = Dimensions.get('window');
+  const { width: screenW, height: screenH } = useWindowDimensions();
   const supabase = createSupabaseClient();
   const { business, user, locations, activeLocationId, myHomeLocationId, currentRole } = useApp();
   // Equipment maps to the inventory permission per the role matrix. Read-only

@@ -14,8 +14,11 @@ import { REPORT_RANGE_KEYS,
 } from '@amixos/shared/lib/reports';
 import { useSwr } from '@amixos/shared/lib/swrCache';
 import { useDataFingerprint } from '@amixos/shared/lib/dataFingerprint';
+import { useMoreBack } from '@/lib/useMoreBack';
 
 export default function ReportesRoute() {
+  // ← back to Más when opened from there (hidden when pinned to the dock).
+  const moreBack = useMoreBack('reportes');
   const supabase = createSupabaseClient();
   const router = useRouter();
   const { business, activeLocationId } = useApp();
@@ -101,6 +104,7 @@ export default function ReportesRoute() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <LocationSwitcher />
       <ReportsScreen
+        onBack={moreBack}
         loading={loading}
         range={range}
         onRangeChange={(r) => { setRange(r); setCustomFrom(null); setCustomTo(null); }}

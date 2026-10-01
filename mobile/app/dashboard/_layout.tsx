@@ -175,6 +175,10 @@ function DashboardTabs() {
         <Tabs
           key={impersonating ? `imp:${impersonating.userId}` : 'self'}
           tabBar={props => <AnimatedDock {...props} />}
+          // Back returns to the screen you came from. The default
+          // ('firstRoute') sent every hidden screen's back arrow — Ajustes,
+          // Nómina… opened from Más or Reportes — to Inicio instead.
+          backBehavior="history"
           screenOptions={{
             headerShown: false,
           }}

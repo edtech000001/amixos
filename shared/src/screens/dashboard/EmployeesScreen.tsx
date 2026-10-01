@@ -15,6 +15,7 @@ import type { AccessStatus } from '../../lib/teamPeople';
 import { splitMultiValue } from '../../lib/fieldTemplates';
 import { SkeletonList } from '../../ui/Skeleton';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
+import { ScreenTitle } from '../../ui/ScreenTitle';
 
 export interface EmployeeListItem {
   id: string;
@@ -76,6 +77,8 @@ export interface HourTotalItem {
 }
 
 export interface EmployeesScreenProps {
+  /** Mobile: shown as a ← before the title when opened from Más. */
+  onBack?: () => void;
   employees: EmployeeListItem[];
   timesheets: TimesheetListItem[];
   /** Per-worker hour totals for the current pay period (Hours tab). */
@@ -110,6 +113,7 @@ export interface EmployeesScreenProps {
 type Tab = 'empleados' | 'horas' | 'historial';
 
 export function EmployeesScreen({
+  onBack,
   employees,
   timesheets,
   hourTotals,
@@ -261,7 +265,7 @@ export function EmployeesScreen({
     <>
       <View className="flex-row items-center justify-between mb-6 flex-wrap gap-3">
         <View>
-          <Text className="text-2xl font-bold text-ink">{t.title}</Text>
+          <ScreenTitle title={t.title} onBack={onBack} />
           <Text className="text-sm text-muted mt-0.5">
             {tab === 'empleados' && (search.trim() !== '' || filtersActive)
               ? t.resultsCount.replace('{{count}}', String(filteredEmployees.length))

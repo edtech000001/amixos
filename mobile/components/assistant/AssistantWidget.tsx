@@ -30,6 +30,8 @@ export function AssistantWidget() {
   // which would leak past the impersonated member's permissions. Pilot gate:
   // only enabled businesses see Ami (api enforces the same list).
   if (!business || impersonating || !isAssistantEnabled(business.id)) return null;
+  // Turned off in Ajustes → Cuenta: no button at all (the toggle brings it back).
+  if (consent.state === 'off' && !open) return null;
 
   return (
     <>

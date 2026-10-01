@@ -14,8 +14,11 @@ import {
   type ReportRange,
   type ReportsMetrics,
 } from '../../lib/reports';
+import { ScreenTitle } from '../../ui/ScreenTitle';
 
 export interface ReportsScreenProps {
+  /** Mobile: shown as a ← before the title when opened from Más. */
+  onBack?: () => void;
   loading: boolean;
   range: ReportRange;
   onRangeChange: (r: ReportRange) => void;
@@ -79,7 +82,7 @@ function Kpi({ icon, label, value, sub, color }: { icon: React.ReactNode; label:
   );
 }
 
-export function ReportsScreen({ loading, range, onRangeChange, metrics, inventoryEnabled, customFrom, customTo, onCustomChange, onOpenPayroll }: ReportsScreenProps) {
+export function ReportsScreen({ loading, range, onRangeChange, metrics, inventoryEnabled, customFrom, customTo, onCustomChange, onOpenPayroll, onBack }: ReportsScreenProps) {
   const { t: full } = useLang();
   const c = useThemeColors();
   const t = full.dashboard.reports;
@@ -133,7 +136,7 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
   return (
     <View className="flex-1 bg-surface">
     <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 144 }}>
-      <Text className="text-2xl font-bold text-ink">{t.title}</Text>
+      <ScreenTitle title={t.title} onBack={onBack} />
       <Text className="text-sm text-muted mt-0.5 mb-4">{t.subtitle}</Text>
 
       {/* Range selector — presets + a Custom date-range chip (opens the sheet) */}

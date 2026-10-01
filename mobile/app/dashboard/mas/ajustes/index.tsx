@@ -182,7 +182,9 @@ export default function AjustesIndex() {
         {/* Back to the Más menu (Ajustes is pushed from there, not a dock tab). */}
         <View className="flex-row items-center mb-5 -ml-2">
           <Pressable
-            onPress={() => (router.canGoBack() ? router.back() : router.push('/dashboard/mas'))}
+            // Explicit target: Ajustes shares a stack with the module store, so
+            // back() could land on a leftover store page instead of Más.
+            onPress={() => router.navigate('/dashboard/mas' as never)}
             hitSlop={12}
             className="p-2 rounded-lg active:bg-border-soft"
           >

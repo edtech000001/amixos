@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { Alert, Share, View, Text, Pressable, ScrollView, Modal as RNModal, Linking, TextInput, KeyboardAvoidingView, Keyboard, Platform, Image, Dimensions } from 'react-native';
+import { Alert, Share, View, Text, Pressable, ScrollView, Modal as RNModal, Linking, TextInput, KeyboardAvoidingView, Keyboard, Platform, Image, useWindowDimensions } from 'react-native';
 import { X, Camera, ImagePlus, ClipboardPaste, RotateCw } from 'lucide-react-native';
 import { hasClipboardImage, readClipboardImageToFile } from '@/lib/clipboardPhoto';
 import * as Print from 'expo-print';
@@ -609,7 +609,8 @@ export default function FacturaDetailRoute() {
   const [viewPhoto, setViewPhoto] = useState<{ id: string; url: string; rotation: number } | null>(null);
   // Full-screen viewport for the photo viewer. Leaves room for the action bar
   // at the bottom so the buttons never sit on top of the image.
-  const { width: photoViewW, height: photoScreenH } = Dimensions.get('window');
+  // useWindowDimensions (not Dimensions.get) so it follows iPad rotation.
+  const { width: photoViewW, height: photoScreenH } = useWindowDimensions();
   const photoViewH = photoScreenH - insets.top - insets.bottom - 120;
   const rotateViewPhoto = async () => {
     if (!viewPhoto) return;
@@ -1361,7 +1362,7 @@ export default function FacturaDetailRoute() {
           />
           <View
             className="bg-card rounded-t-3xl px-5 pt-5 pb-10"
-            style={{ maxHeight: Dimensions.get('window').height - insets.top - 24 }}
+            style={{ maxHeight: photoScreenH - insets.top - 24 }}
           >
             <View className="flex-row items-center justify-between mb-3">
               <Text className="text-lg font-bold text-ink">{linkIndex !== null ? jobsT.linkTitle : jobsT.addTitle}</Text>

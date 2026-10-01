@@ -45,6 +45,7 @@ import {
   countForDay,
   visibleRange,
 } from '../../lib/calendarModel';
+import { ScreenTitle } from '../../ui/ScreenTitle';
 
 // ── Re-exported so the page wrappers share one source of truth ──────────────
 export type { CalItem } from '../../lib/calendarModel';
@@ -69,6 +70,8 @@ export interface CalendarEventInput {
 }
 
 export interface CalendarScreenProps {
+  /** Mobile: shown as a ← before the title when opened from Más. */
+  onBack?: () => void;
   items: CalItem[];
   clients: CalendarClient[];
   /** Active team members — the roster shown in the availability panel. */
@@ -160,6 +163,7 @@ function hm(d: Date): string {
 }
 
 export function CalendarScreen({
+  onBack,
   items,
   clients,
   leads,
@@ -387,7 +391,7 @@ export function CalendarScreen({
         {/* Header — on web the add button lives here; on native the FAB
             (bottom-right, thumb reach) is the single add affordance. */}
         <View className="flex-row items-center justify-between mb-4">
-          <Text className="text-2xl font-bold text-ink">{t.title}</Text>
+          <ScreenTitle title={t.title} onBack={onBack} />
           <View className="flex-row items-center gap-2">
             <Pressable
               onPress={openAvailability}

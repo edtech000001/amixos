@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SkeletonBlock, SkeletonStats, SkeletonChart, SkeletonCard, SkeletonList } from '@amixos/shared/ui/Skeleton';
 import {
-  Alert, Dimensions, FlatList, Image, KeyboardAvoidingView, Linking, Modal as RNModal,
+  Alert, useWindowDimensions, FlatList, Image, KeyboardAvoidingView, Linking, Modal as RNModal,
   Platform, Pressable, ScrollView, Share, Text, TextInput, View, ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -107,6 +107,7 @@ import {
   generateChargesForLeases,
   generateLateFees,
   type RentalPropertyCursor, fetchChargesForLeases, fetchAllCharges, fetchAllPayments } from '@amixos/shared/lib/rentalsQuery';
+import { gridColumns } from '@/lib/gridColumns';
 
 type TabKey = 'overview' | 'properties' | 'tenants';
 type DetailTab = 'overview' | 'leases' | 'ledger' | 'expenses' | 'maintenance' | 'photos';
@@ -170,6 +171,8 @@ export default function RentalsScreen() {
   const tc = full.common;
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
+  // Live window size — follows iPad rotation / Split View.
+  const { width: winW, height: winH } = useWindowDimensions();
 
   const [tab, setTab] = useState<TabKey>('overview');
   const [detail, setDetail] = useState<RentalProperty | null>(null);
@@ -2146,10 +2149,11 @@ export default function RentalsScreen() {
               // Explicit pixel tiles (equipment pattern): % width + aspectRatio
               // never resolves a height for an empty box, which collapsed the
               // Add tile and mis-centered its icon. 16px screen padding, 12px
-              // gap, two columns. Grouped by category (general / tenant stay
+              // gap, 2 columns on a phone (more on iPad via gridColumns). Grouped by category (general / tenant stay
               // before-after) — the Add tile uploads into the selected category.
               (() => {
-                const tileW = (Dimensions.get('window').width - 32 - 12) / 2;
+                const tileCols = gridColumns(winW);
+                const tileW = (winW - 32 - 12 * (tileCols - 1)) / tileCols;
                 const tileH = Math.round(tileW * 10 / 16);
                 const tile = (p: RentalPropertyPhoto, i: number) => (
                   <Pressable key={p.id} onPress={() => setPhotoViewer(i)}
@@ -2221,7 +2225,8 @@ export default function RentalsScreen() {
         {/* Fullscreen photo viewer — swipe pages, native pinch-zoom */}
         <RNModal visible={viewerPhoto !== null} transparent animationType="fade" onRequestClose={() => setPhotoViewer(null)}>
           {(() => {
-            const { width: screenW, height: screenH } = Dimensions.get('window');
+            const screenW = winW;
+            const screenH = winH;
             const availH = screenH - insets.top - insets.bottom - 120;
             return (
               <View style={{ flex: 1, backgroundColor: '#000' }}>

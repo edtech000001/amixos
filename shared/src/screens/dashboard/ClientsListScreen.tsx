@@ -34,6 +34,7 @@ import { SkeletonList, SkeletonRow } from '../../ui/Skeleton';
 import { clientMatchesSearch, matchingContacts } from '../../lib/clientSearch';
 import { groupClients, parseClientGroupKey, CLIENTS_GROUP_KEY, type ClientSection, type ClientGroupKey } from '../../lib/clientSections';
 import { usStateName } from '../../lib/usStates';
+import { ScreenTitle } from '../../ui/ScreenTitle';
 
 export interface ClientListItem {
   id: string;
@@ -51,6 +52,8 @@ export interface ClientListItem {
 }
 
 export interface ClientsListScreenProps {
+  /** Mobile: shown as a ← before the title when opened from Más. */
+  onBack?: () => void;
   loading: boolean;
   clients: ClientListItem[];
   search: string;
@@ -119,6 +122,7 @@ type Row =
   | { type: 'footer'; key: string; letter: '' };
 
 export function ClientsListScreen({
+  onBack,
   loading,
   clients,
   search,
@@ -368,7 +372,7 @@ export function ClientsListScreen({
     <View className="pt-6">
       <View className="flex-row items-center justify-between mb-6">
         <View>
-          <Text className="text-2xl font-bold text-ink">{t.title}</Text>
+          <ScreenTitle title={t.title} onBack={onBack} />
           <Text className="text-sm text-muted mt-0.5">
             {search.trim()
               ? t.countFound.replace('{{count}}', String(serverMode ? (serverTotal ?? filtered.length) : filtered.length))

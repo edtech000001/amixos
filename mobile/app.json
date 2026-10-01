@@ -21,6 +21,12 @@
       },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ],
         "NSPhotoLibraryAddUsageDescription": "Amixos guarda en tus fotos las imágenes y documentos que eliges descargar desde la app, como el PDF de una factura o la foto de un comprobante.",
         "CFBundleLocalizations": [
           "es",

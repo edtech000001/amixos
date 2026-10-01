@@ -24,6 +24,7 @@ import {
   type InventoryStats,
 } from '@amixos/shared/lib/inventoryQuery';
 import { can } from '@amixos/shared/lib/permissions';
+import { useMoreBack } from '@/lib/useMoreBack';
 
 interface RawItem {
   id: string;
@@ -48,6 +49,8 @@ const UNIT_DB_VALUES: Record<typeof UNIT_KEYS[number], string> = {
 };
 
 export default function InventoryModuleScreen() {
+  // Modules always open from Más — give the ← back to that menu.
+  const moreBack = useMoreBack();
   const { t: full, locale } = useLang();
   const t = full.dashboard.inventory;
   const tc = full.common;
@@ -501,6 +504,7 @@ export default function InventoryModuleScreen() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <LocationSwitcher />
       <SharedInventoryScreen
+        onBack={moreBack}
         loading={loading}
         items={screenItems}
         unitLabel={unitLabel}

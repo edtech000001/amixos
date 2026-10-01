@@ -9,8 +9,11 @@ import { AddonStoreScreen } from '@amixos/shared/screens/dashboard/AddonStoreScr
 import { getModuleById } from '@amixos/shared/modules/registry';
 import { notifyModulesChanged } from '@amixos/shared/modules/useEnabledModules';
 import { logAudit } from '@amixos/shared/lib/audit';
+import { useMoreBack } from '@/lib/useMoreBack';
 
 export default function TiendaPage() {
+  // ← back to Más when opened from there (hidden when pinned to the dock).
+  const moreBack = useMoreBack();
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { business, currentRole } = useApp();
@@ -93,6 +96,7 @@ export default function TiendaPage() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <AddonStoreScreen
+        onBack={moreBack}
         enabledIds={enabledIds}
         businessId={business?.id ?? null}
         currentRole={currentRole}

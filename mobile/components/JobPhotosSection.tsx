@@ -7,7 +7,7 @@ import {
   Alert,
   ActivityIndicator,
   Modal as RNModal,
-  Dimensions,
+  useWindowDimensions,
   FlatList,
   ScrollView,
   type NativeSyntheticEvent,
@@ -34,6 +34,7 @@ import { queuedUpload } from '@/lib/offline/mutate';
 import { useOutboxStore } from '@/lib/offline/outbox';
 import { isOnlineNow } from '@/lib/offline/network';
 import { newUuid } from '@/lib/offline/ids';
+import { gridColumns } from '@/lib/gridColumns';
 
 interface Props {
   jobId: string;
@@ -43,6 +44,7 @@ interface Props {
 }
 
 const GAP = 8;
+/** Photo-grid columns on a phone; wider screens add more (gridColumns). */
 const COLS = 3;
 
 export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
@@ -223,7 +225,9 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
     ]);
   };
 
-  const { width: screenW, height: screenH } = Dimensions.get('window');
+  // Follows rotation / Split View; more columns on iPad (gridColumns).
+  const { width: screenW, height: screenH } = useWindowDimensions();
+  const cols = gridColumns(screenW, COLS);
 
   const rotateCurrent = async () => {
     if (viewerIndex === null) return;
@@ -250,7 +254,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
   };
 
   // Section sits inside the detail ScrollView's px-5 (20px) padding.
-  const tileSize = Math.floor((screenW - 40 - GAP * (COLS - 1)) / COLS);
+  const tileSize = Math.floor((screenW - 40 - GAP * (cols - 1)) / cols);
   const atLimit = photos.length + pending.length >= MAX_PHOTOS_PER_JOB;
 
   const viewerPhoto = viewerIndex !== null ? photos[viewerIndex] : null;

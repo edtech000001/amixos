@@ -8,10 +8,13 @@ import { useThemeColors } from '../../theme';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { modulesForBusiness, type ModuleDef, type ModuleCategory } from '../../modules/registry';
 import { can, type Role } from '../../lib/permissions';
+import { ScreenTitle } from '../../ui/ScreenTitle';
 
 type CategoryFilter = ModuleCategory | 'all';
 
 export interface AddonStoreScreenProps {
+  /** Mobile: shown as a ← before the title when opened from Más. */
+  onBack?: () => void;
   // The set of currently-enabled module ids for the active business.
   // Pre-fetched by the wrapper so the screen stays purely presentational.
   enabledIds: Set<string>;
@@ -33,6 +36,7 @@ export interface AddonStoreScreenProps {
 }
 
 export function AddonStoreScreen({
+  onBack,
   enabledIds,
   businessId,
   currentRole,
@@ -113,7 +117,7 @@ export function AddonStoreScreen({
     >
       {/* Heading */}
       <View className="mb-4">
-        <Text className="text-2xl font-bold text-ink">{t.heading}</Text>
+        <ScreenTitle title={t.heading} onBack={onBack} />
         <Text className="text-sm text-muted mt-0.5">{t.subtitle}</Text>
       </View>
 

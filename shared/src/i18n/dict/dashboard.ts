@@ -3016,6 +3016,7 @@ export type DashboardDict = {
       settingHint: string;
       settingOn: string;
       settingOff: string;
+      settingUnasked: string;
     };
     placeholder: string;
     send: string;
@@ -6312,9 +6313,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         allow: 'Permitir y continuar',
         decline: 'Ahora no',
         settingTitle: 'Ami (asistente de IA)',
-        settingHint: 'Permite que Ami comparta tu pregunta y la información necesaria de tu negocio con Anthropic (y con Google para la voz) para responderte.',
-        settingOn: 'Permitido',
-        settingOff: 'No permitido',
+        settingHint: 'Permite que Ami comparta tu pregunta y la información necesaria de tu negocio con Anthropic (y con Google para la voz) para responderte. Si lo desactivas, Ami se oculta.',
+        settingOn: 'Activado',
+        settingOff: 'Desactivado — el botón de Ami está oculto',
+        settingUnasked: 'Ami te pedirá permiso la primera vez que lo abras',
       },
       placeholder: 'Escríbele a Ami…',
       send: 'Enviar',
@@ -9645,9 +9647,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         allow: 'Allow and continue',
         decline: 'Not now',
         settingTitle: 'Ami (AI assistant)',
-        settingHint: 'Lets Ami share your question and the business information it needs with Anthropic (and Google for the voice) to answer you.',
-        settingOn: 'Allowed',
-        settingOff: 'Not allowed',
+        settingHint: 'Lets Ami share your question and the business information it needs with Anthropic (and Google for the voice) to answer you. Turn it off to hide Ami.',
+        settingOn: 'On',
+        settingOff: 'Off — Ami’s button is hidden',
+        settingUnasked: 'Ami will ask for permission the first time you open it',
       },
       placeholder: 'Message Ami…',
       send: 'Send',

@@ -32,7 +32,7 @@ export function AiConsentSection() {
       </View>
       <Text className="text-xs text-muted leading-5">{t.settingHint}</Text>
       <Text className={`text-xs font-medium ${consent.granted ? 'text-emerald-600' : 'text-muted'}`}>
-        {consent.granted ? t.settingOn : t.settingOff}
+        {consent.state === 'granted' ? t.settingOn : consent.state === 'off' ? t.settingOff : t.settingUnasked}
       </Text>
     </View>
   );

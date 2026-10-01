@@ -22,6 +22,7 @@ import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { Input } from '../../ui/Input';
 import { Logo } from '../../ui/Logo';
+import { FillSvg } from '../../ui/FillSvg';
 
 export type LoginAttemptResult =
   | { ok: true; needsOnboarding: boolean }
@@ -110,7 +111,7 @@ export function LoginScreen({
           therefore mismatched the whole left side, and the card's rounded top
           corners cut a window straight onto the seam — worse on the left,
           which is exactly how it looked. */}
-      <Svg style={StyleSheet.absoluteFill} preserveAspectRatio="xMidYMid slice" pointerEvents="none">
+      <FillSvg preserveAspectRatio="xMidYMid slice">
         <Defs>
           <SvgLinearGradient id="heroGrad" x1="0%" y1="0%" x2="100%" y2="100%">
             <Stop offset="0%" stopColor="#1E40AF" />
@@ -119,7 +120,7 @@ export function LoginScreen({
           </SvgLinearGradient>
         </Defs>
         <Rect width="100%" height="100%" fill="url(#heroGrad)" />
-      </Svg>
+      </FillSvg>
 
       <ScrollView
         style={{ flex: 1 }}

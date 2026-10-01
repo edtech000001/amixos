@@ -46,6 +46,7 @@ import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { resolveAccess, orphanMembers, displayNameFromAccount, type AccessMember, type AccessInvite } from '@amixos/shared/lib/teamPeople';
 import { can, isReadOnly, type Role } from '@amixos/shared/lib/permissions';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
+import { useMoreBack } from '@/lib/useMoreBack';
 
 interface RawEmployee {
   id: string;
@@ -165,6 +166,8 @@ interface EmployeesPageCache {
 }
 
 export default function EmpleadosRoute() {
+  // ← back to Más when opened from there (hidden when pinned to the dock).
+  const moreBack = useMoreBack('empleados');
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { business, user, currentRole, activeLocationId } = useApp();
@@ -1098,6 +1101,7 @@ export default function EmpleadosRoute() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <LocationSwitcher />
       <EmployeesScreen
+        onBack={moreBack}
         customFieldDefs={templates.map((tpl) => ({
           key: tpl.field_key,
           label: tpl.field_label,

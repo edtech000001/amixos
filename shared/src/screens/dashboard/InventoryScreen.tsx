@@ -15,6 +15,7 @@ import { useThemeColors } from '../../theme';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { Input } from '../../ui/Input';
 import { Fab } from '../../ui/Fab';
+import { ScreenTitle } from '../../ui/ScreenTitle';
 
 export interface InventoryItem {
   id: string;
@@ -28,6 +29,8 @@ export interface InventoryItem {
 }
 
 export interface InventoryScreenProps {
+  /** Mobile: shown as a ← before the title when opened from Más. */
+  onBack?: () => void;
   loading: boolean;
   items: InventoryItem[];
   /** Resolve the localized unit label for a stored DB value. */
@@ -54,6 +57,7 @@ export interface InventoryScreenProps {
 type Filter = 'todos' | 'bajo_stock';
 
 export function InventoryScreen({
+  onBack,
   loading,
   items,
   unitLabel,
@@ -122,7 +126,7 @@ export function InventoryScreen({
   const header = (
     <>
       <View className="mb-5">
-        <Text className="text-2xl font-bold text-ink">{t.title}</Text>
+        <ScreenTitle title={t.title} onBack={onBack} />
         <Text className="text-sm text-muted mt-0.5">
           {summaryText}
           {lowStockCount > 0 ? (

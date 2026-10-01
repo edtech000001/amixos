@@ -24,6 +24,7 @@ import {
 } from '@amixos/shared/lib/invoicesQuery';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
+import { useMoreBack } from '@/lib/useMoreBack';
 
 interface InvoiceClient { first_name: string; last_name: string; company: string | null; state: string | null; }
 interface RawInvoice {
@@ -56,6 +57,8 @@ const totalFor = (counts: Record<string, number>, statuses?: string[]) =>
   statuses?.length ? statuses.reduce((s, k) => s + (counts[k] ?? 0), 0) : (counts.all ?? 0);
 
 export default function FacturasTab() {
+  // ← back to Más when opened from there (hidden when pinned to the dock).
+  const moreBack = useMoreBack('facturas');
   const insets = useSafeAreaInsets();
   const router = useRouter();
   // ?status=sent|overdue|all — dashboard tiles deep-link here. 'all' clears
@@ -355,6 +358,7 @@ export default function FacturasTab() {
     <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       <LocationSwitcher />
       <InvoicesListScreen
+        onBack={moreBack}
         initialStatuses={initialStatuses}
         payPeriod={business ? { frequency: business.payroll_frequency, anchorDate: business.payroll_anchor_date, customDays: business.payroll_custom_days } : undefined}
         loading={loading}
