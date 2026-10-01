@@ -5,6 +5,10 @@ export interface AuthRequest extends Request {
   user?: {
     id: string;
     email: string;
+    /** Version of the Ami AI-sharing consent the user gave (user_metadata.
+     *  ai_consent.v), or null. The user's own choice about their own data —
+     *  NOT an authorization claim, so reading user metadata is fine here. */
+    aiConsentVersion: string | null;
   };
   /** The caller's verified Supabase JWT — used to build per-request
    *  RLS-scoped clients (lib/supabaseRls.ts) so queries run AS the user. */
@@ -29,9 +33,11 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
     // NOT read from user_metadata — that field is writable by the user
     // themselves (auth.updateUser), so it can never be an authorization
     // claim. Authorize per-request from business_members instead.
+    const aiConsent = (user.user_metadata as { ai_consent?: { v?: unknown } | null } | undefined)?.ai_consent;
     req.user = {
       id: user.id,
       email: user.email!,
+      aiConsentVersion: typeof aiConsent?.v === 'string' ? aiConsent.v : null,
     };
     req.token = token;
 

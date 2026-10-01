@@ -16,6 +16,18 @@ import { isJobUpdateDraft } from '../lib/assistant/types';
 
 export const assistantRouter = Router();
 
+// App Store 5.1.2(i): nothing goes to third-party AI without the user's
+// explicit consent to the CURRENT disclosure (shared/src/lib/aiConsent.ts).
+// The apps ask before opening Ami; this is the backstop.
+// Mirror of AI_CONSENT_VERSION in shared/src/lib/aiConsent.ts — the api
+// workspace doesn't depend on @amixos/shared. Keep the two in sync.
+const AI_CONSENT_VERSION = '2026-09-30';
+function requireAiConsent(req: AuthRequest, res: Response): boolean {
+  if (req.user?.aiConsentVersion === AI_CONSENT_VERSION) return true;
+  res.status(403).json({ success: false, message: 'ai_consent_required' });
+  return false;
+}
+
 // Per-user limits — the Claude calls behind /chat are the expensive part.
 // TODO: persistent daily token budget — this in-memory per-minute cap does not
 // bound cumulative daily spend per business/user across instances or restarts.
@@ -100,6 +112,7 @@ async function buildContext(
 
 // POST /api/v1/assistant/chat
 assistantRouter.post('/chat', authenticate, chatLimiter, async (req: AuthRequest, res: Response) => {
+  if (!requireAiConsent(req, res)) return;
   const { business_id, messages, pending_draft, locale } = req.body ?? {};
   if (!business_id || typeof business_id !== 'string') {
     return res.status(400).json({ success: false, message: 'business_id required' });
@@ -130,6 +143,7 @@ assistantRouter.post('/chat', authenticate, chatLimiter, async (req: AuthRequest
 // (Google Chirp 3: HD). Returns base64 MP3; clients fall back to the on-device
 // voice when this endpoint is unavailable.
 assistantRouter.post('/tts', authenticate, ttsLimiter, async (req: AuthRequest, res: Response) => {
+  if (!requireAiConsent(req, res)) return;
   const { business_id, text, locale } = req.body ?? {};
   if (!business_id || typeof business_id !== 'string' || typeof text !== 'string' || !text.trim()) {
     return res.status(400).json({ success: false, message: 'business_id and text required' });
@@ -153,6 +167,7 @@ assistantRouter.post('/tts', authenticate, ttsLimiter, async (req: AuthRequest, 
 
 // POST /api/v1/assistant/confirm
 assistantRouter.post('/confirm', authenticate, confirmLimiter, async (req: AuthRequest, res: Response) => {
+  if (!requireAiConsent(req, res)) return;
   const { business_id, draft, locale } = req.body ?? {};
   if (!business_id || typeof business_id !== 'string' || !draft) {
     return res.status(400).json({ success: false, message: 'business_id and draft required' });

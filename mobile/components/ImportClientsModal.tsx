@@ -1,15 +1,15 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { parseClientContactsCell } from '@amixos/shared/lib/clientShare';
 import { fetchAll } from '@amixos/shared/lib/supabaseFetch';
 import { logImportRun } from '@amixos/shared/lib/importRunners';
 import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
-import { View, Text, Pressable, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, Alert, ScrollView, FlatList, TextInput, Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as Contacts from 'expo-contacts';
 import Papa from 'papaparse';
-import { Upload, FileText, CheckCircle2, AlertCircle, Download, Users } from 'lucide-react-native';
+import { Upload, FileText, CheckCircle2, AlertCircle, Download, Users, UserPlus, Check, Search, X } from 'lucide-react-native';
 import { Modal, Button, Select } from '@amixos/shared/ui';
 import { useGoogleSyncBanner } from '@amixos/shared/lib/googleSyncBanner';
 import { parseTimestamp } from '@amixos/shared/lib/dataImport';
@@ -358,21 +358,64 @@ export function ImportClientsModal({
     }
   };
 
-  // Read phone contacts (with permission), let the user pick a subset, and
-  // insert them as clients directly — no CSV mapping step required.
-  const importFromContacts = async () => {
+  // Two ways to bring phone contacts in as clients — no CSV mapping step:
+  //  • ONE contact via the system picker. On iOS the picker runs out of
+  //    process and needs NO Contacts permission, which App Store 5.1.1(iii)
+  //    prefers; Android's picker still needs it to read the details.
+  //  • SEVERAL contacts: full access, then an in-app searchable checklist
+  //    (the system picker only ever returns a single contact).
+  const pickOneContact = async () => {
+    setError('');
+    if (Platform.OS !== 'ios') {
+      const { status } = await Contacts.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('', t.importModal.contactsPermissionDenied);
+        return;
+      }
+    }
+    const picked = await Contacts.presentContactPickerAsync();
+    if (!picked) return;
+    await importContactList([picked]);
+  };
+
+  const [contactList, setContactList] = useState<Contacts.ExistingContact[] | null>(null);
+  const [contactQuery, setContactQuery] = useState('');
+  const [contactPicked, setContactPicked] = useState<Set<string>>(new Set());
+  const openContactList = async () => {
     setError('');
     const { status } = await Contacts.requestPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('', t.importModal.contactsPermissionDenied);
       return;
     }
-    // Present the system contact picker. On iOS this is a multi-select
-    // overlay; on Android the equivalent flow uses the same API.
-    const picked = await Contacts.presentContactPickerAsync();
-    if (!picked) return;
-    const contactsList = Array.isArray(picked) ? picked : [picked];
+    const { data } = await Contacts.getContactsAsync({
+      fields: [
+        Contacts.Fields.FirstName, Contacts.Fields.LastName, Contacts.Fields.Name,
+        Contacts.Fields.Company, Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails,
+        Contacts.Fields.Addresses,
+      ],
+      sort: Contacts.SortTypes.FirstName,
+    });
+    setContactPicked(new Set());
+    setContactQuery('');
+    setContactList(data.filter(c => (c.firstName || c.lastName || c.name || c.company)));
+  };
+  const contactRows = useMemo(() => {
+    if (!contactList) return [];
+    const q = contactQuery.trim().toLowerCase();
+    if (!q) return contactList;
+    return contactList.filter(c =>
+      [c.name, c.firstName, c.lastName, c.company, ...(c.phoneNumbers ?? []).map(p => p.number), ...(c.emails ?? []).map(e => e.email)]
+        .some(v => (v ?? '').toLowerCase().includes(q)),
+    );
+  }, [contactList, contactQuery]);
+  const importPickedContacts = async () => {
+    const chosen = (contactList ?? []).filter(c => c.id && contactPicked.has(c.id));
+    setContactList(null);
+    if (chosen.length) await importContactList(chosen);
+  };
 
+  const importContactList = async (contactsList: Contacts.Contact[]) => {
     setImporting(true);
 
     // For contacts-import the "CSV line" isn't meaningful — use the
@@ -723,28 +766,27 @@ export function ImportClientsModal({
             )}
           </Pressable>
 
-          {/* Contacts picker — secondary action */}
-          <Pressable
-            onPress={importFromContacts}
-            disabled={importing}
-            className="flex-row items-center gap-3 rounded-2xl border border-border px-4 py-3.5 active:bg-surface"
-          >
-            <View className="w-9 h-9 rounded-xl bg-emerald-500/10 items-center justify-center">
-              {importing ? (
-                <ActivityIndicator size="small" color={c.success} />
-              ) : (
-                <Users size={18} color={c.success} />
-              )}
-            </View>
-            <View className="flex-1">
-              <Text className="text-sm font-semibold text-ink">
-                {t.importModal.importContactsBtn}
-              </Text>
-              <Text className="text-xs text-muted mt-0.5">
-                {t.importModal.importContactsHint}
-              </Text>
-            </View>
-          </Pressable>
+          {/* Contacts — two secondary actions: one via the system picker (no
+              permission on iOS), or several via full access + checklist. */}
+          {([
+            [pickOneContact, UserPlus, t.importModal.pickOneContactBtn, t.importModal.pickOneContactHint],
+            [openContactList, Users, t.importModal.pickManyContactsBtn, t.importModal.pickManyContactsHint],
+          ] as const).map(([action, Icon, label, hint], i) => (
+            <Pressable
+              key={i}
+              onPress={() => void action()}
+              disabled={importing}
+              className="flex-row items-center gap-3 rounded-2xl border border-border px-4 py-3.5 active:bg-surface"
+            >
+              <View className="w-9 h-9 rounded-xl bg-emerald-500/10 items-center justify-center">
+                {importing ? <ActivityIndicator size="small" color={c.success} /> : <Icon size={18} color={c.success} />}
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-ink">{label}</Text>
+                <Text className="text-xs text-muted mt-0.5">{hint}</Text>
+              </View>
+            </Pressable>
+          ))}
 
           {/* Template download — tertiary action */}
           <Pressable
@@ -1009,6 +1051,82 @@ export function ImportClientsModal({
           <Button onPress={close} fullWidth>
             <Text className="text-white font-semibold">Cerrar</Text>
           </Button>
+        </View>
+      ) : null}
+
+      {/* Contact checklist — an in-modal absolute overlay, NOT a second RNModal
+          (iOS won't present one while this modal is up; see CLAUDE.md). */}
+      {contactList ? (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', padding: 12 }}>
+          <Pressable onPress={() => setContactList(null)} style={SHEET_BACKDROP} />
+          <View className="bg-card rounded-2xl p-4" style={{ maxHeight: '92%' }}>
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-base font-bold text-ink">{t.importModal.contactsListTitle}</Text>
+              <Pressable onPress={() => setContactList(null)} hitSlop={8} className="p-1 rounded-lg active:bg-surface">
+                <X size={18} color={c.muted} />
+              </Pressable>
+            </View>
+            <View className="flex-row items-center gap-2 px-3 rounded-xl border border-border bg-surface mb-2">
+              <Search size={15} color={c.faint} />
+              <TextInput
+                value={contactQuery}
+                onChangeText={setContactQuery}
+                placeholder={t.importModal.contactsSearch}
+                placeholderTextColor={c.faint}
+                className="flex-1 py-2.5 text-sm text-ink"
+                autoCorrect={false}
+              />
+            </View>
+            <Pressable
+              onPress={() => setContactPicked(prev =>
+                prev.size ? new Set() : new Set(contactRows.map(r => r.id).filter((x): x is string => !!x)))}
+              hitSlop={6}
+              className="self-start mb-1 active:opacity-60"
+            >
+              <Text className="text-xs font-semibold text-primary">
+                {contactPicked.size ? t.importModal.contactsClear : t.importModal.contactsSelectAll}
+              </Text>
+            </Pressable>
+            <FlatList
+              data={contactRows}
+              keyExtractor={(item, i) => item.id ?? String(i)}
+              keyboardShouldPersistTaps="handled"
+              style={{ flexGrow: 0 }}
+              ListEmptyComponent={<Text className="text-sm text-faint py-6 text-center">{t.importModal.contactsEmpty}</Text>}
+              renderItem={({ item }) => {
+                const on = !!item.id && contactPicked.has(item.id);
+                const name = item.name || [item.firstName, item.lastName].filter(Boolean).join(' ') || item.company || '—';
+                const sub = item.phoneNumbers?.[0]?.number ?? item.emails?.[0]?.email ?? item.company ?? '';
+                return (
+                  <Pressable
+                    onPress={() => item.id && setContactPicked(prev => {
+                      const n = new Set(prev);
+                      if (n.has(item.id!)) n.delete(item.id!); else n.add(item.id!);
+                      return n;
+                    })}
+                    className="flex-row items-center gap-3 py-2.5 border-b border-border-soft active:opacity-70"
+                  >
+                    <View className={`w-5 h-5 rounded-md border items-center justify-center ${on ? 'bg-primary border-primary' : 'border-border'}`}>
+                      {on ? <Check size={13} color="#fff" /> : null}
+                    </View>
+                    <View className="flex-1 min-w-0">
+                      <Text className="text-sm text-ink" numberOfLines={1}>{name}</Text>
+                      {sub ? <Text className="text-xs text-faint" numberOfLines={1}>{sub}</Text> : null}
+                    </View>
+                  </Pressable>
+                );
+              }}
+            />
+            <Pressable
+              onPress={() => void importPickedContacts()}
+              disabled={contactPicked.size === 0}
+              className={`mt-3 py-3.5 rounded-2xl items-center ${contactPicked.size === 0 ? 'bg-primary/50' : 'bg-primary active:opacity-90'}`}
+            >
+              <Text className="text-sm font-semibold text-white">
+                {t.importModal.contactsImportSelected.replace('{{count}}', String(contactPicked.size))}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       ) : null}
 

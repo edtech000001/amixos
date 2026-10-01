@@ -113,6 +113,7 @@ import { normalizeImageFile } from '@/lib/imageFile';
 import { usePasteImage } from '@/lib/usePasteImage';
 import { PasteHint } from '@/components/ui/PasteHint';
 import { BillThroughSettingCard } from '@/components/settings/BillThroughSettingCard';
+import { AiConsentCard } from '@/components/settings/AiConsentCard';
 import { Tooltip } from '@amixos/shared/ui/Tooltip';
 import {
   activePlanKey,
@@ -3421,6 +3422,9 @@ export default function AjustesPage() {
 
               {/* Language */}
               <LanguageCard />
+
+              {/* Ami AI-sharing consent (App Store 5.1.2(i)) — Ami businesses only. */}
+              <AiConsentCard />
 
               {/* Password */}
               <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-6">

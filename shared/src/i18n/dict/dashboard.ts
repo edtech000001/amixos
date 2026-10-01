@@ -739,6 +739,19 @@ export type DashboardDict = {
       importContactsBtn: string;
       importContactsHint: string;
       contactsPermissionDenied: string;
+      /** Two ways in (App Store 5.1.1(iii) prefers the picker): one contact
+       *  via the system picker (no permission on iOS), or several via full
+       *  access + an in-app checklist. */
+      pickOneContactBtn: string;
+      pickOneContactHint: string;
+      pickManyContactsBtn: string;
+      pickManyContactsHint: string;
+      contactsListTitle: string;
+      contactsSearch: string;
+      contactsSelectAll: string;
+      contactsClear: string;
+      contactsImportSelected: string;
+      contactsEmpty: string;
       contactsImportedCount: string;
     };
   };
@@ -2989,6 +3002,21 @@ export type DashboardDict = {
   assistant: {
     title: string;
     subtitle: string;
+    /** Explicit consent before Ami sends data to third-party AI (5.1.2(i)). */
+    consent: {
+      title: string;
+      intro: string;
+      sends: string;
+      providers: string;
+      notTraining: string;
+      changeLater: string;
+      allow: string;
+      decline: string;
+      settingTitle: string;
+      settingHint: string;
+      settingOn: string;
+      settingOff: string;
+    };
     placeholder: string;
     send: string;
     listening: string;
@@ -4066,6 +4094,16 @@ export const dashboard: Record<Locale, DashboardDict> = {
         importContactsBtn: 'Importar desde contactos',
         importContactsHint: 'Elige contactos del teléfono',
         contactsPermissionDenied: 'Permiso denegado. Activa el acceso a contactos en Ajustes para usar esta función.',
+        pickOneContactBtn: 'Elegir un contacto',
+        pickOneContactHint: 'Sin dar acceso a todos tus contactos',
+        pickManyContactsBtn: 'Importar varios contactos',
+        pickManyContactsHint: 'Pide acceso a tus contactos para elegir varios',
+        contactsListTitle: 'Elige los contactos',
+        contactsSearch: 'Buscar contacto…',
+        contactsSelectAll: 'Seleccionar todos',
+        contactsClear: 'Quitar selección',
+        contactsImportSelected: 'Importar {{count}}',
+        contactsEmpty: 'No hay contactos que coincidan.',
         contactsImportedCount: '{{count}} contacto(s) importado(s)',
       },
     },
@@ -6264,6 +6302,20 @@ export const dashboard: Record<Locale, DashboardDict> = {
     assistant: {
       title: 'Ami',
       subtitle: 'Tu asistente de negocio',
+      consent: {
+        title: 'Antes de usar a Ami',
+        intro: 'Ami es un asistente de inteligencia artificial. Para responderte, necesita compartir información con servicios de IA de terceros.',
+        sends: 'Se envía tu pregunta y la información de tu negocio necesaria para responder: clientes, trabajos, empleados y horas trabajadas.',
+        providers: 'Las respuestas las genera Anthropic (Claude). Si Ami te responde en voz alta, el texto se convierte en audio con Google.',
+        notTraining: 'Tu información no se usa para entrenar modelos de IA.',
+        changeLater: 'Puedes cambiar esto cuando quieras en Ajustes → Cuenta.',
+        allow: 'Permitir y continuar',
+        decline: 'Ahora no',
+        settingTitle: 'Ami (asistente de IA)',
+        settingHint: 'Permite que Ami comparta tu pregunta y la información necesaria de tu negocio con Anthropic (y con Google para la voz) para responderte.',
+        settingOn: 'Permitido',
+        settingOff: 'No permitido',
+      },
       placeholder: 'Escríbele a Ami…',
       send: 'Enviar',
       editingHint: 'Editando tu mensaje — se responderá de nuevo desde aquí',
@@ -7375,6 +7427,16 @@ export const dashboard: Record<Locale, DashboardDict> = {
         importContactsBtn: 'Import from contacts',
         importContactsHint: 'Pick from your phone contacts',
         contactsPermissionDenied: 'Permission denied. Enable contacts access in Settings to use this.',
+        pickOneContactBtn: 'Choose a contact',
+        pickOneContactHint: 'Without giving access to all your contacts',
+        pickManyContactsBtn: 'Import several contacts',
+        pickManyContactsHint: 'Asks for access to your contacts so you can pick several',
+        contactsListTitle: 'Choose contacts',
+        contactsSearch: 'Search contacts…',
+        contactsSelectAll: 'Select all',
+        contactsClear: 'Clear selection',
+        contactsImportSelected: 'Import {{count}}',
+        contactsEmpty: 'No matching contacts.',
         contactsImportedCount: '{{count}} contact(s) imported',
       },
     },
@@ -9573,6 +9635,20 @@ export const dashboard: Record<Locale, DashboardDict> = {
     assistant: {
       title: 'Ami',
       subtitle: 'Your business assistant',
+      consent: {
+        title: 'Before you use Ami',
+        intro: 'Ami is an artificial intelligence assistant. To answer you, it needs to share information with third-party AI services.',
+        sends: 'It sends your question and the business information needed to answer it: clients, jobs, employees and hours worked.',
+        providers: 'Answers are generated by Anthropic (Claude). If Ami answers out loud, the text is turned into audio by Google.',
+        notTraining: 'Your information is not used to train AI models.',
+        changeLater: 'You can change this any time in Settings → Account.',
+        allow: 'Allow and continue',
+        decline: 'Not now',
+        settingTitle: 'Ami (AI assistant)',
+        settingHint: 'Lets Ami share your question and the business information it needs with Anthropic (and Google for the voice) to answer you.',
+        settingOn: 'Allowed',
+        settingOff: 'Not allowed',
+      },
       placeholder: 'Message Ami…',
       send: 'Send',
       editingHint: 'Editing your message — Ami will reply again from here',
