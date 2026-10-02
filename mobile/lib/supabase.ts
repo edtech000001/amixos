@@ -2,6 +2,7 @@ import 'react-native-url-polyfill/auto';
 import { AppState, Platform } from 'react-native';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { impersonatingFetch } from '@amixos/shared/lib/impersonation';
+import { withRequestTimeout } from '@amixos/shared/lib/fetchTimeout';
 import { SecureSessionStorage } from './secureSessionStore';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -44,7 +45,10 @@ export function createSupabaseClient(): SupabaseClient {
     },
     // While "Ver como" is active, rewrites Authorization on data requests so
     // RLS runs as the impersonated member. No-op otherwise.
-    global: { fetch: impersonatingFetch },
+    // Wrapped in a timeout so a request that HANGS rejects instead of leaving
+    // a screen's `finally { setLoading(false) }` unreachable forever — the
+    // endless-skeleton bug described in fetchTimeout.ts and below.
+    global: { fetch: withRequestTimeout(impersonatingFetch) },
   });
   // Supabase's RN guidance: pause the auto-refresh timer while backgrounded
   // and resume on foreground. Without this, a refresh can fire mid-suspend

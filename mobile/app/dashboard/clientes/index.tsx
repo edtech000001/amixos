@@ -113,6 +113,12 @@ export default function ClientesTab() {
   }, [clientLocations, activeLocationId]);
   const excludeIdsRef = useRef<string[]>([]);
   useEffect(() => { excludeIdsRef.current = excludeIds; }, [excludeIds]);
+  // Compare the exclusion set BY VALUE. loadMeta() refetches client locations on
+  // every focus and hands back a fresh array, which gave `excludeIds` a new
+  // identity each time and re-ran the query below — so every focus fired two
+  // identical queries (this effect plus the focus effect's reRun), doubling the
+  // requests and the exposure to a stalled one.
+  const excludeKey = excludeIds.join(',');
 
   const loadMeta = async () => {
     if (!business) return;
@@ -218,10 +224,11 @@ export default function ClientesTab() {
     if (paramsRef.current) void runQuery(paramsRef.current, loadAllRef.current);
   };
   // Re-run when the branch scope changes (locations load, or branch switch).
+  // Keyed on the joined ids, not the array, so a same-contents refetch is a no-op.
   useEffect(() => {
     if (paramsRef.current) void runQuery(paramsRef.current, loadAllRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [excludeIds]);
+  }, [excludeKey]);
 
   const handleFiltersChange = (f: { search: string; groupBy: string }) => {
     if (!business) return;

@@ -29,6 +29,10 @@ export function usePersistedSearch(
   // Tracks which key the current value was hydrated for, so we only persist
   // once the saved value has been restored (avoids writing '' over a real one).
   const hydratedForKey = useRef<string | null>(null);
+  // Mirror of `value` readable from the restore callback, so it can tell
+  // whether the saved value would actually change anything.
+  const valueRef = useRef('');
+  useEffect(() => { valueRef.current = value; }, [value]);
 
   useEffect(() => {
     if (!key) {
@@ -39,9 +43,16 @@ export function usePersistedSearch(
     hydratedForKey.current = null;
     void kvGet(key).then((saved) => {
       if (!active) return;
-      restoringRef.current = true;
-      setValue(saved ?? '');
       hydratedForKey.current = key;
+      const next = saved ?? '';
+      // Arming restoringRef unconditionally used to strand it: when the saved
+      // value equals the current one (both '' — the usual case for a list with
+      // no saved search) React bails out of the re-render, the [value] effect
+      // never runs, and the flag stayed true until the user's NEXT keystroke,
+      // which then skipped the debounce and fired a query per character.
+      if (next === valueRef.current) return;
+      restoringRef.current = true;
+      setValue(next);
     });
     return () => {
       active = false;
