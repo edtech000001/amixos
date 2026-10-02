@@ -104,16 +104,17 @@ function DashboardTabs() {
   const sb = t.dashboard.sidebar;
   const { currentRole, user, impersonating, business } = useApp();
   const insets = useSafeAreaInsets();
-  // Load the user's dock-app selection (synced via profiles.dock_apps) once.
-  // Every role-eligible app stays REGISTERED as a tab below (href fixed by role
-  // only) — which apps actually appear in the dock is decided visually by
-  // AnimatedDock from the store. So toggling apps in Navegación is just a dock
-  // re-render, not a tab-navigator reconfigure (which felt sluggish).
+  // Load this user's dock-app selection for the CURRENT business (user_dock_apps,
+  // migration 245) — re-runs on every business switch, since each business has
+  // its own pins. Every role-eligible app stays REGISTERED as a tab below (href
+  // fixed by role only) — which apps actually appear in the dock is decided
+  // visually by AnimatedDock from the store. So toggling apps in Navegación is
+  // just a dock re-render, not a tab-navigator reconfigure (which felt sluggish).
   const supabase = useMemo(() => createSupabaseClient(), []);
   const loadDock = useDockStore(s => s.load);
   useEffect(() => {
-    if (user?.id) loadDock(supabase, user.id);
-  }, [user?.id, supabase, loadDock]);
+    if (user?.id && business?.id) loadDock(supabase, user.id, business.id);
+  }, [user?.id, business?.id, supabase, loadDock]);
 
   // Offline write queue: watch connectivity and drain the outbox on reconnect.
   // Both are idempotent, so mounting once here is enough for the whole app.

@@ -22,7 +22,7 @@ export default function NavegacionSettings() {
   const { t: full } = useLang();
   const sb = full.dashboard.sidebar;
   const t = full.dashboard.settings.navigation;
-  const { user } = useApp();
+  const { user, business } = useApp();
   const supabase = useMemo(() => createSupabaseClient(), []);
   const save = useDockStore(s => s.save);
   const [msg, setMsg] = useState<string | null>(null);
@@ -45,9 +45,11 @@ export default function NavegacionSettings() {
   );
   const maxLabel = String(MAX_DOCK_MIDDLE);
 
+  // Pins are per user PER BUSINESS (migration 245) — saving here only ever
+  // changes the dock for the business that's currently open.
   const persist = (next: string[]) => {
-    if (!user?.id) return;
-    save(supabase, user.id, next).then(({ error }) => { if (error) setMsg(t.savedError); });
+    if (!user?.id || !business?.id) return;
+    save(supabase, user.id, business.id, next).then(({ error }) => { if (error) setMsg(t.savedError); });
   };
 
   const onReorder = (items: { id: string }[]) => {

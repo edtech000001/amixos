@@ -2,7 +2,8 @@
 //
 // The dock always shows Inicio (first) and Más (last). Between them the user
 // picks from the apps below — up to MAX_DOCK_MIDDLE (so 6 tabs total), at least
-// MIN_DOCK_MIDDLE. The choice is stored per user in profiles.dock_apps and
+// MIN_DOCK_MIDDLE. The choice is stored per user PER BUSINESS in
+// user_dock_apps (migration 245) and
 // applied in app/dashboard/_layout.tsx by flipping each route's `href`.
 
 import { ClipboardList, Users, FileText, Calendar, UsersRound, BarChart3, type LucideIcon } from 'lucide-react-native';
@@ -15,7 +16,7 @@ import type { Role } from '@amixos/shared/lib/permissions';
 export type DockLabelKey = 'trabajos' | 'clientes' | 'facturas' | 'calendario' | 'empleados' | 'reportes';
 
 export interface DockApp {
-  /** Stable key persisted in profiles.dock_apps. */
+  /** Stable key persisted in user_dock_apps.keys. */
   key: string;
   /** expo-router Tabs.Screen route name. */
   routeName: string;
