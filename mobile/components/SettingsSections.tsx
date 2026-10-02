@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { View, Text, Pressable, Alert, TextInput, Image, Modal as RNModal, Linking, Platform } from 'react-native';
 import { WEB_APP_URL } from '@/lib/webUrl';
 import * as ImagePicker from 'expo-image-picker';
@@ -3451,7 +3451,11 @@ function FieldTemplateModal({
 }
 
 // ─── Account section ──────────────────────────────────────────────────────
-export function AccountSection() {
+/** `children` render between the password card and the danger zone — the page
+ *  composes what goes there (today: the Ami consent card). Anything passed as a
+ *  plain sibling AFTER <AccountSection /> would land below "Cerrar sesión", which
+ *  is the wrong place for an ordinary setting. */
+export function AccountSection({ children }: { children?: ReactNode }) {
   const supabase = createSupabaseClient();
   const router = useRouter();
   const { user, currentRole } = useApp();
@@ -3917,6 +3921,8 @@ export function AccountSection() {
         </>
         )}
       </View>
+
+      {children}
 
       {/* Account + business deletion (App Store 5.1.1(v)). */}
 

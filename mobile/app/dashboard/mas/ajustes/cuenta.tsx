@@ -7,8 +7,9 @@ export default function CuentaPage() {
   const { t } = useLang();
   return (
     <SettingsPageWrapper title={t.dashboard.settings.tabs.cuenta}>
-      <AccountSection />
-      <AiConsentSection />
+      <AccountSection>
+        <AiConsentSection />
+      </AccountSection>
     </SettingsPageWrapper>
   );
 }
