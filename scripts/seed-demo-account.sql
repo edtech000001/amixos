@@ -71,10 +71,28 @@ values
   ('b9e348d6-3ea6-42dd-9697-0211b6b376b8','Rosa','García','(512) 555-0204','rosa.garcia@example.com','manager','hourly',30.00,true,'2022-06-14','Austin','TX',true,false),
   ('b9e348d6-3ea6-42dd-9697-0211b6b376b8','Hugo','Beltrán','(512) 555-0205','hugo.beltran@example.com','field','hourly',21.00,true,'2025-07-02','Pflugerville','TX',true,true);
 
+-- ── Pay period alignment ───────────────────────────────────────────────────
+-- Anchor the WEEKLY period so it started 4 days ago, i.e. we are mid-period.
+-- For 'weekly', getPayrollPeriod (shared/src/lib/payroll.ts) treats the anchor
+-- as a period START and steps in 7-day windows:
+--     start = anchor + floor(days_since_anchor / 7) * 7,  end = start + 6
+-- Left unanchored, the period could roll over the day before a screenshot and
+-- the Inicio payroll card would show ONE day of work — which is exactly what
+-- happened: "$814 · 34 Horas" against $11k of revenue, a 7% labor rate that
+-- reads as broken for a labor business.
+update public.businesses
+   set payroll_frequency   = 'weekly',
+       payroll_anchor_date = (current_date - 4)
+ where id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
+
 -- ── Hours ──────────────────────────────────────────────────────────────────
--- Today's hours (so the CURRENT pay period, Inicio's payroll card and Team →
--- Hours are never empty, whatever day this runs) plus the previous four days
--- for history. Re-running resets them (deleted above with the employees).
+-- Ten days, which the anchor above splits into two full pay periods:
+--   days 0-4  = the CURRENT period  → 192.5 h, ~$4,747
+--   days 5-9  = the PREVIOUS period → 175.0 h, ~$4,305   (so the card reads +10%)
+-- ~42% of revenue, which is what a labor business actually looks like.
+-- Miguel lands on 41 h in the current period on purpose: it crosses the 40 h
+-- threshold, so overtime is exercised rather than merely configured.
+--
 -- clock_in/clock_out are set explicitly: clock_in defaults to now() and an
 -- entry with no clock_out counts as "clocked in" — Inicio showed 25 people
 -- "Active now".
@@ -83,11 +101,18 @@ select 'b9e348d6-3ea6-42dd-9697-0211b6b376b8', e.id, e.first_name || ' ' || e.la
        (current_date - d.n) + time '08:00', (current_date - d.n) + time '08:00' + d.h * interval '1 hour'
 from public.employees e
 join (values
+  -- current period
   ('Miguel', 0, 8.0), ('Pedro', 0, 8.0), ('Hugo', 0, 7.5), ('Rosa', 0, 6.0), ('Ana', 0, 4.0),
   ('Miguel', 1, 8.0), ('Pedro', 1, 8.5), ('Hugo', 1, 8.0), ('Rosa', 1, 8.0), ('Ana', 1, 8.0),
   ('Miguel', 2, 9.0), ('Pedro', 2, 8.0), ('Hugo', 2, 8.0), ('Rosa', 2, 8.0), ('Ana', 2, 8.0),
   ('Miguel', 3, 8.0), ('Pedro', 3, 7.0), ('Hugo', 3, 8.0), ('Rosa', 3, 8.0), ('Ana', 3, 8.0),
-  ('Miguel', 4, 8.0), ('Pedro', 4, 8.0), ('Hugo', 4, 6.5), ('Rosa', 4, 8.0), ('Ana', 4, 8.0)
+  ('Miguel', 4, 8.0), ('Pedro', 4, 8.0), ('Hugo', 4, 6.5), ('Rosa', 4, 8.0), ('Ana', 4, 8.0),
+  -- previous period
+  ('Miguel', 5, 8.0), ('Pedro', 5, 8.0), ('Hugo', 5, 8.0), ('Rosa', 5, 8.0), ('Ana', 5, 8.0),
+  ('Miguel', 6, 8.0), ('Pedro', 6, 8.0), ('Hugo', 6, 8.0), ('Rosa', 6, 8.0), ('Ana', 6, 6.0),
+  ('Miguel', 7, 8.5), ('Pedro', 7, 8.0), ('Hugo', 7, 8.0), ('Rosa', 7, 7.0), ('Ana', 7, 8.0),
+  ('Miguel', 8, 8.0), ('Pedro', 8, 7.5), ('Hugo', 8, 8.0), ('Rosa', 8, 8.0), ('Ana', 8, 8.0),
+  ('Miguel', 9, 4.0), ('Pedro', 9, 4.0), ('Hugo', 9, 4.0), ('Rosa', 9, 2.0), ('Ana', 9, 4.0)
 ) as d(first, n, h) on d.first = e.first_name
 where e.business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8';
 
@@ -224,6 +249,66 @@ from (values
    '[{"description":"Perimeter planters","qty":1,"rate":2400},{"description":"Mulch","qty":120,"rate":7.5}]',
    3300.00, null, null)
 ) as v(cli, num, status, issued, due, items, sub, note, paid)
+join public.clients c
+  on c.business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8'
+ and c.last_name = v.cli;
+
+-- ── Revenue history (INV-3xxx) ─────────────────────────────────────────────
+-- Paid invoices going back to January, so Inicio's earnings card describes a
+-- business worth running. Before this, the card read "$585 · -75% vs mes
+-- anterior · Total 2026: $2,944" — two lonely bars and a collapse, which is a
+-- poor thing to lead an App Store screenshot with.
+--
+-- Only `status='paid'` and `paid_at` feed that card (dashboard_stats,
+-- migrations 225/240: sum(total_amount - passthrough_amount) where paid, over
+-- paid_at). issue_date/due_date are cosmetic, so invoices are ISSUED a couple
+-- of weeks before they are PAID — how receivables actually behave, and it
+-- avoids a wall of same-day rows in the Facturas list.
+--
+-- Result: ~$4.2k in January rising to ~$11.2k this month, +40% on last month,
+-- ~$65.8k for the year. The current month is highest on purpose.
+--
+-- Amounts climb gently rather than jumping, because a tidy ramp reads as a
+-- growing business where a random walk reads as seeded data.
+insert into public.invoices
+  (business_id, client_id, invoice_number, status, language, issue_date, due_date,
+   line_items, subtotal_amount, tax_rate, tax_amount, total_amount, notes, paid_at)
+select 'b9e348d6-3ea6-42dd-9697-0211b6b376b8', c.id, v.num, 'paid', 'en',
+       (date_trunc('month', current_date) - make_interval(months => v.mo_ago::int) + interval '3 days')::date,
+       (date_trunc('month', current_date) - make_interval(months => v.mo_ago::int) + interval '18 days')::date,
+       v.items::jsonb, v.sub, 8.25,
+       round(v.sub * 0.0825, 2), round(v.sub * 1.0825, 2), null,
+       date_trunc('month', now()) - make_interval(months => v.mo_ago::int)
+         + make_interval(days => v.pay_day::int, hours => v.pay_hour::int)
+from (values
+  -- THIS MONTH — issued across the last few weeks, cleared on the 1st/2nd.
+  -- The hours offset matters: paid_at is UTC, and a bare midnight would fall
+  -- into the PREVIOUS month once the dashboard converts to a US timezone.
+  ('INV-3101','Ramírez', 0, 0,  9, '[{"description":"Monthly maintenance — September","qty":4,"rate":385},{"description":"Hedge trimming","qty":6,"rate":65}]', 1930.00),
+  ('INV-3102','Mendoza', 0, 0, 11, '[{"description":"St. Augustine sod installation","qty":1800,"rate":1.35},{"description":"Site preparation","qty":10,"rate":58}]', 3010.00),
+  ('INV-3103','Navarro', 0, 1, 14, '[{"description":"Irrigation system — back zone","qty":1,"rate":2240},{"description":"Smart controller","qty":1,"rate":310}]', 2550.00),
+  ('INV-3104','Herrera', 0, 0, 10, '[{"description":"Seasonal cleanup","qty":8,"rate":95},{"description":"Debris removal","qty":1,"rate":240}]', 1000.00),
+  ('INV-3105','Vega',    0, 1, 15, '[{"description":"Cedar mulch","qty":140,"rate":7.25},{"description":"Mulch installation","qty":6,"rate":55}]', 1345.00),
+  -- JANUARY → LAST MONTH
+  ('INV-3201','Ramírez', 9, 14, 10, '[{"description":"Monthly maintenance — January","qty":4,"rate":385},{"description":"Winter pruning","qty":5,"rate":78}]', 1930.00),
+  ('INV-3202','Mendoza', 9, 25, 10, '[{"description":"Irrigation repair","qty":1,"rate":1950}]', 1950.00),
+  ('INV-3203','Navarro', 8, 12, 10, '[{"description":"Monthly maintenance — February","qty":4,"rate":385},{"description":"Fertilization","qty":1,"rate":420}]', 1960.00),
+  ('INV-3204','Ramírez', 8, 24, 10, '[{"description":"Front garden design","qty":1,"rate":2290}]', 2290.00),
+  ('INV-3205','Mendoza', 7, 10, 10, '[{"description":"Monthly maintenance — March","qty":4,"rate":420},{"description":"Seasonal plants","qty":1,"rate":560}]', 2240.00),
+  ('INV-3206','Navarro', 7, 22, 10, '[{"description":"Sod installation","qty":1600,"rate":1.72}]', 2752.00),
+  ('INV-3207','Ramírez', 6, 11, 10, '[{"description":"Monthly maintenance — April","qty":4,"rate":420},{"description":"Weed control","qty":3,"rate":145}]', 2115.00),
+  ('INV-3208','Mendoza', 6, 23, 10, '[{"description":"Raised planters","qty":4,"rate":495},{"description":"Topsoil","qty":12,"rate":48}]', 2556.00),
+  ('INV-3209','Navarro', 5, 13, 10, '[{"description":"Monthly maintenance — May","qty":4,"rate":450},{"description":"Tree pruning","qty":7,"rate":120}]', 2640.00),
+  ('INV-3210','Ramírez', 5, 26, 10, '[{"description":"Drip irrigation system","qty":1,"rate":3140}]', 3140.00),
+  ('INV-3211','Mendoza', 4, 12, 10, '[{"description":"Monthly maintenance — June","qty":4,"rate":450},{"description":"Cedar mulch","qty":160,"rate":7.25}]', 2960.00),
+  ('INV-3212','Navarro', 4, 24, 10, '[{"description":"Perimeter fencing","qty":120,"rate":28}]', 3360.00),
+  ('INV-3213','Ramírez', 3, 10, 10, '[{"description":"Monthly maintenance — July","qty":4,"rate":450},{"description":"Emergency watering","qty":1,"rate":680}]', 2480.00),
+  ('INV-3214','Mendoza', 3, 25, 10, '[{"description":"Landscaping — back patio","qty":1,"rate":3890}]', 3890.00),
+  ('INV-3215','Navarro', 2, 11, 10, '[{"description":"Monthly maintenance — August","qty":4,"rate":485},{"description":"Hedge trimming","qty":8,"rate":65}]', 2460.00),
+  ('INV-3216','Ramírez', 2, 23, 10, '[{"description":"Exterior lighting installation","qty":1,"rate":4250}]', 4250.00),
+  ('INV-3217','Mendoza', 1, 9,  10, '[{"description":"Monthly maintenance — September","qty":4,"rate":485},{"description":"Gutter cleaning","qty":1,"rate":390}]', 2330.00),
+  ('INV-3218','Navarro', 1, 21, 10, '[{"description":"Front garden renovation","qty":1,"rate":2890}]', 2890.00)
+) as v(num, cli, mo_ago, pay_day, pay_hour, items, sub)
 join public.clients c
   on c.business_id = 'b9e348d6-3ea6-42dd-9697-0211b6b376b8'
  and c.last_name = v.cli;

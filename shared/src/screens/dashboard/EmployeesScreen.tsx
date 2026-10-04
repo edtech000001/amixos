@@ -154,11 +154,12 @@ export function EmployeesScreen({
       return { ...prev, [fieldKey]: cur.includes(v) ? cur.filter(x => x !== v) : [...cur, v] };
     });
 
-  const ROLES: Record<string, string> = {
-    owner: t.roles.owner,
-    manager: t.roles.manager,
-    worker: t.roles.worker,
-  };
+  // roleLabel() covers EVERY system role plus custom ones (business_roles).
+  // A local map here listed only owner/manager/worker, so 'field' and 'office'
+  // fell through to the raw English key and rendered untranslated next to
+  // correctly-localised siblings — "Gerente" above "field" in a Spanish UI.
+  // CLAUDE.md calls this out: never index a role map directly with a member's
+  // role.
   const PAY_TYPES: Record<string, string> = {
     hourly: t.payTypes.hourly,
     salary: t.payTypes.salary,
@@ -168,7 +169,7 @@ export function EmployeesScreen({
   const filterFields = useMemo<FilterField[]>(() => {
     const id = (v: string) => v;
     const fields: FilterField[] = [
-      { key: 'role', label: t.filter.role, get: e => e.role, labelOf: v => ROLES[v] ?? v },
+      { key: 'role', label: t.filter.role, get: e => e.role, labelOf: v => roleLabel(v, lang) },
       { key: 'access', label: t.filter.access, get: e => (e.access?.kind === 'active' ? 'yes' : e.access?.kind === 'invited' ? 'invited' : 'no'), labelOf: v => (v === 'yes' ? t.filter.accessYes : v === 'invited' ? t.filter.accessInvited : t.filter.accessNo) },
       { key: 'payType', label: t.filter.payType, get: e => e.payType, labelOf: v => PAY_TYPES[v] ?? v },
       { key: 'overtime', label: t.filter.overtime, get: e => (e.overtimeEligible ? 'yes' : 'no'), labelOf: v => (v === 'yes' ? t.filter.yes : t.filter.no) },
@@ -431,7 +432,7 @@ export function EmployeesScreen({
             </View>
           ) : null}
           <Text className="text-xs text-faint mt-1">
-            {ROLES[e.role] ?? e.role} · {PAY_TYPES[e.payType]} ${Number(e.payRate ?? 0).toFixed(2)}
+            {roleLabel(e.role, lang)} · {PAY_TYPES[e.payType]} ${Number(e.payRate ?? 0).toFixed(2)}
             {e.phone ? ` · ${e.phone}` : ''}
           </Text>
         </View>
