@@ -1685,6 +1685,12 @@ export function DashboardHomeScreen({
       {/* In-place drag-and-drop: the real widgets reorder right in the grid
           (same as web). sortEnabled toggles dragging without remounting. */}
       <Sortable.Flex
+        // Rebuilt whenever the card set or any card's SIZE changes (switching
+        // business swaps in that business's saved layout). The library caches
+        // each item's measured size by key, so the same card going lg → sm
+        // kept its old height and was drawn under the next card. Sorted, so a
+        // drag-to-reorder (order only) doesn't rebuild the grid.
+        key={visibleIds.map(id => `${id}:${sizes[id] ?? defaultWidgetSize(id)}`).sort().join(',')}
         sortEnabled={editing}
         flexDirection="row"
         flexWrap="wrap"

@@ -790,6 +790,11 @@ export function PayrollScreen({
               </Pressable>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled">
+
+            {/* Tap any blank part of the sheet to close the keyboard — the
+                number pad has no return key. Inside the ScrollView so drags
+                still scroll (see CLAUDE.md bottom-sheet rule). */}
+            <Pressable onPress={Keyboard.dismiss} accessible={false}>
               <Text className="text-sm font-semibold text-ink mb-2">{t.manualPeriodLabel}</Text>
               <Pressable
                 onPress={() => setManualPeriodPickerOpen(true)}
@@ -853,6 +858,7 @@ export function PayrollScreen({
                 className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
                 <Text className="text-sm font-semibold text-white">{t.confirmBtn}</Text>
               </Pressable>
+            </Pressable>
             </ScrollView>
           </View>
 
@@ -1189,6 +1195,11 @@ export function PayrollScreen({
                   />
           <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+
+            {/* Tap any blank part of the sheet to close the keyboard — the
+                number pad has no return key. Inside the ScrollView so drags
+                still scroll (see CLAUDE.md bottom-sheet rule). */}
+            <Pressable onPress={Keyboard.dismiss} accessible={false}>
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>
@@ -1314,6 +1325,7 @@ export function PayrollScreen({
 
             <Pressable onPress={confirmPay} disabled={busy || modalTotal <= 0} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
               <Text className="text-sm font-semibold text-white">{t.confirmBtn}</Text>
+            </Pressable>
             </Pressable>
             </ScrollView>
           </View>
