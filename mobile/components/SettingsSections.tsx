@@ -4,6 +4,8 @@ import { WEB_APP_URL } from '@/lib/webUrl';
 import * as ImagePicker from 'expo-image-picker';
 import {
   Building2,
+  Check,
+  Globe,
   User as UserIcon,
   Lock,
   LogOut,
@@ -3451,6 +3453,75 @@ function FieldTemplateModal({
 }
 
 // ─── Account section ──────────────────────────────────────────────────────
+/**
+ * Interface language. Mobile had NO in-app switcher at all — the only way to
+ * change language was iOS Settings, which changes it for every app on the
+ * phone. That also meant setLocale never ran, so syncUserLocale never ran, so
+ * a mobile-only user's locale was never written to their profile and Supabase
+ * sent their auth emails in the wrong language (LangProvider documents this).
+ *
+ * Precedence is deliberate: picking here writes to AsyncStorage, which wins
+ * over the device locale on every later launch. Anyone who never touches it
+ * keeps following their phone. Storage is per device, so one person can run
+ * the app in English while their crew runs it in Spanish on the same business.
+ *
+ * No save button — setLocale applies immediately and persists itself.
+ */
+export function LanguageSection() {
+  const { t: full, locale, setLocale, locales, labels, followingDevice, followDevice } = useLang();
+  const c = useThemeColors();
+  const t = full.dashboard.settings.language;
+
+  // Automatic first, then one row per locale. A radio list rather than pills:
+  // three options don't fit side by side, and it stays readable if more
+  // languages are added.
+  const rows: Array<{ key: string; label: string; hint?: string; active: boolean; onPress: () => void }> = [
+    ...(followDevice
+      ? [{
+          key: 'auto',
+          label: t.autoOption,
+          hint: t.autoHint,
+          active: !!followingDevice,
+          onPress: followDevice,
+        }]
+      : []),
+    ...locales.map(l => ({
+      key: l,
+      label: labels[l],
+      active: !followingDevice && l === locale,
+      onPress: () => setLocale(l),
+    })),
+  ];
+
+  return (
+    <View className="gap-3">
+      <SectionHeader
+        icon={<Globe size={18} color={c.primary} />}
+        title={t.heading}
+        subtitle={t.subtitle}
+      />
+      <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
+        {rows.map((r, i) => (
+          <Pressable
+            key={r.key}
+            onPress={r.onPress}
+            className={`flex-row items-center px-4 py-3.5 active:bg-border-soft ${
+              i > 0 ? 'border-t border-border-soft' : ''
+            }`}
+          >
+            <View className="flex-1">
+              <Text className="text-sm text-ink">{r.label}</Text>
+              {r.hint ? <Text className="text-xs text-faint mt-0.5">{r.hint}</Text> : null}
+            </View>
+            {r.active ? <Check size={18} color={c.primary} /> : null}
+          </Pressable>
+        ))}
+      </View>
+      <Text className="text-xs text-faint">{t.savedNote}</Text>
+    </View>
+  );
+}
+
 /** `children` render between the password card and the danger zone — the page
  *  composes what goes there (today: the Ami consent card). Anything passed as a
  *  plain sibling AFTER <AccountSection /> would land below "Cerrar sesión", which

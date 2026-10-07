@@ -2108,6 +2108,9 @@ export type DashboardDict = {
       subtitle: string;
       label: string;
       savedNote: string;
+      /** "Follow the phone's language" option — see LanguageSection. */
+      autoOption: string;
+      autoHint: string;
     };
     password: {
       heading: string;
@@ -5448,6 +5451,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         subtitle: 'Elige el idioma para mostrar la interfaz.',
         label: 'Idioma de la interfaz',
         savedNote: 'Los cambios se aplican al instante.',
+        autoOption: 'Automático',
+        autoHint: 'Sigue el idioma del teléfono',
       },
       password: {
         heading: 'Cambiar contraseña',
@@ -8784,6 +8789,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         subtitle: 'Choose your interface display language.',
         label: 'Interface language',
         savedNote: 'Changes apply instantly.',
+        autoOption: 'Automatic',
+        autoHint: "Follows your phone's language",
       },
       password: {
         heading: 'Change password',

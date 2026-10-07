@@ -20,6 +20,14 @@ export type LangContextValue = {
   t: Dictionary;
   locales: readonly Locale[];
   labels: Record<Locale, string>;
+  /** True when no explicit choice is stored, so the locale tracks the device.
+   *  Optional: only platforms with a meaningful "device language" supply it
+   *  (mobile). Undefined on web, where the picker simply omits the option. */
+  followingDevice?: boolean;
+  /** Forget the explicit choice and go back to tracking the device language.
+   *  Without this, picking a language once pins it forever — changing the
+   *  phone's language would no longer affect the app. */
+  followDevice?: () => void;
 };
 
 // Default value: the dictionary for DEFAULT_LOCALE, no-op setters. This lets
@@ -32,6 +40,8 @@ const defaultValue: LangContextValue = {
   t: dictionaries[DEFAULT_LOCALE],
   locales: LOCALES,
   labels: LOCALE_LABELS,
+  followingDevice: false,
+  followDevice: undefined,
 };
 
 export const LangContext = createContext<LangContextValue>(defaultValue);

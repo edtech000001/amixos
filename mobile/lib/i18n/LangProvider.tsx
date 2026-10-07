@@ -64,11 +64,15 @@ interface LangProviderProps {
 export function LangProvider({ children }: LangProviderProps) {
   const [locale, setLocaleState] = useState<Locale>(DEFAULT_LOCALE);
   const [hydrated, setHydrated] = useState(false);
+  // No stored choice ⇒ the locale tracks the device. Surfaced so the settings
+  // picker can show "Automatic" as the ACTIVE option rather than guessing.
+  const [followingDevice, setFollowingDevice] = useState(true);
 
   useEffect(() => {
     AsyncStorage.getItem(LOCALE_STORAGE_KEY).then(stored => {
       if (isLocale(stored)) {
         setLocaleState(stored);
+        setFollowingDevice(false);
       } else {
         // First launch: seed from device locale so users see their language.
         setLocaleState(getDeviceLocale());
@@ -82,6 +86,7 @@ export function LangProvider({ children }: LangProviderProps) {
 
   const setLocale = useCallback((next: Locale) => {
     setLocaleState(next);
+    setFollowingDevice(false);
     AsyncStorage.setItem(LOCALE_STORAGE_KEY, next).catch(() => {
       // Persistence failure isn't fatal — choice persists for the session.
     });
@@ -89,6 +94,18 @@ export function LangProvider({ children }: LangProviderProps) {
     // language just chosen. This is what lets an existing OAuth user, who
     // never had a locale recorded, fix their emails by switching in Ajustes.
     void syncUserLocale(createSupabaseClient(), next);
+  }, []);
+
+  /** Drop the explicit choice so the app tracks the phone again. Without this
+   *  the picker is a one-way door: once a language is stored it wins on every
+   *  later launch and changing the phone's language does nothing. */
+  const followDevice = useCallback(() => {
+    const device = getDeviceLocale();
+    setLocaleState(device);
+    setFollowingDevice(true);
+    AsyncStorage.removeItem(LOCALE_STORAGE_KEY).catch(() => {});
+    // Keep the profile in step so auth emails follow the same language.
+    void syncUserLocale(createSupabaseClient(), device);
   }, []);
 
   const toggleLocale = useCallback(() => {
@@ -109,6 +126,8 @@ export function LangProvider({ children }: LangProviderProps) {
     t: dictionaries[locale],
     locales: LOCALES,
     labels: LOCALE_LABELS,
+    followingDevice,
+    followDevice,
   };
 
   return <LangContext.Provider value={value}>{children}</LangContext.Provider>;
