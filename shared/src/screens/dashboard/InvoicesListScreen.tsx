@@ -453,8 +453,19 @@ export function InvoicesListScreen({
       {/* Date-range filter now lives in a bottom sheet (DateRangeSheet at the
           screen root) for one-hand reach. */}
 
-      {/* Status tabs — multi-select chips; "all" is an icon reset. */}
-      <ChipScroll className="mb-4" contentContainerClassName="gap-1 pb-1">
+      {/* Status tabs — multi-select chips; "all" is an icon reset.
+         activeIndex reveals the selected chip: a filter restored with the
+         screen could sit past the right edge, leaving "0 encontradas" on
+         screen with the chip that explains it invisible. Child 0 is the
+         reset, so STATUS_KEYS are offset by one. */}
+      <ChipScroll
+        className="mb-4"
+        contentContainerClassName="gap-1 pb-1"
+        activeIndex={(() => {
+          const i = STATUS_KEYS.findIndex(k => statusSet.has(k));
+          return i === -1 ? null : i + 1;
+        })()}
+      >
         <Pressable
           onPress={() => setStatuses([])}
           accessibilityLabel={t.filters.all}

@@ -1119,7 +1119,17 @@ export function JobsListScreen({
         />
         {/* Date-range filter now lives in a bottom sheet (DateRangeSheet,
             rendered at the screen root) for one-hand reach. */}
-        <ChipScroll contentContainerClassName="gap-1 pb-1">
+        {/* activeIndex reveals the selected chip — same reason as the invoices
+           list: a filter can sit past the right edge, leaving "0 found" with
+           no visible cause. Child 0 is the "all" reset, so the status keys
+           are offset by one. */}
+        <ChipScroll
+          contentContainerClassName="gap-1 pb-1"
+          activeIndex={(() => {
+            const i = STATUS_TAB_KEYS.findIndex(k => tabSet.has(k));
+            return i === -1 ? null : i + 1;
+          })()}
+        >
           {/* "All" reset — an icon. Active (highlighted) when no status filter
              is applied; tapping it clears the selection back to all. */}
           <Pressable
