@@ -38,6 +38,8 @@ import {
   Navigation,
   MessageSquare,
   XCircle,
+  Play,
+  PauseCircle,
   Share2,
   X,
   Sparkles,
@@ -56,6 +58,7 @@ import { swrRead } from '@amixos/shared/lib/swrCache';
 import { Button } from '@amixos/shared/ui';
 import { delegateJob } from '@amixos/shared/lib/delegation';
 import { jobShortCode } from '@amixos/shared/lib/jobRef';
+import { canPauseStatus, fetchPauseLog, fetchPauseReasons, fetchPauseSummary, formatDuration, formatPauseSummary, logPauseEnd, logPauseStart, pausePatch, resumePatch, type PauseEpisode, type PauseReason, type PauseSummary } from '@amixos/shared/lib/jobPause';
 import { secureShareToken } from '@amixos/shared/lib/shareToken';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { insertInvoiceUnique, removeJobFromInvoice, placeholderQtyFor, fetchClientDraftInvoices, addJobsToInvoice, type ClientDraftInvoice } from '@amixos/shared/lib/invoicing';
@@ -74,6 +77,7 @@ import { JobDocumentsSection } from '@/components/JobDocumentsSection';
 import { SignaturePad } from '@/components/SignaturePad';
 import { fetchClientOwnEmails, resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
+import { AutocompleteInput } from '@amixos/shared/ui/AutocompleteInput';
 import { useAppHref, useSectionBase } from '@/lib/sectionNav';
 
 // Local-date helpers for the schedule sheet (avoid UTC parsing shifting the
@@ -139,6 +143,10 @@ interface Job {
   accepted_at: string | null;
   declined_at: string | null;
   cancelled_at: string | null;
+  paused_at: string | null;
+  paused_from: string | null;
+  pause_reason: string | null;
+  pause_note: string | null;
   scheduled_at: string | null;
   in_progress_at: string | null;
   completed_at: string | null;
@@ -1105,6 +1113,30 @@ export default function JobDetailRoute() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [business?.id]);
 
+  // Pause history (migration 247) — shown on the banner so a job that keeps
+  // stalling is visible without opening a report.
+  useEffect(() => {
+    if (!id) return;
+    let active = true;
+    void fetchPauseSummary(supabase, id).then(r => { if (active) setPauseSummary(r); });
+    void fetchPauseLog(supabase, id).then(r => { if (active) setPauseLog(r); });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, job?.status]);
+
+  // Pause / resume state (migration 246). Must sit above BOTH early returns
+  // below — `if (loading)` and `if (!job)`. A hook after either only runs once
+  // the job has loaded, so the hook count changes between renders and React
+  // throws "Rendered more hooks than during the previous render". Same reason
+  // the autoprice effect above is pinned here.
+  const tp = t.pause;
+  const [pauseOpen, setPauseOpen] = useState(false);
+  const [pauseReason, setPauseReason] = useState('');
+  const [pauseNote, setPauseNote] = useState('');
+  const [reasonIdeas, setReasonIdeas] = useState<PauseReason[]>([]);
+  const [pauseSummary, setPauseSummary] = useState<PauseSummary | null>(null);
+  const [pauseLog, setPauseLog] = useState<PauseEpisode[]>([]);
+
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
@@ -1186,8 +1218,12 @@ export default function JobDetailRoute() {
       const raw = stepStampValue(s.key);
       return { ...s, stamp: raw ? formatStamp(raw, dateLoc) : null };
     });
-  const pipelineIdx = pipeline.findIndex((s) => s.key === job.status);
+  const pipelineIdx = pipeline.findIndex((s) => s.key === effectiveStatus);
   const isCancelled = job.status === 'cancelled' || job.status === 'declined';
+  const isPaused = job.status === 'paused';
+  // Paused suspends a status rather than being one — keep the strip pointing
+  // at where the job is held so it still reads as "stuck HERE".
+  const effectiveStatus = isPaused ? (job.paused_from ?? 'in_progress') : job.status;
   const canInvoice = (job.status === 'completed' || job.status === 'accepted') && !job.invoice_id && can.createInvoice(currentRole);
   // Status-pipeline write gate. Managers/owners with jobs.edit can always drive
   // the pipeline; a field worker assigned to THIS job may also advance it
@@ -1216,7 +1252,7 @@ export default function JobDetailRoute() {
   // sent without sending anything. For everything else it's a simple
   // status nudge to the next step in the pipeline.
   const nextStatusAction = (() => {
-    if (isCancelled) return null;
+    if (isCancelled || isPaused) return null;
     if (job.status === 'posible') return { label: t.statuses.scheduled, onPress: promptSchedule };
     if (job.status === 'proposal') {
       return { label: td.sendAction, onPress: sendProposalAction };
@@ -1242,11 +1278,50 @@ export default function JobDetailRoute() {
     });
   };
 
+  // ── Pause / resume: hooks live above the `if (!job)` early return ────────
+  const canPause = canChangeStatus && !isCancelled && !isPaused && canPauseStatus(job.status);
+
+  const openPauseSheet = () => {
+    setPauseReason('');
+    setPauseNote('');
+    setPauseOpen(true);
+    // Suggestions are a convenience — the sheet opens immediately and they
+    // fill in when they arrive.
+    if (business) void fetchPauseReasons(supabase, business.id).then(setReasonIdeas);
+  };
+
+  const confirmPause = () => {
+    if (!job || !business) return;
+    setPauseOpen(false);
+    const from = job.status;
+    void (async () => {
+      await updateStatus('paused', pausePatch(from, pauseReason, pauseNote));
+      // History is best-effort and must not block the status change.
+      await logPauseStart(supabase, {
+        businessId: business.id, jobId: job.id, pausedFrom: from,
+        reason: pauseReason, note: pauseNote, userId: authUser?.id ?? null,
+      });
+      setPauseSummary(await fetchPauseSummary(supabase, job.id));
+      setPauseLog(await fetchPauseLog(supabase, job.id));
+    })();
+  };
+
+  const resumeJob = () => {
+    if (!job) return;
+    const patch = resumePatch(job.paused_from);
+    void (async () => {
+      await updateStatus(patch.status as string, patch);
+      await logPauseEnd(supabase, job.id, authUser?.id ?? null);
+      setPauseSummary(await fetchPauseSummary(supabase, job.id));
+      setPauseLog(await fetchPauseLog(supabase, job.id));
+    })();
+  };
+
   // One-step back. Walks the visible pipeline so "Programado → En progreso"
   // can be undone by tapping ←. Hidden at the first step, during cancellation,
   // and once invoiced (the invoice would need to be deleted first).
   const prevStatusAction = (() => {
-    if (isCancelled) return null;
+    if (isCancelled || isPaused) return null;
     if (job.status === 'invoiced') return null;
     const idx = pipeline.findIndex((s) => s.key === job.status);
     if (idx <= 0) return null;
@@ -1486,6 +1561,37 @@ export default function JobDetailRoute() {
           </Text>
         </View>
 
+        {/* On-hold banner — orange, not red: blocked, not dead. Orange rather
+         than in_progress's amber so the two don't read alike in a list. */}
+        {isPaused ? (
+          <View className="bg-orange-500/10 border border-orange-200 rounded-2xl p-4 mb-5 flex-row items-start gap-3">
+            <PauseCircle size={18} color="#EA580C" />
+            <View className="flex-1">
+              <Text className="text-sm font-semibold text-orange-800">
+                {job.pause_reason
+                  ? tp.bannerTitle.replace('{{reason}}', job.pause_reason)
+                  : tp.bannerTitle.replace(' · {{reason}}', '')}
+              </Text>
+              {job.paused_at ? (
+                <Text className="text-xs text-orange-700 mt-0.5">
+                  {tp.bannerSince.replace('{{date}}', fmtDateTime(job.paused_at))}
+                </Text>
+              ) : null}
+              {job.pause_note ? (
+                <Text className="text-xs text-orange-700 mt-1">{job.pause_note}</Text>
+              ) : null}
+              {pauseSummary && pauseSummary.episodes > 1 ? (
+                <Text className="text-xs font-semibold text-orange-800 mt-1.5">
+                  {formatPauseSummary(pauseSummary, {
+                    times: tp.historyTimes, timesOne: tp.historyTimesOne,
+                    days: tp.historyDays, hours: tp.historyHours,
+                  })}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+
         {/* Cancelled / declined banner */}
         {isCancelled ? (
           <View className="bg-red-500/10 border border-red-100 rounded-2xl p-4 mb-5 flex-row items-start gap-3">
@@ -1620,6 +1726,31 @@ export default function JobDetailRoute() {
             >
               <MessageSquare size={16} color={c.muted} />
               <Text className="text-sm font-semibold text-ink">{td.sendToCrew}</Text>
+            </Pressable>
+          ) : null}
+
+          {/* Resume — the primary action while held, so the way out is the
+             first thing you see. */}
+          {isPaused && canChangeStatus ? (
+            <Pressable
+              onPress={resumeJob}
+              disabled={updatingStatus}
+              className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-primary active:opacity-80"
+            >
+              <Play size={16} color="#FFFFFF" />
+              <Text className="text-sm font-semibold text-white">{tp.resumeAction}</Text>
+            </Pressable>
+          ) : null}
+
+          {/* Put on hold — sits with the other reversible status actions. */}
+          {canPause ? (
+            <Pressable
+              onPress={openPauseSheet}
+              disabled={updatingStatus}
+              className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-card border border-border active:bg-border-soft"
+            >
+              <PauseCircle size={16} color="#EA580C" />
+              <Text className="text-sm font-semibold text-orange-700">{tp.action}</Text>
             </Pressable>
           ) : null}
 
@@ -1947,6 +2078,37 @@ export default function JobDetailRoute() {
             businessId={job.business_id}
             canWrite={can.editJobMetadata(currentRole)}
           />
+
+        {/* Hold history (migration 247). Only rendered once something has
+           actually stalled — an empty "never been on hold" card is noise. */}
+        {pauseLog.length > 0 ? (
+          <View className="mt-5">
+            <Text className="text-xs font-semibold text-faint uppercase tracking-wider mb-1">
+              {tp.historyHeading}
+            </Text>
+            <Text className="text-xs text-muted mb-3">{tp.historySubtitle}</Text>
+            <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
+              {pauseLog.map((e, i) => (
+                <View key={e.id} className={`px-4 py-3 ${i > 0 ? 'border-t border-border-soft' : ''}`}>
+                  <View className="flex-row items-center justify-between gap-3">
+                    <Text className="text-sm font-medium text-ink flex-1" numberOfLines={1}>
+                      {e.reason || '—'}
+                    </Text>
+                    <Text className={`text-xs font-semibold ${e.resumed_at ? 'text-muted' : 'text-orange-700'}`}>
+                      {formatDuration(e, { days: tp.durDays, hours: tp.durHours })}
+                    </Text>
+                  </View>
+                  <Text className="text-xs text-faint mt-0.5">
+                    {e.resumed_at
+                      ? `${fmtDateTime(e.paused_at)} → ${fmtDateTime(e.resumed_at)}`
+                      : `${fmtDateTime(e.paused_at)} · ${tp.historyOpen}`}
+                  </Text>
+                  {e.note ? <Text className="text-xs text-muted mt-1">{e.note}</Text> : null}
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
         </View>
 
         {/* Metadata — last edited (created moved to top) */}
@@ -2117,6 +2279,62 @@ export default function JobDetailRoute() {
             >
               <Text className="text-sm font-semibold text-ink">
                 {full.common.buttons.cancel}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </RNModal>
+
+      {/* Put-on-hold sheet. Structure per the CLAUDE.md contract: plain root
+         View (flex-1 justify-end), absolutely-positioned backdrop Pressable as
+         the FIRST child, card as a plain SIBLING after it — nesting the card
+         inside the backdrop stops its inputs receiving taps and drags. */}
+      <RNModal visible={pauseOpen} transparent animationType="fade" onRequestClose={() => setPauseOpen(false)}>
+        <View className="flex-1 justify-end">
+          <Pressable onPress={() => setPauseOpen(false)} style={SHEET_BACKDROP} />
+          <View className="bg-card rounded-t-3xl px-5 pt-6 pb-10">
+            <View className="flex-row items-center justify-between mb-1">
+              <Text className="text-xl font-bold text-ink">{tp.sheetTitle}</Text>
+              <Pressable onPress={() => setPauseOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                <X size={22} color={c.faint} />
+              </Pressable>
+            </View>
+            <Text className="text-xs text-muted mb-5">{tp.sheetBody}</Text>
+
+            {/* Free text WITH a dropdown of what this business already used:
+               typing a reason once makes it pickable next time, so no catalog
+               has to be maintained. `browse` shows the full list on focus and
+               filters as you type; new text is still accepted. */}
+            <AutocompleteInput
+              label={tp.reasonLabel}
+              value={pauseReason}
+              onChangeText={setPauseReason}
+              suggestions={reasonIdeas.map(r => r.reason)}
+              placeholder={tp.reasonPlaceholder}
+              browse
+              autoCapitalize="sentences"
+            />
+
+            <Text className="text-sm font-medium text-ink mt-4 mb-1.5">{tp.noteLabel}</Text>
+            <TextInput
+              value={pauseNote}
+              onChangeText={setPauseNote}
+              placeholder={tp.notePlaceholder}
+              placeholderTextColor={c.faint}
+              style={{ color: c.ink, fontSize: 16 }}
+              className="border border-border rounded-xl px-4 py-3.5 bg-surface"
+              multiline
+            />
+
+            <Pressable
+              onPress={confirmPause}
+              disabled={!pauseReason.trim()}
+              className={`mt-5 py-3.5 rounded-2xl items-center ${
+                pauseReason.trim() ? 'bg-orange-500 active:opacity-80' : 'bg-border-soft'
+              }`}
+            >
+              <Text className={`text-base font-semibold ${pauseReason.trim() ? 'text-white' : 'text-faint'}`}>
+                {tp.confirm}
               </Text>
             </Pressable>
           </View>

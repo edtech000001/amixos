@@ -11,6 +11,7 @@ import {
   MapPin,
   ChevronRight,
   CheckCircle2,
+  PauseCircle,
   XCircle,
   FileText,
   ListChecks,
@@ -116,7 +117,7 @@ export interface JobListItem {
 const PROPOSAL_STATUSES = ['proposal', 'sent', 'accepted', 'declined'];
 // Closed/terminal work hidden from the default (no-tab) "active" view — still
 // reachable by selecting the corresponding status tab.
-const TAB_KEYS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'completed', 'invoiced', 'cancelled', 'delegated', 'archived'] as const;
+const TAB_KEYS = ['all', 'propuestas', 'posible', 'scheduled', 'in_progress', 'paused', 'completed', 'invoiced', 'cancelled', 'delegated', 'archived'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 type StatusTabKey = Exclude<TabKey, 'all'>;
 // Selectable status filters (everything except the "all" reset). Multi-select.
@@ -129,6 +130,7 @@ const TAB_ICON: Record<StatusTabKey, typeof List> = {
   posible: Lightbulb,
   scheduled: Calendar,
   in_progress: Clock,
+  paused: PauseCircle,
   completed: CheckCircle2,
   invoiced: Receipt,
   cancelled: XCircle,
@@ -222,6 +224,7 @@ const STATUS_PILL_BG: Record<string, string> = {
   declined: 'bg-red-100',
   scheduled: 'bg-blue-100',
   in_progress: 'bg-amber-100',
+  paused: 'bg-orange-100',
   completed: 'bg-emerald-100',
   cancelled: 'bg-border-soft',
   invoiced: 'bg-purple-100',
@@ -234,6 +237,7 @@ const STATUS_PILL_TEXT: Record<string, string> = {
   declined: 'text-red-600',
   scheduled: 'text-blue-700',
   in_progress: 'text-amber-700',
+  paused: 'text-orange-700',
   completed: 'text-emerald-700',
   cancelled: 'text-faint',
   invoiced: 'text-purple-700',
@@ -246,6 +250,7 @@ const STATUS_DOT: Record<string, string> = {
   declined: 'bg-red-400',
   scheduled: 'bg-blue-500',
   in_progress: 'bg-amber-500',
+  paused: 'bg-orange-500',
   completed: 'bg-emerald-500',
   cancelled: 'bg-gray-400',
   invoiced: 'bg-purple-500',
@@ -454,6 +459,7 @@ export function JobsListScreen({
     posible: t.tabs.posible,
     scheduled: t.tabs.scheduled,
     in_progress: t.tabs.in_progress,
+    paused: t.tabs.paused,
     completed: t.tabs.completed,
     invoiced: t.tabs.invoiced,
     cancelled: t.tabs.cancelled,

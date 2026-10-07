@@ -171,7 +171,8 @@ export async function fetchJobsForConflictCheck(
       .from('jobs')
       .select('id, title, scheduled_date, end_date, all_day, time_start, time_end, driver_employee_ids')
       .eq('business_id', businessId)
-      .not('status', 'in', '("cancelled","declined")')
+      // Paused work doesn't hold its crew — that is the whole point of pausing.
+        .not('status', 'in', '("cancelled","declined","paused")')
       .lte('scheduled_date', endStr)
       .or(`end_date.gte.${startStr},and(end_date.is.null,scheduled_date.gte.${startStr})`)
       .range(from, to),

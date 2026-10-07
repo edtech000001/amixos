@@ -865,10 +865,38 @@ export type DashboardDict = {
       posible: string;
       scheduled: string;
       in_progress: string;
+      paused: string;
       completed: string;
       invoiced: string;
       cancelled: string;
       archived: string;
+    };
+    /** Pause / on-hold sheet — see migration 246. */
+    pause: {
+      action: string;
+      resumeAction: string;
+      sheetTitle: string;
+      sheetBody: string;
+      reasonLabel: string;
+      reasonPlaceholder: string;
+      recentLabel: string;
+      noteLabel: string;
+      notePlaceholder: string;
+      confirm: string;
+      /** Banner on a paused job. {{reason}} is the recorded reason. */
+      bannerTitle: string;
+      bannerSince: string;
+      saveError: string;
+      /** History line: "3 times · 12 days" (migration 247). */
+      historyTimes: string;
+      historyTimesOne: string;
+      historyDays: string;
+      historyHours: string;
+      historyHeading: string;
+      historySubtitle: string;
+      historyOpen: string;
+      durDays: string;
+      durHours: string;
     };
     statuses: {
       proposal: string;
@@ -878,6 +906,7 @@ export type DashboardDict = {
       posible: string;
       scheduled: string;
       in_progress: string;
+      paused: string;
       completed: string;
       cancelled: string;
       invoiced: string;
@@ -4224,10 +4253,35 @@ export const dashboard: Record<Locale, DashboardDict> = {
         posible: 'Posibles',
         scheduled: 'Programados',
         in_progress: 'En progreso',
+        paused: 'En espera',
         completed: 'Completados',
         invoiced: 'Facturados',
         cancelled: 'Cancelados',
         archived: 'Archivados',
+      },
+      pause: {
+        action: 'Poner en espera',
+        resumeAction: 'Reanudar trabajo',
+        sheetTitle: 'Poner en espera',
+        sheetBody: 'El equipo queda libre para otros trabajos. La fecha programada se conserva.',
+        reasonLabel: 'Motivo',
+        reasonPlaceholder: 'Material, clima, cliente...',
+        recentLabel: 'Usados antes',
+        noteLabel: 'Nota (opcional)',
+        notePlaceholder: 'Detalles para el equipo',
+        confirm: 'Poner en espera',
+        bannerTitle: 'En espera · {{reason}}',
+        bannerSince: 'Desde {{date}}',
+        saveError: 'No se pudo guardar.',
+        historyTimes: '{{count}} veces en espera',
+        historyTimesOne: '1 vez en espera',
+        historyDays: '{{count}} días en total',
+        historyHours: '{{count}} h en total',
+        historyHeading: 'Historial de esperas',
+        historySubtitle: 'Cada vez que este trabajo se detuvo.',
+        historyOpen: 'En espera ahora',
+        durDays: '{{count}} d',
+        durHours: '{{count}} h',
       },
       statuses: {
         proposal: 'Cotización',
@@ -4237,6 +4291,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         posible: 'Posible',
         scheduled: 'Programado',
         in_progress: 'En progreso',
+        paused: 'En espera',
         completed: 'Completado',
         cancelled: 'Cancelado',
         invoiced: 'Facturado',
@@ -7562,10 +7617,35 @@ export const dashboard: Record<Locale, DashboardDict> = {
         posible: 'Possible',
         scheduled: 'Scheduled',
         in_progress: 'In progress',
+        paused: 'On hold',
         completed: 'Completed',
         invoiced: 'Invoiced',
         cancelled: 'Cancelled',
         archived: 'Archived',
+      },
+      pause: {
+        action: 'Put on hold',
+        resumeAction: 'Resume job',
+        sheetTitle: 'Put on hold',
+        sheetBody: 'The crew is freed for other jobs. The scheduled date is kept.',
+        reasonLabel: 'Reason',
+        reasonPlaceholder: 'Material, weather, client...',
+        recentLabel: 'Used before',
+        noteLabel: 'Note (optional)',
+        notePlaceholder: 'Details for the crew',
+        confirm: 'Put on hold',
+        bannerTitle: 'On hold · {{reason}}',
+        bannerSince: 'Since {{date}}',
+        saveError: "Couldn't save.",
+        historyTimes: 'On hold {{count}} times',
+        historyTimesOne: 'On hold once',
+        historyDays: '{{count}} days total',
+        historyHours: '{{count}} h total',
+        historyHeading: 'Hold history',
+        historySubtitle: 'Every time this job stopped.',
+        historyOpen: 'On hold now',
+        durDays: '{{count}} d',
+        durHours: '{{count}} h',
       },
       statuses: {
         proposal: 'Estimate',
@@ -7575,6 +7655,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         posible: 'Possible',
         scheduled: 'Scheduled',
         in_progress: 'In progress',
+        paused: 'On hold',
         completed: 'Completed',
         cancelled: 'Cancelled',
         invoiced: 'Invoiced',

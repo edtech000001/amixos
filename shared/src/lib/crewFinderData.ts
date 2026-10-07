@@ -79,7 +79,8 @@ export async function fetchCrewFinderData(
         .from('jobs')
         .select('id, title, status, scheduled_date, end_date, time_start, time_end, all_day, job_city, job_state, job_lat, job_lng')
         .eq('business_id', businessId)
-        .not('status', 'in', '("cancelled","declined")')
+        // Paused work doesn't hold its crew — that is the whole point of pausing.
+        .not('status', 'in', '("cancelled","declined","paused")')
         .lte('scheduled_date', endYmd)
         .or(`end_date.gte.${todayYmd},and(end_date.is.null,scheduled_date.gte.${todayYmd})`)
         .range(from, to),

@@ -38,6 +38,7 @@ const STATUS_SORT_ORDER = [
   'posible',
   'scheduled',
   'in_progress',
+  'paused',
   'completed',
   'invoiced',
   'declined',

@@ -37,7 +37,7 @@ export interface JobsSummaryTotals {
 // reads in the same order as the tabs.
 const STATUS_ORDER = [
   'proposal', 'sent', 'accepted', 'posible', 'scheduled',
-  'in_progress', 'completed', 'invoiced', 'declined', 'cancelled',
+  'in_progress', 'paused', 'completed', 'invoiced', 'declined', 'cancelled',
 ];
 
 /** The job custom-field keys a business's pay formula reads — pass to

@@ -8,7 +8,9 @@ import Link from 'next/link';
 import {
   ArrowLeft, MapPin, Calendar, Users, DollarSign,
   FileText, CheckCircle2, Clock, AlertTriangle,
-  XCircle, Send, ArrowRight, Trash2, Pencil, Copy,
+  XCircle,
+  Play,
+  PauseCircle, Send, ArrowRight, Trash2, Pencil, Copy,
   Share2, Download, RotateCcw, Building2, Sparkles,
   MessageSquare, Navigation, Archive, Mail, PenLine } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -16,6 +18,7 @@ import { useApp } from '@/lib/AppContext';
 import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { Input } from '@/components/ui/Input';
 import { useLang } from '@/i18n/LangProvider';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { delegateJob } from '@amixos/shared/lib/delegation';
@@ -29,6 +32,7 @@ import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { memberNameMap } from '@amixos/shared/lib/memberNames';
 import { insertInvoiceUnique, removeJobFromInvoice, placeholderQtyFor, fetchClientDraftInvoices, addJobsToInvoice, type ClientDraftInvoice } from '@amixos/shared/lib/invoicing';
 import { can } from '@amixos/shared/lib/permissions';
+import { canPauseStatus, fetchPauseLog, fetchPauseReasons, fetchPauseSummary, formatDuration, formatPauseSummary, logPauseEnd, logPauseStart, pausePatch, resumePatch, type PauseEpisode, type PauseReason, type PauseSummary } from '@amixos/shared/lib/jobPause';
 import { estimateJobLaborCost, type JobLaborEstimate } from '@amixos/shared/lib/payroll';
 import { rowToPriceSheetItem, autopriceLine, suggestPriceItem, matchingAddons, extractQuantity, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { formatDateLong, formatDateTimeLong, formatTime12h, formatStamp, formatNumberGrouped, todayLocalISO } from '@amixos/shared/lib/format';
@@ -58,6 +62,8 @@ interface Job {
   sent_at: string | null; accepted_at: string | null; declined_at: string | null;
   scheduled_at: string | null; in_progress_at: string | null; completed_at: string | null; invoiced_at: string | null;
   share_token: string | null; created_by: string | null; updated_by: string | null; cancelled_at: string | null;
+  paused_at: string | null; paused_from: string | null;
+  pause_reason: string | null; pause_note: string | null;
   client_response: 'accepted' | 'declined' | null; client_responded_at: string | null;
   client_signed_name: string | null; client_signature: string | null;
   delegated_to_business_id: string | null; delegated_from_business_id: string | null; delegated_at: string | null;
@@ -842,11 +848,44 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       ? [POSIBLE_STEP, ...WORK_PIPELINE]
       : WORK_PIPELINE;
   const pipeline = fullPipeline.filter(s => !disabled[s.key]);
-  const pipelineIdx = pipeline.findIndex(s => s.key === job.status);
+  // ── Pause / resume (migration 246) ───────────────────────────────────────
+  const tp = t.pause;
+  const [pauseOpen, setPauseOpen] = useState(false);
+  const [pauseReason, setPauseReason] = useState('');
+  const [pauseNote, setPauseNote] = useState('');
+  const [reasonIdeas, setReasonIdeas] = useState<PauseReason[]>([]);
+  const [pauseSummary, setPauseSummary] = useState<PauseSummary | null>(null);
+  const [pauseLog, setPauseLog] = useState<PauseEpisode[]>([]);
+
+  // Pause history (migration 247) — surfaced on the banner so a job that keeps
+  // stalling is visible without opening a report.
+  useEffect(() => {
+    if (!id) return;
+    let active = true;
+    void fetchPauseSummary(supabase, id).then(r => { if (active) setPauseSummary(r); });
+    void fetchPauseLog(supabase, id).then(r => { if (active) setPauseLog(r); });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, job?.status]);
+
+  const openPauseModal = () => {
+    setPauseReason('');
+    setPauseNote('');
+    setPauseOpen(true);
+    // Suggestions are a convenience — the modal opens immediately and they
+    // fill in when they arrive.
+    if (business) void fetchPauseReasons(supabase, business.id).then(setReasonIdeas);
+  };
+
+  const isPaused = job.status === 'paused';
+  // Paused suspends a status rather than being one — the strip keeps pointing
+  // at where the job is held so it still reads as "stuck HERE".
+  const effectiveStatus = isPaused ? (job.paused_from ?? 'in_progress') : job.status;
+  const pipelineIdx = pipeline.findIndex(s => s.key === effectiveStatus);
   // Back one step in the visible pipeline. Hidden at index 0, once invoiced,
   // and during cancellation. Lets the user undo an accidental click.
   const prevStep =
-    pipelineIdx > 0 && job.status !== 'invoiced' && job.status !== 'cancelled' && job.status !== 'declined'
+    pipelineIdx > 0 && !isPaused && job.status !== 'invoiced' && job.status !== 'cancelled' && job.status !== 'declined'
       ? pipeline[pipelineIdx - 1]
       : null;
 
@@ -1181,6 +1220,31 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
               )}
             </div>
 
+            {/* Resume / put on hold. Resume is primary while held, so the way
+               out is the first thing you see. */}
+            {(isPaused || canPauseStatus(job.status)) && !['cancelled', 'declined'].includes(job.status) && (
+              <div className="flex justify-center gap-3 flex-wrap">
+                {isPaused ? (
+                  <Button size="sm" loading={updatingStatus} onClick={() => {
+                    const patch = resumePatch(job.paused_from);
+                    void (async () => {
+                      await updateStatus(patch.status as string, patch);
+                      await logPauseEnd(supabase, id, user?.id ?? null);
+                      setPauseSummary(await fetchPauseSummary(supabase, id));
+                      setPauseLog(await fetchPauseLog(supabase, id));
+                setPauseLog(await fetchPauseLog(supabase, id));
+                    })();
+                  }}>
+                    <Play size={14} className="mr-1.5"/> {tp.resumeAction}
+                  </Button>
+                ) : (
+                  <Button variant="secondary" size="sm" loading={updatingStatus} onClick={openPauseModal}>
+                    <PauseCircle size={14} className="mr-1.5"/> {tp.action}
+                  </Button>
+                )}
+              </div>
+            )}
+
             {/* Cancel + Archive share one row (side by side) to avoid stacked
                dead space. Both are confirmed / reversible. */}
             {(!['cancelled', 'declined', 'invoiced'].includes(job.status) ||
@@ -1253,6 +1317,35 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           </div>
         );
       })()}
+
+      {/* On-hold banner — orange, not red: blocked, not dead. Orange rather
+         than in_progress's amber so the two don't read alike in a list. */}
+      {isPaused && (
+        <div className="rounded-2xl p-4 mb-5 border bg-orange-500/10 border-orange-200 flex items-start gap-3">
+          <PauseCircle size={18} className="text-orange-600 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-orange-800">
+              {job.pause_reason
+                ? tp.bannerTitle.replace('{{reason}}', job.pause_reason)
+                : tp.bannerTitle.replace(' · {{reason}}', '')}
+            </p>
+            {job.paused_at && (
+              <p className="text-xs text-orange-700 mt-0.5">
+                {tp.bannerSince.replace('{{date}}', formatDateTimeLong(job.paused_at, dateLoc))}
+              </p>
+            )}
+            {job.pause_note && <p className="text-xs text-orange-700 mt-1">{job.pause_note}</p>}
+            {pauseSummary && pauseSummary.episodes > 1 && (
+              <p className="text-xs font-semibold text-orange-800 mt-1.5">
+                {formatPauseSummary(pauseSummary, {
+                  times: tp.historyTimes, timesOne: tp.historyTimesOne,
+                  days: tp.historyDays, hours: tp.historyHours,
+                })}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Cancelled / Declined banner */}
       {(job.status === 'cancelled' || job.status === 'declined') && (
@@ -1479,7 +1572,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           {/* Internal notes */}
           {/* Office-side note — hidden from assigned-only roles entirely. */}
           {job.internal_notes && can.seeInternalJobNotes(currentRole) && (
-            <div className="bg-amber-500/10 border border-amber-200 rounded-2xl p-5">
+            <div className="bg-orange-500/10 border border-orange-200 rounded-2xl p-5">
               <h2 className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-2">{td.internalNote}</h2>
               <p className="text-sm text-ink whitespace-pre-wrap">{job.internal_notes}</p>
             </div>
@@ -1681,6 +1774,33 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
           businessId={job.business_id}
           canWrite={can.editJobMetadata(currentRole)}
         />
+
+      {/* Hold history (migration 247). Only rendered once something has
+         actually stalled — an empty "never been on hold" card is noise. */}
+      {pauseLog.length > 0 && (
+        <div className="mt-6">
+          <p className="text-xs font-semibold text-faint uppercase tracking-wider mb-1">{tp.historyHeading}</p>
+          <p className="text-xs text-muted mb-3">{tp.historySubtitle}</p>
+          <div className="bg-card rounded-2xl border border-border-soft overflow-hidden">
+            {pauseLog.map((e, i) => (
+              <div key={e.id} className={`px-4 py-3 ${i > 0 ? 'border-t border-border-soft' : ''}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium text-ink truncate">{e.reason || '—'}</p>
+                  <p className={`text-xs font-semibold shrink-0 ${e.resumed_at ? 'text-muted' : 'text-orange-700'}`}>
+                    {formatDuration(e, { days: tp.durDays, hours: tp.durHours })}
+                  </p>
+                </div>
+                <p className="text-xs text-faint mt-0.5">
+                  {e.resumed_at
+                    ? `${formatDateTimeLong(e.paused_at, dateLoc)} → ${formatDateTimeLong(e.resumed_at, dateLoc)}`
+                    : `${formatDateTimeLong(e.paused_at, dateLoc)} · ${tp.historyOpen}`}
+                </p>
+                {e.note && <p className="text-xs text-muted mt-1">{e.note}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       </div>
 
       {/* Last edited — bottom of the page, mirrors the mobile layout */}
@@ -1691,6 +1811,59 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       ) : null}
 
       {/* Generate Invoice Modal */}
+      {/* Put-on-hold modal */}
+      <Modal open={pauseOpen} onClose={() => setPauseOpen(false)} title={tp.sheetTitle} size="sm">
+        <div className="flex flex-col gap-4">
+          <p className="text-xs text-muted">{tp.sheetBody}</p>
+
+          {/* Free text WITH a dropdown of what this business already used.
+             <datalist> is the native primitive for exactly this: the browser
+             shows the list, filters as you type, and still accepts new text —
+             so no catalog has to be maintained. Mirrors mobile's
+             AutocompleteInput browse mode. */}
+          <Input
+            label={tp.reasonLabel}
+            value={pauseReason}
+            onChange={e => setPauseReason(e.target.value)}
+            placeholder={tp.reasonPlaceholder}
+            list="pause-reason-options"
+          />
+          <datalist id="pause-reason-options">
+            {reasonIdeas.map(r => <option key={r.reason} value={r.reason} />)}
+          </datalist>
+
+          <Input
+            label={tp.noteLabel}
+            value={pauseNote}
+            onChange={e => setPauseNote(e.target.value)}
+            placeholder={tp.notePlaceholder}
+          />
+
+          <Button
+            disabled={!pauseReason.trim()}
+            loading={updatingStatus}
+            onClick={() => {
+              setPauseOpen(false);
+              const from = job.status;
+              void (async () => {
+                await updateStatus('paused', pausePatch(from, pauseReason, pauseNote));
+                // History is best-effort and must not block the status change.
+                if (business) {
+                  await logPauseStart(supabase, {
+                    businessId: business.id, jobId: id, pausedFrom: from,
+                    reason: pauseReason, note: pauseNote, userId: user?.id ?? null,
+                  });
+                }
+                setPauseSummary(await fetchPauseSummary(supabase, id));
+                setPauseLog(await fetchPauseLog(supabase, id));
+              })();
+            }}
+          >
+            {tp.confirm}
+          </Button>
+        </div>
+      </Modal>
+
       <Modal open={invoiceModal} onClose={() => setInvoiceModal(false)} title={td.genInvoiceTitle} size={clientDrafts?.length ? 'xl' : 'sm'}>
         <div className="flex flex-col gap-4">
           {/* With a draft to choose from: widen and split — choice left,
