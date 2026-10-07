@@ -2272,6 +2272,11 @@ export type DashboardDict = {
       categoryTools: string;
       categoryIndustry: string;
       noResults: string;
+      /** Single placeholder card shown in place of the individual
+       *  coming-soon modules (see AddonStoreScreen). Naming unbuilt
+       *  modules promises things we may never ship. */
+      moreComingTitle: string;
+      moreComingBody: string;
     };
   };
   modules: {
@@ -5594,6 +5599,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         categoryTools: 'Herramientas',
         categoryIndustry: 'Industria',
         noResults: 'No se encontraron módulos.',
+        moreComingTitle: 'Más módulos en camino',
+        moreComingBody: 'Estamos construyendo más. Escríbenos y dinos cuál necesita tu industria.',
       },
     },
     modules: {
@@ -8928,6 +8935,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         categoryTools: 'Tools',
         categoryIndustry: 'Industry',
         noResults: 'No modules found.',
+        moreComingTitle: 'More modules in progress',
+        moreComingBody: "We're building more. Write to us and tell us what your industry needs.",
       },
     },
     modules: {

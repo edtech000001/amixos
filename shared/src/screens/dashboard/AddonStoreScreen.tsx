@@ -80,6 +80,14 @@ export function AddonStoreScreen({
       return enabledIds.has(m.id) ? 0 : 1;
     };
     const list = modulesForBusiness(businessId).filter(m => {
+      // Unbuilt modules are NOT listed by name. Advertising a dozen specific
+      // verticals (mechanic, salon, restaurant…) promises things we may never
+      // ship, and quietly dropping one later reads as a broken promise. A
+      // single "more in progress" card below stands in for all of them.
+      // NOTE: moduleStatusFor also returns 'coming_soon' for a module that is
+      // built but pilot-gated to other businesses, so this hides those too —
+      // which is what we want.
+      if (m.status === 'coming_soon') return false;
       if (category !== 'all' && m.category !== category) return false;
       if (!q) return true;
       const { name, description } = labelFor(m);
@@ -271,6 +279,13 @@ export function AddonStoreScreen({
               })}
             </View>
           ))}
+
+          {/* Stands in for every unbuilt module. Deliberately vague: it signals
+             the catalog is growing without naming anything we might not ship. */}
+          <View className="rounded-2xl border border-dashed border-border p-5 items-center">
+            <Text className="text-sm font-semibold text-ink">{t.moreComingTitle}</Text>
+            <Text className="text-xs text-muted mt-1 text-center">{t.moreComingBody}</Text>
+          </View>
         </View>
         )
       )}
