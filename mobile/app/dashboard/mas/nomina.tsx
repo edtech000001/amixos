@@ -12,6 +12,7 @@ import {
   type PayrollScreenRow,
   type LoanLedgerEntry,
 } from '@amixos/shared/screens/dashboard/PayrollScreen';
+import { fetchPreferredPayMethod, type PreferredPayMethod } from '@amixos/shared/lib/payMethod';
 import {
   getPayrollPeriod,
   computePayrollRowsFromAggregates,
@@ -79,6 +80,18 @@ export default function NominaRoute() {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [loanBalances, setLoanBalances] = useState<Record<string, number>>({});
   const [loanEntries, setLoanEntries] = useState<Record<string, LoanLedgerEntry[]>>({});
+  // Preselect the method this business actually uses, instead of making
+  // everyone re-pick away from 'check' on every single payment.
+  const [payMethodDefault, setPayMethodDefault] = useState<PreferredPayMethod>('check');
+  useEffect(() => {
+    if (!business?.id) return;
+    let active = true;
+    void fetchPreferredPayMethod(supabase, business.id)
+      .then(m => { if (active) setPayMethodDefault(m); });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id]);
+
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [empLocations, setEmpLocations] = useState<EmployeeLocation[]>([]);
@@ -476,6 +489,7 @@ export default function NominaRoute() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <PayrollScreen
+        defaultPayMethod={payMethodDefault}
         loading={loading}
         frequency={frequency}
         onFrequencyChange={onFrequencyChange}

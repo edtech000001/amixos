@@ -66,6 +66,10 @@ export interface LoanLedgerEntry {
 }
 
 export interface PayrollScreenProps {
+  /** Method to preselect when a payment sheet opens — the one this
+   *  business uses most (see fetchPreferredPayMethod). Omitted falls back
+   *  to 'check', which is what everyone used to get. */
+  defaultPayMethod?: PayMethod;
   loading: boolean;
   frequency: PayrollFrequency;
   /** Days per period when frequency='custom'. */
@@ -134,6 +138,7 @@ function fmt(n: number) {
 const FREQS: PayrollFrequency[] = ['weekly', 'biweekly', 'monthly', 'custom'];
 
 export function PayrollScreen({
+  defaultPayMethod = 'check',
   loading,
   frequency,
   customDays,
@@ -262,7 +267,7 @@ export function PayrollScreen({
   const [manualWorker, setManualWorker] = useState('');
   const [manualAmount, setManualAmount] = useState('');
   const [manualHours, setManualHours] = useState('');
-  const [manualMethod, setManualMethod] = useState<PayMethod>('check');
+  const [manualMethod, setManualMethod] = useState<PayMethod>(defaultPayMethod);
   const [manualCheck, setManualCheck] = useState('');
   const [manualPeriod, setManualPeriod] = useState('');
   // Selectable pay periods: the viewed one + the last ~26 (a year biweekly).
@@ -287,7 +292,7 @@ export function PayrollScreen({
     setManualWorker('');
     setManualAmount('');
     setManualHours('');
-    setManualMethod('check');
+    setManualMethod(defaultPayMethod);
     setManualCheck('');
     setManualPeriod(periodStartStr ?? manualPeriods[0]?.start ?? '');
     setWorkerSearch('');
@@ -320,7 +325,7 @@ export function PayrollScreen({
   const insets = useSafeAreaInsets();
   const [payRow, setPayRow] = useState<PayrollScreenRow | null>(null);
   // Check is the default — it's how these crews get paid most of the time.
-  const [method, setMethod] = useState<PayMethod>('check');
+  const [method, setMethod] = useState<PayMethod>(defaultPayMethod);
   const [checkNumber, setCheckNumber] = useState('');
   const [bonus, setBonus] = useState('');
 
@@ -423,7 +428,7 @@ export function PayrollScreen({
 
   const openPay = (row: PayrollScreenRow) => {
     setPayRow(row);
-    setMethod('check');
+    setMethod(defaultPayMethod);
     setCheckNumber('');
     setBonus('');
     setLoanDeduct('');
