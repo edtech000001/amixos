@@ -456,7 +456,10 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       from: job.status, to: 'invoiced', job_title: job.title, invoice_number: draft.invoice_number,
     });
     setInvoicing(false);
-    window.location.href = `/dashboard/facturas/${draft.id}`;
+    // ?from=job&job= is what makes the invoice's back button return to THIS
+    // job. Without it, back fell through to history and landed wherever the
+    // user came from before the job — usually the dashboard.
+    window.location.href = `/dashboard/facturas/${draft.id}?from=job&job=${id}`;
   };
 
   const generateInvoice = async () => {
@@ -535,7 +538,8 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
         from_job_id: id,
       });
       setInvoicing(false);
-      window.location.href = `/dashboard/facturas/${invoice.id}`;
+      // See the note on the draft path above.
+      window.location.href = `/dashboard/facturas/${invoice.id}?from=job&job=${id}`;
     } else {
       setInvoicing(false);
     }

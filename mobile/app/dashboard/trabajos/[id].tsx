@@ -955,7 +955,11 @@ export default function JobDetailRoute() {
     void logAudit(supabase, business.id, 'job.status_changed', 'job', job.id, {
       from: job.status, to: 'invoiced', job_title: job.title, invoice_number: draft.invoice_number,
     });
-    router.replace(`/dashboard/facturas/${draft.id}` as never);
+    // ?from=job pairs with replace(): the job was swapped OUT for the invoice,
+    // and the invoice's goBack swaps it back. Without the params, back fell
+    // through to router.back() and landed on whatever was under the job —
+    // the dashboard — because the job itself was no longer in the stack.
+    router.replace(`/dashboard/facturas/${draft.id}?from=job&jobId=${job.id}` as never);
   };
 
   const generateInvoice = async () => {
@@ -1040,7 +1044,9 @@ export default function JobDetailRoute() {
         total_amount: total,
         from_job_id: job.id,
       });
-      router.replace(`/dashboard/facturas/${invoice.id}`);
+      // See the note on the draft path above — ?from=job is what makes back
+      // return to this job instead of the dashboard.
+      router.replace(`/dashboard/facturas/${invoice.id}?from=job&jobId=${job.id}` as never);
     }
     setUpdatingStatus(false);
   };
