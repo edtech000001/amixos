@@ -823,6 +823,28 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   };
 
   // Header, status pipeline, then the detail + items cards.
+  // Pause / resume state (migrations 246/247). Must sit above BOTH early
+  // returns below — `if (loading)` and `if (!job)`. A hook after either only
+  // runs once the job has loaded, so the hook count changes between renders
+  // and React throws #310 "Rendered more hooks than during the previous
+  // render". The same trap caught the mobile screen.
+  const tp = t.pause;
+  const [pauseOpen, setPauseOpen] = useState(false);
+  const [pauseReason, setPauseReason] = useState('');
+  const [pauseNote, setPauseNote] = useState('');
+  const [reasonIdeas, setReasonIdeas] = useState<PauseReason[]>([]);
+  const [pauseSummary, setPauseSummary] = useState<PauseSummary | null>(null);
+  const [pauseLog, setPauseLog] = useState<PauseEpisode[]>([]);
+
+  useEffect(() => {
+    if (!id) return;
+    let active = true;
+    void fetchPauseSummary(supabase, id).then(r => { if (active) setPauseSummary(r); });
+    void fetchPauseLog(supabase, id).then(r => { if (active) setPauseLog(r); });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, job?.status]);
+
   if (loading) return (
     <div className="p-6">
       <SkeletonDetail>
@@ -848,26 +870,6 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       ? [POSIBLE_STEP, ...WORK_PIPELINE]
       : WORK_PIPELINE;
   const pipeline = fullPipeline.filter(s => !disabled[s.key]);
-  // ── Pause / resume (migration 246) ───────────────────────────────────────
-  const tp = t.pause;
-  const [pauseOpen, setPauseOpen] = useState(false);
-  const [pauseReason, setPauseReason] = useState('');
-  const [pauseNote, setPauseNote] = useState('');
-  const [reasonIdeas, setReasonIdeas] = useState<PauseReason[]>([]);
-  const [pauseSummary, setPauseSummary] = useState<PauseSummary | null>(null);
-  const [pauseLog, setPauseLog] = useState<PauseEpisode[]>([]);
-
-  // Pause history (migration 247) — surfaced on the banner so a job that keeps
-  // stalling is visible without opening a report.
-  useEffect(() => {
-    if (!id) return;
-    let active = true;
-    void fetchPauseSummary(supabase, id).then(r => { if (active) setPauseSummary(r); });
-    void fetchPauseLog(supabase, id).then(r => { if (active) setPauseLog(r); });
-    return () => { active = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, job?.status]);
-
   const openPauseModal = () => {
     setPauseReason('');
     setPauseNote('');
