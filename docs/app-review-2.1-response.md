@@ -50,9 +50,9 @@ access to everything. Crew members have a reduced view, but that requires a
 second invited user and is not needed to review the app.
 
 **The interface defaults to Spanish.** To switch to English: **Más → Ajustes →
-Cuenta → Idioma**. *(This in-app switcher is in the next build; in the
-submitted build the app follows the device language, so an English device shows
-English.)*
+Cuenta → Idioma**. It offers *Automatic* (follow the phone's language),
+*Español* and *English*, so an English device shows English with no action
+needed.
 
 **Where to find the main features**
 
