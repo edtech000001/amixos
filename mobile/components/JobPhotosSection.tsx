@@ -248,9 +248,14 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
   };
 
   // Swipe sync — round the paged offset to the nearest page index.
+  //
+  // `prev === null` must win: closing the viewer tears down this FlatList,
+  // which emits one final scroll event. Without the null guard that wrote a
+  // real index straight back and the viewer reopened the instant you closed
+  // it — an inescapable loop, since the X does nothing but set null.
   const onViewerScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / screenW);
-    setViewerIndex(prev => (prev === idx ? prev : idx));
+    setViewerIndex(prev => (prev === null || prev === idx ? prev : idx));
   };
 
   // Section sits inside the detail ScrollView's px-5 (20px) padding.

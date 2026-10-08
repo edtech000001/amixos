@@ -2272,7 +2272,10 @@ export default function RentalsScreen() {
                     getItemLayout={(_, index) => ({ length: screenW, offset: screenW * index, index })}
                     onMomentumScrollEnd={e => {
                       const idx = Math.round(e.nativeEvent.contentOffset.x / screenW);
-                      setPhotoViewer(prev => (prev === idx ? prev : idx));
+                      // `prev === null` must win: closing the viewer tears down the FlatList,
+                      // which emits a final scroll event that otherwise writes a real index
+                      // straight back and reopens the viewer — an inescapable loop.
+                      setPhotoViewer(prev => (prev === null || prev === idx ? prev : idx));
                     }}
                     renderItem={({ item }) => {
                       const r = (item.rotation ?? 0) % 360;

@@ -946,7 +946,10 @@ export default function EquipmentScreen() {
 
   const onViewerScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / screenW);
-    setViewerIndex((prev) => (prev === idx ? prev : idx));
+    // `prev === null` must win: closing the viewer tears down the FlatList,
+    // which emits a final scroll event that otherwise writes a real index
+    // straight back and reopens the viewer — an inescapable loop.
+    setViewerIndex((prev) => (prev === null || prev === idx ? prev : idx));
   };
 
   const viewerPhoto = viewerIndex !== null ? photos[viewerIndex] : null;
