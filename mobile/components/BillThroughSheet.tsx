@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput, Modal as RNModal, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
-import { X, ArrowLeft, Check, Building2, FilePlus2, UserPlus, Search, AlertTriangle, CheckCircle } from 'lucide-react-native';
+import { X, ArrowLeft, Check, Building2, FilePlus2, UserPlus, Search, AlertTriangle, CheckCircle, ExternalLink, Trash2 } from 'lucide-react-native';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -16,6 +16,8 @@ import {
   type BillThroughTarget,
   type ClientMatch,
   type OpenInvoice,
+  removeBillThrough,
+  type BillThroughLink,
 } from '@amixos/shared/lib/invoiceBillThrough';
 
 type Supa = Parameters<typeof billInvoiceThrough>[0];
@@ -39,9 +41,12 @@ interface Props {
   targets: BillThroughTarget[];
   /** Switch to the target business and open the invoice. */
   onOpenTarget: (businessId: string, invoiceId: string) => void;
+  /** Set when this invoice is already billed through somewhere. The sheet then
+   *  opens on the linked step instead of the picker — one company at a time. */
+  existingLink?: BillThroughLink | null;
 }
 
-type Step = 'company' | 'client' | 'invoice' | 'lines' | 'done';
+type Step = 'linked' | 'company' | 'client' | 'invoice' | 'lines' | 'done';
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 const clientName = (c: BillThroughClient) => [c.firstName, c.lastName].filter(Boolean).join(' ') || c.company || '—';
@@ -63,6 +68,7 @@ export function BillThroughSheet({
   lines,
   targets,
   onOpenTarget,
+  existingLink,
 }: Props) {
   const c = useThemeColors();
   const { t: full, locale } = useLang();
@@ -84,13 +90,35 @@ export function BillThroughSheet({
   const [duplicate, setDuplicate] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<{ businessId: string; invoiceId: string; invoiceNumber: string } | null>(null);
+  // Removing an existing link. Confirmation renders INLINE — iOS silently
+  // refuses to present a second modal over this one (see CLAUDE.md).
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removed, setRemoved] = useState<string | null>(null);
+
+  const doRemoveLink = async () => {
+    if (!existingLink) return;
+    setRemoving(true); setError('');
+    const res = await removeBillThrough(supabase, {
+      sourceInvoiceId,
+      targetInvoiceId: existingLink.invoice_id,
+    });
+    setRemoving(false);
+    if (!res.ok) { setError(t.removeFailed); setConfirmRemove(false); return; }
+    setRemoved(
+      (res.invoiceDeleted ? t.removedDeleted : t.removed)
+        .replace('{{invoice}}', existingLink.invoice_number),
+    );
+  };
+
 
   // Reset on every open; pre-pick the only company and all included lines.
   useEffect(() => {
     if (!open) return;
     setEnabled(null);
     setTarget(targets.length === 1 ? targets[0] : null);
-    setStep(targets.length === 1 ? 'client' : 'company');
+    setStep(existingLink ? 'linked' : targets.length === 1 ? 'client' : 'company');
+    setConfirmRemove(false); setRemoving(false); setRemoved(null);
     setMatches(null); setQuery(''); setResults([]); setClient(null); setCopyClient(false);
     setOpenInvoices(null); setInvoice(null); setBusy(false); setDuplicate(false); setError(''); setResult(null);
     setPicked(new Set(lines.map((l, i) => (l.excluded ? -1 : i)).filter(i => i >= 0)));
@@ -158,8 +186,6 @@ export function BillThroughSheet({
       targetClientId: clientId,
       targetInvoiceId: invoice === 'new' ? null : invoice.id,
       allowDuplicate,
-      targetNote: (count, company, number) =>
-        t.targetNote.replace('{{count}}', String(count)).replace('{{company}}', company).replace('{{invoice}}', number),
     });
     setBusy(false);
     if (res.ok === true) { setResult(res); setStep('done'); return; }
@@ -219,7 +245,9 @@ export function BillThroughSheet({
                 <ArrowLeft size={18} color={c.muted} />
               </Pressable>
             ) : null}
-            <Text className="text-base font-bold text-ink flex-1">{t.title}</Text>
+            <Text className="text-base font-bold text-ink flex-1">
+              {step === 'linked' ? t.linkedTitle : t.title}
+            </Text>
             <Pressable onPress={onClose} hitSlop={8} className="p-1.5 rounded-lg active:bg-border-soft">
               <X size={18} color={c.muted} />
             </Pressable>
@@ -236,7 +264,7 @@ export function BillThroughSheet({
             </View>
           ) : (
             <>
-              {step !== 'done' ? (
+              {step !== 'done' && step !== 'linked' && !removed ? (
                 <>
                   <Text className="text-xs text-faint mb-3">{t.subtitle}</Text>
                   {/* Breadcrumb of what's been chosen so far. */}
@@ -339,7 +367,9 @@ export function BillThroughSheet({
                         <Pressable
                           key={i}
                           onPress={() => setPicked(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
-                          className="flex-row items-center gap-3 py-2.5 border-b border-border-soft active:opacity-70"
+                          /* Keeps its divider: mobile rows have no hover fill, so without one
+                             they run together. px-3 aligns them with the other steps. */
+                          className="flex-row items-center gap-3 px-3 py-2.5 border-b border-border-soft active:opacity-70"
                         >
                           <View className={`w-5 h-5 rounded-md border items-center justify-center ${on ? 'bg-primary border-primary' : 'border-border'}`}>
                             {on ? <Check size={13} color="#fff" /> : null}
@@ -355,7 +385,63 @@ export function BillThroughSheet({
                   </>
                 ) : null}
 
-                {step === 'done' && result && target ? (
+                {removed ? (
+                  <View className="py-6 items-center gap-3">
+                    <CheckCircle size={36} color={c.success} />
+                    <Text className="text-base font-semibold text-ink text-center">{removed}</Text>
+                  </View>
+                ) : step === 'linked' && existingLink ? (
+                  /* Already billed through somewhere. The source account can
+                     see where and undo it from here, instead of switching
+                     business and hunting for the line. Billing through a
+                     second company means removing this one first. */
+                  <View className="gap-4">
+                    <View className="flex-row gap-3 p-4 rounded-2xl bg-border-soft">
+                      <Building2 size={18} color={c.muted} />
+                      <Text className="text-sm text-ink flex-1">
+                        {t.linkedBody
+                          .replace('{{company}}', existingLink.business_name)
+                          .replace('{{invoice}}', existingLink.invoice_number)}
+                      </Text>
+                    </View>
+                    {confirmRemove ? (
+                      <View className="gap-3 p-4 rounded-2xl border border-red-500/30 bg-red-500/5">
+                        <Text className="text-sm text-ink">
+                          {t.removeConfirm
+                            .replace('{{company}}', existingLink.business_name)
+                            .replace('{{invoice}}', existingLink.invoice_number)}
+                        </Text>
+                        <View className="flex-row gap-2">
+                          <Pressable disabled={removing} onPress={() => setConfirmRemove(false)}
+                            className="px-4 py-2.5 rounded-xl bg-border-soft active:opacity-70">
+                            <Text className="text-sm font-semibold text-ink">{full.common.buttons.cancel}</Text>
+                          </Pressable>
+                          <Pressable disabled={removing} onPress={() => void doRemoveLink()}
+                            className="px-4 py-2.5 rounded-xl bg-red-500 active:opacity-70">
+                            <Text className="text-sm font-semibold text-white">
+                              {removing ? t.removing : t.removeConfirmYes}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    ) : (
+                      /* Right-aligned, the conventional spot for dialog
+                         actions, and the easiest reach for a right thumb. */
+                      <View className="flex-row flex-wrap justify-end gap-2">
+                        <Pressable onPress={() => onOpenTarget(existingLink.business_id, existingLink.invoice_id)}
+                          className="flex-row items-center gap-2 px-4 py-2.5 rounded-xl bg-border-soft active:opacity-70">
+                          <ExternalLink size={15} color={c.muted} />
+                          <Text className="text-sm font-semibold text-ink">{t.viewTarget}</Text>
+                        </Pressable>
+                        <Pressable onPress={() => setConfirmRemove(true)}
+                          className="flex-row items-center gap-2 px-4 py-2.5 rounded-xl border border-red-500/30 active:opacity-70">
+                          <Trash2 size={15} color="#EF4444" />
+                          <Text className="text-sm font-semibold text-red-500">{t.removeLink}</Text>
+                        </Pressable>
+                      </View>
+                    )}
+                  </View>
+                ) : step === 'done' && result && target ? (
                   <View className="py-6 items-center gap-3">
                     <CheckCircle size={36} color={c.success} />
                     <Text className="text-base font-semibold text-ink text-center">
@@ -387,7 +473,9 @@ export function BillThroughSheet({
                   </Text>
                   {!busy ? (
                     <Text className="text-xs text-white/80 mt-0.5">
-                      {t.linesSelected.replace('{{count}}', String(picked.size)).replace('{{amount}}', fmt(pickedTotal))}
+                      {(picked.size === 1 ? t.linesSelectedOne : t.linesSelected)
+                        .replace('{{count}}', String(picked.size))
+                        .replace('{{amount}}', fmt(pickedTotal))}
                     </Text>
                   ) : null}
                 </Pressable>

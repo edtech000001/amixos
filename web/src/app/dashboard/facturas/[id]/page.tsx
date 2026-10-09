@@ -23,7 +23,7 @@ import type { InvoiceLang } from '@amixos/shared';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { can } from '@amixos/shared/lib/permissions';
-import { billThroughTargets } from '@amixos/shared/lib/invoiceBillThrough';
+import { activeBillThrough, billThroughTargets } from '@amixos/shared/lib/invoiceBillThrough';
 import { resolveLineDescriptions } from '@amixos/shared/lib/invoiceTemplate';
 import { BillThroughModal } from '@/components/invoices/BillThroughModal';
 import { resolveConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
@@ -1147,6 +1147,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         ) : null}
         businessName={business?.name}
         onBillThrough={invoice && canEdit && billTargets.length > 0 ? () => setBillThroughOpen(true) : undefined}
+        onViewBilledThrough={(bizId, invId) => { setActiveBusiness(bizId); router.push(`/dashboard/facturas/${invId}`); }}
       />
 
       {business && invoice ? (
@@ -1162,6 +1163,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
             return invoice.lineItems.map((li, i) => ({ name: names[i], qty: Number(li.qty) || 0, rate: Number(li.rate) || 0, excluded: li.excluded }));
           })()}
           targets={billTargets}
+          existingLink={activeBillThrough(invoice.billedThrough)}
           onOpenTarget={(bizId, invId) => {
             setBillThroughOpen(false);
             setActiveBusiness(bizId);

@@ -4,6 +4,7 @@ import { View, Text, Pressable, ScrollView, Image, Modal as RNModal } from 'reac
 import {
   ArrowLeft,
   MoreHorizontal,
+  ExternalLink,
   X,
   Eye,
   EyeOff,
@@ -224,6 +225,8 @@ export interface InvoiceDetailScreenProps {
   /** Bill this invoice's lines through another company (⋯ menu). Hidden when
    *  not provided (user isn't in another company that can invoice). */
   onBillThrough?: () => void;
+  /** Open the invoice this one is billed through, at the other business. */
+  onViewBilledThrough?: (businessId: string, invoiceId: string) => void;
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
@@ -291,6 +294,7 @@ export function InvoiceDetailScreen({
   remindersSlot,
   businessName,
   onBillThrough,
+  onViewBilledThrough,
 }: InvoiceDetailScreenProps) {
   const { t: ui, locale } = useLang();
   const c = useThemeColors();
@@ -435,14 +439,32 @@ export function InvoiceDetailScreen({
          own status/amount are untouched — the other company pays it later. */}
       {invoice.billedThrough?.length ? (
         <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-4 gap-1.5">
-          {invoice.billedThrough.map(b => (
-            <View key={b.invoice_id} className="flex-row items-center gap-2">
-              <Building2 size={14} color={c.muted} />
-              <Text className="text-sm text-muted flex-1">
-                {tBt.billedVia.replace('{{company}}', b.business_name).replace('{{invoice}}', b.invoice_number)}
-              </Text>
-            </View>
-          ))}
+          {invoice.billedThrough.map(b => {
+            // Tapping the banner opens the other company's invoice directly —
+            // the obvious thing to want from here, and otherwise several taps
+            // away through the more-actions sheet.
+            const label = tBt.billedVia
+              .replace('{{company}}', b.business_name)
+              .replace('{{invoice}}', b.invoice_number);
+            const inner = (
+              <>
+                <Building2 size={14} color={c.muted} />
+                <Text className="text-sm text-muted flex-1">{label}</Text>
+                {onViewBilledThrough ? <ExternalLink size={14} color={c.faint} /> : null}
+              </>
+            );
+            return onViewBilledThrough ? (
+              <Pressable
+                key={b.invoice_id}
+                onPress={() => onViewBilledThrough(b.business_id, b.invoice_id)}
+                className="flex-row items-center gap-2 active:opacity-60"
+              >
+                {inner}
+              </Pressable>
+            ) : (
+              <View key={b.invoice_id} className="flex-row items-center gap-2">{inner}</View>
+            );
+          })}
         </View>
       ) : null}
 
@@ -854,7 +876,11 @@ export function InvoiceDetailScreen({
             {onBillThrough && canEdit ? (
               <Pressable onPress={() => { setMoreOpen(false); onBillThrough(); }} className="flex-row items-center gap-3 py-3.5 border-b border-border-soft active:opacity-60">
                 <View className="w-9 h-9 rounded-xl bg-border-soft items-center justify-center"><Building2 size={18} color={c.muted} /></View>
-                <Text className="text-base text-ink font-medium">{tBt.action}</Text>
+                {/* Names the state it's in: the sheet it opens shows the
+                    existing link with view/remove, not the picker. */}
+                <Text className="text-base text-ink font-medium">
+                  {invoice.billedThrough?.length ? tBt.linkedAction : tBt.action}
+                </Text>
               </Pressable>
             ) : null}
             {onShareLink ? (

@@ -213,7 +213,7 @@ export async function openInvoicesForClient(
 
 export type BillThroughResult =
   | { ok: true; invoiceId: string; invoiceNumber: string; businessId: string }
-  | { ok: false; error: 'not_found' | 'not_allowed' | 'no_lines' | 'duplicate' | 'failed'; message?: string };
+  | { ok: false; error: 'not_found' | 'not_allowed' | 'no_lines' | 'duplicate' | 'already_linked' | 'failed'; message?: string };
 
 export interface BillThroughOpts {
   sourceInvoiceId: string;
@@ -224,7 +224,6 @@ export interface BillThroughOpts {
   /** Existing open invoice to append to; null = create a new draft. */
   targetInvoiceId: string | null;
   /** Internal note appended on the target, e.g. "3 items from Champion Built INV-1002". */
-  targetNote: (count: number, sourceBusinessName: string, sourceInvoiceNumber: string) => string;
   /** Proceed even if this source invoice was already billed into the target. */
   allowDuplicate?: boolean;
 }
@@ -246,6 +245,12 @@ export async function billInvoiceThrough(supabase: Supa, opts: BillThroughOpts):
     .single();
   if (!src) return { ok: false, error: 'not_found' };
   if (src.business_id === opts.targetBusinessId) return { ok: false, error: 'not_allowed' };
+  // One company at a time (migration 248). The UI opens the linked view
+  // instead of the picker, so reaching this means an API or a stale client —
+  // the same work on two companies' invoices to one client is a mistake.
+  if (!opts.allowDuplicate && activeBillThrough(src.billed_through)) {
+    return { ok: false, error: 'already_linked' };
+  }
   const { data: srcBiz } = await supabase
     .from('businesses').select('name, allow_bill_through').eq('id', src.business_id).single();
   if (!srcBiz?.allow_bill_through) return { ok: false, error: 'not_allowed' };
@@ -292,16 +297,17 @@ export async function billInvoiceThrough(supabase: Supa, opts: BillThroughOpts):
       passthrough: tag,
     };
   });
-  const note = opts.targetNote(copied.length, tag.business_name, tag.invoice_number);
-  const appendNote = (existing: string | null | undefined) =>
-    existing?.trim() ? `${existing.trim()}\n${note}` : note;
+  // No internal note is written. Every line carries its own `passthrough`
+  // tag, which the invoice screen renders as "From <company> · <invoice>" on
+  // the line itself, and the total card already breaks out what belongs to
+  // other companies — a note restating both was pure duplication.
 
   // 3. Write the target invoice.
   let target: { id: string; invoice_number: string };
   if (opts.targetInvoiceId) {
     const { data: inv } = await supabase
       .from('invoices')
-      .select('id, invoice_number, line_items, tax_rate, discount, internal_notes')
+      .select('id, invoice_number, line_items, tax_rate, discount')
       .eq('id', opts.targetInvoiceId)
       .single();
     if (!inv) return { ok: false, error: 'not_found' };
@@ -316,7 +322,6 @@ export async function billInvoiceThrough(supabase: Supa, opts: BillThroughOpts):
         subtotal_amount: subtotal,
         tax_amount: tax,
         total_amount: total,
-        internal_notes: appendNote(inv.internal_notes),
       })
       .eq('id', inv.id);
     if (error) return { ok: false, error: 'failed', message: error.message };
@@ -344,7 +349,7 @@ export async function billInvoiceThrough(supabase: Supa, opts: BillThroughOpts):
       discount: 0,
       total_amount: total,
       notes: null,
-      internal_notes: note,
+      internal_notes: null,
     });
     if (error || !inv) return { ok: false, error: 'failed', message: error?.message };
     target = { id: inv.id, invoice_number: inv.invoice_number ?? '' };
@@ -367,4 +372,81 @@ export async function billInvoiceThrough(supabase: Supa, opts: BillThroughOpts):
     .eq('id', src.id);
 
   return { ok: true, invoiceId: target.id, invoiceNumber: target.invoice_number, businessId: opts.targetBusinessId };
+}
+
+// ── Unlinking (migration 248) ──────────────────────────────────────────────
+// A source invoice is billed through ONE company at a time. `billed_through`
+// stays an array so rows written before this rule still read, but the UI
+// treats the first entry as the link and requires removing it before billing
+// through somewhere else — the same work appearing on two companies' invoices
+// to the same client is a mistake, not a workflow.
+
+export interface BillThroughLink {
+  business_id: string;
+  business_name: string;
+  invoice_id: string;
+  invoice_number: string;
+  at?: string;
+}
+
+/** The invoice's current bill-through link, or null. */
+export function activeBillThrough(
+  billedThrough: BillThroughLink[] | null | undefined,
+): BillThroughLink | null {
+  const list = Array.isArray(billedThrough) ? billedThrough.filter(b => b?.invoice_id) : [];
+  return list.length ? list[0] : null;
+}
+
+export type RemoveBillThroughResult =
+  | { ok: true; invoiceDeleted: boolean }
+  | { ok: false; error: 'not_found' | 'failed'; message?: string };
+
+/**
+ * Undo a bill-through from the SOURCE invoice's side — the account that
+ * created the link, without having to switch business and hunt for the line.
+ *
+ * Only the TARGET is written: its passthrough lines are dropped and its totals
+ * recomputed. The source's stamp is cleared by the trigger in migration 248,
+ * so this can't half-apply and leave the two sides disagreeing — and the same
+ * cleanup covers someone removing the line at the target instead.
+ *
+ * RLS is the gate: the caller must have invoice rights in the target business.
+ * A target left with no lines at all is deleted rather than left as an empty
+ * invoice, UNLESS it has already been sent — history isn't ours to erase.
+ */
+export async function removeBillThrough(
+  supabase: Supa,
+  opts: { sourceInvoiceId: string; targetInvoiceId: string },
+): Promise<RemoveBillThroughResult> {
+  const { data: tgt } = await supabase
+    .from('invoices')
+    .select('id, status, line_items, tax_rate, discount')
+    .eq('id', opts.targetInvoiceId)
+    .single();
+  if (!tgt) return { ok: false, error: 'not_found' };
+
+  const existing = (tgt.line_items ?? []) as InvoiceLineItem[];
+  const kept = existing.filter(li => li.passthrough?.invoice_id !== opts.sourceInvoiceId);
+  if (kept.length === existing.length) {
+    // Nothing here pointed back. The stamp is already stale, so nudge the
+    // target with a no-op write and let the trigger clear it.
+    const { error } = await supabase
+      .from('invoices').update({ line_items: existing }).eq('id', tgt.id);
+    if (error) return { ok: false, error: 'failed', message: error.message };
+    return { ok: true, invoiceDeleted: false };
+  }
+
+  if (!kept.length && tgt.status === 'draft') {
+    const { error } = await supabase.from('invoices').delete().eq('id', tgt.id);
+    if (error) return { ok: false, error: 'failed', message: error.message };
+    return { ok: true, invoiceDeleted: true };
+  }
+
+  const { subtotal, tax, total } = computeTotals(kept, tgt.tax_rate ?? 0, tgt.discount ?? 0);
+  const { error } = await supabase
+    .from('invoices')
+    .update({ line_items: kept, subtotal_amount: subtotal, tax_amount: tax, total_amount: total })
+    .eq('id', tgt.id);
+  if (error) return { ok: false, error: 'failed', message: error.message };
+  return { ok: true, invoiceDeleted: false };
 }

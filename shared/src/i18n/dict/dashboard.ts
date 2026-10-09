@@ -355,6 +355,19 @@ export type DashboardDict = {
     /** Bill this invoice's lines through another company (migration 240). */
     billThrough: {
       action: string;
+      // Linked state (migration 248) — shown when the invoice is already
+      // billed through somewhere.
+      linkedAction: string;
+      linkedTitle: string;
+      linkedBody: string;
+      viewTarget: string;
+      removeLink: string;
+      removeConfirm: string;
+      removeConfirmYes: string;
+      removing: string;
+      removed: string;
+      removedDeleted: string;
+      removeFailed: string;
       title: string;
       subtitle: string;
       notEnabled: string;
@@ -377,6 +390,7 @@ export type DashboardDict = {
       noOpenInvoices: string;
       selectAll: string;
       linesSelected: string;
+      linesSelectedOne: string;
       confirmBtn: string;
       working: string;
       back: string;
@@ -387,7 +401,6 @@ export type DashboardDict = {
       done: string;
       openTarget: string;
       failed: string;
-      targetNote: string;
       /** Detail screen. */
       fromTag: string;
       ownShare: string;
@@ -3750,6 +3763,17 @@ export const dashboard: Record<Locale, DashboardDict> = {
       shareLinkAction: 'Compartir enlace',
       billThrough: {
         action: 'Facturar por otra empresa',
+        linkedAction: 'Facturada por otra empresa',
+        linkedTitle: 'Facturada por otra empresa',
+        linkedBody: 'Las líneas de esta factura están en {{invoice}} de {{company}}. Esta factura se queda sin pagar hasta que esa empresa te pague.',
+        viewTarget: 'Ver factura',
+        removeLink: 'Quitar de esa factura',
+        removeConfirm: '¿Quitar estas líneas de {{invoice}}? La factura de {{company}} se actualiza sola.',
+        removeConfirmYes: 'Sí, quitar',
+        removing: 'Quitando…',
+        removed: 'Listo. Las líneas se quitaron de {{invoice}}.',
+        removedDeleted: 'Listo. {{invoice}} se quedó sin líneas y se borró.',
+        removeFailed: 'No se pudo quitar. Revisa que sigas teniendo acceso a esa empresa.',
         title: 'Facturar por otra empresa',
         subtitle: 'Copia estas líneas a una factura de tu otra empresa. Esta factura se queda igual (sin pagar) hasta que la otra empresa te pague.',
         notEnabled: 'Esta empresa no permite facturar sus facturas por otras empresas. Un administrador lo puede activar en Ajustes → Facturas.',
@@ -3772,6 +3796,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         noOpenInvoices: 'Este cliente no tiene facturas abiertas.',
         selectAll: 'Seleccionar todo',
         linesSelected: '{{count}} líneas · {{amount}}',
+        linesSelectedOne: '1 línea · {{amount}}',
         confirmBtn: 'Copiar a {{company}}',
         working: 'Copiando…',
         back: 'Atrás',
@@ -3782,7 +3807,6 @@ export const dashboard: Record<Locale, DashboardDict> = {
         done: 'Listo — agregado a {{invoice}} de {{company}}.',
         openTarget: 'Ver factura',
         failed: 'No se pudo copiar: {{error}}',
-        targetNote: '{{count}} líneas de {{company}} {{invoice}}',
         fromTag: 'De {{company}} · {{invoice}}',
         ownShare: 'Total de {{company}}',
         clientPays: 'El cliente paga {{total}} · incluye {{amount}} de otras empresas',
@@ -7117,6 +7141,17 @@ export const dashboard: Record<Locale, DashboardDict> = {
       shareLinkAction: 'Share link',
       billThrough: {
         action: 'Bill through another company',
+        linkedAction: 'Billed through another company',
+        linkedTitle: 'Billed through another company',
+        linkedBody: "This invoice's lines are on {{company}}'s {{invoice}}. This invoice stays unpaid until that company pays you.",
+        viewTarget: 'View invoice',
+        removeLink: 'Remove from that invoice',
+        removeConfirm: 'Remove these lines from {{invoice}}? {{company}}\'s invoice updates itself.',
+        removeConfirmYes: 'Yes, remove',
+        removing: 'Removing…',
+        removed: 'Done. The lines were removed from {{invoice}}.',
+        removedDeleted: 'Done. {{invoice}} had no lines left and was deleted.',
+        removeFailed: "Couldn't remove it. Check that you still have access to that company.",
         title: 'Bill through another company',
         subtitle: "Copies these lines onto an invoice from your other company. This invoice stays as it is (unpaid) until that company pays you.",
         notEnabled: "This company doesn't allow its invoices to be billed through other companies. An admin can turn it on in Settings → Invoices.",
@@ -7139,6 +7174,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         noOpenInvoices: 'This client has no open invoices.',
         selectAll: 'Select all',
         linesSelected: '{{count}} lines · {{amount}}',
+        linesSelectedOne: '1 line · {{amount}}',
         confirmBtn: 'Copy to {{company}}',
         working: 'Copying…',
         back: 'Back',
@@ -7149,7 +7185,6 @@ export const dashboard: Record<Locale, DashboardDict> = {
         done: "Done — added to {{company}}'s {{invoice}}.",
         openTarget: 'View invoice',
         failed: "Couldn't copy: {{error}}",
-        targetNote: '{{count}} lines from {{company}} {{invoice}}',
         fromTag: 'From {{company}} · {{invoice}}',
         ownShare: '{{company}} total',
         clientPays: 'Client pays {{total}} · includes {{amount}} for other companies',

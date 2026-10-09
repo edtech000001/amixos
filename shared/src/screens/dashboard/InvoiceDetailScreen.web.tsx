@@ -25,6 +25,7 @@ import {
   Ban,
   Building2,
   MoreHorizontal,
+  ExternalLink,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import {
@@ -224,6 +225,8 @@ export interface InvoiceDetailScreenProps {
   /** Bill this invoice's lines through another company. Hidden when not
    *  provided (user isn't in another company that can invoice). */
   onBillThrough?: () => void;
+  /** Open the invoice this one is billed through, at the other business. */
+  onViewBilledThrough?: (businessId: string, invoiceId: string) => void;
 }
 
 const STATUS_PILL_BG: Record<string, string> = {
@@ -290,6 +293,7 @@ export function InvoiceDetailScreen({
   remindersSlot,
   businessName,
   onBillThrough,
+  onViewBilledThrough,
 }: InvoiceDetailScreenProps) {
   const { t: ui, locale } = useLang();
   const tInv = ui.dashboard.invoices;
@@ -421,7 +425,7 @@ export function InvoiceDetailScreen({
               {moreOpen ? (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setMoreOpen(false)} />
-                  <div className="absolute right-0 mt-2 w-64 bg-card rounded-2xl border border-border-soft shadow-lg overflow-hidden z-20">
+                  <div className="absolute right-0 mt-2 w-max min-w-[16rem] bg-card rounded-2xl border border-border-soft shadow-lg overflow-hidden z-20">
                     {onAutoname ? (
                       <button
                         type="button"
@@ -429,7 +433,7 @@ export function InvoiceDetailScreen({
                         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface text-left border-b border-border-soft"
                       >
                         <Pencil size={16} className="text-primary shrink-0" />
-                        <span className="text-sm font-medium text-ink">{tInv.autonameBtn}</span>
+                        <span className="text-sm font-medium text-ink whitespace-nowrap">{tInv.autonameBtn}</span>
                       </button>
                     ) : null}
                     {onBillThrough ? (
@@ -439,7 +443,11 @@ export function InvoiceDetailScreen({
                         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface text-left"
                       >
                         <Building2 size={16} className="text-muted shrink-0" />
-                        <span className="text-sm font-medium text-ink">{tBt.action}</span>
+                        {/* Names the state it's in: the sheet it opens shows
+                            the existing link with view/remove, not the picker. */}
+                        <span className="text-sm font-medium text-ink whitespace-nowrap">
+                          {invoice.billedThrough?.length ? tBt.linkedAction : tBt.action}
+                        </span>
                       </button>
                     ) : null}
                   </div>
@@ -516,12 +524,32 @@ export function InvoiceDetailScreen({
            own status/amount are untouched — the other company pays it later. */}
         {invoice.billedThrough?.length ? (
           <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 flex flex-col gap-1.5">
-            {invoice.billedThrough.map(b => (
-              <p key={b.invoice_id} className="flex items-center gap-2 text-sm text-muted">
-                <Building2 size={14} className="shrink-0" />
-                {tBt.billedVia.replace('{{company}}', b.business_name).replace('{{invoice}}', b.invoice_number)}
-              </p>
-            ))}
+            {invoice.billedThrough.map(b => {
+              // The banner opens the other company's invoice directly — the
+              // obvious thing to want from here, and otherwise three clicks
+              // away through the "…" menu.
+              const label = tBt.billedVia
+                .replace('{{company}}', b.business_name)
+                .replace('{{invoice}}', b.invoice_number);
+              return onViewBilledThrough ? (
+                <button
+                  key={b.invoice_id}
+                  type="button"
+                  onClick={() => onViewBilledThrough(b.business_id, b.invoice_id)}
+                  title={tBt.viewTarget}
+                  className="group flex items-center gap-2 text-sm text-muted text-left hover:text-ink transition-colors"
+                >
+                  <Building2 size={14} className="shrink-0" />
+                  <span className="flex-1">{label}</span>
+                  <ExternalLink size={14} className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+              ) : (
+                <p key={b.invoice_id} className="flex items-center gap-2 text-sm text-muted">
+                  <Building2 size={14} className="shrink-0" />
+                  {label}
+                </p>
+              );
+            })}
           </div>
         ) : null}
 

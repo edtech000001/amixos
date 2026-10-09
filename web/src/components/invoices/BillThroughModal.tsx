@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Check, Building2, FilePlus2, UserPlus, Search, AlertTriangle, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Check, Building2, FilePlus2, UserPlus, Search, AlertTriangle, CheckCircle, ExternalLink, Trash2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useLang } from '@/i18n/LangProvider';
 import { formatDateLong } from '@amixos/shared/lib/format';
@@ -16,6 +16,8 @@ import {
   type BillThroughTarget,
   type ClientMatch,
   type OpenInvoice,
+  removeBillThrough,
+  type BillThroughLink,
 } from '@amixos/shared/lib/invoiceBillThrough';
 
 type Supa = Parameters<typeof billInvoiceThrough>[0];
@@ -39,9 +41,12 @@ interface Props {
   targets: BillThroughTarget[];
   /** Switch to the target business and open the invoice. */
   onOpenTarget: (businessId: string, invoiceId: string) => void;
+  /** Set when this invoice is already billed through somewhere. The modal then
+   *  opens on the linked step instead of the picker — one company at a time. */
+  existingLink?: BillThroughLink | null;
 }
 
-type Step = 'company' | 'client' | 'invoice' | 'lines' | 'done';
+type Step = 'linked' | 'company' | 'client' | 'invoice' | 'lines' | 'done';
 
 const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 const clientName = (c: BillThroughClient) => [c.firstName, c.lastName].filter(Boolean).join(' ') || c.company || '—';
@@ -61,6 +66,7 @@ export function BillThroughModal({
   lines,
   targets,
   onOpenTarget,
+  existingLink,
 }: Props) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.invoices.billThrough;
@@ -81,13 +87,35 @@ export function BillThroughModal({
   const [duplicate, setDuplicate] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<{ businessId: string; invoiceId: string; invoiceNumber: string } | null>(null);
+  // Removing an existing link. The confirm renders inline rather than as a
+  // second dialog, matching how this modal already handles confirmations.
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removed, setRemoved] = useState<string | null>(null);
+
+  const doRemoveLink = async () => {
+    if (!existingLink) return;
+    setRemoving(true); setError('');
+    const res = await removeBillThrough(supabase, {
+      sourceInvoiceId,
+      targetInvoiceId: existingLink.invoice_id,
+    });
+    setRemoving(false);
+    if (!res.ok) { setError(t.removeFailed); setConfirmRemove(false); return; }
+    setRemoved(
+      (res.invoiceDeleted ? t.removedDeleted : t.removed)
+        .replace('{{invoice}}', existingLink.invoice_number),
+    );
+  };
+
 
   // Reset on every open; pre-pick the only company and all included lines.
   useEffect(() => {
     if (!open) return;
     setEnabled(null);
     setTarget(targets.length === 1 ? targets[0] : null);
-    setStep(targets.length === 1 ? 'client' : 'company');
+    setStep(existingLink ? 'linked' : targets.length === 1 ? 'client' : 'company');
+    setConfirmRemove(false); setRemoving(false); setRemoved(null);
     setMatches(null); setQuery(''); setResults([]); setClient(null); setCopyClient(false);
     setOpenInvoices(null); setInvoice(null); setBusy(false); setDuplicate(false); setError(''); setResult(null);
     setPicked(new Set(lines.map((l, i) => (l.excluded ? -1 : i)).filter(i => i >= 0)));
@@ -152,8 +180,6 @@ export function BillThroughModal({
       targetClientId: clientId,
       targetInvoiceId: invoice === 'new' ? null : invoice.id,
       allowDuplicate,
-      targetNote: (count, company, number) =>
-        t.targetNote.replace('{{count}}', String(count)).replace('{{company}}', company).replace('{{invoice}}', number),
     });
     setBusy(false);
     if (res.ok === true) { setResult(res); setStep('done'); return; }
@@ -194,7 +220,7 @@ export function BillThroughModal({
   );
 
   return (
-    <Modal open={open} onClose={onClose} title={t.title} size="lg"
+    <Modal open={open} onClose={onClose} title={step === 'linked' ? t.linkedTitle : t.title} size="lg"
       headerAction={canGoBack && enabled ? (
         <button type="button" onClick={back} className="flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-border-soft text-sm text-muted">
           <ArrowLeft size={15} /> {t.back}
@@ -207,6 +233,65 @@ export function BillThroughModal({
         <div className="flex gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30">
           <AlertTriangle size={18} className="text-amber-500 shrink-0" />
           <p className="text-sm text-ink">{t.notEnabled}</p>
+        </div>
+      ) : removed ? (
+        <div className="py-6 flex flex-col items-center gap-3 text-center">
+          <CheckCircle size={36} className="text-emerald-500" />
+          <p className="text-base font-semibold text-ink">{removed}</p>
+          <button type="button" onClick={onClose} className="mt-2 px-4 py-2.5 rounded-xl bg-primary text-sm font-semibold text-white hover:opacity-90">
+            {full.common.buttons.close}
+          </button>
+        </div>
+      ) : step === 'linked' && existingLink ? (
+        /* Already billed through somewhere. The source account can see where
+           and undo it from here, instead of switching business and hunting
+           for the line. Billing through a second company means removing this
+           link first — one at a time. */
+        <div className="flex flex-col gap-4">
+          <div className="flex gap-3 p-4 rounded-2xl bg-border-soft">
+            <Building2 size={18} className="text-muted shrink-0 mt-0.5" />
+            <p className="text-sm text-ink">
+              {t.linkedBody
+                .replace('{{company}}', existingLink.business_name)
+                .replace('{{invoice}}', existingLink.invoice_number)}
+            </p>
+          </div>
+          {error ? <p className="text-sm text-red-500">{error}</p> : null}
+          {confirmRemove ? (
+            <div className="flex flex-col gap-3 p-4 rounded-2xl border border-red-500/30 bg-red-500/5">
+              <p className="text-sm text-ink">
+                {t.removeConfirm
+                  .replace('{{company}}', existingLink.business_name)
+                  .replace('{{invoice}}', existingLink.invoice_number)}
+              </p>
+              <div className="flex gap-2">
+                <button type="button" disabled={removing} onClick={() => setConfirmRemove(false)}
+                  className="px-4 py-2.5 rounded-xl bg-border-soft text-sm font-semibold text-ink hover:bg-border disabled:opacity-50">
+                  {full.common.buttons.cancel}
+                </button>
+                <button type="button" disabled={removing} onClick={() => void doRemoveLink()}
+                  className="px-4 py-2.5 rounded-xl bg-red-500 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+                  {removing ? t.removing : t.removeConfirmYes}
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Right-aligned, the conventional spot for dialog actions —
+               reads as actions rather than more body content. Sized to their
+               labels: full-width rows read as a list of settings. */
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => onOpenTarget(existingLink.business_id, existingLink.invoice_id)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-border-soft hover:bg-border transition-colors">
+                <ExternalLink size={15} className="text-muted shrink-0" />
+                <span className="text-sm font-semibold text-ink whitespace-nowrap">{t.viewTarget}</span>
+              </button>
+              <button type="button" onClick={() => setConfirmRemove(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-red-500/30 hover:bg-red-500/10 transition-colors">
+                <Trash2 size={15} className="text-red-500 shrink-0" />
+                <span className="text-sm font-semibold text-red-500 whitespace-nowrap">{t.removeLink}</span>
+              </button>
+            </div>
+          )}
         </div>
       ) : step === 'done' && result && target ? (
         <div className="py-6 flex flex-col items-center gap-3 text-center">
@@ -313,7 +398,9 @@ export function BillThroughModal({
               >
                 {t.selectAll}
               </button>
-              <div className="flex flex-col">
+              {/* gap, not border-b: the rows are rounded fills now, so a
+                  divider would cut across the hover highlight. */}
+              <div className="flex flex-col gap-0.5">
                 {lines.map((l, i) => {
                   const on = picked.has(i);
                   return (
@@ -321,7 +408,7 @@ export function BillThroughModal({
                       key={i}
                       type="button"
                       onClick={() => setPicked(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
-                      className="flex items-center gap-3 py-2.5 border-b border-border-soft text-left hover:bg-surface"
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-surface transition-colors"
                     >
                       <span className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${on ? 'bg-primary border-primary' : 'border-border'}`}>
                         {on ? <Check size={13} className="text-white" /> : null}
@@ -356,7 +443,9 @@ export function BillThroughModal({
                 <span className="text-sm">{busy ? t.working : t.confirmBtn.replace('{{company}}', target.name)}</span>
                 {!busy ? (
                   <span className="text-xs text-white/80 font-normal">
-                    {t.linesSelected.replace('{{count}}', String(picked.size)).replace('{{amount}}', fmt(pickedTotal))}
+                    {(picked.size === 1 ? t.linesSelectedOne : t.linesSelected)
+                        .replace('{{count}}', String(picked.size))
+                        .replace('{{amount}}', fmt(pickedTotal))}
                   </span>
                 ) : null}
               </button>

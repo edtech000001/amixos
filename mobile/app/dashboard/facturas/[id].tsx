@@ -40,7 +40,7 @@ import { InvoiceRemindersCard } from '@amixos/shared/screens/dashboard/InvoiceRe
 import { addInvoiceReminder } from '@amixos/shared/lib/invoiceReminders';
 import { formatDateLong, formatMoneyInput, formatNumberGrouped, todayLocalISO } from '@amixos/shared/lib/format';
 import { can } from '@amixos/shared/lib/permissions';
-import { billThroughTargets } from '@amixos/shared/lib/invoiceBillThrough';
+import { activeBillThrough, billThroughTargets } from '@amixos/shared/lib/invoiceBillThrough';
 import { resolveLineDescriptions } from '@amixos/shared/lib/invoiceTemplate';
 import { useAuthStore } from '@/lib/auth/store';
 import { BillThroughSheet } from '@/components/BillThroughSheet';
@@ -1266,6 +1266,7 @@ export default function FacturaDetailRoute() {
         // present a modal while another is still animating out.
         onViewPrices={priceItems.some(p => p.active) ? () => setTimeout(() => setPricesOpen(true), 400) : undefined}
         onAutoname={autonameEnabled(business?.id) && canEdit ? runAutoname : undefined}
+        onViewBilledThrough={(bizId, invId) => { setActiveBusiness(bizId); router.replace(`${sectionBase}/${invId}` as never); }}
         onClearPrices={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? clearPrices : undefined}
         autopriceVerify={showInvVerify}
         onMoveJob={canEdit ? openMove : undefined}
@@ -1311,6 +1312,7 @@ export default function FacturaDetailRoute() {
             return invoice.lineItems.map((li, i) => ({ name: names[i], qty: Number(li.qty) || 0, rate: Number(li.rate) || 0, excluded: li.excluded }));
           })()}
           targets={billTargets}
+          existingLink={activeBillThrough(invoice?.billedThrough)}
           onOpenTarget={(bizId, invId) => {
             setBillThroughOpen(false);
             setActiveBusiness(bizId);
