@@ -24,6 +24,7 @@ import {
   Undo2,
   Ban,
   Building2,
+  MoreHorizontal,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import {
@@ -321,6 +322,9 @@ export function InvoiceDetailScreen({
   // "Fecha de emisión" on imported Spanish-language invoices.
   const uiLang: InvoiceLang = locale === 'en' ? 'en' : 'es';
   const t = getInvoiceLabels(uiLang);
+  // Occasional header actions (autoname, bill-through) sit behind "…",
+  // mirroring the mobile more-actions sheet.
+  const [moreOpen, setMoreOpen] = useState(false);
   const dateLoc = getInvoiceDateLocale(uiLang);
   const statusKey = invoice.status as keyof typeof tStatus;
   const statusLabel = tStatus[statusKey] ?? invoice.status;
@@ -374,10 +378,15 @@ export function InvoiceDetailScreen({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1">
+        {/* nowrap: the header row above wraps this whole group onto its own
+           line when space is tight, which reads fine. What looked broken was
+           labels splitting INSIDE a button ("Bill through another / company"). */}
+        <div className="flex items-center gap-1 flex-nowrap whitespace-nowrap">
+          {/* Icons match the mobile more-actions sheet exactly (DollarSign for
+             prices, Pencil for autoname) so the two platforms read the same. */}
           {onViewPrices ? (
             <button type="button" onClick={onViewPrices} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-surface text-sm font-semibold text-muted transition-colors mr-1">
-              {tInv.clientPrices.viewBtn}
+              <DollarSign size={15} /> {tInv.clientPrices.viewBtn}
             </button>
           ) : null}
           {onAutoprice && canEdit ? (
@@ -387,20 +396,56 @@ export function InvoiceDetailScreen({
               </button>
             </Tooltip>
           ) : null}
-          {onAutoname && canEdit ? (
-            <button type="button" onClick={onAutoname} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-surface text-sm font-semibold text-primary transition-colors mr-1">
-              {tInv.autonameBtn}
-            </button>
-          ) : null}
           {onClearPrices && canEdit ? (
             <button type="button" onClick={onClearPrices} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-surface text-sm font-semibold text-muted transition-colors mr-1">
               <Eraser size={15} /> {tInv.jobsSection.clearPricesBtn}
             </button>
           ) : null}
-          {onBillThrough && canEdit ? (
-            <button type="button" onClick={onBillThrough} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-surface text-sm font-semibold text-muted transition-colors mr-1">
-              <Building2 size={15} /> {tBt.action}
-            </button>
+
+          {/* The occasional actions live behind "…" the way they already do on
+             mobile — the header had five text buttons plus four icons, which
+             crowded out the ones used every time. */}
+          {(onAutoname || onBillThrough) && canEdit ? (
+            <div className="relative mr-1">
+              <Tooltip label={tInv.moreActionsTitle}>
+                <button
+                  type="button"
+                  onClick={() => setMoreOpen(v => !v)}
+                  className="p-2 rounded-xl hover:bg-border-soft transition-colors"
+                  aria-haspopup="menu"
+                  aria-expanded={moreOpen}
+                >
+                  <MoreHorizontal size={18} className="text-muted" />
+                </button>
+              </Tooltip>
+              {moreOpen ? (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setMoreOpen(false)} />
+                  <div className="absolute right-0 mt-2 w-64 bg-card rounded-2xl border border-border-soft shadow-lg overflow-hidden z-20">
+                    {onAutoname ? (
+                      <button
+                        type="button"
+                        onClick={() => { setMoreOpen(false); onAutoname(); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface text-left border-b border-border-soft"
+                      >
+                        <Pencil size={16} className="text-primary shrink-0" />
+                        <span className="text-sm font-medium text-ink">{tInv.autonameBtn}</span>
+                      </button>
+                    ) : null}
+                    {onBillThrough ? (
+                      <button
+                        type="button"
+                        onClick={() => { setMoreOpen(false); onBillThrough(); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface text-left"
+                      >
+                        <Building2 size={16} className="text-muted shrink-0" />
+                        <span className="text-sm font-medium text-ink">{tBt.action}</span>
+                      </button>
+                    ) : null}
+                  </div>
+                </>
+              ) : null}
+            </div>
           ) : null}
           {onShareLink ? (
             <Tooltip tip="shareLink">
