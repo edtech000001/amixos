@@ -891,8 +891,8 @@ export default function NuevaFacturaRoute() {
                           placeholder={t.notesPlaceholder}
                           placeholderTextColor={c.faint}
                           multiline
-                          numberOfLines={3}
-                          className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[80px]"
+                          numberOfLines={6}
+                          className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[140px]"
                           style={[{ fontSize: 16 }, { textAlignVertical: 'top' }]}
                         />
                       )}
@@ -913,8 +913,8 @@ export default function NuevaFacturaRoute() {
               placeholder={t.internalNotesPlaceholder}
               placeholderTextColor={c.faint}
               multiline
-              numberOfLines={3}
-              className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[80px]"
+              numberOfLines={8}
+              className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[180px]"
               style={[{ fontSize: 16 }, { textAlignVertical: 'top' }]}
             />
           </Section>

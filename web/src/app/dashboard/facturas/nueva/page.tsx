@@ -727,11 +727,11 @@ function NuevaFacturaContent() {
                         </div>
                       ) : (
                         <textarea
-                          rows={3}
+                          rows={6}
                           placeholder={t.notesPlaceholder}
                           value={notes}
                           onChange={e => setNotes(e.target.value)}
-                          className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none transition"
+                          className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-y min-h-[6rem] transition"
                         />
                       )}
                     </div>
@@ -747,11 +747,11 @@ function NuevaFacturaContent() {
         <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
           <h2 className="text-sm font-semibold text-ink mb-2">{t.internalNotesLabel}</h2>
           <textarea
-            rows={3}
+            rows={8}
             placeholder={t.internalNotesPlaceholder}
             value={internalNotes}
             onChange={e => setInternalNotes(e.target.value)}
-            className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none transition"
+            className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-y min-h-[8rem] transition"
           />
         </div>
 
