@@ -4212,7 +4212,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         sortByTitle: 'Ordenar por',
         groupByTitle: 'Agrupar por',
         by: {
-          recent: 'Más recientes',
+          // "Agregados" not "Más recientes": this sorts by created_at (when the
+          // job was entered), while the card shows scheduled_date. The old name
+          // implied the visible date, so a list ordered correctly looked broken.
+          recent: 'Agregados recientemente',
           status: 'Estado del trabajo',
           startDate: 'Fecha de inicio',
           priority: 'Prioridad',
@@ -7576,7 +7579,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         sortByTitle: 'Sort by',
         groupByTitle: 'Group by',
         by: {
-          recent: 'Newest',
+          recent: 'Recently added',
           status: 'Job status',
           startDate: 'Start date',
           priority: 'Priority',
