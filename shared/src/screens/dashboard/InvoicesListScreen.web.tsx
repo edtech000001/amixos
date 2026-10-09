@@ -555,11 +555,11 @@ export function InvoicesListScreen({
             <button
               key={k}
               onClick={() => toggleStatus(k)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 ${on ? 'bg-primary text-white' : 'bg-border-soft text-muted hover:text-ink'}`}
+              className={`flex items-center gap-1.5 px-3 h-8 rounded-xl text-xs font-semibold shrink-0 ${on ? 'bg-primary text-white' : 'bg-border-soft text-muted hover:text-ink'}`}
             >
               {statusLabels[k]}
               {counts[k] > 0 ? (
-                <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${on ? 'bg-white/20 text-white' : 'bg-border text-muted'}`}>{counts[k]}</span>
+                <span className={`px-1.5 rounded-full text-xs font-bold ${on ? 'bg-white/20 text-white' : 'bg-border text-muted'}`}>{counts[k]}</span>
               ) : null}
             </button>
           );

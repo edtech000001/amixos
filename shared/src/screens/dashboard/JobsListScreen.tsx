@@ -1154,7 +1154,7 @@ export function JobsListScreen({
               <Pressable
                 key={k}
                 onPress={() => toggleTab(k)}
-                className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-xl ${
+                className={`flex-row items-center gap-1.5 px-3 h-8 rounded-xl ${
                   isActive ? 'bg-primary' : 'bg-border-soft'
                 }`}
               >
@@ -1168,7 +1168,7 @@ export function JobsListScreen({
                 </Text>
                 {counts[k] > 0 ? (
                   <View
-                    className={`px-1.5 py-0.5 rounded-full ${
+                    className={`px-1.5 rounded-full ${
                       isActive ? 'bg-white/20' : 'bg-border'
                     }`}
                   >

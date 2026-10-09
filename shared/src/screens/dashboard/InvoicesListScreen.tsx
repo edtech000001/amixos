@@ -481,11 +481,11 @@ export function InvoicesListScreen({
             <Pressable
               key={k}
               onPress={() => toggleStatus(k)}
-              className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-xl ${on ? 'bg-primary' : 'bg-border-soft'}`}
+              className={`flex-row items-center gap-1.5 px-3 h-8 rounded-xl ${on ? 'bg-primary' : 'bg-border-soft'}`}
             >
               <Text className={`text-xs font-semibold ${on ? 'text-white' : 'text-muted'}`}>{statusLabels[k]}</Text>
               {counts[k] > 0 ? (
-                <View className={`px-1.5 py-0.5 rounded-full ${on ? 'bg-white/20' : 'bg-border'}`}>
+                <View className={`px-1.5 rounded-full ${on ? 'bg-white/20' : 'bg-border'}`}>
                   <Text className={`text-xs font-bold ${on ? 'text-white' : 'text-muted'}`}>{counts[k]}</Text>
                 </View>
               ) : null}

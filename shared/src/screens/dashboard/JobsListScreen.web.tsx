@@ -1076,14 +1076,14 @@ export function JobsListScreen({
             <button
               key={k}
               onClick={() => toggleTab(k)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl shrink-0 text-xs font-semibold ${
+              className={`flex items-center gap-1.5 px-3 h-8 rounded-xl shrink-0 text-xs font-semibold ${
                 isActive ? 'bg-primary text-white' : 'bg-border-soft text-muted hover:bg-border'
               }`}
             >
               <Icon size={13} />
               {tabLabels[k]}
               {counts[k] > 0 ? (
-                <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-border text-muted'}`}>
+                <span className={`px-1.5 rounded-full text-xs font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-border text-muted'}`}>
                   {counts[k]}
                 </span>
               ) : null}
