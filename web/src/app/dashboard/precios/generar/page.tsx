@@ -171,10 +171,12 @@ export default function GenerarPreciosPage() {
   );
   const [emailPickOpen, setEmailPickOpen] = useState(false);
   const [emailPickQuery, setEmailPickQuery] = useState('');
-  // Set when a recipient is chosen from state mode. The sheet must be switched
-  // to that client FIRST — window.print() prints whatever is on screen, so
-  // emailing before the switch renders would send a Colorado sheet to a Kansas
-  // customer. The effect below fires once React has applied the switch.
+  // Set when a recipient is picked. window.print() prints whatever is on
+  // screen, so the email waits (effect below) until the picker has closed and,
+  // in Client mode, the sheet shows that client. In State mode the sheet stays
+  // the generic state sheet — choosing State is how you send a plain state
+  // price list, even to a client (it used to switch to Client mode and add
+  // "Prepared for" them).
   const [pendingEmail, setPendingEmail] = useState<ClientLite | null>(null);
 
   const doEmail = (target: ClientLite) => {
@@ -191,31 +193,28 @@ export default function GenerarPreciosPage() {
     window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
   useEffect(() => {
-    if (!pendingEmail) return;
-    // Wait until the mode/client switch has actually rendered.
-    if (mode !== 'client' || clientId !== pendingEmail.id) return;
+    if (!pendingEmail || emailPickOpen) return;
+    // Client mode: wait until the sheet shows this client.
+    if (mode === 'client' && clientId !== pendingEmail.id) return;
     const target = pendingEmail;
     setPendingEmail(null);
     doEmail(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingEmail, mode, clientId]);
+  }, [pendingEmail, mode, clientId, emailPickOpen]);
 
   const onEmailPress = () => {
     // Keyed on the SELECTED CLIENT, not on `mode` — arriving from a client's
     // page means the recipient is already known, and asking who it is for
-    // would be absurd. pickEmailTarget rather than doEmail so that a sheet
-    // currently showing STATE pricing is switched to that client first: the
-    // recipient and the prices they are shown have to agree.
+    // would be absurd.
     if (selectedClient && clientEmail(selectedClient)) { pickEmailTarget(selectedClient); return; }
     setEmailPickQuery('');
     setEmailPickOpen(true);
   };
   const pickEmailTarget = (target: ClientLite) => {
     setEmailPickOpen(false);
-    // Switching the sheet to this client is the point: the recipient and the
-    // prices they are shown have to agree.
-    setMode('client');
-    setClientId(target.id);
+    // Client mode: the sheet follows the recipient. State mode: it stays the
+    // chosen state's generic sheet.
+    if (mode === 'client') setClientId(target.id);
     setPendingEmail(target);
   };
 

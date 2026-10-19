@@ -336,17 +336,17 @@ export default function FacturasPreciosPage() {
 
   /** Emails the sheet to one client, PDF attached.
    *
-   *  Addressed to the client the sheet was BUILT for — so the prices in the
-   *  attachment and the recipient always agree. In state mode there is no such
-   *  client, so the picker below asks for one and the sheet is re-rendered for
-   *  them; emailing a Colorado sheet to a Kansas customer would be worse than
-   *  refusing. */
+   *  The MODE decides what's attached: Client mode → that client's sheet
+   *  (their prices, "Prepared for" them). State mode → the GENERIC sheet for
+   *  the chosen state, even though it's addressed to a client — choosing State
+   *  is how you send a plain state price list. (It used to re-render for the
+   *  recipient, adding their name and swapping in their state.) */
   const emailTo = async (target: ClientLite) => {
     const to = clientEmail(target);
     if (!to || !business) return;
     setBusy(true);
     try {
-      const uri = await renderPdf(target);
+      const uri = await renderPdf(mode === 'client' ? target : null);
       const subject = t.emailSubject.replace('{{business}}', business.name ?? 'Amixos');
       const body = t.emailBody
         .replace('{{name}}', (target.first_name ?? '').trim() || clientName(target))
