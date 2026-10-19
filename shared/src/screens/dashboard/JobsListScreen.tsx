@@ -21,6 +21,8 @@ import {
   Send,
   Building2,
   ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   Check,
   AlertTriangle,
   Clock,
@@ -58,6 +60,8 @@ import {
 } from '../../lib/jobAlerts';
 import {
   sortJobs,
+  sortIsDesc,
+  sortDirCaption,
   groupJobs,
   JOB_SORT_KEYS,
   JOB_GROUP_KEYS,
@@ -203,6 +207,8 @@ export interface JobsListScreenProps {
   onFiltersChange?: (f: {
     search: string; tabs: string[]; sortBy: JobSortKey; groupBy: JobGroupKey;
     dateFrom: string | null; dateTo: string | null;
+    /** Explicit direction (tap the active sort again); null = its default. */
+    sortDesc?: boolean | null;
   }) => void;
   /** Business payroll settings — adds "This/Last pay period" chips to the
    *  date filter that match the Payroll screen's periods exactly. */
@@ -329,6 +335,8 @@ export function JobsListScreen({
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [sortBy, setSortBy] = useState<JobSortKey>('recent');
+  // null = the sort's default direction (dates newest-first — jobSort.ts).
+  const [sortDesc, setSortDesc] = useState<boolean | null>(null);
   const [groupBy, setGroupBy] = useState<JobGroupKey>('none');
   // Scheduled-date range filter (yyyy-mm-dd). null = open-ended that side.
   const [dateFrom, setDateFrom] = useState<string | null>(null);
@@ -380,6 +388,7 @@ export function JobsListScreen({
         // report must carry the restored term, not a stale empty debounce.
         setDebouncedSearch(typeof s?.search === 'string' ? s.search : '');
         setSortBy(s?.sortBy ?? 'recent');
+        setSortDesc(s?.sortDesc ?? null);
         setGroupBy(s?.groupBy ?? 'none');
         setDateFrom(s?.dateFrom ?? null);
         setDateTo(s?.dateTo ?? null);
@@ -394,8 +403,8 @@ export function JobsListScreen({
   // Persist on change (after the initial load so we don't clobber stored values).
   useEffect(() => {
     if (!hydrated.current) return;
-    void AsyncStorage.setItem(filtersKey, JSON.stringify({ tabs, search, sortBy, groupBy, dateFrom, dateTo, datePreset })).catch(() => {});
-  }, [filtersKey, tabs, search, sortBy, groupBy, dateFrom, dateTo, datePreset]);
+    void AsyncStorage.setItem(filtersKey, JSON.stringify({ tabs, search, sortBy, sortDesc, groupBy, dateFrom, dateTo, datePreset })).catch(() => {});
+  }, [filtersKey, tabs, search, sortBy, sortDesc, groupBy, dateFrom, dateTo, datePreset]);
 
   const dateRangePresets = buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets, payPeriod);
   // A tapped relative preset ("This pay period", "This week"…) rolls forward
@@ -450,7 +459,7 @@ export function JobsListScreen({
     setSummaryOpen(true);
     void loadSummary(picked.length ? picked : undefined);
   };
-  const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setGroupBy('none'); setDateFrom(null); setDateTo(null); };
+  const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setSortDesc(null); setGroupBy('none'); setDateFrom(null); setDateTo(null); };
 
   const tw = full.dashboard.workspaces;
   const tabLabels: Record<TabKey, string> = {
@@ -514,7 +523,12 @@ export function JobsListScreen({
   }, [jobs, search, tabs, dateFrom, dateTo, serverMode]);
 
   const sections = useMemo(
-    () => groupJobs(sortJobs(filtered, sortBy), groupBy, {
+    () => groupJobs(
+      // Server mode + "Recently added": rows already arrive in the chosen
+      // order (newest-first keyset, or oldest-first via the server's
+      // 'created' sort) — re-sorting locally would flip oldest-first back.
+      serverMode && sortBy === 'recent' ? filtered : sortJobs(filtered, sortBy, sortDesc),
+      groupBy, {
       client: t.sort.noClient,
       lead: t.sort.noLead,
       company: t.sort.noCompany,
@@ -522,7 +536,7 @@ export function JobsListScreen({
     }, (v) => usStateName(v, locale)),
     [filtered, sortBy, groupBy, t, locale],
   );
-  const sortActive = sortBy !== 'recent' || groupBy !== 'none';
+  const sortActive = sortBy !== 'recent' || sortDesc === false || groupBy !== 'none';
 
   // SectionList data + an id → {sectionIndex,itemIndex} map for scroll-restore.
   const flatSections = useMemo<JobFlatSection[]>(
@@ -599,9 +613,9 @@ export function JobsListScreen({
   }, [search]);
   useEffect(() => {
     if (!serverMode || !onFiltersChange || !ready) return;
-    onFiltersChange({ search: debouncedSearch, tabs, sortBy, groupBy, dateFrom, dateTo });
+    onFiltersChange({ search: debouncedSearch, tabs, sortBy, sortDesc, groupBy, dateFrom, dateTo });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverMode, ready, debouncedSearch, tabs, sortBy, groupBy, dateFrom, dateTo]);
+  }, [serverMode, ready, debouncedSearch, tabs, sortBy, sortDesc, groupBy, dateFrom, dateTo]);
 
   const pendingValue = jobs.filter(j => j.status === 'sent' && !isExpired(j))
     .reduce((s, j) => s + j.totalAmount, 0);
@@ -1321,10 +1335,16 @@ export function JobsListScreen({
               {JOB_SORT_KEYS.map(k => {
                 const selected = sortBy === k;
                 const Icon = SORT_ICON[k];
+                const desc = sortIsDesc(k, selected ? sortDesc : null);
                 return (
                   <Pressable
                     key={k}
-                    onPress={() => setSortBy(k)}
+                    // Tap a new sort → its default direction. Tap the active
+                    // one again → reverse it.
+                    onPress={() => {
+                      if (selected) setSortDesc(!sortIsDesc(k, sortDesc));
+                      else { setSortBy(k); setSortDesc(null); }
+                    }}
                     className={`flex-row items-center gap-3 px-3 py-1.5 rounded-2xl ${
                       selected ? 'bg-primary/10' : 'active:bg-surface'
                     }`}
@@ -1332,10 +1352,19 @@ export function JobsListScreen({
                     <View className={`w-8 h-8 rounded-xl items-center justify-center ${selected ? 'bg-primary' : 'bg-border-soft'}`}>
                       <Icon size={16} color={selected ? '#FFFFFF' : '#6B7280'} />
                     </View>
-                    <Text className={`flex-1 text-[15px] ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>
-                      {t.sort.by[k]}
-                    </Text>
-                    {selected ? <Check size={18} color={c.primary} /> : null}
+                    <View className="flex-1">
+                      <Text className={`text-[15px] ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>
+                        {t.sort.by[k]}
+                      </Text>
+                      {selected ? (
+                        <Text className="text-[11px] text-muted mt-0.5">
+                          {t.sort.dir[sortDirCaption(k, desc)]} · {t.sort.dir.tapToReverse}
+                        </Text>
+                      ) : null}
+                    </View>
+                    {selected
+                      ? (desc ? <ArrowDown size={18} color={c.primary} /> : <ArrowUp size={18} color={c.primary} />)
+                      : null}
                   </Pressable>
                 );
               })}

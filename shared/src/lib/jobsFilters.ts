@@ -12,6 +12,9 @@ export interface JobsFilters {
   tabs: string[];
   search: string;
   sortBy: JobSortKey;
+  /** Sort direction the user chose by tapping the active sort again. null /
+   *  absent = the sort's default (sortIsDesc in jobSort.ts). */
+  sortDesc?: boolean | null;
   groupBy: JobGroupKey;
   /** Scheduled-date range filter (yyyy-mm-dd). null = open-ended on that side. */
   dateFrom: string | null;
@@ -38,6 +41,7 @@ export function jobsFiltersActive(f: JobsFilters): boolean {
     f.tabs.length > 0 ||
     f.search.trim() !== '' ||
     f.sortBy !== 'recent' ||
+    f.sortDesc === false ||
     f.groupBy !== 'none' ||
     !!f.dateFrom ||
     !!f.dateTo
@@ -80,6 +84,7 @@ export function parseJobsFilters(raw: string | null | undefined): Partial<JobsFi
     // 'client'/'lead' left the sort menu (grouping covers them) — migrate old
     // saved views to the default order instead of restoring a hidden option.
     if (o.sortBy) out.sortBy = o.sortBy === 'client' || o.sortBy === 'lead' ? 'recent' : o.sortBy;
+    if (typeof o.sortDesc === 'boolean') out.sortDesc = o.sortDesc;
     if (o.groupBy) out.groupBy = o.groupBy;
     if (typeof o.dateFrom === 'string') out.dateFrom = o.dateFrom;
     if (typeof o.dateTo === 'string') out.dateTo = o.dateTo;

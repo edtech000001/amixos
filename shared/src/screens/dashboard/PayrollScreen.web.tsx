@@ -262,6 +262,8 @@ export function PayrollScreen({
   // worker with no hours this period…). Same insert path as Mark paid.
   const [manualOpen, setManualOpen] = useState(false);
   const [manualWorker, setManualWorker] = useState('');
+  // Loan deduction on a manual payment — same as Mark paid's.
+  const [manualLoanDeduct, setManualLoanDeduct] = useState('');
   const [manualAmount, setManualAmount] = useState('');
   const [manualHours, setManualHours] = useState('');
   const [manualMethod, setManualMethod] = useState<PayMethod>(defaultPayMethod);
@@ -284,6 +286,7 @@ export function PayrollScreen({
   }, [frequency, anchorDate, periodStartStr]);
   const openManual = () => {
     setManualWorker('');
+    setManualLoanDeduct('');
     setManualAmount('');
     setManualHours('');
     setManualMethod(defaultPayMethod);
@@ -291,10 +294,29 @@ export function PayrollScreen({
     setManualPeriod(periodStartStr ?? manualPeriods[0]?.start ?? '');
     setManualOpen(true);
   };
+  // Record HOW a loan deduction was taken (check #, wire, cash) on the ledger
+  // entry. Shared by Mark paid and Record payment.
+  const loanNoteFor = (m: PayMethod, checkNo: string) => {
+    const num = checkNo.trim();
+    return m === 'check'
+      ? (num ? t.loanNoteFromCheckNum.replace('{{n}}', num) : t.loanNoteFromCheck)
+      : m === 'wire'
+        ? t.loanNoteFromWire
+        : t.loanNoteFromCash;
+  };
+  /** Workers for the manual-payment picker, A–Z by first name. */
+  const sortedWorkers = (allWorkers ?? []).slice()
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  const manualLoanOwed = manualWorker ? (loanBalances?.[manualWorker] ?? 0) : 0;
+  const manualNet = (parseFloat(manualAmount) || 0) - (parseFloat(manualLoanDeduct) || 0);
   const confirmManual = () => {
     const amt = parseFloat(manualAmount) || 0;
     if (!manualWorker || amt <= 0) return;
     onMarkPaid(manualWorker, manualMethod, manualMethod === 'check' ? manualCheck.trim() : '', 0, amt, parseFloat(manualHours) || 0, null, manualPeriod || undefined);
+    const deduct = parseFloat(manualLoanDeduct) || 0;
+    if (deduct > 0 && onLoanRepayment) {
+      onLoanRepayment(manualWorker, deduct, loanNoteFor(manualMethod, manualCheck));
+    }
     setManualOpen(false);
   };
 
@@ -437,16 +459,7 @@ export function PayrollScreen({
     );
     const deduct = parseFloat(loanDeduct) || 0;
     if (deduct > 0 && onLoanRepayment) {
-      // Record HOW this loan deduction was taken (check #, wire, cash) on the
-      // ledger entry.
-      const num = checkNumber.trim();
-      const note =
-        method === 'check'
-          ? (num ? t.loanNoteFromCheckNum.replace('{{n}}', num) : t.loanNoteFromCheck)
-          : method === 'wire'
-            ? t.loanNoteFromWire
-            : t.loanNoteFromCash;
-      onLoanRepayment(payRow.employeeId, deduct, note);
+      onLoanRepayment(payRow.employeeId, deduct, loanNoteFor(method, checkNumber));
     }
     setPayRow(null);
   };
@@ -773,11 +786,11 @@ export function PayrollScreen({
             <label className="block text-sm font-semibold text-ink mb-2">{t.manualWorkerLabel}</label>
             <select
               value={manualWorker}
-              onChange={e => setManualWorker(e.target.value)}
+              onChange={e => { setManualWorker(e.target.value); setManualLoanDeduct(''); }}
               className="w-full mb-4 rounded-2xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="">{t.manualSelectWorker}</option>
-              {(allWorkers ?? []).map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+              {sortedWorkers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
 
             <p className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">{t.methodHeading}</p>
@@ -813,6 +826,22 @@ export function PayrollScreen({
               <input value={manualHours} onChange={e => setManualHours(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0" inputMode="decimal"
                 className="w-full rounded-2xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
             </div>
+
+            {/* Loan — only when the selected worker owes something. */}
+            {manualWorker && onAddLoan && manualLoanOwed > 0 ? (
+              <div className="mb-4 rounded-2xl border border-border-soft bg-surface p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-ink">{t.loanTitle}</span>
+                  <span className="text-sm font-bold text-amber-600">{fmt(manualLoanOwed)} {t.loanOwed}</span>
+                </div>
+                <label className="block text-xs text-muted mt-2 mb-1">{t.loanDeductLabel}</label>
+                <input value={formatMoneyInput(manualLoanDeduct)} onChange={e => setManualLoanDeduct(e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal"
+                  className="w-full rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                {(parseFloat(manualLoanDeduct) || 0) > 0 ? (
+                  <p className="text-xs text-muted mt-1.5">{t.loanNetToPay}: <span className="font-bold text-ink">{fmt(manualNet)}</span></p>
+                ) : null}
+              </div>
+            ) : null}
 
             <button type="button" onClick={confirmManual} disabled={busy || !manualWorker || !(parseFloat(manualAmount) > 0)}
               className="w-full py-3 rounded-2xl bg-primary text-white font-semibold hover:opacity-90 disabled:opacity-50">

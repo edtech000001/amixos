@@ -118,6 +118,8 @@ export default function TrabajosTab() {
   // jobs_page_ids RPC (offset paging); 'group' = lazy group index + per-group.
   const modeRef = useRef<'page' | 'sorted' | 'group'>('page');
   const sortKeyRef = useRef<string>('recent');
+  // Explicit sort direction for the server-sorted stream (null = its default).
+  const sortDescRef = useRef<boolean | null>(null);
   const sortOffsetRef = useRef(0);
   const searchIdsRef = useRef<SearchIds | null>(null);
   const groupIndexRef = useRef<JobGroup[]>([]);
@@ -125,10 +127,10 @@ export default function TrabajosTab() {
   const groupByRef = useRef<string>('none');
 
   // ── SWR default view: instant from cache, background revalidate ───────────
-  type Filters = { search: string; tabs: string[]; sortBy: string; groupBy: string; dateFrom: string | null; dateTo: string | null };
+  type Filters = { search: string; tabs: string[]; sortBy: string; groupBy: string; dateFrom: string | null; dateTo: string | null; sortDesc?: boolean | null };
   const [filters, setFilters] = useState<Filters | null>(null);
   const isDefaultFilters = (f: Filters) =>
-    !f.search && f.tabs.length === 0 && f.sortBy === 'recent' && f.groupBy === 'none' && !f.dateFrom && !f.dateTo;
+    !f.search && f.tabs.length === 0 && f.sortBy === 'recent' && f.sortDesc !== false && f.groupBy === 'none' && !f.dateFrom && !f.dateTo;
   const defaultActive = !!business && !!filters && isDefaultFilters(filters);
   const swrKey = defaultActive ? `jobs_list_v2_${business.id}_${activeLocationId ?? 'all'}` : null;
   type JobsPayload = { jobs: RawJob[]; nextCursor: JobsCursor | null; counts: Record<string, number> };
@@ -201,11 +203,12 @@ export default function TrabajosTab() {
   // Server-side sort (status/startDate/client/company/lead) via jobs_page_ids.
   // Falls back to 'recent' paging when the tab combo can't be expressed
   // (multi-tab / delegated) — filters stay correct, order degrades to recent.
-  const runSorted = async (params: JobsQueryParams, sortKey: string) => {
+  const runSorted = async (params: JobsQueryParams, sortKey: string, sortDesc: boolean | null = null) => {
     const seq = ++loadSeqRef.current;
     paramsRef.current = params;
     modeRef.current = 'sorted';
     sortKeyRef.current = sortKey;
+    sortDescRef.current = sortDesc;
     sortOffsetRef.current = 0;
     setLoading(true);
     setHasMore(false);
@@ -214,7 +217,7 @@ export default function TrabajosTab() {
       if (seq !== loadSeqRef.current) return;
       searchIdsRef.current = ids;
       const [pageRes, counts] = await Promise.all([
-        fetchJobsPageSorted<RawJob>(supabase, JOB_LIST_SELECT, { ...params, sortBy: sortKey, offset: 0, pageSize: 50 }, ids),
+        fetchJobsPageSorted<RawJob>(supabase, JOB_LIST_SELECT, { ...params, sortBy: sortKey, sortDesc, offset: 0, pageSize: 50 }, ids),
         fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search, dateFrom: params.dateFrom, dateTo: params.dateTo }, ids),
       ]);
       if (seq !== loadSeqRef.current) return;
@@ -282,7 +285,7 @@ export default function TrabajosTab() {
       try {
         const pageRes = await fetchJobsPageSorted<RawJob>(
           supabase, JOB_LIST_SELECT,
-          { ...paramsRef.current, sortBy: sortKeyRef.current, offset: sortOffsetRef.current, pageSize: 50 },
+          { ...paramsRef.current, sortBy: sortKeyRef.current, sortDesc: sortDescRef.current, offset: sortOffsetRef.current, pageSize: 50 },
           searchIdsRef.current,
         );
         if (seq !== loadSeqRef.current || !pageRes) return;
@@ -342,7 +345,7 @@ export default function TrabajosTab() {
     if (!paramsRef.current) return;
     const p = { ...paramsRef.current, locationId };
     if (modeRef.current === 'group') void runGroupLazy(p, groupByRef.current);
-    else if (modeRef.current === 'sorted') void runSorted(p, sortKeyRef.current);
+    else if (modeRef.current === 'sorted') void runSorted(p, sortKeyRef.current, sortDescRef.current);
     else void runQuery(p);
   };
   const reload = () => reRun(activeLocationId ?? null);
@@ -400,7 +403,11 @@ export default function TrabajosTab() {
       // Server-sorted stream by the group dimension — groupJobs sections it.
       void runSorted(params, f.groupBy);
     } else if (f.sortBy !== 'recent') {
-      void runSorted(params, f.sortBy);
+      void runSorted(params, f.sortBy, f.sortDesc ?? null);
+    } else if (f.sortDesc === false) {
+      // "Recently added" flipped to oldest-first: the keyset path only pages
+      // newest-first, so the server sorts by created (migration 249).
+      void runSorted(params, 'created', false);
     } else {
       void runQuery(params);
     }

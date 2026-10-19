@@ -149,6 +149,9 @@ export default function EmpleadosPage() {
   const assignableRoles: Role[] = [...INVITABLE_ROLES, ...getActiveCustomRoles().map(c => c.key as Role)];
   const supabase = createSupabaseClient();
   const { business, user, currentRole, startImpersonation, activeLocationId, locations } = useApp();
+  // Business overtime defaults — shown in the per-employee boxes, which fall
+  // back to them when left blank.
+  const otDefaults = normalizePayrollConfig(business?.payroll_config).overtime;
   // UI-hygiene gates (RLS is the real lock). A read-only viewer never sees
   // write affordances. Log-hours stays for anyone who may write timesheets
   // (field crew via writeOwnTimesheet, managers via seeAllTimesheets) but
@@ -320,13 +323,17 @@ export default function EmpleadosPage() {
                   />
                 </label>
                 {empForm.overtime_eligible ? (
-                  <div className="flex gap-3">
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs text-muted leading-relaxed">
+                      {t.modal.overtimeHint.replace('{{hours}}', String(otDefaults.weeklyThreshold)).replace('{{mult}}', String(otDefaults.multiplier))}
+                    </p>
+                    <div className="flex gap-3">
                     <label className="flex-1 text-xs text-muted">
                       {t.modal.overtimeThresholdLabel}
                       <input
                         type="number" min="0"
                         value={empForm.overtime_threshold}
-                        placeholder={t.modal.overtimeDefaultPlaceholder}
+                        placeholder={t.modal.overtimeHoursDefault.replace('{{n}}', String(otDefaults.weeklyThreshold))}
                         onChange={e => setEmpForm(f => ({ ...f, overtime_threshold: e.target.value }))}
                         className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                       />
@@ -336,11 +343,12 @@ export default function EmpleadosPage() {
                       <input
                         type="number" min="1" step="0.1"
                         value={empForm.overtime_multiplier}
-                        placeholder={t.modal.overtimeDefaultPlaceholder}
+                        placeholder={t.modal.overtimeMultDefault.replace('{{n}}', String(otDefaults.multiplier))}
                         onChange={e => setEmpForm(f => ({ ...f, overtime_multiplier: e.target.value }))}
                         className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                       />
                     </label>
+                  </div>
                   </div>
                 ) : null}
               </>

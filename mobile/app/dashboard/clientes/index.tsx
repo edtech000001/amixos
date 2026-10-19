@@ -224,12 +224,12 @@ export default function ClientesTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [swr.data, swrKey]);
 
-  const loadMore = async () => {
+  const loadMore = async (pageSize = 50) => {
     if (loadingMore || !paramsRef.current || loadAllRef.current || !cursorRef.current) return;
     const seq = loadSeqRef.current;
     setLoadingMore(true);
     try {
-      const page = await fetchClientsPage<Client>(supabase, CLIENT_PAGE_SELECT, { ...paramsRef.current, excludeIds: excludeIdsRef.current, cursor: cursorRef.current, pageSize: 50 });
+      const page = await fetchClientsPage<Client>(supabase, CLIENT_PAGE_SELECT, { ...paramsRef.current, excludeIds: excludeIdsRef.current, cursor: cursorRef.current, pageSize });
       if (seq !== loadSeqRef.current) return;
       setRawClients(prev => [...prev, ...page.clients]);
       cursorRef.current = page.nextCursor;
@@ -237,6 +237,20 @@ export default function ClientesTab() {
     } catch { setLoadError(true); }
     finally { setLoadingMore(false); }
   };
+
+  // A–Z scrubber smoothness: it jumps instantly to letters already loaded, but
+  // only the first 50 clients arrive up front, so dragging across the rest of
+  // the alphabet fired a server request per letter and the list lagged behind
+  // the finger. A business with up to ~1,000 clients is a small payload, so
+  // fetch the remainder in ONE background request once the first page is up —
+  // after that every letter is local. Bigger books keep page-at-a-time.
+  const PREFETCH_ALL_MAX = 1000;
+  useEffect(() => {
+    if (loading || loadingMore || !hasMore || serverTotal > PREFETCH_ALL_MAX) return;
+    if (!paramsRef.current || paramsRef.current.search) return; // default A–Z view only
+    void loadMore(PREFETCH_ALL_MAX);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, loadingMore, hasMore, serverTotal]);
 
   const reRun = () => {
     if (defaultActive) { swr.refresh({ force: true }); return; }
@@ -433,7 +447,7 @@ export default function ClientesTab() {
         serverTotal={serverTotal}
         hasMore={hasMore}
         loadingMore={loadingMore}
-        onLoadMore={loadMore}
+        onLoadMore={() => void loadMore()}
         onFiltersChange={handleFiltersChange}
       />
     </View>

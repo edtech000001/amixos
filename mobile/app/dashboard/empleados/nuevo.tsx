@@ -40,6 +40,7 @@ import {
   type EmployeeFieldSection,
 } from '@amixos/shared/lib/employeeFieldSections';
 import { useSectionBase } from '@/lib/sectionNav';
+import { normalizePayrollConfig } from '@amixos/shared/lib/payroll';
 
 interface FieldTemplate {
   id: string;
@@ -113,6 +114,9 @@ export default function NuevoEmpleadoRoute() {
   const sectionBase = useSectionBase('empleados');
   const supabase = createSupabaseClient();
   const { business, user, currentRole, locations, activeLocationId } = useApp();
+  // Business overtime defaults — shown in the per-employee boxes, which fall
+  // back to them when left blank.
+  const otDefaults = normalizePayrollConfig(business?.payroll_config).overtime;
   const { t: full, locale } = useLang();
   const c = useThemeColors();
   const t = full.dashboard.employees;
@@ -265,13 +269,17 @@ export default function NuevoEmpleadoRoute() {
                   </View>
                 </Pressable>
                 {form.overtime_eligible ? (
-                  <View className="flex-row gap-3">
+                  <View className="gap-2">
+                    <Text className="text-xs text-muted leading-4">
+                      {t.modal.overtimeHint.replace('{{hours}}', String(otDefaults.weeklyThreshold)).replace('{{mult}}', String(otDefaults.multiplier))}
+                    </Text>
+                    <View className="flex-row gap-3">
                     <View className="flex-1">
                       <Text className="text-xs text-muted mb-1">{t.modal.overtimeThresholdLabel}</Text>
                       <TextInput
                         value={form.overtime_threshold}
                         onChangeText={v => setForm(f => ({ ...f, overtime_threshold: v.replace(/[^0-9.]/g, '') }))}
-                        placeholder={t.modal.overtimeDefaultPlaceholder}
+                        placeholder={t.modal.overtimeHoursDefault.replace('{{n}}', String(otDefaults.weeklyThreshold))}
                         placeholderTextColor={c.faint}
                         keyboardType="decimal-pad"
                         className="rounded-xl border border-border bg-card px-3 py-2 text-ink" style={{ fontSize: 14 }} />
@@ -281,11 +289,12 @@ export default function NuevoEmpleadoRoute() {
                       <TextInput
                         value={form.overtime_multiplier}
                         onChangeText={v => setForm(f => ({ ...f, overtime_multiplier: v.replace(/[^0-9.]/g, '') }))}
-                        placeholder={t.modal.overtimeDefaultPlaceholder}
+                        placeholder={t.modal.overtimeMultDefault.replace('{{n}}', String(otDefaults.multiplier))}
                         placeholderTextColor={c.faint}
                         keyboardType="decimal-pad"
                         className="rounded-xl border border-border bg-card px-3 py-2 text-ink" style={{ fontSize: 14 }} />
                     </View>
+                  </View>
                   </View>
                 ) : null}
               </View>

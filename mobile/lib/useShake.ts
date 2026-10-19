@@ -11,6 +11,7 @@
 // shake registering as four.
 
 import { useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
 
 /** Total acceleration (in g) past which a sample counts as a jolt. 1g is
  *  gravity at rest, so this is 0.8g of actual movement. */
@@ -21,6 +22,8 @@ const JOLTS_REQUIRED = 3;
 const WINDOW_MS = 1000;
 /** Silence after firing, so one continuous shake is one event. */
 const COOLDOWN_MS = 3000;
+/** Ignore motion this long after the app comes back to the foreground. */
+const RESUME_GRACE_MS = 1500;
 
 // Whether this binary actually has the accelerometer, asked in the only way
 // that does not throw.
@@ -68,17 +71,35 @@ export function useShake(onShake: () => void, enabled = true) {
 
     let jolts: number[] = [];
     let lastFired = 0;
+    let resumedAt = Date.now();
 
-    // Guarded as a unit: on a client where the module resolves but the native
-    // side is absent, it is addListener that throws, not the require.
+    // Listen ONLY while the app is in the foreground. Subscribed regardless,
+    // motion queued up while the app was in the background (a run, a drive)
+    // was delivered all at once on reopening — three "jolts" inside a second —
+    // and the bug-report sheet opened by itself. Resubscribe on return, then
+    // ignore the first moments (late queued samples, picking the phone up).
     let sub: { remove: () => void } | null = null;
-    try {
-      Accelerometer.setUpdateInterval(100);
-      sub = Accelerometer.addListener(({ x, y, z }: { x: number; y: number; z: number }) => {
+    const start = () => {
+      if (sub) return;
+      jolts = [];
+      resumedAt = Date.now();
+      // Guarded as a unit: on a client where the module resolves but the
+      // native side is absent, it is addListener that throws, not the require.
+      try {
+        Accelerometer.setUpdateInterval(100);
+        sub = Accelerometer.addListener(onSample);
+      } catch {
+        sub = null;
+      }
+    };
+    const stop = () => { sub?.remove(); sub = null; jolts = []; };
+
+    function onSample({ x, y, z }: { x: number; y: number; z: number }) {
         const magnitude = Math.sqrt(x * x + y * y + z * z);
         if (magnitude < THRESHOLD) return;
 
         const now = Date.now();
+        if (now - resumedAt < RESUME_GRACE_MS) return;
         if (now - lastFired < COOLDOWN_MS) return;
 
         jolts = [...jolts.filter(ts => now - ts < WINDOW_MS), now];
@@ -87,11 +108,14 @@ export function useShake(onShake: () => void, enabled = true) {
           lastFired = now;
           handler.current();
         }
-      });
-    } catch {
-      sub = null;
     }
 
-    return () => sub?.remove();
+    if (AppState.currentState === 'active') start();
+    const appSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') start();
+      else stop();
+    });
+
+    return () => { appSub.remove(); stop(); };
   }, [enabled]);
 }

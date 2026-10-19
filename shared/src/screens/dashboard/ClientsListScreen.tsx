@@ -718,29 +718,10 @@ function AlphabetScrubber({
   // the way down the alphabet (a fixed guess drifts as the index grows).
   const [letterH, setLetterH] = useState(LETTER_H);
   const bubbleAnim = useRef(new Animated.Value(0)).current;
-  const dotY = useRef(new Animated.Value(0)).current;
-  const dotOpacity = useRef(new Animated.Value(0)).current;
 
   // While dragging, the finger wins; otherwise follow the scroll position.
   const highlighted = dragIndex != null ? letters[dragIndex] : activeLetter;
-  const activeIdx = highlighted ? letters.indexOf(highlighted) : -1;
 
-  useEffect(() => {
-    if (activeIdx < 0) {
-      Animated.timing(dotOpacity, { toValue: 0, duration: 120, useNativeDriver: true }).start();
-      return;
-    }
-    Animated.parallel([
-      Animated.spring(dotY, {
-        // Center the dot on the letter: slot top + half a slot − half the dot.
-        toValue: activeIdx * letterH + letterH / 2 - DOT_SIZE / 2,
-        speed: 24,
-        bounciness: 6,
-        useNativeDriver: true,
-      }),
-      Animated.timing(dotOpacity, { toValue: 1, duration: 120, useNativeDriver: true }),
-    ]).start();
-  }, [activeIdx, letterH, dotY, dotOpacity]);
 
   const handle = (y: number) => {
     const clamped = Math.min(stripH.current, Math.max(0, y));
@@ -810,23 +791,24 @@ function AlphabetScrubber({
           onResponderRelease={endDrag}
           onResponderTerminate={endDrag}
         >
-          {/* Sliding dot behind the active letter */}
-          <Animated.View
-            pointerEvents="none"
-            className="absolute w-4 h-4 rounded-full bg-primary"
-            style={{ left: 4, top: 0, opacity: dotOpacity, transform: [{ translateY: dotY }] }}
-          />
-          {letters.map(l => (
-            <View key={l} className="w-4 h-4 items-center justify-center">
-              <Text
-                className={`text-[9px] font-bold text-center ${
-                  l === highlighted ? 'text-white' : 'text-faint'
-                }`}
-              >
-                {l}
-              </Text>
-            </View>
-          ))}
+          {/* The active letter's circle is its OWN background, sized exactly
+              to the letter slot, with a line height equal to that slot — so
+              the letter is always dead-centre. (A separate sliding dot,
+              placed by measured-height maths and a springy animation, landed
+              slightly off the glyph.) */}
+          {letters.map(l => {
+            const on = l === highlighted;
+            return (
+              <View key={l} className={`w-4 h-4 items-center justify-center rounded-full ${on ? 'bg-primary' : ''}`}>
+                <Text
+                  className={`text-[9px] font-bold text-center ${on ? 'text-white' : 'text-faint'}`}
+                  style={{ lineHeight: DOT_SIZE, height: DOT_SIZE, includeFontPadding: false, textAlignVertical: 'center' }}
+                >
+                  {l}
+                </Text>
+              </View>
+            );
+          })}
         </View>
       </View>
     </View>

@@ -836,6 +836,18 @@ export type DashboardDict = {
       title: string;
       sortByTitle: string;
       groupByTitle: string;
+      /** Caption under the active sort: its current direction + how to flip. */
+      dir: {
+        newest: string;
+        oldest: string;
+        az: string;
+        za: string;
+        pipeline: string;
+        pipelineReverse: string;
+        urgentFirst: string;
+        lowFirst: string;
+        tapToReverse: string;
+      };
       by: {
         recent: string;
         status: string;
@@ -1376,6 +1388,12 @@ export type DashboardDict = {
       overtimeThresholdLabel: string;
       overtimeMultiplierLabel: string;
       overtimeDefaultPlaceholder: string;
+      /** One-line explainer above the two overtime boxes. {{hours}}/{{mult}} =
+       *  the business defaults used when a box is left blank. */
+      overtimeHint: string;
+      /** Box placeholders showing the actual default: {{n}}. */
+      overtimeHoursDefault: string;
+      overtimeMultDefault: string;
       errorFirstNameRequired: string;
       requiredError: string;
       // New standard fields
@@ -4236,6 +4254,17 @@ export const dashboard: Record<Locale, DashboardDict> = {
         button: 'Ordenar',
         title: 'Ordenar y agrupar',
         sortByTitle: 'Ordenar por',
+        dir: {
+          newest: 'Más recientes primero',
+          oldest: 'Más antiguos primero',
+          az: 'A–Z',
+          za: 'Z–A',
+          pipeline: 'Orden del proceso',
+          pipelineReverse: 'Orden inverso',
+          urgentFirst: 'Más urgentes primero',
+          lowFirst: 'Menos urgentes primero',
+          tapToReverse: 'Toca de nuevo para invertir',
+        },
         groupByTitle: 'Agrupar por',
         by: {
           // "Agregados" not "Más recientes": this sorts by created_at (when the
@@ -4243,11 +4272,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
           // implied the visible date, so a list ordered correctly looked broken.
           recent: 'Agregados recientemente',
           status: 'Estado del trabajo',
-          startDate: 'Fecha de inicio',
+          startDate: 'Fecha de inicio (programada)',
           priority: 'Prioridad',
           updated: 'Actualizados recientemente',
           title: 'Nombre del trabajo (A–Z)',
-          endDate: 'Fecha de fin',
+          endDate: 'Fecha de fin (terminación)',
           client: 'Cliente',
           lead: 'Líder de equipo',
         },
@@ -4762,6 +4791,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         overtimeThresholdLabel: 'Horas regulares/semana',
         overtimeMultiplierLabel: 'Multiplicador',
         overtimeDefaultPlaceholder: 'Predeterminado',
+        overtimeHint: 'Las horas por encima de este límite en una semana se pagan con el multiplicador (1.5 = tiempo y medio). Déjalo vacío para usar el valor de tu negocio: {{hours}} h · {{mult}}×.',
+        overtimeHoursDefault: '{{n}} (predeterminado)',
+        overtimeMultDefault: '{{n}}× (predeterminado)',
         errorFirstNameRequired: 'El nombre es requerido',
         requiredError: 'Campos requeridos: {{fields}}',
         emailLabel: 'Correo personal',
@@ -7615,15 +7647,26 @@ export const dashboard: Record<Locale, DashboardDict> = {
         button: 'Sort',
         title: 'Sort & group',
         sortByTitle: 'Sort by',
+        dir: {
+          newest: 'Newest first',
+          oldest: 'Oldest first',
+          az: 'A–Z',
+          za: 'Z–A',
+          pipeline: 'Pipeline order',
+          pipelineReverse: 'Reverse order',
+          urgentFirst: 'Most urgent first',
+          lowFirst: 'Least urgent first',
+          tapToReverse: 'Tap again to reverse',
+        },
         groupByTitle: 'Group by',
         by: {
           recent: 'Recently added',
           status: 'Job status',
-          startDate: 'Start date',
+          startDate: 'Start date (scheduled)',
           priority: 'Priority',
           updated: 'Recently updated',
           title: 'Job title (A–Z)',
-          endDate: 'End date',
+          endDate: 'End date (finish)',
           client: 'Client',
           lead: 'Crew lead',
         },
@@ -8138,6 +8181,9 @@ export const dashboard: Record<Locale, DashboardDict> = {
         overtimeThresholdLabel: 'Regular hours/week',
         overtimeMultiplierLabel: 'Multiplier',
         overtimeDefaultPlaceholder: 'Default',
+        overtimeHint: 'Hours over this limit in a week are paid at the multiplier (1.5 = time and a half). Leave blank to use your business setting: {{hours}} h · {{mult}}×.',
+        overtimeHoursDefault: '{{n}} (default)',
+        overtimeMultDefault: '{{n}}× (default)',
         errorFirstNameRequired: 'First name is required',
         requiredError: 'Required fields: {{fields}}',
         emailLabel: 'Personal email',

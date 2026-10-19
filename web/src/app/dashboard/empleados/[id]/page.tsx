@@ -43,6 +43,7 @@ import {
   employeeFieldsInSection,
   type EmployeeFieldSection,
 } from '@amixos/shared/lib/employeeFieldSections';
+import { normalizePayrollConfig } from '@amixos/shared/lib/payroll';
 
 interface RawEmployee {
   id: string;
@@ -889,6 +890,10 @@ function EditForm({
   fHidden: (key: string) => boolean;
   layout: { key: string; section: EmployeeFieldSection }[];
 }) {
+  // Business overtime defaults — shown in the per-employee boxes, which fall
+  // back to them when left blank.
+  const { business } = useApp();
+  const otDefaults = normalizePayrollConfig(business?.payroll_config).overtime;
   const sectionLabel = (section: EmployeeFieldSection): string => {
     const es = lang === 'es';
     switch (section) {
@@ -953,13 +958,17 @@ function EditForm({
                   />
                 </label>
                 {form.overtime_eligible ? (
-                  <div className="flex gap-3">
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs text-muted leading-relaxed">
+                      {t.modal.overtimeHint.replace('{{hours}}', String(otDefaults.weeklyThreshold)).replace('{{mult}}', String(otDefaults.multiplier))}
+                    </p>
+                    <div className="flex gap-3">
                     <label className="flex-1 text-xs text-muted">
                       {t.modal.overtimeThresholdLabel}
                       <input
                         type="number" min="0"
                         value={form.overtime_threshold}
-                        placeholder={t.modal.overtimeDefaultPlaceholder}
+                        placeholder={t.modal.overtimeHoursDefault.replace('{{n}}', String(otDefaults.weeklyThreshold))}
                         onChange={e => setForm(f => ({ ...f, overtime_threshold: e.target.value }))}
                         className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                       />
@@ -969,11 +978,12 @@ function EditForm({
                       <input
                         type="number" min="1" step="0.1"
                         value={form.overtime_multiplier}
-                        placeholder={t.modal.overtimeDefaultPlaceholder}
+                        placeholder={t.modal.overtimeMultDefault.replace('{{n}}', String(otDefaults.multiplier))}
                         onChange={e => setForm(f => ({ ...f, overtime_multiplier: e.target.value }))}
                         className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
                       />
                     </label>
+                  </div>
                   </div>
                 ) : null}
               </>

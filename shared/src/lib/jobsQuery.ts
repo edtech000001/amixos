@@ -373,7 +373,7 @@ export async function fetchJobTabCounts(
 export async function fetchJobsPageSorted<T extends { id: string }>(
   supabase: AnySupabase,
   select: string,
-  params: JobsQueryParams & { sortBy: string; offset: number },
+  params: JobsQueryParams & { sortBy: string; offset: number; sortDesc?: boolean | null },
   searchIds?: SearchIds | null,
 ): Promise<{ jobs: T[]; hasMore: boolean } | null> {
   const term = params.search?.trim() ?? '';
@@ -383,7 +383,7 @@ export async function fetchJobsPageSorted<T extends { id: string }>(
   const ids = term
     ? (searchIds ?? (await resolveSearchIds(supabase, params.businessId, term)))
     : null;
-  const { data, error } = await supabase.rpc('jobs_page_ids', {
+  const rpcArgs: Record<string, unknown> = {
     p_business_id: params.businessId,
     p_sort: params.sortBy,
     p_status_include: fp.statusInclude,
@@ -397,7 +397,17 @@ export async function fetchJobsPageSorted<T extends { id: string }>(
     p_date_to: params.dateTo ?? null,
     p_limit: pageSize,
     p_offset: params.offset,
-  });
+    // Direction (migration 249). null = the sort's default (dates newest-first).
+    p_sort_desc: params.sortDesc ?? null,
+  };
+  let { data, error } = await supabase.rpc('jobs_page_ids', rpcArgs);
+  // PGRST202 = no function with these params: migration 249 not run yet. Retry
+  // on the old signature (no direction) rather than breaking the sorted list.
+  if (error?.code === 'PGRST202') {
+    const { p_sort_desc: _omit, ...legacy } = rpcArgs;
+    void _omit;
+    ({ data, error } = await supabase.rpc('jobs_page_ids', legacy));
+  }
   if (error) throw new Error(error.message);
   const pageIds = ((data ?? []) as ({ jobs_page_ids: string } | string)[])
     .map((r) => (typeof r === 'string' ? r : r.jobs_page_ids));

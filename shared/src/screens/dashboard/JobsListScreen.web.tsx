@@ -28,6 +28,8 @@ import {
   ChevronDown,
   Building2,
   ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   Check,
   AlertTriangle,
   Clock,
@@ -57,6 +59,8 @@ import {
 } from '../../lib/jobAlerts';
 import {
   sortJobs,
+  sortIsDesc,
+  sortDirCaption,
   groupJobs,
   JOB_SORT_KEYS,
   JOB_GROUP_KEYS,
@@ -216,6 +220,8 @@ export interface JobsListScreenProps {
   onFiltersChange?: (f: {
     search: string; tabs: string[]; sortBy: JobSortKey; groupBy: JobGroupKey;
     dateFrom: string | null; dateTo: string | null;
+    /** Explicit direction (click the active sort again); null = its default. */
+    sortDesc?: boolean | null;
   }) => void;
   /** Business payroll settings — adds "This/Last pay period" chips to the
    *  date filter that match the Payroll screen's periods exactly. */
@@ -321,6 +327,8 @@ export function JobsListScreen({
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [sortBy, setSortBy] = useState<JobSortKey>('recent');
+  // null = the sort's default direction (dates newest-first — jobSort.ts).
+  const [sortDesc, setSortDesc] = useState<boolean | null>(null);
   const [groupBy, setGroupBy] = useState<JobGroupKey>('none');
   // Scheduled-date range filter (yyyy-mm-dd). null = open-ended that side.
   const [dateFrom, setDateFrom] = useState<string | null>(null);
@@ -353,6 +361,7 @@ export function JobsListScreen({
       setTabs((saved?.tabs ?? []).filter((k): k is StatusTabKey => (STATUS_TAB_KEYS as readonly string[]).includes(k)));
     }
     setSortBy(saved?.sortBy ?? 'recent');
+    setSortDesc(saved?.sortDesc ?? null);
     setGroupBy(saved?.groupBy ?? 'none');
     setDateFrom(saved?.dateFrom ?? null);
     setDateTo(saved?.dateTo ?? null);
@@ -364,9 +373,9 @@ export function JobsListScreen({
   // Persist on change — only after restore, so defaults don't clobber saved.
   useEffect(() => {
     if (!hydrated || typeof window === 'undefined') return;
-    const f: JobsFilters = { tabs, search, sortBy, groupBy, dateFrom, dateTo, datePreset };
+    const f: JobsFilters = { tabs, search, sortBy, sortDesc, groupBy, dateFrom, dateTo, datePreset };
     window.localStorage.setItem(filtersKey, JSON.stringify(f));
-  }, [hydrated, filtersKey, tabs, search, sortBy, groupBy, dateFrom, dateTo, datePreset]);
+  }, [hydrated, filtersKey, tabs, search, sortBy, sortDesc, groupBy, dateFrom, dateTo, datePreset]);
 
   const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy, dateFrom, dateTo });
   const dateActive = !!dateFrom || !!dateTo;
@@ -435,7 +444,7 @@ export function JobsListScreen({
   const staleCaption = stale && cachedAt ? swrT.updatedAgo.replace('{{time}}', relTime(cachedAt)) : null;
 
   const applyDatePreset = (p: DateRangePreset) => { setDateFrom(p.from); setDateTo(p.to); setDatePreset(toAppliedDatePreset(p)); };
-  const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setGroupBy('none'); setDateFrom(null); setDateTo(null); };
+  const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setSortDesc(null); setGroupBy('none'); setDateFrom(null); setDateTo(null); };
 
   const tabLabels: Record<TabKey, string> = {
     all: t.tabs.all,
@@ -498,7 +507,12 @@ export function JobsListScreen({
   }, [jobs, search, tabs, dateFrom, dateTo, serverMode]);
 
   const sections = useMemo(
-    () => groupJobs(sortJobs(filtered, sortBy), groupBy, {
+    () => groupJobs(
+      // Server mode + "Recently added": rows already arrive in the chosen
+      // order (newest-first keyset, or oldest-first via the server's
+      // 'created' sort) — re-sorting locally would flip oldest-first back.
+      serverMode && sortBy === 'recent' ? filtered : sortJobs(filtered, sortBy, sortDesc),
+      groupBy, {
       client: t.sort.noClient,
       lead: t.sort.noLead,
       company: t.sort.noCompany,
@@ -506,7 +520,7 @@ export function JobsListScreen({
     }, (v) => usStateName(v, locale)),
     [filtered, sortBy, groupBy, t, locale],
   );
-  const sortActive = sortBy !== 'recent' || groupBy !== 'none';
+  const sortActive = sortBy !== 'recent' || sortDesc === false || groupBy !== 'none';
 
   // Counts reflect the active search + date range so the badges tell the user
   // WHERE matches are (e.g. "Invoiced 1"). With no search this is every job,
@@ -535,9 +549,9 @@ export function JobsListScreen({
   }, [search]);
   useEffect(() => {
     if (!serverMode || !onFiltersChange || !hydrated) return;
-    onFiltersChange({ search: debouncedSearch, tabs, sortBy, groupBy, dateFrom, dateTo });
+    onFiltersChange({ search: debouncedSearch, tabs, sortBy, sortDesc, groupBy, dateFrom, dateTo });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverMode, hydrated, debouncedSearch, tabs, sortBy, groupBy, dateFrom, dateTo]);
+  }, [serverMode, hydrated, debouncedSearch, tabs, sortBy, sortDesc, groupBy, dateFrom, dateTo]);
 
   // Infinite scroll: load the next page when a sentinel near the list bottom
   // scrolls into view.
@@ -1015,16 +1029,24 @@ export function JobsListScreen({
                   {JOB_SORT_KEYS.map(k => {
                     const selected = sortBy === k;
                     const Icon = SORT_ICON[k];
+                    const desc = sortIsDesc(k, selected ? sortDesc : null);
                     return (
                       <button
                         key={k}
-                        onClick={() => setSortBy(k)}
+                        // New sort → its default direction; the active one
+                        // again → reverse it.
+                        onClick={() => {
+                          if (selected) setSortDesc(!sortIsDesc(k, sortDesc));
+                          else { setSortBy(k); setSortDesc(null); }
+                        }}
+                        title={selected ? `${t.sort.dir[sortDirCaption(k, desc)]} · ${t.sort.dir.tapToReverse}` : undefined}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
                           selected ? 'bg-primary border-primary text-white' : 'bg-card border-border text-muted hover:border-border'
                         }`}
                       >
-                        {selected ? <Check size={12} /> : <Icon size={12} />}
+                        {selected ? (desc ? <ArrowDown size={12} /> : <ArrowUp size={12} />) : <Icon size={12} />}
                         {t.sort.by[k]}
+                        {selected ? <span className="font-normal opacity-80">· {t.sort.dir[sortDirCaption(k, desc)]}</span> : null}
                       </button>
                     );
                   })}

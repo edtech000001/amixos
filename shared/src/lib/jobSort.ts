@@ -59,65 +59,59 @@ function priorityIdx(priority: string | null | undefined): number {
   return i === -1 ? PRIORITY_SORT_ORDER.length : i;
 }
 
-export function sortJobs<T extends SortableJob>(jobs: T[], sortBy: JobSortKey): T[] {
-  if (sortBy === 'recent') return jobs;
-  const out = [...jobs];
-  if (sortBy === 'status') {
-    out.sort((a, b) => statusIdx(a.status) - statusIdx(b.status));
-  } else if (sortBy === 'startDate') {
-    // Soonest first; jobs without a date sink to the bottom.
-    out.sort((a, b) => {
-      if (!a.scheduledDate && !b.scheduledDate) return 0;
-      if (!a.scheduledDate) return 1;
-      if (!b.scheduledDate) return -1;
-      return a.scheduledDate.localeCompare(b.scheduledDate);
-    });
-  } else if (sortBy === 'lead') {
-    out.sort((a, b) => {
-      const al = a.leadName ?? null;
-      const bl = b.leadName ?? null;
-      if (!al && !bl) return 0;
-      if (!al) return 1;
-      if (!bl) return -1;
-      return al.localeCompare(bl);
-    });
-  } else if (sortBy === 'client') {
-    out.sort((a, b) => {
-      const ac = a.clientName ?? null;
-      const bc = b.clientName ?? null;
-      if (!ac && !bc) return 0;
-      if (!ac) return 1;
-      if (!bc) return -1;
-      return ac.localeCompare(bc);
-    });
-  } else if (sortBy === 'priority') {
-    out.sort((a, b) => priorityIdx(a.priority) - priorityIdx(b.priority));
-  } else if (sortBy === 'updated') {
-    // Latest activity first; rows without the column (stale cache) sink.
-    out.sort((a, b) => {
-      if (!a.updatedAt && !b.updatedAt) return 0;
-      if (!a.updatedAt) return 1;
-      if (!b.updatedAt) return -1;
-      return b.updatedAt.localeCompare(a.updatedAt);
-    });
-  } else if (sortBy === 'title') {
-    out.sort((a, b) => {
-      const at = a.title?.trim().toLowerCase() || null;
-      const bt = b.title?.trim().toLowerCase() || null;
-      if (!at && !bt) return 0;
-      if (!at) return 1;
-      if (!bt) return -1;
-      return at.localeCompare(bt);
-    });
-  } else if (sortBy === 'endDate') {
-    // Soonest deadline first; jobs without an end date sink to the bottom.
-    out.sort((a, b) => {
-      if (!a.endDate && !b.endDate) return 0;
-      if (!a.endDate) return 1;
-      if (!b.endDate) return -1;
-      return a.endDate.localeCompare(b.endDate);
-    });
+/** Sorts that read newest/latest FIRST unless the user flips them. Dates and
+ *  activity: a 5,000-job list sorted oldest-first opened on work from years
+ *  ago. Status, priority and title keep their natural ascending order. */
+const DEFAULT_DESC = new Set<JobSortKey>(['recent', 'updated', 'startDate', 'endDate']);
+
+/** The effective direction: the user's explicit choice, else the sort's
+ *  default. `sortDesc` null/undefined = "default for this sort". Mirrors
+ *  jobs_page_ids (migration 249) so local and server sorting agree. */
+export function sortIsDesc(sortBy: JobSortKey, sortDesc?: boolean | null): boolean {
+  return sortDesc ?? DEFAULT_DESC.has(sortBy);
+}
+
+/** The value a job sorts by, or null (null always sinks to the bottom, in
+ *  either direction). End date of a single-day job = its start date. */
+function sortValue(j: SortableJob, sortBy: JobSortKey): string | number | null {
+  switch (sortBy) {
+    case 'status': return statusIdx(j.status);
+    case 'priority': return priorityIdx(j.priority);
+    case 'startDate': return j.scheduledDate || null;
+    case 'endDate': return j.endDate || j.scheduledDate || null;
+    case 'updated': return j.updatedAt || null;
+    case 'title': return j.title?.trim().toLowerCase() || null;
+    case 'client': return j.clientName || null;
+    case 'lead': return j.leadName || null;
+    default: return null;
   }
+}
+
+/** Which direction caption a sort shows (keys of t.sort.dir). */
+export function sortDirCaption(sortBy: JobSortKey, desc: boolean):
+  'newest' | 'oldest' | 'az' | 'za' | 'pipeline' | 'pipelineReverse' | 'urgentFirst' | 'lowFirst' {
+  if (sortBy === 'title' || sortBy === 'client' || sortBy === 'lead') return desc ? 'za' : 'az';
+  if (sortBy === 'status') return desc ? 'pipelineReverse' : 'pipeline';
+  if (sortBy === 'priority') return desc ? 'lowFirst' : 'urgentFirst';
+  return desc ? 'newest' : 'oldest';
+}
+
+export function sortJobs<T extends SortableJob>(jobs: T[], sortBy: JobSortKey, sortDesc?: boolean | null): T[] {
+  const desc = sortIsDesc(sortBy, sortDesc);
+  // 'recent' = the incoming order (pages arrive created_at desc).
+  if (sortBy === 'recent') return desc ? jobs : [...jobs].reverse();
+  const out = [...jobs];
+  out.sort((a, b) => {
+    const av = sortValue(a, sortBy);
+    const bv = sortValue(b, sortBy);
+    if (av === null && bv === null) return 0;
+    if (av === null) return 1;
+    if (bv === null) return -1;
+    const cmp = typeof av === 'number' && typeof bv === 'number'
+      ? av - bv
+      : String(av).localeCompare(String(bv));
+    return desc ? -cmp : cmp;
+  });
   return out;
 }
 
