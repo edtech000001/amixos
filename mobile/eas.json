@@ -22,7 +22,7 @@
       },
       "ios": {
         "simulator": false,
-        "image": "latest"
+        "image": "macos-tahoe-26.5-xcode-26.6"
       }
     },
     "preview": {
@@ -40,7 +40,7 @@
         "buildType": "apk"
       },
       "ios": {
-        "image": "latest"
+        "image": "macos-tahoe-26.5-xcode-26.6"
       }
     },
     "simulator": {
@@ -56,7 +56,7 @@
       },
       "ios": {
         "simulator": true,
-        "image": "latest"
+        "image": "macos-tahoe-26.5-xcode-26.6"
       }
     },
     "production": {
@@ -71,7 +71,7 @@
         "EXPO_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAFJvVnOAPARstqw1"
       },
       "ios": {
-        "image": "latest"
+        "image": "macos-tahoe-26.5-xcode-26.6"
       }
     }
   },
