@@ -1737,6 +1737,8 @@ export type DashboardDict = {
         back: string;
       };
       generateTitle: string;
+      /** Price sheet PDF failed / timed out on mobile. */
+      generateError: string;
       forClient: string;
       forState: string;
       selectClientPlaceholder: string;
@@ -5115,6 +5117,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           back: 'Atrás',
         },
         generateTitle: 'Generar hoja de precios',
+        generateError: 'No se pudo generar la hoja de precios. Revisa tu conexión e inténtalo de nuevo.',
         forClient: 'Cliente',
         forState: 'Estado',
         selectClientPlaceholder: 'Elegir cliente…',
@@ -8490,6 +8493,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           back: 'Back',
         },
         generateTitle: 'Generate price sheet',
+        generateError: 'Couldn’t generate the price sheet. Check your connection and try again.',
         forClient: 'Client',
         forState: 'State',
         selectClientPlaceholder: 'Choose a client…',

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, Pressable, ScrollView, SectionList, Modal as RNModal } from 'react-native';
+import { View, Text, Pressable, ScrollView, SectionList, ActivityIndicator, Modal as RNModal } from 'react-native';
 import { FileText, Search, Calendar, Layers, XCircle, List, Building2, MapPin, Check, ListChecks, Trash2, X, DollarSign, Bell, BellRing, AlertTriangle } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
@@ -444,7 +444,11 @@ export function InvoicesListScreen({
           value={search}
           onChangeText={setSearch}
           onClear={() => setSearch('')}
-          leftIcon={<Search size={16} color={c.faint} />}
+          // Spinner while the server search runs, so a slow connection reads
+          // as "searching", not "stuck".
+          leftIcon={serverMode && !!search.trim() && (loading || search !== debouncedSearch)
+            ? <ActivityIndicator size="small" color={c.primary} />
+            : <Search size={16} color={c.faint} />}
           autoCapitalize="none"
           autoCorrect={false}
         />

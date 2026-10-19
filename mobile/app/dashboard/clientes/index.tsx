@@ -20,6 +20,7 @@ import {
   fetchAllClientsMatching,
   fetchClientCount,
   clientGroupNeedsAll,
+  resolveClientSearch,
   type ClientsCursor,
 } from '@amixos/shared/lib/clientsQuery';
 import { usePersistedSearch } from '@amixos/shared/lib/usePersistedSearch';
@@ -133,18 +134,30 @@ export default function ClientesTab() {
     void fetchClientLocations(supabase, business.id).then(setClientLocations).catch(() => {});
   };
 
+  // The in-flight query's canceller. A new query (another keystroke, a regroup)
+  // aborts the old one, so on weak signal the stale search stops competing for
+  // bandwidth with the one the user is now waiting on.
+  const abortRef = useRef<AbortController | null>(null);
+
   const runQuery = async (
     base: { businessId: string; search: string; startAtLetter?: string | null },
     loadAll = false,
   ) => {
     const seq = ++loadSeqRef.current;
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    // Searches give up after 8s (vs the 20s global request timeout) and show
+    // the retry strip — a search that hangs reads as a frozen screen.
+    const searching = !!base.search.trim();
+    const timer = searching ? setTimeout(() => ctrl.abort(), 8_000) : null;
     paramsRef.current = base;
     loadAllRef.current = loadAll;
     setLoading(true);
     setLoadError(false);
     cursorRef.current = null;
     setHasMore(false);
-    const params = { ...base, excludeIds: excludeIdsRef.current };
+    const params = { ...base, excludeIds: excludeIdsRef.current, signal: ctrl.signal };
     if (loadAll) {
       // Group-by needs every matching row. Online action (not cached).
       try {
@@ -153,22 +166,28 @@ export default function ClientesTab() {
         if (seq !== loadSeqRef.current) return;
         setRawClients(rows);
         setServerTotal(total);
-      } catch { setLoadError(true); }
-      finally { if (seq === loadSeqRef.current) setLoading(false); }
+      } catch { if (seq === loadSeqRef.current) setLoadError(true); }
+      finally { if (timer) clearTimeout(timer); if (seq === loadSeqRef.current) setLoading(false); }
       return;
     }
     try {
+      // Contact matches resolved ONCE and shared — page and count each used to
+      // run their own lookup first, adding a round trip before either started.
+      const searchOr = await resolveClientSearch(supabase, base.businessId, base.search, ctrl.signal);
       const [page, total] = await Promise.all([
-        fetchClientsPage<Client>(supabase, CLIENT_PAGE_SELECT, { ...params, pageSize: 50 }),
-        fetchClientCount(supabase, params),
+        fetchClientsPage<Client>(supabase, CLIENT_PAGE_SELECT, { ...params, searchOr, pageSize: 50 }),
+        fetchClientCount(supabase, { ...params, searchOr }),
       ]);
       if (seq !== loadSeqRef.current) return;
       setRawClients(page.clients);
       cursorRef.current = page.nextCursor;
       setHasMore(!!page.nextCursor);
       setServerTotal(total);
-    } catch { setLoadError(true); }
-    finally { if (seq === loadSeqRef.current) setLoading(false); }
+    } catch {
+      // A superseded query's abort isn't an error — only the latest one counts.
+      if (seq === loadSeqRef.current) setLoadError(true);
+    }
+    finally { if (timer) clearTimeout(timer); if (seq === loadSeqRef.current) setLoading(false); }
   };
 
   // Default view rides the SWR cache: renders the last snapshot instantly and
@@ -234,7 +253,13 @@ export default function ClientesTab() {
     if (!business) return;
     setFilters(f);
     setJumpLetter(null); // searching or regrouping starts from the top again
-    if (isDefaultFilters(f)) return; // SWR owns the default view
+    if (isDefaultFilters(f)) {
+      // SWR owns the default view; drop a search still in flight so it can't
+      // land late over the full list.
+      abortRef.current?.abort();
+      ++loadSeqRef.current;
+      return;
+    }
     void runQuery({ businessId: business.id, search: f.search }, clientGroupNeedsAll(f.groupBy));
   };
 

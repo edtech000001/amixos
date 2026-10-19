@@ -23,7 +23,6 @@ import {
   buildClientIndex, matchExistingClient, clientFieldPatch, mergeContacts,
   type DuplicateStrategy, type ExistingClientLite, type ContactLite,
 } from '@amixos/shared/lib/clientImportMerge';
-import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 
 export interface ImportClientsModalProps {
   open: boolean;
@@ -738,6 +737,13 @@ export function ImportClientsModal({
 
   return (
     <Modal open={open} onClose={close} title={t.importBtn}>
+      {/* The duplicate question and the contact checklist REPLACE the steps
+          while they're up. They used to be absolute overlays, but the shared
+          Modal wraps its children in a ScrollView, so an absolute view sized
+          itself to the (short) content behind it and was squeezed out of
+          sight — the import then sat on "Importando…" waiting for an answer
+          nobody could see. */}
+      {!dupPrompt && !contactList ? (<>
       {step === 'upload' ? (
         <View className="gap-3">
           {/* CSV file picker — primary action */}
@@ -1054,12 +1060,13 @@ export function ImportClientsModal({
         </View>
       ) : null}
 
-      {/* Contact checklist — an in-modal absolute overlay, NOT a second RNModal
-          (iOS won't present one while this modal is up; see CLAUDE.md). */}
+      </>) : null}
+
+      {/* Contact checklist — inline in this modal, NOT a second RNModal (iOS
+          won't present one while this modal is up; see CLAUDE.md). */}
       {contactList ? (
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', padding: 12 }}>
-          <Pressable onPress={() => setContactList(null)} style={SHEET_BACKDROP} />
-          <View className="bg-card rounded-2xl p-4" style={{ maxHeight: '92%' }}>
+        <View>
+          <View>
             <View className="flex-row items-center justify-between mb-3">
               <Text className="text-base font-bold text-ink">{t.importModal.contactsListTitle}</Text>
               <Pressable onPress={() => setContactList(null)} hitSlop={8} className="p-1 rounded-lg active:bg-surface">
@@ -1091,7 +1098,8 @@ export function ImportClientsModal({
               data={contactRows}
               keyExtractor={(item, i) => item.id ?? String(i)}
               keyboardShouldPersistTaps="handled"
-              style={{ flexGrow: 0 }}
+              nestedScrollEnabled
+              style={{ maxHeight: 420 }}
               ListEmptyComponent={<Text className="text-sm text-faint py-6 text-center">{t.importModal.contactsEmpty}</Text>}
               renderItem={({ item }) => {
                 const on = !!item.id && contactPicked.has(item.id);
@@ -1130,17 +1138,14 @@ export function ImportClientsModal({
         </View>
       ) : null}
 
-      {/* Duplicate prompt. An in-modal absolute overlay, NOT a second RNModal —
+      {/* Duplicate prompt. Inline in this modal (see the note at the top),
+          NOT a second RNModal —
           iOS silently refuses to present one while another is visible, so the
           import would just appear to hang (see CLAUDE.md). runImport awaits the
           answer, so nothing is written until a choice is made. */}
       {dupPrompt ? (
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', padding: 16 }}>
-          <Pressable
-            onPress={() => answerDuplicates(null)}
-            style={SHEET_BACKDROP}
-          />
-          <View className="bg-card rounded-2xl p-5">
+        <View>
+          <View>
             <Text className="text-base font-bold text-ink">{t.dupTitle}</Text>
             <Text className="text-sm text-muted mt-1">
               {t.dupBody.replace('{{count}}', String(dupPrompt.count)).replace('{{total}}', String(dupPrompt.total))}

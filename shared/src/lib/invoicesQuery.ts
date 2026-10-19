@@ -72,7 +72,32 @@ const escLike = (s: string) => s.replace(/[\\%_]/g, (m) => `\\${m}`);
  *  invoice_ids it should match through joined tables — client names (via the
  *  direct client_id and the M2M invoice_clients) and linked jobs (jobs.invoice_id
  *  points at the invoice; there is no invoices.job_id). Small id lookups. */
-async function resolveSearchIds(
+// Search-id lookups are shared: the list page and the tab counts fire in
+// parallel for the same term, and each used to run this two-trip lookup on its
+// own — four lookups before either real query could start. Concurrent callers
+// now share ONE in-flight promise, and a result is reused briefly (load-more,
+// the 42703 retry, a refocus) so a search costs one lookup. Short TTL: a client
+// or invoice created a moment ago still shows up on the next search.
+const SEARCH_IDS_TTL_MS = 15_000;
+const searchIdsCache = new Map<string, { at: number; p: Promise<{ clientIds: string[]; invoiceIds: string[] }> }>();
+
+function resolveSearchIds(
+  supabase: AnySupabase,
+  businessId: string,
+  term: string,
+): Promise<{ clientIds: string[]; invoiceIds: string[] }> {
+  const key = `${businessId}|${term.toLowerCase()}`;
+  const hit = searchIdsCache.get(key);
+  if (hit && Date.now() - hit.at < SEARCH_IDS_TTL_MS) return hit.p;
+  const p = lookupSearchIds(supabase, businessId, term);
+  searchIdsCache.set(key, { at: Date.now(), p });
+  // Never cache a failure — the next search must retry for real.
+  p.catch(() => { if (searchIdsCache.get(key)?.p === p) searchIdsCache.delete(key); });
+  if (searchIdsCache.size > 50) searchIdsCache.delete(searchIdsCache.keys().next().value as string);
+  return p;
+}
+
+async function lookupSearchIds(
   supabase: AnySupabase,
   businessId: string,
   term: string,

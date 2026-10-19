@@ -69,6 +69,7 @@ import { JobPhotosSection } from '@/components/JobPhotosSection';
 import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useSectionBase } from '@/lib/sectionNav';
+import { AutoGrowTextInput } from '@/components/AutoGrowTextInput';
 
 interface Client {
   id: string;
@@ -943,14 +944,14 @@ export default function NuevoTrabajoRoute() {
       return (
         <View key={k} className="flex flex-col gap-2 mt-3">
           <Text className="text-sm font-semibold text-ink">{jrl('description', t.descriptionLabel)}</Text>
-          <TextInput
+          <AutoGrowTextInput
+            minHeight={100}
             value={description}
             onChangeText={setDescription}
             placeholder={t.descriptionPlaceholder}
             placeholderTextColor={c.faint}
             multiline
-            numberOfLines={3}
-            className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[80px]"
+            className="rounded-2xl border border-border bg-card px-4 py-3 text-ink"
             style={[{ fontSize: 16 }, { textAlignVertical: 'top' }]}
           />
         </View>
@@ -1324,14 +1325,14 @@ export default function NuevoTrabajoRoute() {
           <Text className="text-sm font-semibold text-ink mb-2">
             {isProposal ? t.internalNoteLabelProposal : jrl('internal_notes', t.internalNoteLabelJob)}
           </Text>
-          <TextInput
+          <AutoGrowTextInput
+            minHeight={100}
             value={internalNotes}
             onChangeText={setInternalNotes}
             placeholder={isProposal ? t.internalNotePlaceholderProposal : t.internalNotePlaceholderJob}
             placeholderTextColor={c.faint}
             multiline
-            numberOfLines={4}
-            className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[100px]"
+            className="rounded-2xl border border-border bg-card px-4 py-3 text-ink"
             style={[{ fontSize: 16 }, { textAlignVertical: 'top' }]}
           />
         </View>
@@ -1346,14 +1347,14 @@ export default function NuevoTrabajoRoute() {
           <Text className="text-sm font-semibold text-ink mb-2">
             {t.workerNoteLabel}
           </Text>
-          <TextInput
+          <AutoGrowTextInput
+            minHeight={90}
             value={workerNotes}
             onChangeText={setWorkerNotes}
             placeholder={t.workerNotePlaceholder}
             placeholderTextColor={c.faint}
             multiline
-            numberOfLines={3}
-            className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[80px]"
+            className="rounded-2xl border border-border bg-card px-4 py-3 text-ink"
             style={[{ fontSize: 16 }, { textAlignVertical: 'top' }]}
           />
         </View>
@@ -1998,7 +1999,12 @@ export default function NuevoTrabajoRoute() {
         // none was picked — "the person logging the job is the lead".
         if (restrictedCreator && !editId) {
           const alreadyLead = assignments.some((a) => a.is_lead);
-          const creatorName = (user?.name ?? '').trim();
+          // Name the auto-lead from the creator's EMPLOYEE record. user.name is the
+          // login's name, and a login with none falls back to the email's local
+          // part — a field worker's own jobs then showed "Líder: antoniojacome1991"
+          // instead of their real name.
+          const myEmp = myEmployeeId ? employees.find((e) => e.id === myEmployeeId) : undefined;
+          const creatorName = (myEmp ? `${myEmp.first_name} ${myEmp.last_name}` : (user?.name ?? '')).trim();
           if (myEmployeeId) {
             const mine = assignments.find((a) => a.employee_id === myEmployeeId);
             if (mine) {
@@ -2271,14 +2277,14 @@ export default function NuevoTrabajoRoute() {
                 <Text className="text-sm font-semibold text-ink mb-2">
                   {t.clientNoteLabel}
                 </Text>
-                <TextInput
+                <AutoGrowTextInput
+            minHeight={90}
                   value={clientNotes}
                   onChangeText={setClientNotes}
                   placeholder={t.clientNotePlaceholder}
                   placeholderTextColor={c.faint}
                   multiline
-                  numberOfLines={3}
-                  className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[80px]"
+                  className="rounded-2xl border border-border bg-card px-4 py-3 text-ink"
                   style={[{ fontSize: 16 }, { textAlignVertical: 'top' }]}
                 />
               </View>
@@ -2984,13 +2990,13 @@ function CustomFieldInput({
     return (
       <View className="mt-3">
         <Text className="text-sm font-semibold text-ink mb-2">{label}</Text>
-        <TextInput
+        <AutoGrowTextInput
+            minHeight={90}
           value={value}
           onChangeText={onChange}
           multiline
-          numberOfLines={4}
           placeholderTextColor={c.faint}
-          className="rounded-2xl border border-border bg-card px-4 py-3 text-ink min-h-[90px]"
+          className="rounded-2xl border border-border bg-card px-4 py-3 text-ink"
           style={[{ fontSize: 16 }, { textAlignVertical: 'top' }]}
         />
       </View>

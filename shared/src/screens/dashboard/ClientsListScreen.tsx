@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Animated,
   View,
+  ActivityIndicator,
   Text,
   Pressable,
   FlatList,
@@ -198,9 +199,19 @@ export function ClientsListScreen({
   // so we don't re-filter — we only group the loaded rows. In client mode we
   // filter the full array (own fields + contact people; state name ↔ abbr
   // expansion is handled inside — see clientSearch / usStates).
+  //
+  // EXCEPT while the server search is still on its way (debounce window or the
+  // request in flight): then the rows on screen belong to the PREVIOUS search,
+  // so we filter them locally for instant feedback instead of leaving the old
+  // list up looking frozen. The server's complete results replace them on
+  // arrival. Declared before `filtered` — see serverSearchPending below.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const serverSearchPending = serverMode && !!search.trim() && (loading || search !== debouncedSearch);
   const filtered = useMemo(
-    () => serverMode ? clients : clients.filter(c => clientMatchesSearch(c, search)),
-    [clients, search, serverMode],
+    () => (!serverMode || serverSearchPending)
+      ? clients.filter(c => clientMatchesSearch(c, search))
+      : clients,
+    [clients, search, serverMode, serverSearchPending],
   );
 
   const searching = search.trim().length > 0;
@@ -211,7 +222,6 @@ export function ClientsListScreen({
   // Search arrives as a PROP (container owns/persists it). Debounce only once
   // the user has actually typed — the container's async restore must apply
   // instantly or the list briefly shows unfiltered rows before "reapplying".
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   const searchTypedRef = useRef(false);
   useEffect(() => {
     if (!searchTypedRef.current) { setDebouncedSearch(search); return; }
@@ -436,7 +446,11 @@ export function ClientsListScreen({
           value={search}
           onChangeText={(v) => { searchTypedRef.current = true; onSearchChange(v); }}
           onClear={() => onSearchChange('')}
-          leftIcon={<Search size={16} color={c.faint} />}
+          // Spinner while the server search runs, so a slow connection reads
+          // as "searching", not "stuck".
+          leftIcon={serverSearchPending
+            ? <ActivityIndicator size="small" color={c.primary} />
+            : <Search size={16} color={c.faint} />}
           // Search is case-insensitive — turn off iOS smart-capitalize +
           // autocorrect so the input doesn't start each query with a
           // capital letter or try to "correct" partial names.

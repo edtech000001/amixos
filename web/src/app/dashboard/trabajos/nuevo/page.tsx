@@ -303,6 +303,15 @@ function NuevoTrabajoContent() {
   // the field auto-computes from them and this is ignored.
   const [totalHours, setTotalHours] = useState('');
   const [description, setDescription] = useState('');
+  // Auto-grow the description box to fit its text (including text loaded when
+  // editing). Only ever grows to content — a manual drag-resize still works.
+  const descRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = descRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [description]);
   const [internalNotes, setInternalNotes] = useState('');
   const [workerNotes, setWorkerNotes] = useState('');
   const [items, setItems] = useState<LineItem[]>([]);
@@ -599,7 +608,9 @@ function NuevoTrabajoContent() {
       return (
         <div key={k} className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-ink">{jrl('description', t.descriptionLabel)}</label>
-          <textarea rows={5} placeholder={t.descriptionPlaceholder}
+          {/* Grows with its content (descRef effect) and can still be dragged
+              taller — a long description read through a 5-row box was hard to read. */}
+          <textarea ref={descRef} rows={5} placeholder={t.descriptionPlaceholder}
             value={description} onChange={e => setDescription(e.target.value)}
             className="w-full rounded-xl border border-border px-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:ring-2 focus:ring-primary resize-y"/>
         </div>
@@ -1724,7 +1735,12 @@ function NuevoTrabajoContent() {
         // none was picked — "the person logging the job is the lead".
         if (restrictedCreator && !editId) {
           const alreadyLead = assignments.some(a => a.is_lead);
-          const creatorName = (user?.name ?? '').trim();
+          // Name the auto-lead from the creator's EMPLOYEE record. user.name is the
+          // login's name, and a login with none falls back to the email's local
+          // part — a field worker's own jobs then showed "Líder: antoniojacome1991"
+          // instead of their real name.
+          const myEmp = myEmployeeId ? employees.find((e) => e.id === myEmployeeId) : undefined;
+          const creatorName = (myEmp ? `${myEmp.first_name} ${myEmp.last_name}` : (user?.name ?? '')).trim();
           if (myEmployeeId) {
             const mine = assignments.find(a => a.employee_id === myEmployeeId);
             if (mine) {

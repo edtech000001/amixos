@@ -79,6 +79,9 @@ export interface FieldHomeData {
   stats: FieldHomeStats;
   /** The caller's employees row id in this business, if one exists. */
   employeeId: string | null;
+  /** First name from that employees row — the name the BUSINESS set, which
+   *  wins over the login's own name (often blank → the email's local part). */
+  employeeFirstName?: string | null;
 }
 
 /** Per-business payroll settings the field home needs to bound "active hours". */
@@ -173,7 +176,7 @@ export async function fetchFieldHome(
       .order('scheduled_date', { ascending: true }),
     supabase
       .from('employees')
-      .select('id')
+      .select('id, first_name')
       .eq('business_id', businessId)
       .eq('user_id', userId)
       .limit(1)
@@ -216,7 +219,9 @@ export async function fetchFieldHome(
       .order('completed_date', { ascending: false }),
   ]);
 
-  const employeeId = (employeeRes.data as { id: string } | null)?.id ?? null;
+  const employeeRow = employeeRes.data as { id: string; first_name: string | null } | null;
+  const employeeId = employeeRow?.id ?? null;
+  const employeeFirstName = employeeRow?.first_name?.trim() || null;
 
   // The `jobs` RLS already returns ONLY the field worker's assigned jobs (via
   // is_assigned_to_job, migration 022), so we don't filter here. `isLead` is
@@ -289,6 +294,7 @@ export async function fetchFieldHome(
     jobs,
     recentCompleted,
     employeeId,
+    employeeFirstName,
     openTimesheet: timesheetRes.data
       ? { id: timesheetRes.data.id, clockIn: timesheetRes.data.clock_in }
       : null,

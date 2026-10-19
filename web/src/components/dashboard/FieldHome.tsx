@@ -189,13 +189,17 @@ export function FieldHome() {
     );
   };
 
+  // The business's name for this worker first; the login's own name only as a
+  // fallback (a login with no name showed its email's local part).
+  const greetName = fh.data?.employeeFirstName || firstName(user?.name);
+
   return (
     <div className="p-6 lg:p-8 max-w-6xl">
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-ink">{f.greeting}{firstName(user?.name) ? ',' : ''}</h1>
+          <h1 className="text-2xl font-bold text-ink">{f.greeting}{greetName ? ',' : ''}</h1>
           {/* Crew don't get the business logo/name header — greet them by name. */}
-          {firstName(user?.name) && <p className="text-lg font-semibold text-ink mt-1">{firstName(user?.name)}</p>}
+          {greetName && <p className="text-lg font-semibold text-ink mt-1">{greetName}</p>}
         </div>
       </div>
 

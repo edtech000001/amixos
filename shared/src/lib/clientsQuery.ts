@@ -37,6 +37,14 @@ export interface ClientsQueryParams {
   /** Client ids to hide — branch scoping passes clients restricted to OTHER
    *  branches here (see clientBranchExcludeIds). */
   excludeIds?: string[];
+  /** The search's OR clause, already resolved by resolveClientSearch(). Pass it
+   *  to the page AND count queries so the contact lookup runs once, not twice —
+   *  each lookup is a network round trip that sits BEFORE the real query.
+   *  Omitted = resolved here. */
+  searchOr?: string | null;
+  /** Cancels the request(s) — a superseded search shouldn't keep using a weak
+   *  connection the new one needs. */
+  signal?: AbortSignal;
   /** Keyset cursor from the previous page's last row; null for the first page. */
   cursor?: ClientsCursor | null;
   /** Start the page at this section letter — 'A'–'Z', or '#' for names that do
@@ -66,10 +74,16 @@ async function resolveContactClientIds(
   supabase: AnySupabase,
   businessId: string,
   term: string,
+  signal?: AbortSignal,
 ): Promise<string[]> {
   const like = `%${escLike(term)}%`;
-  const { data } = await supabase.from('client_contacts').select('client_id')
+  let q = supabase.from('client_contacts').select('client_id')
     .eq('business_id', businessId).or(`name.ilike.${like},role.ilike.${like}`).limit(300);
+  if (signal) q = q.abortSignal(signal);
+  const { data, error } = await q;
+  // A cancelled/failed lookup must not silently drop contact matches into a
+  // "complete" result — surface it so the caller can retry.
+  if (error) throw new Error(error.message);
   return Array.from(new Set(((data ?? []) as { client_id: string }[]).map((r) => r.client_id))).slice(0, 200);
 }
 
@@ -82,9 +96,10 @@ async function searchOrClause(
   supabase: AnySupabase,
   businessId: string,
   term: string,
+  signal?: AbortSignal,
 ): Promise<string | null> {
   if (!term) return null;
-  const contactIds = await resolveContactClientIds(supabase, businessId, term);
+  const contactIds = await resolveContactClientIds(supabase, businessId, term, signal);
   const like = `%${escLike(term)}%`;
   const ors = [
     `first_name.ilike.${like}`, `last_name.ilike.${like}`, `company.ilike.${like}`,
@@ -100,6 +115,17 @@ async function searchOrClause(
   ];
   if (contactIds.length) ors.push(`id.in.(${contactIds.join(',')})`);
   return ors.join(',');
+}
+
+/** Resolve a search term to the OR clause once, to share between the page and
+ *  count queries (params.searchOr). null when there's no term. */
+export function resolveClientSearch(
+  supabase: AnySupabase,
+  businessId: string,
+  search: string | undefined,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  return searchOrClause(supabase, businessId, search?.trim() ?? '', signal);
 }
 
 /**
@@ -118,7 +144,9 @@ export async function fetchClientsPage<T extends { id: string; first_name: strin
   let q = supabase.from('clients').select(select).eq('business_id', params.businessId);
   if (params.excludeIds?.length) q = q.not('id', 'in', `(${params.excludeIds.join(',')})`);
 
-  const searchOr = await searchOrClause(supabase, params.businessId, term);
+  const searchOr = params.searchOr !== undefined
+    ? params.searchOr
+    : await searchOrClause(supabase, params.businessId, term, params.signal);
   if (searchOr) q = q.or(searchOr);
 
   if (params.cursor) {
@@ -146,6 +174,7 @@ export async function fetchClientsPage<T extends { id: string; first_name: strin
   // could never line up with the A–Z index.
   q = q.order('first_name', { ascending: true }).order('last_name', { ascending: true })
     .order('id', { ascending: true }).limit(pageSize);
+  if (params.signal) q = q.abortSignal(params.signal);
 
   const { data, error } = await q;
   if (error) throw new Error(error.message);
@@ -167,8 +196,11 @@ export async function fetchAllClientsMatching<T extends { id: string; first_name
 ): Promise<T[]> {
   const out: T[] = [];
   let cursor: ClientsCursor | null = null;
+  const searchOr = params.searchOr !== undefined
+    ? params.searchOr
+    : await searchOrClause(supabase, params.businessId, params.search?.trim() ?? '', params.signal);
   for (let i = 0; i < 100; i++) {
-    const page = await fetchClientsPage<T>(supabase, select, { ...params, cursor, pageSize: 1000 });
+    const page = await fetchClientsPage<T>(supabase, select, { ...params, searchOr, cursor, pageSize: 1000 });
     out.push(...page.clients);
     if (!page.nextCursor) break;
     cursor = page.nextCursor;
@@ -179,15 +211,19 @@ export async function fetchAllClientsMatching<T extends { id: string; first_name
 /** Total clients matching the filters (for the header count) — a count-only query. */
 export async function fetchClientCount(
   supabase: AnySupabase,
-  params: Pick<ClientsQueryParams, 'businessId' | 'search' | 'excludeIds'>,
+  params: Pick<ClientsQueryParams, 'businessId' | 'search' | 'excludeIds' | 'searchOr' | 'signal'>,
 ): Promise<number> {
   const term = params.search?.trim() ?? '';
-  const searchOr = await searchOrClause(supabase, params.businessId, term);
+  const searchOr = params.searchOr !== undefined
+    ? params.searchOr
+    : await searchOrClause(supabase, params.businessId, term, params.signal);
   let q = supabase.from('clients').select('id', { count: 'exact', head: true })
     .eq('business_id', params.businessId);
   if (params.excludeIds?.length) q = q.not('id', 'in', `(${params.excludeIds.join(',')})`);
   if (searchOr) q = q.or(searchOr);
-  const { count } = await q;
+  if (params.signal) q = q.abortSignal(params.signal);
+  const { count, error } = await q;
+  if (error) throw new Error(error.message);
   return count ?? 0;
 }
 

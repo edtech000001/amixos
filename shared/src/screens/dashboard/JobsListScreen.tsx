@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, Pressable, ScrollView, SectionList, Modal as RNModal, Alert, type ViewToken } from 'react-native';
+import { View, Text, Pressable, ScrollView, SectionList, ActivityIndicator, Modal as RNModal, Alert, type ViewToken } from 'react-native';
 import { JobsSummarySheet } from './JobsSummarySheet';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import type { JobsSummaryTotals } from '../../lib/jobsSummary';
@@ -1119,7 +1119,11 @@ export function JobsListScreen({
           value={search}
           onChangeText={setSearch}
           onClear={() => setSearch('')}
-          leftIcon={<Search size={16} color={c.faint} />}
+          // Spinner while the server search runs, so a slow connection reads
+          // as "searching", not "stuck".
+          leftIcon={serverMode && !!search.trim() && (loading || search !== debouncedSearch)
+            ? <ActivityIndicator size="small" color={c.primary} />
+            : <Search size={16} color={c.faint} />}
           autoCapitalize="none"
           autoCorrect={false}
         />

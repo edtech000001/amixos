@@ -94,7 +94,9 @@ export function FieldHomeContainer() {
       {/* Crew don't get a business logo/switcher — greet them by name. */}
       <FieldHomeScreen
         loading={appLoading || loading}
-        businessName={firstName(user?.name)}
+        // The business's name for this worker first; the login's name only as
+        // a fallback (a login with no name showed its email's local part).
+        businessName={fh.data?.employeeFirstName || firstName(user?.name)}
         jobs={jobs}
         recentCompleted={recentCompleted}
         openTimesheet={open}

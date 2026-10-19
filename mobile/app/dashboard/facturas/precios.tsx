@@ -7,7 +7,7 @@
 // state + client prices) or a state, then share.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, Modal as RNModal, ActivityIndicator, Platform, KeyboardAvoidingView, TextInput } from 'react-native';
+import { View, Text, Pressable, ScrollView, Modal as RNModal, ActivityIndicator, Platform, KeyboardAvoidingView, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronDown, ChevronLeft, ChevronUp, Printer, Sliders, X, GripVertical, Eye, EyeOff, Mail, Search, Building2 } from 'lucide-react-native';
@@ -296,8 +296,23 @@ export default function FacturasPreciosPage() {
       preparedFor: forClient ? clientName(forClient) : null,
       todayStr: formatDateLong(new Date(), locale),
     });
-    const { uri } = await Print.printToFileAsync({ html });
+    // Bounded: a PDF render that never resolves left the button spinning for
+    // good. 30s is far beyond a normal render.
+    const { uri } = await Promise.race([
+      Print.printToFileAsync({ html }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('pdf_timeout')), 30_000)),
+    ]);
     return uri;
+  };
+
+  /** iOS refuses to present the share sheet / mail composer while our sheet
+   *  (an RNModal) is still visible or fading out — and then the modal can't
+   *  dismiss either: the sheet stayed up with the button spinning forever.
+   *  Close it first and wait out the fade before presenting anything. */
+  const closeSheetsThenWait = async () => {
+    setGenOpen(false);
+    setEmailPickOpen(false);
+    await new Promise((r) => setTimeout(r, 450));
   };
 
   const generate = async () => {
@@ -307,12 +322,16 @@ export default function FacturasPreciosPage() {
       const selClient = mode === 'client' ? (clients.find(x => x.id === clientId) ?? null) : null;
       const uri = await renderPdf(selClient);
       if (!uri) return;
-      setGenOpen(false);
+      await closeSheetsThenWait();
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: t.sheetTitle });
       }
-    } catch { /* keep sheet open on failure */ }
-    setBusy(false);
+    } catch {
+      Alert.alert('', t.generateError);
+    } finally {
+      // Always — an early return above used to skip this and leave it spinning.
+      setBusy(false);
+    }
   };
 
   /** Emails the sheet to one client, PDF attached.
@@ -346,8 +365,7 @@ export default function FacturasPreciosPage() {
         try { available = await MailComposer.isAvailableAsync(); } catch { available = false; }
       }
 
-      setGenOpen(false);
-      setEmailPickOpen(false);
+      await closeSheetsThenWait();
       if (MailComposer && available) {
         await MailComposer.composeAsync({
           recipients: [to],
@@ -362,8 +380,11 @@ export default function FacturasPreciosPage() {
       if (uri && (await Sharing.isAvailableAsync())) {
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: t.sheetTitle });
       }
-    } catch { /* swallow — the sheet stays usable */ }
-    setBusy(false);
+    } catch {
+      Alert.alert('', t.generateError);
+    } finally {
+      setBusy(false);
+    }
   };
 
   /** Clients that can actually receive this. Filtering here rather than
