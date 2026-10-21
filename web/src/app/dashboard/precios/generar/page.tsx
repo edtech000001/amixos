@@ -33,6 +33,7 @@ import {
   type PriceSheetTemplateConfig,
   type PriceSheetDesign,
 } from '@amixos/shared/lib/priceSheetTemplate';
+import { mailtoHref, resolveClientRecipients } from '@amixos/shared/lib/clientRecipients';
 
 interface ClientLite {
   id: string;
@@ -179,9 +180,12 @@ export default function GenerarPreciosPage() {
   // "Prepared for" them).
   const [pendingEmail, setPendingEmail] = useState<ClientLite | null>(null);
 
-  const doEmail = (target: ClientLite) => {
+  const doEmail = async (target: ClientLite) => {
     const to = clientEmail(target);
     if (!to) return;
+    // To (a contact may replace the client) + contacts flagged "CC on all
+    // emails" — same rule as invoices and proposals.
+    const rcpt = await resolveClientRecipients(supabase, target.id, to);
     const selectedClient = target;
     const subject = t.emailSubject.replace('{{business}}', business?.name ?? 'Amixos');
     const body = t.emailBody
@@ -194,8 +198,8 @@ export default function GenerarPreciosPage() {
     // So a small card asks for one more click, which opens the draft.
     window.print();
     setEmailDraft({
-      to,
-      href: `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
+      to: (rcpt.to.length ? rcpt.to : [to]).join(', '),
+      href: mailtoHref(rcpt.to.length ? rcpt.to : [to], { cc: rcpt.cc, subject, body }),
     });
   };
   const [emailDraft, setEmailDraft] = useState<{ to: string; href: string } | null>(null);
@@ -205,7 +209,7 @@ export default function GenerarPreciosPage() {
     if (mode === 'client' && clientId !== pendingEmail.id) return;
     const target = pendingEmail;
     setPendingEmail(null);
-    doEmail(target);
+    void doEmail(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingEmail, mode, clientId, emailPickOpen]);
 

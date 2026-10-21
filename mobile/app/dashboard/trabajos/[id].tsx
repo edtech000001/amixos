@@ -75,7 +75,7 @@ import { formatProjectDuration } from '@amixos/shared/lib/duration';
 import { JobPhotosSection } from '@/components/JobPhotosSection';
 import { JobDocumentsSection } from '@/components/JobDocumentsSection';
 import { SignaturePad } from '@/components/SignaturePad';
-import { fetchClientOwnEmails, resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
+import { fetchClientOwnEmails, resolveClientRecipients, mailtoHref } from '@amixos/shared/lib/clientRecipients';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { AutocompleteInput } from '@amixos/shared/ui/AutocompleteInput';
 import { useAppHref, useSectionBase } from '@/lib/sectionNav';
@@ -771,9 +771,9 @@ export default function JobDetailRoute() {
       },
     });
     // A contact flagged receives_email is addressed instead of the client
-    // (migration 220). No CC — that is invoice-only.
+    // (migration 220); contacts flagged "CC on all emails" are copied.
     const proposalTo = await resolveClientRecipients(supabase, job.client_id ?? null, emails.length ? emails : email);
-    const mailto = `mailto:${encodeURIComponent(joinRecipients(proposalTo.to))}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const mailto = mailtoHref(proposalTo.to, { cc: proposalTo.cc, subject, body });
     const canMail = await Linking.canOpenURL(mailto).catch(() => false);
     if (!canMail) { Alert.alert('', td.shareError); return; }
     openLink(mailto);

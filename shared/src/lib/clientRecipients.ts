@@ -17,7 +17,7 @@ export interface ClientRecipients {
   /** Addressed TO. Empty means there is nobody to send to — callers should not
    *  open a blank mail composer, they should say so. */
   to: string[];
-  /** Copied. Only ever populated for invoice sends. */
+  /** Copied — contacts flagged "CC on all emails" (cc_on_invoices). */
   cc: string[];
 }
 
@@ -117,8 +117,11 @@ export async function fetchClientOwnEmails(
  *   the office one quietly dropped the personal address, even when the office
  *   address was merely a CC contact's. Used only when no contact is flagged as
  *   the recipient.
- * @param opts.includeInvoiceCc true for invoice sends, which additionally copy
- *   contacts flagged cc_on_invoices. Other sends have no CC concept.
+ * @param opts.includeCc copy contacts flagged cc_on_invoices — shown to users
+ *   as "CC on all emails". Default TRUE: a contact copied on invoices was
+ *   missed on proposals, price sheets, etc. (the client's assistant never got
+ *   the COI). The column keeps its old name; no migration needed.
+ *   `includeInvoiceCc` is the old name, still accepted.
  *
  * Fails OPEN: if the contacts query errors (offline, RLS), the client's own
  * address is used. Silently sending nothing would be worse than sending to the
@@ -128,7 +131,7 @@ export async function resolveClientRecipients(
   supabase: Supa,
   clientId: string | null | undefined,
   clientEmail: string | string[] | null | undefined,
-  opts?: { includeInvoiceCc?: boolean },
+  opts?: { includeCc?: boolean; includeInvoiceCc?: boolean },
 ): Promise<ClientRecipients> {
   const own = Array.isArray(clientEmail) ? clientEmail : [clientEmail];
   const fallback: ClientRecipients = { to: cleanEmails(own), cc: [] };
@@ -149,7 +152,7 @@ export async function resolveClientRecipients(
   const to = cleanEmails(rows.filter(r => r.receives_email).map(r => r.email));
   const resolvedTo = to.length ? to : cleanEmails(own);
 
-  if (!opts?.includeInvoiceCc) return { to: resolvedTo, cc: [] };
+  if (opts?.includeCc === false) return { to: resolvedTo, cc: [] };
 
   const toKeys = new Set(resolvedTo.map(e => e.toLowerCase()));
   const cc = cleanEmails(rows.filter(r => r.cc_on_invoices).map(r => r.email))
@@ -160,4 +163,28 @@ export async function resolveClientRecipients(
 /** `a@x.com,b@y.com` for a mailto target, or '' when there is nobody. */
 export function joinRecipients(list: string[]): string {
   return list.join(',');
+}
+
+/** Emails of contacts flagged "CC on all emails", minus any addresses already
+ *  being written to (`exclude`). For screens that hold the contacts list. */
+export function ccContactEmails(
+  contacts: { email?: string | null; cc_on_invoices?: boolean | null }[] | null | undefined,
+  exclude: string[] = [],
+): string[] {
+  const ex = new Set(exclude.map(e => e.trim().toLowerCase()));
+  return cleanEmails((contacts ?? []).filter(c => c.cc_on_invoices).map(c => c.email))
+    .filter(e => !ex.has(e.toLowerCase()));
+}
+
+/** A mailto: URL with optional CC / subject / body. */
+export function mailtoHref(
+  to: string | string[],
+  opts?: { cc?: string[]; subject?: string; body?: string },
+): string {
+  const toList = Array.isArray(to) ? to : [to];
+  const params: string[] = [];
+  if (opts?.cc?.length) params.push(`cc=${encodeURIComponent(opts.cc.join(','))}`);
+  if (opts?.subject) params.push(`subject=${encodeURIComponent(opts.subject)}`);
+  if (opts?.body) params.push(`body=${encodeURIComponent(opts.body)}`);
+  return `mailto:${encodeURIComponent(toList.join(','))}${params.length ? `?${params.join('&')}` : ''}`;
 }

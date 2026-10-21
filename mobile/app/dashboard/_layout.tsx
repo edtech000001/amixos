@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import { Home, LayoutGrid } from 'lucide-react-native';
 import { Alert, View } from 'react-native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -103,6 +103,15 @@ function DashboardTabs() {
   const { t } = useLang();
   const sb = t.dashboard.sidebar;
   const { currentRole, user, impersonating, business } = useApp();
+  // Bumped when the active business CHANGES (A → B), not on the first load
+  // (null → A), so startup doesn't rebuild the navigator. Keys <Tabs> below.
+  const [bizGen, setBizGen] = useState(0);
+  const prevBizId = useRef<string | null>(null);
+  useEffect(() => {
+    const id = business?.id ?? null;
+    if (id && prevBizId.current && id !== prevBizId.current) setBizGen(g => g + 1);
+    if (id) prevBizId.current = id;
+  }, [business?.id]);
   const insets = useSafeAreaInsets();
   // Load this user's dock-app selection for the CURRENT business (user_dock_apps,
   // migration 245) — re-runs on every business switch, since each business has
@@ -174,7 +183,11 @@ function DashboardTabs() {
             The enter/leave flows router.replace() right after the flip, so the
             user still lands on the intended screen. */}
         <Tabs
-          key={impersonating ? `imp:${impersonating.userId}` : 'self'}
+          // …and by business switch (bizGen): each section keeps its own stack,
+          // so after switching from Prime Solutions to Pivot Builders the Clients
+          // tab still showed the PREVIOUS business's client detail. A fresh
+          // navigator puts every section back on its list for the new business.
+          key={`${impersonating ? `imp:${impersonating.userId}` : 'self'}:${bizGen}`}
           tabBar={props => <AnimatedDock {...props} />}
           // Back returns to the screen you came from. The default
           // ('firstRoute') sent every hidden screen's back arrow — Ajustes,

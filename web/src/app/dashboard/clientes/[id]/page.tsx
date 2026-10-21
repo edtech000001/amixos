@@ -10,7 +10,7 @@ import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, Phone, Mail, MapPin, FileText, Plus, Pencil, Building2, Trash2, Star, UserPlus, Printer, Share2, ShieldCheck, MoreHorizontal } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
-import { withoutEmailIncludeFlags, isUndefinedColumn } from '@amixos/shared/lib/clientRecipients';
+import { ccContactEmails, isUndefinedColumn, withoutEmailIncludeFlags } from '@amixos/shared/lib/clientRecipients';
 import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
 import { can } from '@amixos/shared/lib/permissions';
 import { Button } from '@/components/ui/Button';
@@ -230,7 +230,10 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
           [[client.city, client.state].filter(Boolean).join(', '), client.zip_code].filter(Boolean).join(' '),
         ].filter(Boolean),
         phone: client.phone_cell || client.phone_office,
-        email: client.email_office || client.email_home,
+        // Where the agent should send the certificate: the client plus every
+        // contact flagged "CC on all emails" (e.g. their assistant).
+        email: [client.email_office || client.email_home, ...ccContactEmails(contacts, [client.email_office || client.email_home || ''])]
+          .filter(Boolean).join(', '),
       },
       t: {
         subjectCoi: td.policy.subjectCoi,

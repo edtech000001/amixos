@@ -23,7 +23,7 @@ import { PriceSheetScreen } from '@amixos/shared/screens/dashboard/PriceSheetScr
 import { Select } from '@amixos/shared/ui';
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { formatDateLong } from '@amixos/shared/lib/format';
-import { CLIENT_EMAIL_SELECT, clientOwnEmails } from '@amixos/shared/lib/clientRecipients';
+import { CLIENT_EMAIL_SELECT, clientOwnEmails, resolveClientRecipients } from '@amixos/shared/lib/clientRecipients';
 import { usStateName, US_STATE_ABBR_TO_NAME } from '@amixos/shared/lib/usStates';
 import { rowToPriceSheetItem, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import {
@@ -347,6 +347,9 @@ export default function FacturasPreciosPage() {
     setBusy(true);
     try {
       const uri = await renderPdf(mode === 'client' ? target : null);
+      // To (a contact may replace the client) + CC contacts — same rule as
+      // invoices and proposals.
+      const rcpt = await resolveClientRecipients(supabase, target.id, to);
       const subject = t.emailSubject.replace('{{business}}', business.name ?? 'Amixos');
       const body = t.emailBody
         .replace('{{name}}', (target.first_name ?? '').trim() || clientName(target))
@@ -368,7 +371,9 @@ export default function FacturasPreciosPage() {
       await closeSheetsThenWait();
       if (MailComposer && available) {
         await MailComposer.composeAsync({
-          recipients: [to],
+          recipients: rcpt.to.length ? rcpt.to : [to],
+          // Contacts flagged "CC on all emails" (e.g. the client's assistant).
+          ccRecipients: rcpt.cc,
           subject,
           body,
           attachments: uri ? [uri] : [],

@@ -59,6 +59,7 @@ import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useAppHref, useSectionBase } from '@/lib/sectionNav';
+import { ccContactEmails, mailtoHref } from '@amixos/shared/lib/clientRecipients';
 
 interface FieldTemplate {
   id: string;
@@ -449,7 +450,10 @@ export default function ClienteDetailRoute() {
           [[client.city, client.state].filter(Boolean).join(', '), client.zip_code].filter(Boolean).join(' '),
         ].filter(Boolean),
         phone: client.phone_cell || client.phone_office,
-        email: client.email_office || client.email_home,
+        // Where the agent should send the certificate: the client plus every
+        // contact flagged "CC on all emails" (e.g. their assistant).
+        email: [client.email_office || client.email_home, ...ccContactEmails(contacts, [client.email_office || client.email_home || ''])]
+          .filter(Boolean).join(', '),
       },
       t: {
         subjectCoi: td.policy.subjectCoi,
@@ -825,7 +829,8 @@ export default function ClienteDetailRoute() {
                   setEmailPickOpen(false);
                   fireContact({
                     type: 'email',
-                    target: `mailto:${opt.email}`,
+                    // Copy contacts flagged "CC on all emails".
+                    target: mailtoHref(opt.email, { cc: ccContactEmails(contacts, [opt.email]) }),
                     contactMethod: opt.email,
                     clientId: client.id,
                   });
@@ -977,7 +982,8 @@ export default function ClienteDetailRoute() {
               if (emailOptions.length > 1) { setEmailPickOpen(true); return; }
               fireContact({
                 type: 'email',
-                target: `mailto:${emailTarget}`,
+                // Copy contacts flagged "CC on all emails".
+                target: mailtoHref(emailTarget, { cc: ccContactEmails(contacts, [emailTarget]) }),
                 contactMethod: emailTarget,
                 clientId: client.id,
               });
