@@ -1768,6 +1768,12 @@ export type DashboardDict = {
       emailPickTitle: string;
       emailSubject: string;
       emailBody: string;
+      /** Web: after the print dialog, a second click opens the email draft
+       *  (browsers block opening Outlook/Mail without a fresh click). */
+      emailDraftTitle: string;
+      emailDraftBody: string;
+      emailDraftOpen: string;
+      emailDraftClose: string;
       generateForClientBtn: string;
       preparedFor: string;
       sheetTitle: string;
@@ -5158,6 +5164,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         emailBtn: 'Enviar por correo',
         emailPickTitle: '¿A quién se lo enviamos?',
         emailSubject: 'Lista de precios – {{business}}',
+        emailDraftTitle: '¿Guardaste el PDF?',
+        emailDraftBody: 'Abre el correo para {{to}} y adjunta el PDF que acabas de guardar.',
+        emailDraftOpen: 'Abrir correo',
+        emailDraftClose: 'Cerrar',
         emailBody: 'Hola {{name}},\n\nTe comparto nuestra lista de precios actualizada (adjunta en PDF).\n\nSaludos,\n{{business}}',
         generateForClientBtn: 'Generar lista de precios',
         preparedFor: 'Preparado para',
@@ -8548,6 +8558,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         emailBtn: 'Email to client',
         emailPickTitle: 'Who should receive this?',
         emailSubject: 'Price sheet – {{business}}',
+        emailDraftTitle: 'Saved the PDF?',
+        emailDraftBody: 'Open the email to {{to}} and attach the PDF you just saved.',
+        emailDraftOpen: 'Open email',
+        emailDraftClose: 'Close',
         emailBody: 'Hi {{name}},\n\nSharing our current price sheet (PDF attached).\n\nBest,\n{{business}}',
         generateForClientBtn: 'Generate price sheet',
         preparedFor: 'Prepared for',

@@ -187,11 +187,18 @@ export default function GenerarPreciosPage() {
     const body = t.emailBody
       .replace('{{name}}', (selectedClient.first_name ?? '').trim() || clientName(selectedClient))
       .replace(/\{\{business\}\}/g, business?.name ?? 'Amixos');
-    // Same flow as sending an invoice: pop the print dialog FIRST so the user
-    // saves the PDF, then (once it closes) open the drafted email to attach it.
+    // Print FIRST so the user saves the PDF. The email can't be opened
+    // automatically afterwards: browsers only let a page launch Outlook/Mail
+    // (a mailto: link) right after a click, and the print dialog uses that
+    // click up — the old window.location.href = mailto was silently blocked.
+    // So a small card asks for one more click, which opens the draft.
     window.print();
-    window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    setEmailDraft({
+      to,
+      href: `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
+    });
   };
+  const [emailDraft, setEmailDraft] = useState<{ to: string; href: string } | null>(null);
   useEffect(() => {
     if (!pendingEmail || emailPickOpen) return;
     // Client mode: wait until the sheet shows this client.
@@ -385,6 +392,26 @@ export default function GenerarPreciosPage() {
 
   return (
     <div className="min-h-screen print:min-h-0 bg-surface print:bg-white p-6 lg:p-8 print:p-0">
+      {emailDraft ? (
+        <div className="print:hidden fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
+          <div className="w-full max-w-md rounded-2xl border border-border-soft bg-card shadow-lg p-4">
+            <p className="text-sm font-semibold text-ink">{t.emailDraftTitle}</p>
+            <p className="text-sm text-muted mt-1">{t.emailDraftBody.replace('{{to}}', emailDraft.to)}</p>
+            <div className="flex justify-end gap-2 mt-3">
+              <button type="button" onClick={() => setEmailDraft(null)}
+                className="px-3 py-2 rounded-xl text-sm font-semibold text-muted hover:bg-surface">
+                {t.emailDraftClose}
+              </button>
+              {/* A real link, clicked by the user — the gesture browsers require
+                  to hand a mailto: to the default email app. */}
+              <a href={emailDraft.href} onClick={() => setTimeout(() => setEmailDraft(null), 300)}
+                className="px-4 py-2 rounded-xl bg-primary text-sm font-semibold text-white hover:opacity-90">
+                {t.emailDraftOpen}
+              </a>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {/* Tight, full-width single page when printing. */}
       <style>{`@media print { @page { size: letter portrait; margin: 0.4in; } html, body { background: #fff; } }`}</style>
       {/* Controls — hidden on print */}
@@ -473,10 +500,11 @@ export default function GenerarPreciosPage() {
       </div>
 
       {/* Document — the printout */}
-      {/* print-force-light: on screen the preview follows the app theme, but
-          the PRINTED document always comes out on white paper (this is what
-          killed the black bars in the saved PDF). */}
-      <div className={`print-force-light max-w-3xl print:max-w-full mx-auto bg-card rounded-2xl print:rounded-none border border-border-soft print:border-0 shadow-sm print:shadow-none p-8 print:p-0`} style={{ fontFamily: invTok.cssFontFamily }}>
+      {/* force-light: the preview is a DOCUMENT, so it's paper-white on
+          screen too. Following the dark theme put the accent-coloured title,
+          state and section headings (dark ink, made for paper) on a dark card,
+          where they vanished. print-force-light keeps the printout white. */}
+      <div className={`force-light print-force-light max-w-3xl print:max-w-full mx-auto bg-card rounded-2xl print:rounded-none border border-border-soft print:border-0 shadow-sm print:shadow-none p-8 print:p-0`} style={{ fontFamily: invTok.cssFontFamily }}>
         {/* Header — split (default) or centered (elegant) */}
         {theme.centered ? (
           <div className="text-center pb-5 print:pb-2 border-b border-border-soft">
