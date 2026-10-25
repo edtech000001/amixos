@@ -1047,7 +1047,11 @@ export default function MapScreen() {
             // when used with a lot of markers — leave it off for now.
             animationEnabled={false}
           >
-            {renderedPins.map(p => {
+            {/* Hidden pins are filtered OUT (not rendered as null): null holes
+                in the map's child list skew the indices the new architecture
+                hands react-native-maps, which crashed on pan (see
+                patches/react-native-maps+1.20.1.patch). */}
+            {renderedPins.flatMap(p => {
               // Resolve color + icon LOCALLY using the business's pin
               // config. Returns null when a hide rule matched — skip
               // those pins entirely so they don't render at all. Weather
@@ -1064,7 +1068,7 @@ export default function MapScreen() {
                 layerCfg,
                 p as unknown as Record<string, unknown>,
               );
-              if (style === null) return null;
+              if (style === null) return [];
               // For weather primaries, look up how many siblings share
               // this location so the badge shows "+N".
               const siblingCount =

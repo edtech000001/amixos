@@ -268,14 +268,18 @@ export default function ClienteDetailRoute() {
     // live fetch below replace it (same keys loadCached persists).
     if (!hasDataRef.current) {
       setLoading(true);
-      const [cc, cts] = await Promise.all([
+      const [cc, cts, civ] = await Promise.all([
         swrRead<NonNullable<typeof client>>(`client_${id}`),
         swrRead<typeof contacts>(`client_contacts_${id}`),
+        swrRead<Invoice[]>(`client_invoices_${id}`),
       ]);
       if (cc?.data && !hasDataRef.current) {
         hasDataRef.current = true;
         setClient(cc.data);
         setContacts(cts?.data ?? []);
+        // Invoices paint from the snapshot too, so they don't arrive last (or
+        // not at all when the live fetch below fails).
+        if (civ?.data) setInvoices(civ.data);
         setLoading(false);
       }
     }
@@ -295,16 +299,23 @@ export default function ClienteDetailRoute() {
       if (error) throw error;
       return (data as ClientContact[] | null) ?? [];
     });
-    let invData: Invoice[] = [];
+    // Invoices: cached like the client, and a FAILED fetch never replaces the
+    // list with an empty one. The error used to be ignored (`{ data }` only),
+    // so a request that timed out — likely right after a client import, while
+    // contacts and the Google mirror were still writing — painted "no
+    // invoices" until the client was reopened.
+    let invData: Invoice[] | null = null;
     let tplData: FieldTemplate[] = [];
-    try {
-      const { data } = await supabase
+    const invRes = await loadCached(`client_invoices_${id}`, async () => {
+      const { data, error } = await supabase
         .from('invoices')
         .select('id, invoice_number, status, total_amount, due_date, created_at')
         .eq('client_id', id)
         .order('created_at', { ascending: false });
-      invData = (data as Invoice[] | null) ?? [];
-    } catch { /* offline */ }
+      if (error) throw error;
+      return (data as Invoice[] | null) ?? [];
+    }).catch(() => null);
+    invData = invRes?.data ?? null;
     try {
       const { data } = await supabase
         .from('client_field_templates')
@@ -315,7 +326,7 @@ export default function ClienteDetailRoute() {
     } catch { /* offline */ }
     hasDataRef.current = !!clientRes.data;
     setClient(clientRes.data ?? null);
-    setInvoices(invData);
+    if (invData) setInvoices(invData); // null = failed and nothing cached: keep what's shown
     setTemplates(localizeTemplates(tplData, locale));
     setContacts(contactsRes.data ?? []);
     setOfflineCopy(clientRes.fromCache || contactsRes.fromCache);

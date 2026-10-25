@@ -352,7 +352,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
         setLoading(false);
       }
     }
-    const [{ data: c }, { data: inv }, { data: tpl }, { data: cts }] = await Promise.all([
+    const [{ data: c }, { data: inv, error: invErr }, { data: tpl }, { data: cts }] = await Promise.all([
       supabase.from('clients').select('*').eq('id', id).single(),
       supabase.from('invoices').select('id, invoice_number, status, total_amount, due_date, created_at')
         .eq('client_id', id).order('created_at', { ascending: false }),
@@ -366,7 +366,9 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
       void swrWrite(`client_${id}`, c);
       void swrWrite(`client_contacts_${id}`, cts ?? []);
     }
-    setInvoices(inv ?? []);
+    // A failed invoices request must not paint "no invoices" — keep what's
+    // shown (the list came back only after reopening the client).
+    if (!invErr) setInvoices(inv ?? []);
     setTemplates(localizeTemplates(tpl ?? [], locale));
     setContacts(cts ?? []);
     setLoading(false);
