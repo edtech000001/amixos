@@ -22,6 +22,7 @@ import { LocationSwitcher } from '@/components/LocationSwitcher';
 import { FieldHomeContainer } from '@/components/FieldHomeContainer';
 import { TrialBanner } from '@/components/TrialBanner';
 import { useAppHref } from '@/lib/sectionNav';
+import { OwedByPartnersCard } from '@/components/OwedByPartnersCard';
 
 // Field crew get a purpose-built home (assigned jobs + clock in/out) instead
 // of the owner's widget grid. Branch once the role is known.
@@ -308,6 +309,9 @@ function OwnerDashboardHome() {
     <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       <TrialBanner />
       <DashboardHomeScreen
+        // Bill-through: unpaid invoices whose client already paid the other
+        // company (migration 250). Hidden when there are none / no access.
+        notice={<OwedByPartnersCard />}
         loading={appLoading || loading}
         role={currentRole}
         businessName={business?.name ?? ''}

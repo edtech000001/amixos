@@ -406,6 +406,16 @@ export type DashboardDict = {
       ownShare: string;
       clientPays: string;
       billedVia: string;
+      /** Source invoice, once the client has paid the OTHER company's invoice
+       *  (migration 250). {{company}} {{date}} {{amount}}. */
+      clientPaid: string;
+      /** Invoice-list badge for the same state. {{company}} */
+      collectFrom: string;
+      /** Dashboard card: unpaid invoices whose client already paid a partner. */
+      owedTitle: string;
+      owedHint: string;
+      /** {{invoice}} {{company}} {{date}} */
+      owedLine: string;
       /** Ajustes toggle. */
       settingTitle: string;
       settingHint: string;
@@ -3837,6 +3847,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         ownShare: 'Total de {{company}}',
         clientPays: 'El cliente paga {{total}} · incluye {{amount}} de otras empresas',
         billedVia: 'Facturado por {{company}} · {{invoice}}',
+        clientPaid: 'El cliente ya le pagó a {{company}} el {{date}}. Cóbrale tu parte: {{amount}}',
+        collectFrom: 'Cobrar a {{company}}',
+        owedTitle: 'Te deben tus otras empresas',
+        owedHint: 'El cliente ya pagó la factura de la otra empresa. Pídele tu parte.',
+        owedLine: '{{invoice}} · pagado a {{company}} el {{date}}',
         settingTitle: 'Facturar por otra empresa',
         settingHint: 'Permite copiar las líneas de las facturas de esta empresa a una factura de tus otras empresas. Las líneas copiadas no cuentan como ingreso de la otra empresa.',
       },
@@ -7234,6 +7249,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         ownShare: '{{company}} total',
         clientPays: 'Client pays {{total}} · includes {{amount}} for other companies',
         billedVia: 'Billed through {{company}} · {{invoice}}',
+        clientPaid: 'The client paid {{company}} on {{date}} — collect {{amount}} from them',
+        collectFrom: 'Collect from {{company}}',
+        owedTitle: 'Owed by your other companies',
+        owedHint: 'The client already paid the other company’s invoice. Ask them for your share.',
+        owedLine: '{{invoice}} · paid to {{company}} on {{date}}',
         settingTitle: 'Bill through another company',
         settingHint: "Lets this company's invoice lines be copied onto an invoice from your other companies. Copied lines don't count as the other company's revenue.",
       },

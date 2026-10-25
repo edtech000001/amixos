@@ -23,6 +23,9 @@ export interface InvoiceListItem {
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled' | string;
   totalAmount: number;
   dueDate: string | null;
+  /** The other company the client has already paid for this invoice's work
+   *  (bill-through, migration 250) — shows a "Collect from …" pill. */
+  collectFrom?: string | null;
   clientNames: string | null;
   /** Primary client's company + state (for the company/state filters). */
   company: string | null;
@@ -651,6 +654,12 @@ export function InvoicesListScreen({
                     : null;
                   // "Reminded 3d ago" / "Not reminded" — has this client been chased?
                   const reminder = reminderBadge(inv, t.reminders);
+                  const collectPill = inv.collectFrom ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap bg-amber-500/15 text-amber-700">
+                      <Building2 size={11} />
+                      {t.billThrough.collectFrom.replace('{{company}}', inv.collectFrom)}
+                    </span>
+                  ) : null;
                   const reminderPill = reminder ? (
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap ${
                       reminder.reminded ? 'bg-primary/10 text-primary' : 'bg-amber-500/10 text-amber-600'
@@ -687,6 +696,7 @@ export function InvoicesListScreen({
                         </span>
                         {/* Own line on narrow widths, matching mobile. */}
                         {reminderPill ? <span className="md:hidden flex mt-1">{reminderPill}</span> : null}
+                        {collectPill ? <span className="md:hidden flex mt-1">{collectPill}</span> : null}
                         <span className="md:hidden block text-xs text-faint mt-0.5 truncate">
                           {client}
                           {inv.company ? ` · ${inv.company}` : ''}
@@ -698,6 +708,7 @@ export function InvoicesListScreen({
                       <span className="hidden md:flex w-36 shrink-0 flex-col items-start gap-1">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pill}`}>{pillLabel}</span>
                         {reminderPill}
+                        {collectPill}
                       </span>
                       <span className="hidden md:block flex-1 min-w-0 truncate">
                         <span className="text-sm text-muted">{client}</span>

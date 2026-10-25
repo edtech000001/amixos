@@ -37,7 +37,7 @@ const JOB_LIST_SELECT = `
   job_assignments(worker_name, is_lead)
 `;
 const INVOICE_LIST_SELECT =
-  'id, invoice_number, status, total_amount, due_date, issue_date, created_at, sent_at, line_items, clients(first_name, last_name, company, state), invoice_clients(clients(first_name, last_name, company, state)), jobs(external_ref, title)';
+  'id, invoice_number, status, total_amount, due_date, issue_date, created_at, sent_at, line_items, clients(first_name, last_name, company, state), invoice_clients(clients(first_name, last_name, company, state)), jobs(external_ref, title), billed_through';
 
 interface RawClient { id: string; first_name: string; last_name: string; company: string | null; city?: string; state?: string }
 interface RawEmployee { id: string; first_name: string; last_name: string; role: string; show_in_roster?: boolean | null }

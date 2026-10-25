@@ -28,6 +28,7 @@ import { useSwr } from '@amixos/shared/lib/swrCache';
 import ImportModal from '@/components/dashboard/ImportModal';
 import { confirm } from '@amixos/shared/ui/confirmBus';
 import { useScrollRestore, saveScrollAnchor } from '@/lib/useScrollRestore';
+import { collectFromPartner, type BillThroughLink } from '@amixos/shared/lib/invoiceBillThrough';
 
 interface InvoiceClient { first_name: string; last_name: string; company: string | null; state: string | null }
 interface RawInvoice {
@@ -49,7 +50,7 @@ interface RawInvoice {
 // Only the columns the list renders/searches — `*` hauled every field for every
 // row. created_at is required for the keyset cursor.
 const INVOICE_LIST_SELECT =
-  `id, invoice_number, status, total_amount, due_date, issue_date, created_at, sent_at, line_items, clients(first_name, last_name, company, state), invoice_clients(clients(first_name, last_name, company, state)), jobs(external_ref, title), ${INVOICE_REMINDER_COLUMNS}`;
+  `id, invoice_number, status, total_amount, due_date, issue_date, created_at, sent_at, line_items, clients(first_name, last_name, company, state), invoice_clients(clients(first_name, last_name, company, state)), jobs(external_ref, title), billed_through, ${INVOICE_REMINDER_COLUMNS}`;
 
 // Primary client for company/state — the single `clients` relation if present,
 // else the first of the multi-client list.
@@ -379,6 +380,9 @@ export default function FacturasPage() {
       sentAt: inv.sent_at,
       reminderCount: inv.reminder_count ?? 0,
       lastRemindedOn: inv.last_reminded_on ?? null,
+      // Client already paid the other company this was billed through
+      // (migration 250) → "Collect from <company>" pill.
+      collectFrom: collectFromPartner((inv as { billed_through?: BillThroughLink[] | null }).billed_through, inv.status)?.business_name ?? null,
       clientNames: mapClientNames(inv),
       company: pc?.company ?? null,
       state: pc?.state ?? null,

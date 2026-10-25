@@ -387,6 +387,20 @@ export interface BillThroughLink {
   invoice_id: string;
   invoice_number: string;
   at?: string;
+  /** Set by the database (migration 250) once the client has fully paid the
+   *  OTHER company's invoice — i.e. this company's share is now with them. */
+  client_paid_at?: string;
+}
+
+/** The link whose client has already paid the other company, while THIS
+ *  invoice is still unpaid — "collect your share from them". */
+export function collectFromPartner(
+  billedThrough: BillThroughLink[] | null | undefined,
+  status: string | null | undefined,
+): BillThroughLink | null {
+  if (status === 'paid' || status === 'cancelled') return null;
+  const list = Array.isArray(billedThrough) ? billedThrough : [];
+  return list.find(b => b?.invoice_id && b.client_paid_at) ?? null;
 }
 
 /** The invoice's current bill-through link, or null. */

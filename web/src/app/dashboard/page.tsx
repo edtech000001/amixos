@@ -52,6 +52,7 @@ import {
 } from '@amixos/shared/lib/dashboardWidgets';
 import { can, isFieldOnly } from '@amixos/shared/lib/permissions';
 import { FieldHome } from '@/components/dashboard/FieldHome';
+import { OwedByPartnersCard } from '@/components/dashboard/OwedByPartnersCard';
 
 const formatCurrency = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -1665,6 +1666,10 @@ export default function DashboardPage() {
           <span className="block text-xs text-red-600/80 mt-1">{saveError}</span>
         </div>
       )}
+
+      {/* Bill-through: unpaid invoices whose client already paid the other
+          company (migration 250). Hidden when there are none / no access. */}
+      <OwedByPartnersCard />
 
       {/* Widget grid */}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

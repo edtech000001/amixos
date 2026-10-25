@@ -29,6 +29,9 @@ export interface InvoiceListItem {
   /** Payment-reminder summary (migration 228) — drives the reminder pill. */
   reminderCount?: number;
   lastRemindedOn?: string | null;
+  /** The other company the client has already paid for this invoice's work
+   *  (bill-through, migration 250) — shows a "Collect from …" pill. */
+  collectFrom?: string | null;
   clientNames: string | null;
   /** Primary client's company + state (for the company/state filters). */
   company: string | null;
@@ -586,6 +589,14 @@ export function InvoicesListScreen({
                   <View className={`self-start flex-row items-center gap-1 px-2 py-0.5 mt-1 rounded-full ${reminder.reminded ? 'bg-primary/10' : 'bg-amber-500/10'}`}>
                     {reminder.reminded ? <BellRing size={11} color={c.primary} /> : <Bell size={11} color="#d97706" />}
                     <Text className={`text-[11px] font-medium ${reminder.reminded ? 'text-primary' : 'text-amber-600'}`}>{reminder.label}</Text>
+                  </View>
+                ) : null}
+                {inv.collectFrom ? (
+                  <View className="self-start flex-row items-center gap-1 px-2 py-0.5 mt-1 rounded-full bg-amber-500/15">
+                    <Building2 size={11} color="#B45309" />
+                    <Text className="text-[11px] font-semibold text-amber-700">
+                      {t.billThrough.collectFrom.replace('{{company}}', inv.collectFrom)}
+                    </Text>
                   </View>
                 ) : null}
                 <Text className="text-xs text-faint mt-0.5">

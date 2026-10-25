@@ -98,7 +98,7 @@ export interface InvoiceDetail {
    *  client pays it, but it isn't this business's money. 0 when none. */
   passthroughAmount?: number;
   /** This invoice's lines were billed through another business's invoice. */
-  billedThrough?: { business_id: string; business_name: string; invoice_id: string; invoice_number: string; at?: string }[];
+  billedThrough?: { business_id: string; business_name: string; invoice_id: string; invoice_number: string; at?: string; client_paid_at?: string }[];
   language: InvoiceLang;
   /** Row audit timestamps (ISO). createdAt → header; updatedAt → footer. */
   createdAt: string;
@@ -438,18 +438,31 @@ export function InvoiceDetailScreen({
       {/* Source side: where this invoice's lines were billed through. Its
          own status/amount are untouched — the other company pays it later. */}
       {invoice.billedThrough?.length ? (
-        <View className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 mb-4 gap-1.5">
+        <View className={`rounded-2xl border shadow-sm p-4 mb-4 gap-1.5 ${
+          invoice.status !== 'paid' && invoice.billedThrough.some(b => b.client_paid_at)
+            ? 'bg-amber-500/10 border-amber-500/40'
+            : 'bg-card border-border-soft'
+        }`}>
           {invoice.billedThrough.map(b => {
             // Tapping the banner opens the other company's invoice directly —
             // the obvious thing to want from here, and otherwise several taps
             // away through the more-actions sheet.
-            const label = tBt.billedVia
-              .replace('{{company}}', b.business_name)
-              .replace('{{invoice}}', b.invoice_number);
+            // Once the client has paid the OTHER company (migration 250) and
+            // this invoice is still unpaid, the banner becomes the reminder to
+            // collect this company's share from them.
+            const owed = !!b.client_paid_at && invoice.status !== 'paid';
+            const label = owed
+              ? tBt.clientPaid
+                  .replace('{{company}}', b.business_name)
+                  .replace('{{date}}', formatDate(b.client_paid_at as string))
+                  .replace('{{amount}}', fmt(balanceDue))
+              : tBt.billedVia
+                  .replace('{{company}}', b.business_name)
+                  .replace('{{invoice}}', b.invoice_number);
             const inner = (
               <>
-                <Building2 size={14} color={c.muted} />
-                <Text className="text-sm text-muted flex-1">{label}</Text>
+                <Building2 size={14} color={owed ? '#B45309' : c.muted} />
+                <Text className={`text-sm flex-1 ${owed ? 'text-amber-700 font-semibold' : 'text-muted'}`}>{label}</Text>
                 {onViewBilledThrough ? <ExternalLink size={14} color={c.faint} /> : null}
               </>
             );

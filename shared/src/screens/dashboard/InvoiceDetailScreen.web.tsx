@@ -101,7 +101,7 @@ export interface InvoiceDetail {
    *  client pays it, but it isn't this business's money. 0 when none. */
   passthroughAmount?: number;
   /** This invoice's lines were billed through another business's invoice. */
-  billedThrough?: { business_id: string; business_name: string; invoice_id: string; invoice_number: string; at?: string }[];
+  billedThrough?: { business_id: string; business_name: string; invoice_id: string; invoice_number: string; at?: string; client_paid_at?: string }[];
   language: InvoiceLang;
   /** Custom fields (invoice_field_templates), pre-formatted for display. */
   customFields?: { label: string; value: string; key?: string }[];
@@ -523,28 +523,40 @@ export function InvoiceDetailScreen({
         {/* Source side: where this invoice's lines were billed through. Its
            own status/amount are untouched — the other company pays it later. */}
         {invoice.billedThrough?.length ? (
-          <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 flex flex-col gap-1.5">
+          <div className={`rounded-2xl border shadow-sm p-4 flex flex-col gap-1.5 ${
+            invoice.status !== 'paid' && invoice.billedThrough.some(b => b.client_paid_at)
+              ? 'bg-amber-500/10 border-amber-500/40'
+              : 'bg-card border-border-soft'
+          }`}>
             {invoice.billedThrough.map(b => {
               // The banner opens the other company's invoice directly — the
               // obvious thing to want from here, and otherwise three clicks
               // away through the "…" menu.
-              const label = tBt.billedVia
-                .replace('{{company}}', b.business_name)
-                .replace('{{invoice}}', b.invoice_number);
+              // Once the client has paid the OTHER company (migration 250) and
+              // this invoice is still unpaid, it's the reminder to collect.
+              const owed = !!b.client_paid_at && invoice.status !== 'paid';
+              const label = owed
+                ? tBt.clientPaid
+                    .replace('{{company}}', b.business_name)
+                    .replace('{{date}}', formatDate(b.client_paid_at as string))
+                    .replace('{{amount}}', fmt(balanceDue))
+                : tBt.billedVia
+                    .replace('{{company}}', b.business_name)
+                    .replace('{{invoice}}', b.invoice_number);
               return onViewBilledThrough ? (
                 <button
                   key={b.invoice_id}
                   type="button"
                   onClick={() => onViewBilledThrough(b.business_id, b.invoice_id)}
                   title={tBt.viewTarget}
-                  className="group flex items-center gap-2 text-sm text-muted text-left hover:text-ink transition-colors"
+                  className={`group flex items-center gap-2 text-sm text-left transition-colors ${owed ? 'text-amber-700 font-semibold' : 'text-muted hover:text-ink'}`}
                 >
                   <Building2 size={14} className="shrink-0" />
                   <span className="flex-1">{label}</span>
                   <ExternalLink size={14} className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </button>
               ) : (
-                <p key={b.invoice_id} className="flex items-center gap-2 text-sm text-muted">
+                <p key={b.invoice_id} className={`flex items-center gap-2 text-sm ${owed ? 'text-amber-700 font-semibold' : 'text-muted'}`}>
                   <Building2 size={14} className="shrink-0" />
                   {label}
                 </p>

@@ -94,6 +94,10 @@ export interface DashboardHomeScreenProps {
    * header. When this slot is set, businessName is ignored.
    */
   businessSlot?: ReactNode;
+  /** Optional card shown under the header, above the widgets — e.g. "Owed by
+   *  your other companies" (bill-through, migration 250). Renders nothing
+   *  when null. */
+  notice?: ReactNode;
   stats: DashboardStats | null;
   recent: DashboardRecentInvoice[];
   upcomingJobs: DashboardUpcomingJob[];
@@ -294,6 +298,7 @@ export function DashboardHomeScreen({
   role = null,
   businessName,
   businessSlot,
+  notice,
   stats,
   recent,
   upcomingJobs,
@@ -1672,6 +1677,7 @@ export function DashboardHomeScreen({
           <Text className="text-xs text-red-600/80 mt-1">{saveError}</Text>
         </View>
       ) : null}
+      {notice ? <View className="mt-4">{notice}</View> : null}
     </View>
   );
 
