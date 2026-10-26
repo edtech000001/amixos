@@ -26,6 +26,7 @@ import { can } from '@amixos/shared/lib/permissions';
 import { activeBillThrough, billThroughTargets } from '@amixos/shared/lib/invoiceBillThrough';
 import { resolveLineDescriptions } from '@amixos/shared/lib/invoiceTemplate';
 import { BillThroughModal } from '@/components/invoices/BillThroughModal';
+import { LinkExistingModal } from '@/components/invoices/LinkExistingModal';
 import { resolveConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceTemplate';
 import { signedUrl } from '@amixos/shared/lib/storageUrls';
 import { INVOICE_PAYMENT_BUCKET, paymentPhotoPath } from '@amixos/shared/lib/invoicePayments';
@@ -115,6 +116,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const { business, currentRole, businesses, roles, setActiveBusiness } = useApp();
   // "Bill through another company" modal (migration 240).
   const [billThroughOpen, setBillThroughOpen] = useState(false);
+  const [linkExistingOpen, setLinkExistingOpen] = useState(false);
   const { t: full, locale } = useLang();
   const tInv = full.dashboard.invoices;
   const tc = full.common;
@@ -1147,8 +1149,22 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         ) : null}
         businessName={business?.name}
         onBillThrough={invoice && canEdit && billTargets.length > 0 ? () => setBillThroughOpen(true) : undefined}
+        // Pair with an invoice the other company already billed by hand —
+        // only while this one isn't linked yet.
+        onLinkExisting={invoice && canEdit && billTargets.length > 0 && !activeBillThrough(invoice.billedThrough)
+          ? () => setLinkExistingOpen(true) : undefined}
         onViewBilledThrough={(bizId, invId) => { setActiveBusiness(bizId); router.push(`/dashboard/facturas/${invId}`); }}
       />
+
+      {business && invoice ? (
+        <LinkExistingModal
+          open={linkExistingOpen}
+          onClose={() => setLinkExistingOpen(false)}
+          sourceInvoiceId={id}
+          targets={billTargets}
+          onLinked={() => { void reloadInvoice(); }}
+        />
+      ) : null}
 
       {business && invoice ? (
         <BillThroughModal

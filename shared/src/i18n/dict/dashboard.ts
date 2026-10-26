@@ -416,6 +416,21 @@ export type DashboardDict = {
       owedHint: string;
       /** {{invoice}} {{company}} {{date}} */
       owedLine: string;
+      /** "Link existing" — pair an invoice with one ALREADY billed by hand. */
+      linkAction: string;
+      linkTitle: string;
+      linkIntro: string;
+      linkPickCompany: string;
+      linkPickInvoice: string;
+      linkSearch: string;
+      linkEmpty: string;
+      linkPickLines: string;
+      linkLinesHint: string;
+      linkTaken: string;
+      linkConfirm: string;
+      linkDone: string;
+      linkFailed: string;
+      linkBack: string;
       /** Ajustes toggle. */
       settingTitle: string;
       settingHint: string;
@@ -3852,6 +3867,20 @@ export const dashboard: Record<Locale, DashboardDict> = {
         owedTitle: 'Te deben tus otras empresas',
         owedHint: 'El cliente ya pagó la factura de la otra empresa. Pídele tu parte.',
         owedLine: '{{invoice}} · pagado a {{company}} el {{date}}',
+        linkAction: 'Vincular a una factura ya enviada',
+        linkTitle: 'Vincular factura existente',
+        linkIntro: 'Para facturas que ya cobró otra empresa copiando las líneas a mano. No se copia nada: solo se marcan esas líneas como tuyas.',
+        linkPickCompany: '¿Qué empresa le facturó al cliente?',
+        linkPickInvoice: 'Elige su factura',
+        linkSearch: 'Buscar número de factura…',
+        linkEmpty: 'No hay facturas que coincidan.',
+        linkPickLines: 'Líneas que son tuyas',
+        linkLinesHint: 'Marcamos las que coinciden con esta factura. Revisa y ajusta.',
+        linkTaken: 'Ya es de otra factura',
+        linkConfirm: 'Vincular',
+        linkDone: 'Facturas vinculadas.',
+        linkFailed: 'No se pudo vincular. Revisa que tengas permiso en la otra empresa.',
+        linkBack: 'Atrás',
         settingTitle: 'Facturar por otra empresa',
         settingHint: 'Permite copiar las líneas de las facturas de esta empresa a una factura de tus otras empresas. Las líneas copiadas no cuentan como ingreso de la otra empresa.',
       },
@@ -7254,6 +7283,20 @@ export const dashboard: Record<Locale, DashboardDict> = {
         owedTitle: 'Owed by your other companies',
         owedHint: 'The client already paid the other company’s invoice. Ask them for your share.',
         owedLine: '{{invoice}} · paid to {{company}} on {{date}}',
+        linkAction: 'Link to an invoice already sent',
+        linkTitle: 'Link existing invoice',
+        linkIntro: 'For invoices another company already billed by copying the lines by hand. Nothing is copied: those lines are just marked as yours.',
+        linkPickCompany: 'Which company billed the client?',
+        linkPickInvoice: 'Pick their invoice',
+        linkSearch: 'Search invoice number…',
+        linkEmpty: 'No matching invoices.',
+        linkPickLines: 'Lines that are yours',
+        linkLinesHint: 'We checked the ones matching this invoice. Review and adjust.',
+        linkTaken: 'Already another invoice’s',
+        linkConfirm: 'Link',
+        linkDone: 'Invoices linked.',
+        linkFailed: 'Couldn’t link. Check you have access to the other company.',
+        linkBack: 'Back',
         settingTitle: 'Bill through another company',
         settingHint: "Lets this company's invoice lines be copied onto an invoice from your other companies. Copied lines don't count as the other company's revenue.",
       },

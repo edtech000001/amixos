@@ -26,6 +26,7 @@ import {
   Building2,
   MoreHorizontal,
   ExternalLink,
+  FileSymlink,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import {
@@ -225,6 +226,9 @@ export interface InvoiceDetailScreenProps {
   /** Bill this invoice's lines through another company. Hidden when not
    *  provided (user isn't in another company that can invoice). */
   onBillThrough?: () => void;
+  /** Link to an invoice another company ALREADY billed by hand. Only passed
+   *  while this invoice has no link yet. */
+  onLinkExisting?: () => void;
   /** Open the invoice this one is billed through, at the other business. */
   onViewBilledThrough?: (businessId: string, invoiceId: string) => void;
 }
@@ -293,6 +297,7 @@ export function InvoiceDetailScreen({
   remindersSlot,
   businessName,
   onBillThrough,
+  onLinkExisting,
   onViewBilledThrough,
 }: InvoiceDetailScreenProps) {
   const { t: ui, locale } = useLang();
@@ -409,7 +414,7 @@ export function InvoiceDetailScreen({
           {/* The occasional actions live behind "…" the way they already do on
              mobile — the header had five text buttons plus four icons, which
              crowded out the ones used every time. */}
-          {(onAutoname || onBillThrough) && canEdit ? (
+          {(onAutoname || onBillThrough || onLinkExisting) && canEdit ? (
             <div className="relative mr-1">
               <Tooltip label={tInv.moreActionsTitle}>
                 <button
@@ -448,6 +453,16 @@ export function InvoiceDetailScreen({
                         <span className="text-sm font-medium text-ink whitespace-nowrap">
                           {invoice.billedThrough?.length ? tBt.linkedAction : tBt.action}
                         </span>
+                      </button>
+                    ) : null}
+                    {onLinkExisting ? (
+                      <button
+                        type="button"
+                        onClick={() => { setMoreOpen(false); onLinkExisting(); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface text-left"
+                      >
+                        <FileSymlink size={16} className="text-muted shrink-0" />
+                        <span className="text-sm font-medium text-ink whitespace-nowrap">{tBt.linkAction}</span>
                       </button>
                     ) : null}
                   </div>

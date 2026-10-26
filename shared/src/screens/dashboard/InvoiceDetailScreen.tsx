@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Printer,
   Link2,
+  FileSymlink,
   CheckCircle,
   Send,
   DollarSign,
@@ -225,6 +226,9 @@ export interface InvoiceDetailScreenProps {
   /** Bill this invoice's lines through another company (⋯ menu). Hidden when
    *  not provided (user isn't in another company that can invoice). */
   onBillThrough?: () => void;
+  /** Link this invoice to one another company ALREADY billed by hand (before
+   *  bill-through). Only passed while the invoice has no link yet. */
+  onLinkExisting?: () => void;
   /** Open the invoice this one is billed through, at the other business. */
   onViewBilledThrough?: (businessId: string, invoiceId: string) => void;
 }
@@ -294,6 +298,7 @@ export function InvoiceDetailScreen({
   remindersSlot,
   businessName,
   onBillThrough,
+  onLinkExisting,
   onViewBilledThrough,
 }: InvoiceDetailScreenProps) {
   const { t: ui, locale } = useLang();
@@ -395,7 +400,7 @@ export function InvoiceDetailScreen({
           {onDelete ? (
             <Pressable onPress={onDelete} className="p-2 rounded-xl active:bg-red-500/10"><Trash2 size={18} color={c.danger} /></Pressable>
           ) : null}
-          {((onAutoprice || onAutoname || onClearPrices || onBillThrough) && canEdit) || onShareLink || onViewPrices ? (
+          {((onAutoprice || onAutoname || onClearPrices || onBillThrough || onLinkExisting) && canEdit) || onShareLink || onViewPrices ? (
             <Pressable onPress={() => setMoreOpen(true)} className="p-2 rounded-xl active:bg-border-soft" accessibilityLabel={tInv.moreActionsTitle}>
               <MoreHorizontal size={18} color={c.muted} />
             </Pressable>
@@ -894,6 +899,12 @@ export function InvoiceDetailScreen({
                 <Text className="text-base text-ink font-medium">
                   {invoice.billedThrough?.length ? tBt.linkedAction : tBt.action}
                 </Text>
+              </Pressable>
+            ) : null}
+            {onLinkExisting && canEdit ? (
+              <Pressable onPress={() => { setMoreOpen(false); onLinkExisting(); }} className="flex-row items-center gap-3 py-3.5 border-b border-border-soft active:opacity-60">
+                <View className="w-9 h-9 rounded-xl bg-border-soft items-center justify-center"><FileSymlink size={18} color={c.muted} /></View>
+                <Text className="text-base text-ink font-medium">{tBt.linkAction}</Text>
               </Pressable>
             ) : null}
             {onShareLink ? (

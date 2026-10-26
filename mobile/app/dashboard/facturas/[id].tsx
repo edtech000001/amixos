@@ -52,6 +52,7 @@ import {
 } from '@amixos/shared/lib/invoiceTemplate';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useSectionBase } from '@/lib/sectionNav';
+import { LinkExistingSheet } from '@/components/LinkExistingSheet';
 
 // Check first — the default and most common method for these businesses.
 const PAY_METHODS = ['check', 'cash', 'card', 'transfer', 'zelle', 'cashapp', 'venmo', 'paypal', 'moneyOrder', 'other'] as const;
@@ -199,6 +200,7 @@ export default function FacturaDetailRoute() {
   const [pricesOpen, setPricesOpen] = useState(false);
   // "Bill through another company" sheet (migration 240).
   const [billThroughOpen, setBillThroughOpen] = useState(false);
+  const [linkExistingOpen, setLinkExistingOpen] = useState(false);
   const [showInvVerify, setShowInvVerify] = useState(false);
   const [previewJobId, setPreviewJobId] = useState<string | null>(null);
   const [jobBusy, setJobBusy] = useState(false);
@@ -1294,10 +1296,24 @@ export default function FacturaDetailRoute() {
         jobDates={Object.fromEntries(attachedJobs.filter(j => j.scheduled_date).map(j => [j.id, j.scheduled_date as string]))}
         businessName={business?.name}
         onBillThrough={invoice && canEdit && billTargets.length > 0 ? () => setTimeout(() => setBillThroughOpen(true), 400) : undefined}
+        // Pair with an invoice the other company already billed by hand —
+        // only while this one isn't linked yet.
+        onLinkExisting={invoice && canEdit && billTargets.length > 0 && !activeBillThrough(invoice.billedThrough)
+          ? () => setTimeout(() => setLinkExistingOpen(true), 400) : undefined}
         remindersSlot={business && invoice ? (
           <InvoiceRemindersCard supabase={supabase} businessId={business.id} invoiceId={id} canEdit={canEdit} nameById={nameById} refreshToken={remindersToken} />
         ) : null}
       />
+
+      {business && invoice ? (
+        <LinkExistingSheet
+          open={linkExistingOpen}
+          onClose={() => setLinkExistingOpen(false)}
+          sourceInvoiceId={id}
+          targets={billTargets}
+          onLinked={() => { void reloadInvoice(); }}
+        />
+      ) : null}
 
       {business && invoice ? (
         <BillThroughSheet

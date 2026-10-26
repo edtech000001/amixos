@@ -464,3 +464,170 @@ export async function removeBillThrough(
   if (error) return { ok: false, error: 'failed', message: error.message };
   return { ok: true, invoiceDeleted: false };
 }
+
+// ── Linking an EXISTING pair (legacy / hand-copied) ────────────────────────
+// Before bill-through existed, the other company's lines were copied BY HAND
+// onto the target invoice. "Bill through" would duplicate them, so this links
+// the pair instead: the chosen target lines get the passthrough tag (revenue
+// then excludes them — passthrough_amount is trigger-maintained) and the
+// source gets its stamp. Nothing is copied and the target's totals don't
+// change. If the target is already paid, the source is stamped
+// client_paid_at too, so the "collect from …" reminder shows at once.
+
+export interface LinkableInvoice {
+  id: string;
+  invoiceNumber: string;
+  status: string;
+  issueDate: string | null;
+  totalAmount: number;
+  clientName: string | null;
+}
+
+/** The target business's invoices to pick from — any status (old ones are
+ *  usually paid), newest first, optional invoice-number / client search. */
+export async function invoicesToLink(
+  supabase: Supa,
+  targetBusinessId: string,
+  search = '',
+): Promise<LinkableInvoice[]> {
+  let q = supabase
+    .from('invoices')
+    .select('id, invoice_number, status, issue_date, total_amount, clients(first_name, last_name, company)')
+    .eq('business_id', targetBusinessId)
+    .neq('status', 'cancelled')
+    .order('created_at', { ascending: false })
+    .limit(40);
+  const term = search.trim();
+  if (term) q = q.ilike('invoice_number', `%${term.replace(/[%_]/g, '')}%`);
+  const { data } = await q;
+  return (data ?? []).map((r: any) => {
+    const c = Array.isArray(r.clients) ? r.clients[0] : r.clients;
+    const name = c ? [[c.first_name, c.last_name].filter(Boolean).join(' '), c.company].filter(Boolean).join(' · ') : null;
+    return {
+      id: r.id,
+      invoiceNumber: r.invoice_number ?? '',
+      status: r.status,
+      issueDate: r.issue_date ?? null,
+      totalAmount: Number(r.total_amount) || 0,
+      clientName: name || null,
+    };
+  });
+}
+
+export interface LinkCandidateLine {
+  index: number;
+  description: string;
+  qty: number;
+  rate: number;
+  /** Already tagged as ANOTHER invoice's passthrough — can't be relinked. */
+  taken: boolean;
+  /** Matches one of the source's lines (description + qty + rate). */
+  suggested: boolean;
+}
+
+const normDesc = (s: string | null | undefined) =>
+  (s ?? '').replace(/^\+\s*/, '').trim().toLowerCase().replace(/\s+/g, ' ');
+const money2 = (n: unknown) => Math.round((Number(n) || 0) * 100);
+
+/** The target invoice's lines, with the ones matching the source pre-selected
+ *  (each source line matches at most one target line). */
+export async function linkCandidates(
+  supabase: Supa,
+  sourceInvoiceId: string,
+  targetInvoiceId: string,
+): Promise<LinkCandidateLine[] | null> {
+  const [{ data: src }, { data: tgt }] = await Promise.all([
+    supabase.from('invoices').select('id, line_items').eq('id', sourceInvoiceId).single(),
+    supabase.from('invoices').select('id, line_items').eq('id', targetInvoiceId).single(),
+  ]);
+  if (!src || !tgt) return null;
+  const srcItems = (src.line_items ?? []) as InvoiceLineItem[];
+  const tgtItems = (tgt.line_items ?? []) as InvoiceLineItem[];
+  // Source names as its document shows them (job title for bare job lines).
+  const jobIds = Array.from(new Set(srcItems.map(li => li.job_id).filter((x): x is string => !!x)));
+  const titles: Record<string, string> = {};
+  if (jobIds.length) {
+    const { data: jobs } = await supabase.from('jobs').select('id, title').in('id', jobIds);
+    for (const j of (jobs ?? []) as { id: string; title: string | null }[]) if (j.title) titles[j.id] = j.title;
+  }
+  const srcNames = resolveLineDescriptions(srcItems as any, titles);
+  const pool = srcItems.map((li, i) => ({ d: normDesc(srcNames[i]), q: money2(li.qty), r: money2(li.rate), used: false }));
+  return tgtItems.map((li, index) => {
+    const taken = !!li.passthrough && li.passthrough.invoice_id !== sourceInvoiceId;
+    let suggested = li.passthrough?.invoice_id === sourceInvoiceId;
+    if (!taken && !suggested) {
+      const hit = pool.find(p => !p.used && p.d === normDesc(li.description) && p.q === money2(li.qty) && p.r === money2(li.rate));
+      if (hit) { hit.used = true; suggested = true; }
+    }
+    return {
+      index,
+      description: li.description ?? '',
+      qty: Number(li.qty) || 0,
+      rate: Number(li.rate) || 0,
+      taken,
+      suggested,
+    };
+  });
+}
+
+export type LinkExistingResult =
+  | { ok: true }
+  | { ok: false; error: 'not_found' | 'not_allowed' | 'no_lines' | 'already_linked' | 'failed'; message?: string };
+
+export async function linkExistingBillThrough(
+  supabase: Supa,
+  opts: { sourceInvoiceId: string; targetInvoiceId: string; lineIndexes: number[] },
+): Promise<LinkExistingResult> {
+  const { data: src } = await supabase
+    .from('invoices').select('id, business_id, invoice_number, billed_through').eq('id', opts.sourceInvoiceId).single();
+  if (!src) return { ok: false, error: 'not_found' };
+  if (activeBillThrough(src.billed_through)) return { ok: false, error: 'already_linked' };
+  const { data: tgt } = await supabase
+    .from('invoices')
+    .select('id, business_id, invoice_number, line_items, status, paid_at')
+    .eq('id', opts.targetInvoiceId).single();
+  if (!tgt) return { ok: false, error: 'not_found' };
+  if (tgt.business_id === src.business_id) return { ok: false, error: 'not_allowed' };
+  const [{ data: srcBiz }, { data: tgtBiz }] = await Promise.all([
+    supabase.from('businesses').select('name').eq('id', src.business_id).single(),
+    supabase.from('businesses').select('name').eq('id', tgt.business_id).single(),
+  ]);
+  const tag: PassthroughTag = {
+    business_id: src.business_id,
+    business_name: srcBiz?.name ?? '',
+    invoice_id: src.id,
+    invoice_number: src.invoice_number ?? '',
+  };
+  const items = (tgt.line_items ?? []) as InvoiceLineItem[];
+  const pick = new Set(opts.lineIndexes);
+  let n = 0;
+  const next = items.map((li, i) => {
+    if (!pick.has(i)) return li;
+    if (li.passthrough && li.passthrough.invoice_id !== src.id) return li; // another company's line
+    n++;
+    return { ...li, passthrough: tag };
+  });
+  if (!n) return { ok: false, error: 'no_lines' };
+
+  // 1. Tag the target's lines (RLS: needs invoice rights in that business).
+  //    Totals are untouched; the trigger recomputes passthrough_amount.
+  const { error: tErr } = await supabase.from('invoices').update({ line_items: next }).eq('id', tgt.id);
+  if (tErr) return { ok: false, error: 'failed', message: tErr.message };
+
+  // 2. Stamp the source — with client_paid_at already, when the target is paid.
+  const stamp: BillThroughLink = {
+    business_id: tgt.business_id,
+    business_name: tgtBiz?.name ?? '',
+    invoice_id: tgt.id,
+    invoice_number: tgt.invoice_number ?? '',
+    at: new Date().toISOString(),
+    ...(tgt.status === 'paid' ? { client_paid_at: (tgt.paid_at as string | null) ?? new Date().toISOString() } : {}),
+  };
+  const prior = Array.isArray(src.billed_through) ? src.billed_through : [];
+  const { error: sErr } = await supabase
+    .from('invoices')
+    .update({ billed_through: [...prior.filter((b: any) => b?.invoice_id !== tgt.id), stamp] })
+    .eq('id', src.id);
+  if (sErr) return { ok: false, error: 'failed', message: sErr.message };
+  return { ok: true };
+}
