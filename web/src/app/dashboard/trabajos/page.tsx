@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
-import { fetchJobsPage, fetchJobsPageSorted, fetchJobTabCounts, fetchJobGroupIndex, fetchAllJobsInGroup, resolveSearchIds, LAZY_GROUP_DIMS, type JobsCursor, type JobsQueryParams, type JobGroup, type SearchIds } from '@amixos/shared/lib/jobsQuery';
+import { fetchJobsPage, fetchJobsPageSorted, fetchJobTabCounts, fetchJobGroupIndex, fetchAllJobsInGroup, fetchJobFilterValues, resolveSearchIds, LAZY_GROUP_DIMS, type JobsCursor, type JobsQueryParams, type JobGroup, type SearchIds, type JobFieldFilters } from '@amixos/shared/lib/jobsQuery';
 import { fetchJobsSummary } from '@amixos/shared/lib/jobsQuery';
 import { computeJobsSummaryTotals, payrollJcfKeys } from '@amixos/shared/lib/jobsSummary';
 import { useSwr } from '@amixos/shared/lib/swrCache';
@@ -156,10 +156,10 @@ export default function TrabajosPage() {
   const groupByRef = useRef<string>('none');
 
   // ── SWR default view: instant from cache, background revalidate ───────────
-  type Filters = { search: string; tabs: string[]; sortBy: string; groupBy: string; dateFrom: string | null; dateTo: string | null; sortDesc?: boolean | null };
+  type Filters = { search: string; tabs: string[]; sortBy: string; groupBy: string; dateFrom: string | null; dateTo: string | null; sortDesc?: boolean | null; fieldFilters?: JobFieldFilters };
   const [filters, setFilters] = useState<Filters | null>(null);
   const isDefaultFilters = (f: Filters) =>
-    !f.search && f.tabs.length === 0 && f.sortBy === 'recent' && f.sortDesc !== false && f.groupBy === 'none' && !f.dateFrom && !f.dateTo;
+    !f.search && f.tabs.length === 0 && f.sortBy === 'recent' && f.sortDesc !== false && f.groupBy === 'none' && !f.dateFrom && !f.dateTo && !Object.keys(f.fieldFilters ?? {}).length;
   const defaultActive = !!business && !!filters && isDefaultFilters(filters);
   const swrKey = defaultActive ? `jobs_list_v2_${business.id}_${activeLocationId ?? 'all'}` : null;
   type JobsPayload = { jobs: RawJob[]; nextCursor: JobsCursor | null; counts: Record<string, number> };
@@ -217,7 +217,7 @@ export default function TrabajosPage() {
       searchIdsRef.current = ids;
       const [page, counts] = await Promise.all([
         fetchJobsPage<RawJob>(supabase, JOB_LIST_SELECT, { ...params, pageSize: 50 }, ids),
-        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search, dateFrom: params.dateFrom, dateTo: params.dateTo }, ids),
+        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search, dateFrom: params.dateFrom, dateTo: params.dateTo, fieldFilters: params.fieldFilters }, ids),
       ]);
       if (seq !== loadSeqRef.current) return;
       setRawJobs(page.jobs);
@@ -250,7 +250,7 @@ export default function TrabajosPage() {
       searchIdsRef.current = ids;
       const [pageRes, counts] = await Promise.all([
         fetchJobsPageSorted<RawJob>(supabase, JOB_LIST_SELECT, { ...params, sortBy: sortKey, sortDesc, offset: 0, pageSize: 50 }, ids),
-        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search, dateFrom: params.dateFrom, dateTo: params.dateTo }, ids),
+        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search, dateFrom: params.dateFrom, dateTo: params.dateTo, fieldFilters: params.fieldFilters }, ids),
       ]);
       if (seq !== loadSeqRef.current) return;
       setServerCounts(counts);
@@ -371,8 +371,8 @@ export default function TrabajosPage() {
       if (seq !== loadSeqRef.current) return;
       searchIdsRef.current = ids;
       const [index, counts] = await Promise.all([
-        fetchJobGroupIndex(supabase, { businessId: params.businessId, groupBy, tabs: params.tabs, search: params.search, locationId: params.locationId, dateFrom: params.dateFrom, dateTo: params.dateTo }, ids),
-        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search, dateFrom: params.dateFrom, dateTo: params.dateTo }, ids),
+        fetchJobGroupIndex(supabase, { businessId: params.businessId, groupBy, tabs: params.tabs, search: params.search, locationId: params.locationId, dateFrom: params.dateFrom, dateTo: params.dateTo, fieldFilters: params.fieldFilters }, ids),
+        fetchJobTabCounts(supabase, { businessId: params.businessId, locationId: params.locationId, search: params.search, dateFrom: params.dateFrom, dateTo: params.dateTo, fieldFilters: params.fieldFilters }, ids),
       ]);
       if (seq !== loadSeqRef.current) return;
       setServerCounts(counts);
@@ -453,7 +453,7 @@ export default function TrabajosPage() {
     // Default view → the SWR hook owns it (key flips non-null; cached rows
     // render immediately and a background revalidate kicks off).
     if (isDefaultFilters(f)) return;
-    const params = { businessId: business.id, locationId: activeLocationId ?? null, tabs: f.tabs, search: f.search, dateFrom: f.dateFrom, dateTo: f.dateTo };
+    const params = { businessId: business.id, locationId: activeLocationId ?? null, tabs: f.tabs, search: f.search, dateFrom: f.dateFrom, dateTo: f.dateTo, fieldFilters: f.fieldFilters };
     if (f.groupBy !== 'none' && LAZY_GROUP_DIMS.includes(f.groupBy)) {
       void runGroupLazy(params, f.groupBy);
     } else if (f.groupBy === 'lead' || f.groupBy === 'company') {
@@ -541,6 +541,8 @@ export default function TrabajosPage() {
       />
     )}
     <JobsListScreen
+      onLoadFilterValues={business ? (field) => fetchJobFilterValues(supabase, { businessId: business.id, field, locationId: activeLocationId ?? null }) : undefined}
+      jobCustomFields={jobTemplates}
       onRequestSummary={async (jobIds) => {
         // paramsRef holds the filters the list is CURRENTLY showing, so the
         // summary always describes what's on screen — or, with jobIds (rows picked
@@ -550,7 +552,7 @@ export default function TrabajosPage() {
         if (!business || !p) return null;
         const summary = await fetchJobsSummary(
           supabase,
-          { businessId: p.businessId, locationId: p.locationId, tabs: p.tabs, search: p.search, dateFrom: p.dateFrom, dateTo: p.dateTo },
+          { businessId: p.businessId, locationId: p.locationId, tabs: p.tabs, search: p.search, dateFrom: p.dateFrom, dateTo: p.dateTo, fieldFilters: p.fieldFilters },
           { jcfKeys: payrollJcfKeys(business.payroll_config), jobIds },
         );
         if (!summary) return null; // tab combo the RPC can't express

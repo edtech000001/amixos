@@ -41,7 +41,9 @@ import { useLang } from '../../i18n';
 import { cycleSort, sortTapClears } from '../../lib/sortCycle';
 import { useThemeColors } from '../../theme';
 import { Input } from '../../ui/Input';
-import { FilterSheet, FilterSection, FilterChip, ChipWrap, DateRangeFields, FilterButton, showResultsLabel } from '../../ui/FilterSheet';
+import { FilterSheet, FilterSection, FilterChip, ChipWrap, DateRangeFields, FilterButton, showResultsLabel, AsyncValuesSection } from '../../ui/FilterSheet';
+import { jobFilterFields, picksToQuery, picksCount, jobFilterValueLabel, type JobFieldPicks } from '../../lib/jobFieldFilters';
+import type { JobFieldFilters } from '../../lib/jobsQuery';
 import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset } from '../../lib/dateRangePresets';
 import { Fab } from '../../ui/Fab';
 import { SkeletonList, SkeletonRow } from '../../ui/Skeleton';
@@ -209,7 +211,14 @@ export interface JobsListScreenProps {
     dateFrom: string | null; dateTo: string | null;
     /** Explicit direction (tap the active sort again); null = its default. */
     sortDesc?: boolean | null;
+    /** Field filters (migration 253) — field → picked values. */
+    fieldFilters?: JobFieldFilters;
   }) => void;
+  /** Custom job fields (job_field_templates) — extra filterable fields. */
+  jobCustomFields?: { field_key: string; field_label: string }[];
+  /** Loads one field's values + counts (job_filter_values RPC). Omit to hide
+   *  the field filters. */
+  onLoadFilterValues?: (field: string) => Promise<{ value: string; label: string; count: number }[]>;
   /** Business payroll settings — adds "This/Last pay period" chips to the
    *  date filter that match the Payroll screen's periods exactly. */
   payPeriod?: { frequency: unknown; anchorDate: unknown; customDays?: unknown };
@@ -308,6 +317,8 @@ export function JobsListScreen({
   loadError = false,
   onRetryLoad,
   onFiltersChange,
+  jobCustomFields,
+  onLoadFilterValues,
   payPeriod,
   refreshing = false,
   stale = false,
@@ -348,8 +359,9 @@ export function JobsListScreen({
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
   const [datePreset, setDatePreset] = useState<AppliedDatePreset | null>(null);
-  // The one Filters sheet: sort, group and scheduled-date range.
+  // The one Filters sheet: sort, group, scheduled-date range, field filters.
   const [filterOpen, setFilterOpen] = useState(false);
+  const [fieldPicks, setFieldPicks] = useState<JobFieldPicks>({});
 
   // Re-anchor after returning from a job detail. The screen stays mounted so
   // the native scroll offset survives, but the on-focus refresh can regroup /
@@ -400,6 +412,7 @@ export function JobsListScreen({
         setDateFrom(s?.dateFrom ?? null);
         setDateTo(s?.dateTo ?? null);
         setDatePreset(s?.datePreset ?? null);
+        setFieldPicks(s?.fieldFilters ?? {});
         hydrated.current = true;
         setReady(true);
       })
@@ -410,8 +423,8 @@ export function JobsListScreen({
   // Persist on change (after the initial load so we don't clobber stored values).
   useEffect(() => {
     if (!hydrated.current) return;
-    void AsyncStorage.setItem(filtersKey, JSON.stringify({ tabs, search, sortBy, sortDesc, groupBy, dateFrom, dateTo, datePreset })).catch(() => {});
-  }, [filtersKey, tabs, search, sortBy, sortDesc, groupBy, dateFrom, dateTo, datePreset]);
+    void AsyncStorage.setItem(filtersKey, JSON.stringify({ tabs, search, sortBy, sortDesc, groupBy, dateFrom, dateTo, datePreset, fieldFilters: fieldPicks })).catch(() => {});
+  }, [filtersKey, tabs, search, sortBy, sortDesc, groupBy, dateFrom, dateTo, datePreset, fieldPicks]);
 
   const dateRangePresets = buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets, payPeriod);
   // A tapped relative preset ("This pay period", "This week"…) rolls forward
@@ -425,13 +438,19 @@ export function JobsListScreen({
     setDatePreset(rolledPreset);
   }, [rolledPreset?.key, rolledPreset?.from, rolledPreset?.to]);
 
-  const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy, dateFrom, dateTo });
+  const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy, dateFrom, dateTo, fieldFilters: fieldPicks });
+  const fieldFilterQuery = useMemo(() => picksToQuery(fieldPicks), [fieldPicks]);
+  const fieldFilterKey = JSON.stringify(fieldFilterQuery);
+  const togglePick = (field: string, v: string, l: string) => setFieldPicks(prev => {
+    const cur = prev[field] ?? [];
+    return { ...prev, [field]: cur.some(x => x.v === v) ? cur.filter(x => x.v !== v) : [...cur, { v, l }] };
+  });
   const dateActive = !!dateFrom || !!dateTo;
   // Filters that can HIDE jobs (sort/group only reorder) — drives the
   // empty-state "clear filters" prompt.
-  const narrowed = tabs.length > 0 || search.trim() !== '' || dateActive;
+  const narrowed = tabs.length > 0 || search.trim() !== '' || dateActive || picksCount(fieldPicks) > 0;
   // Empty-state clear: drops only the row-hiding filters, keeps sort/group.
-  const clearNarrowing = () => { setTabs([]); setSearch(''); setDateFrom(null); setDateTo(null); };
+  const clearNarrowing = () => { setTabs([]); setSearch(''); setDateFrom(null); setDateTo(null); setFieldPicks({}); };
 
   // Filtered-set summary. Fetched on open (not with the list) so the extra
   // aggregate query only runs when someone asks for it.
@@ -466,7 +485,7 @@ export function JobsListScreen({
     setSummaryOpen(true);
     void loadSummary(picked.length ? picked : undefined);
   };
-  const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setSortDesc(null); setGroupBy('none'); setDateFrom(null); setDateTo(null); };
+  const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setSortDesc(null); setGroupBy('none'); setDateFrom(null); setDateTo(null); setFieldPicks({}); };
 
   const tw = full.dashboard.workspaces;
   const tabLabels: Record<TabKey, string> = {
@@ -545,11 +564,12 @@ export function JobsListScreen({
   );
   const tf = full.common.filters;
   // Badge on the Filters button: one per active section.
-  const filterCount = (sortBy !== 'recent' || sortDesc === false ? 1 : 0) + (groupBy !== 'none' ? 1 : 0) + (dateActive ? 1 : 0);
+  const filterCount = (sortBy !== 'recent' || sortDesc === false ? 1 : 0) + (groupBy !== 'none' ? 1 : 0) + (dateActive ? 1 : 0) + picksCount(fieldPicks);
   // Sheet reset — sort/group/date only; status tabs + search live outside it.
   const resetSheetFilters = () => {
     setSortBy('recent'); setSortDesc(null); setGroupBy('none');
     setDateFrom(null); setDateTo(null); setDatePreset(null);
+    setFieldPicks({});
   };
 
   // SectionList data + an id → {sectionIndex,itemIndex} map for scroll-restore.
@@ -627,9 +647,9 @@ export function JobsListScreen({
   }, [search]);
   useEffect(() => {
     if (!serverMode || !onFiltersChange || !ready) return;
-    onFiltersChange({ search: debouncedSearch, tabs, sortBy, sortDesc, groupBy, dateFrom, dateTo });
+    onFiltersChange({ search: debouncedSearch, tabs, sortBy, sortDesc, groupBy, dateFrom, dateTo, fieldFilters: fieldFilterQuery });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverMode, ready, debouncedSearch, tabs, sortBy, sortDesc, groupBy, dateFrom, dateTo]);
+  }, [serverMode, ready, debouncedSearch, tabs, sortBy, sortDesc, groupBy, dateFrom, dateTo, fieldFilterKey]);
 
   const pendingValue = jobs.filter(j => j.status === 'sent' && !isExpired(j))
     .reduce((s, j) => s + j.totalAmount, 0);
@@ -1489,6 +1509,25 @@ export function JobsListScreen({
           toLabel={t.dateFilter.to}
         />
       </FilterSection>
+
+      {/* Field filters (migration 253): pick a field, check its values. AND
+          across fields, OR within one. Values + counts load on expand. */}
+      {onLoadFilterValues ? jobFilterFields(t.fieldFilters, jobCustomFields).map(f => (
+        <AsyncValuesSection
+          key={f.key}
+          title={f.label}
+          picked={fieldPicks[f.key] ?? []}
+          load={() => onLoadFilterValues(f.key)}
+          labelOf={(v, l) => jobFilterValueLabel(f.key, v, l, t.fieldFilters, t.priorities as unknown as Record<string, string>)}
+          onToggle={(v, l) => togglePick(f.key, v, l)}
+          labels={{
+            loading: t.fieldFilters.loading,
+            none: t.fieldFilters.none,
+            search: t.fieldFilters.search,
+            more: n => full.dashboard.employees.view.more.replace('{{count}}', String(n)),
+          }}
+        />
+      )) : null}
     </FilterSheet>
     <JobsSummarySheet
       open={summaryOpen}

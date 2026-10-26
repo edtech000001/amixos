@@ -916,6 +916,11 @@ export type DashboardDict = {
       noCompany: string;
       noState: string;
     };
+    /** Field filters (migration 253): pick a field, check its values. */
+    fieldFilters: {
+      lead: string; crew: string; client: string; priority: string; state: string; city: string;
+      empty: string; loading: string; none: string; search: string;
+    };
     dateFilter: {
       button: string;
       title: string;
@@ -4395,6 +4400,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         noCompany: 'Sin empresa',
         noState: 'Sin estado',
       },
+      fieldFilters: {
+        lead: 'Líder', crew: 'Miembro de cuadrilla', client: 'Cliente', priority: 'Prioridad', state: 'Estado', city: 'Ciudad',
+        empty: '(Vacío)', loading: 'Cargando…', none: 'Sin valores todavía', search: 'Buscar…',
+      },
       dateFilter: {
         button: 'Filtrar por fecha',
         title: 'Filtrar por fecha',
@@ -7838,6 +7847,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         noLead: 'No lead',
         noCompany: 'No company',
         noState: 'No state',
+      },
+      fieldFilters: {
+        lead: 'Lead', crew: 'Crew member', client: 'Client', priority: 'Priority', state: 'State', city: 'City',
+        empty: '(Empty)', loading: 'Loading…', none: 'No values yet', search: 'Search…',
       },
       dateFilter: {
         button: 'Filter by date',

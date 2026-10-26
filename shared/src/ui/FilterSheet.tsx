@@ -1,7 +1,7 @@
-import { useEffect, type ReactNode } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, BackHandler } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { View, Text, Pressable, ScrollView, StyleSheet, BackHandler, TextInput, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Check, SlidersHorizontal } from 'lucide-react-native';
+import { Check, SlidersHorizontal, ChevronDown, Search } from 'lucide-react-native';
 import { DatePicker } from './DatePicker';
 import { SHEET_BACKDROP } from './sheetBackdrop';
 import { useThemeColors } from '../theme';
@@ -249,4 +249,104 @@ export function showResultsLabel(t: { show: string; showOne: string; showNone: s
   if (n === 0) return t.showNone;
   if (n === 1) return t.showOne;
   return t.show.replace('{{count}}', n.toLocaleString());
+}
+
+/**
+ * A field whose values load on demand (jobs field filters): collapsed it shows
+ * the field name + what's picked; tap to expand → values with counts as check
+ * chips (search once there are many). Values load on first expand.
+ */
+export function AsyncValuesSection({
+  title,
+  picked,
+  load,
+  labelOf,
+  onToggle,
+  labels,
+}: {
+  title: string;
+  /** Picked values (+ labels saved with them). */
+  picked: { v: string; l: string }[];
+  load: () => Promise<{ value: string; label: string; count: number }[]>;
+  /** Display label for a value (handles '' / translations). */
+  labelOf: (value: string, label: string) => string;
+  onToggle: (value: string, label: string) => void;
+  labels: { loading: string; none: string; search: string; more: (n: number) => string };
+}) {
+  const c = useThemeColors();
+  const [open, setOpen] = useState(picked.length > 0);
+  const [values, setValues] = useState<{ value: string; label: string; count: number }[] | null>(null);
+  // The load error's text, shown instead of "no values" (see the web twin).
+  const [failed, setFailed] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [showAll, setShowAll] = useState(false);
+  useEffect(() => {
+    if (!open || values) return;
+    let active = true;
+    load().then(v => { if (active) setValues(v); }).catch((e: unknown) => {
+      if (active) setFailed(e instanceof Error ? e.message : String(e));
+    });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  const pickedSet = new Set(picked.map(p => p.v));
+  const LIMIT = 12;
+  const norm = (x: string) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const filtered = (values ?? []).filter(v => !q.trim() || norm(labelOf(v.value, v.label)).includes(norm(q.trim())));
+  const shown = showAll || q.trim() ? filtered : filtered.slice(0, LIMIT);
+  return (
+    <View className="mt-5">
+      <Pressable onPress={() => setOpen(o => !o)} className="flex-row items-center gap-2 py-1 active:opacity-70">
+        <Text className={`text-sm font-semibold ${picked.length ? 'text-primary' : 'text-muted'}`}>{title}</Text>
+        {picked.length ? (
+          <View className="min-w-[18px] h-[18px] px-1 rounded-full bg-primary items-center justify-center">
+            <Text className="text-[10px] font-bold text-white">{picked.length}</Text>
+          </View>
+        ) : null}
+        <View className="flex-1" />
+        {!open && picked.length ? (
+          <Text className="text-xs text-muted max-w-[55%]" numberOfLines={1}>{picked.map(p => labelOf(p.v, p.l)).join(', ')}</Text>
+        ) : null}
+        <ChevronDown size={16} color={c.faint} style={open ? { transform: [{ rotate: '180deg' }] } : undefined} />
+      </Pressable>
+      {open ? (
+        <View className="mt-2.5">
+          {values === null ? (
+            failed ? <Text className="text-xs text-red-500">{failed}</Text> : (
+              <View className="flex-row items-center gap-2 py-2">
+                <ActivityIndicator size="small" color={c.primary} />
+                <Text className="text-xs text-faint">{labels.loading}</Text>
+              </View>
+            )
+          ) : values.length === 0 ? (
+            <Text className="text-xs text-faint">{labels.none}</Text>
+          ) : (
+            <>
+              {values.length > LIMIT ? (
+                <View className="flex-row items-center gap-2 rounded-xl border border-border bg-card px-3 mb-2.5">
+                  <Search size={14} color={c.faint} />
+                  <TextInput value={q} onChangeText={setQ} placeholder={labels.search} placeholderTextColor={c.faint}
+                    autoCapitalize="none" autoCorrect={false} className="flex-1 py-2 text-ink" style={{ fontSize: 14 }} />
+                </View>
+              ) : null}
+              <ChipWrap>
+                {shown.map(v => (
+                  <FilterChip
+                    key={v.value || '(empty)'}
+                    check
+                    label={`${labelOf(v.value, v.label)} · ${v.count}`}
+                    on={pickedSet.has(v.value)}
+                    onPress={() => onToggle(v.value, v.label)}
+                  />
+                ))}
+                {!showAll && !q.trim() && filtered.length > LIMIT ? (
+                  <FilterChip label={labels.more(filtered.length - LIMIT)} on={false} onPress={() => setShowAll(true)} />
+                ) : null}
+              </ChipWrap>
+            </>
+          )}
+        </View>
+      ) : null}
+    </View>
+  );
 }

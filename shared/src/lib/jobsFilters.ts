@@ -6,6 +6,7 @@
 
 import type { JobSortKey, JobGroupKey } from './jobSort';
 import { parseAppliedDatePreset, type AppliedDatePreset } from './dateRangePresets';
+import { parsePicks, type JobFieldPicks } from './jobFieldFilters';
 
 export interface JobsFilters {
   /** Selected status tabs (multi-select). Empty = "all" (no status filter). */
@@ -22,6 +23,8 @@ export interface JobsFilters {
   /** The quick preset that produced dateFrom/dateTo, so "This pay period"
    *  etc. roll forward on later visits (see rollDatePreset). */
   datePreset?: AppliedDatePreset | null;
+  /** Field filters (migration 253): field → picked values (+ labels). */
+  fieldFilters?: JobFieldPicks;
 }
 
 export const JOBS_FILTERS_KEY = 'amixos.jobsFilters.v1';
@@ -44,7 +47,8 @@ export function jobsFiltersActive(f: JobsFilters): boolean {
     f.sortDesc === false ||
     f.groupBy !== 'none' ||
     !!f.dateFrom ||
-    !!f.dateTo
+    !!f.dateTo ||
+    Object.values(f.fieldFilters ?? {}).some(v => v?.length)
   );
 }
 
@@ -89,6 +93,7 @@ export function parseJobsFilters(raw: string | null | undefined): Partial<JobsFi
     if (typeof o.dateFrom === 'string') out.dateFrom = o.dateFrom;
     if (typeof o.dateTo === 'string') out.dateTo = o.dateTo;
     out.datePreset = parseAppliedDatePreset(o.datePreset);
+    out.fieldFilters = parsePicks(o.fieldFilters);
     return out;
   } catch {
     return null;

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Plus, X, Check, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { DateRangePreset } from '../lib/dateRangePresets';
 
@@ -478,5 +478,66 @@ export function SortGroupMenu<S extends string, G extends string>({
         </>
       ) : null}
     </div>
+  );
+}
+
+/** CheckListFilterPanel whose options load on open (jobs field filters). */
+export function AsyncCheckListFilterPanel({
+  title,
+  load,
+  labelOf,
+  value,
+  onApply,
+  onClose,
+  labels,
+}: {
+  title: string;
+  load: () => Promise<{ value: string; label: string; count: number }[]>;
+  labelOf: (value: string, label: string) => string;
+  value: string[];
+  /** Picked values with their display labels (saved with the filter). */
+  onApply: (picked: { v: string; l: string }[]) => void;
+  onClose: () => void;
+  labels: { cancel: string; apply: string; search: string; loading: string; none: string };
+}) {
+  const [values, setValues] = useState<{ value: string; label: string; count: number }[] | null>(null);
+  // The load error's text — shown instead of "no values", so a failing RPC
+  // (e.g. a migration not run) doesn't read as an empty field.
+  const [failed, setFailed] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    load().then(v => { if (active) setValues(v); }).catch((e: unknown) => {
+      console.error('[filters] load values failed', e);
+      if (active) setFailed(e instanceof Error ? e.message : String(e));
+    });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (!values) {
+    return (
+      <FilterPanel title={title} onCancel={onClose} onApply={onClose} cancelLabel={labels.cancel} applyLabel={labels.apply}>
+        <p className={`text-sm py-3 ${failed ? 'text-red-500' : 'text-faint'}`}>{failed ?? labels.loading}</p>
+      </FilterPanel>
+    );
+  }
+  if (!values.length) {
+    return (
+      <FilterPanel title={title} onCancel={onClose} onApply={onClose} cancelLabel={labels.cancel} applyLabel={labels.apply}>
+        <p className="text-sm text-faint py-3">{labels.none}</p>
+      </FilterPanel>
+    );
+  }
+  const byValue = new Map(values.map(v => [v.value, v]));
+  return (
+    <CheckListFilterPanel
+      title={title}
+      options={values.map(v => ({ key: v.value, label: labelOf(v.value, v.label), count: v.count, muted: v.value === '' }))}
+      value={value}
+      onApply={keys => onApply(keys.map(k => ({ v: k, l: byValue.get(k)?.label ?? k })))}
+      onClose={onClose}
+      cancelLabel={labels.cancel}
+      applyLabel={labels.apply}
+      searchPlaceholder={labels.search}
+    />
   );
 }

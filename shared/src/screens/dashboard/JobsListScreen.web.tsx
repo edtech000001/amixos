@@ -75,7 +75,9 @@ import {
 import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset } from '../../lib/dateRangePresets';
 import { formatHours } from '../../lib/fieldHome';
 import { Tooltip } from '../../ui/Tooltip';
-import { FilterBar, DateFilterPanel, SortGroupMenu, dateRangeChipText, type BarFilter } from '../../ui/FilterBar.web';
+import { FilterBar, DateFilterPanel, SortGroupMenu, AsyncCheckListFilterPanel, dateRangeChipText, type BarFilter } from '../../ui/FilterBar.web';
+import { jobFilterFields, picksToQuery, picksCount, jobFilterValueLabel, type JobFieldPicks } from '../../lib/jobFieldFilters';
+import type { JobFieldFilters } from '../../lib/jobsQuery';
 
 export interface JobListItem {
   id: string;
@@ -210,7 +212,14 @@ export interface JobsListScreenProps {
     dateFrom: string | null; dateTo: string | null;
     /** Explicit direction (click the active sort again); null = its default. */
     sortDesc?: boolean | null;
+    /** Field filters (migration 253) — field → picked values. */
+    fieldFilters?: JobFieldFilters;
   }) => void;
+  /** Custom job fields (job_field_templates) — extra filterable fields. */
+  jobCustomFields?: { field_key: string; field_label: string }[];
+  /** Loads one field's values + counts (job_filter_values RPC). Omit to hide
+   *  the field filters. */
+  onLoadFilterValues?: (field: string) => Promise<{ value: string; label: string; count: number }[]>;
   /** Business payroll settings — adds "This/Last pay period" chips to the
    *  date filter that match the Payroll screen's periods exactly. */
   payPeriod?: { frequency: unknown; anchorDate: unknown; customDays?: unknown };
@@ -290,6 +299,8 @@ export function JobsListScreen({
   loadError = false,
   onRetryLoad,
   onFiltersChange,
+  jobCustomFields,
+  onLoadFilterValues,
   payPeriod,
   refreshing = false,
   stale = false,
@@ -328,6 +339,8 @@ export function JobsListScreen({
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
   const [datePreset, setDatePreset] = useState<AppliedDatePreset | null>(null);
+  // Field filters (migration 253): field → picked values (+ labels).
+  const [fieldPicks, setFieldPicks] = useState<JobFieldPicks>({});
   // Gate persistence until after the restore pass, so we don't overwrite saved
   // filters with defaults on the first render.
   const [hydrated, setHydrated] = useState(false);
@@ -359,6 +372,7 @@ export function JobsListScreen({
     setDateFrom(saved?.dateFrom ?? null);
     setDateTo(saved?.dateTo ?? null);
     setDatePreset(saved?.datePreset ?? null);
+    setFieldPicks(saved?.fieldFilters ?? {});
     setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtersKey]);
@@ -366,17 +380,19 @@ export function JobsListScreen({
   // Persist on change — only after restore, so defaults don't clobber saved.
   useEffect(() => {
     if (!hydrated || typeof window === 'undefined') return;
-    const f: JobsFilters = { tabs, search, sortBy, sortDesc, groupBy, dateFrom, dateTo, datePreset };
+    const f: JobsFilters = { tabs, search, sortBy, sortDesc, groupBy, dateFrom, dateTo, datePreset, fieldFilters: fieldPicks };
     window.localStorage.setItem(filtersKey, JSON.stringify(f));
-  }, [hydrated, filtersKey, tabs, search, sortBy, sortDesc, groupBy, dateFrom, dateTo, datePreset]);
+  }, [hydrated, filtersKey, tabs, search, sortBy, sortDesc, groupBy, dateFrom, dateTo, datePreset, fieldPicks]);
 
-  const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy, dateFrom, dateTo });
+  const filtersActive = jobsFiltersActive({ tabs, search, sortBy, groupBy, dateFrom, dateTo, fieldFilters: fieldPicks });
+  const fieldFilterQuery = useMemo(() => picksToQuery(fieldPicks), [fieldPicks]);
+  const fieldFilterKey = JSON.stringify(fieldFilterQuery);
   const dateActive = !!dateFrom || !!dateTo;
   // Filters that can HIDE jobs (sort/group only reorder) — drives the
   // empty-state "clear filters" prompt.
-  const narrowed = tabs.length > 0 || search.trim() !== '' || dateActive;
+  const narrowed = tabs.length > 0 || search.trim() !== '' || dateActive || picksCount(fieldPicks) > 0;
   // Empty-state clear: drops only the row-hiding filters, keeps sort/group.
-  const clearNarrowing = () => { setTabs([]); setSearch(''); setDateFrom(null); setDateTo(null); };
+  const clearNarrowing = () => { setTabs([]); setSearch(''); setDateFrom(null); setDateTo(null); setFieldPicks({}); };
 
   // Filtered-set summary. Fetched on open (not with the list) so the extra
   // aggregate query only runs when someone asks for it.
@@ -457,8 +473,36 @@ export function JobsListScreen({
         />
       ),
     },
+    // Field filters (migration 253): pick a field, check its values (counts
+    // across ALL jobs, not the loaded page). AND across fields, OR within.
+    ...(onLoadFilterValues ? jobFilterFields(t.fieldFilters, jobCustomFields).map((f): BarFilter => {
+      const picked = fieldPicks[f.key] ?? [];
+      const labelOf = (v: string, l: string) => jobFilterValueLabel(f.key, v, l, t.fieldFilters, t.priorities as unknown as Record<string, string>);
+      const names = picked.map(p => labelOf(p.v, p.l));
+      return {
+        key: `ff:${f.key}`,
+        label: f.label,
+        active: picked.length > 0,
+        value: names.length > 2 ? `${names[0]}, ${names[1]} +${names.length - 2}` : names.join(', '),
+        onRemove: () => setFieldPicks(prev => ({ ...prev, [f.key]: [] })),
+        panel: close => (
+          <AsyncCheckListFilterPanel
+            title={f.label}
+            load={() => onLoadFilterValues(f.key)}
+            labelOf={labelOf}
+            value={picked.map(p => p.v)}
+            onApply={next => setFieldPicks(prev => ({ ...prev, [f.key]: next }))}
+            onClose={close}
+            labels={{
+              cancel: full.common.filters.cancel, apply: full.common.filters.apply,
+              search: t.fieldFilters.search, loading: t.fieldFilters.loading, none: t.fieldFilters.none,
+            }}
+          />
+        ),
+      };
+    }) : []),
   ];
-  const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setSortDesc(null); setGroupBy('none'); setDateFrom(null); setDateTo(null); };
+  const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setSortDesc(null); setGroupBy('none'); setDateFrom(null); setDateTo(null); setFieldPicks({}); };
 
   const tabLabels: Record<TabKey, string> = {
     all: t.tabs.all,
@@ -563,9 +607,9 @@ export function JobsListScreen({
   }, [search]);
   useEffect(() => {
     if (!serverMode || !onFiltersChange || !hydrated) return;
-    onFiltersChange({ search: debouncedSearch, tabs, sortBy, sortDesc, groupBy, dateFrom, dateTo });
+    onFiltersChange({ search: debouncedSearch, tabs, sortBy, sortDesc, groupBy, dateFrom, dateTo, fieldFilters: fieldFilterQuery });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverMode, hydrated, debouncedSearch, tabs, sortBy, sortDesc, groupBy, dateFrom, dateTo]);
+  }, [serverMode, hydrated, debouncedSearch, tabs, sortBy, sortDesc, groupBy, dateFrom, dateTo, fieldFilterKey]);
 
   // Infinite scroll: load the next page when a sentinel near the list bottom
   // scrolls into view.

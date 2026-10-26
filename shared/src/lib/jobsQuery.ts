@@ -48,6 +48,91 @@ export interface JobsQueryParams {
    *  groupBy dimension (column-based dims only — 'client' | 'state'). */
   groupBy?: string;
   groupKey?: string | null;
+  /** Field filters (migration 253): field → selected values. AND across
+   *  fields, OR within one. See jobFieldFiltersArg / applyFieldFilters. */
+  fieldFilters?: JobFieldFilters | null;
+}
+
+// ── Field filters (migration 253) ───────────────────────────────────────────
+// Keys: 'lead' | 'crew' | 'client' | 'priority' | 'state' | 'city' |
+// 'cf:<field_key>'. lead/crew values are employee uuids or 'w:<worker name>';
+// '' = "(empty)" for the column fields. The SQL rules live in
+// job_matches_filters(); applyFieldFilters() mirrors them for the keyset page.
+export type JobFieldFilters = Record<string, string[]>;
+
+/** Only the fields with something picked, or null when none are. */
+export function jobFieldFiltersArg(ff?: JobFieldFilters | null): JobFieldFilters | null {
+  if (!ff) return null;
+  const out: JobFieldFilters = {};
+  for (const [k, v] of Object.entries(ff)) if (v?.length) out[k] = v;
+  return Object.keys(out).length ? out : null;
+}
+
+/** One field's values + job counts (non-archived), for the filter pickers. */
+export async function fetchJobFilterValues(
+  supabase: AnySupabase & { rpc: (fn: string, args: Record<string, unknown>) => any },
+  params: { businessId: string; field: string; locationId?: string | null },
+): Promise<{ value: string; label: string; count: number }[]> {
+  const { data, error } = await supabase.rpc('job_filter_values', {
+    p_business_id: params.businessId,
+    p_field: params.field,
+    p_location_id: params.locationId ?? null,
+  });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as { value: string; label: string; cnt: number | string }[])
+    .map(r => ({ value: r.value ?? '', label: r.label ?? '', count: Number(r.cnt) }));
+}
+
+/** PostgREST-quoted value for in.(…) / eq. lists. */
+const pq = (v: string) => `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+
+/** The select additions the field filters need (inner-join embeds for
+ *  lead/crew — the filter rides on the embed, which drops jobs without a
+ *  matching assignment). Append to the caller's select. */
+function fieldFilterSelect(ff: JobFieldFilters | null): string {
+  if (!ff) return '';
+  let add = '';
+  if (ff.lead) add += ',ff_lead:job_assignments!inner(id)';
+  if (ff.crew) add += ',ff_crew:job_assignments!inner(id)';
+  return add;
+}
+
+/** The keyset-page mirror of job_matches_filters(). */
+function applyFieldFilters(q: any, ff: JobFieldFilters | null): any {
+  if (!ff) return q;
+  const people = (alias: string, vals: string[]) => {
+    const emp = vals.filter(v => !v.startsWith('w:'));
+    const wrk = vals.filter(v => v.startsWith('w:')).map(v => v.slice(2));
+    const arms = [
+      ...(emp.length ? [`employee_id.in.(${emp.join(',')})`] : []),
+      ...(wrk.length ? [`worker_name.in.(${wrk.map(pq).join(',')})`] : []),
+    ];
+    return q.or(arms.join(','), { referencedTable: alias });
+  };
+  // Column = any of vals, with '' meaning NULL/blank.
+  const column = (col: string, vals: string[], ci = false) => {
+    const set = vals.filter(v => v !== '');
+    const arms: string[] = [];
+    if (set.length) {
+      if (ci) set.forEach(v => arms.push(`${col}.ilike.${pq(escLike(v))}`));
+      else arms.push(`${col}.in.(${set.map(pq).join(',')})`);
+    }
+    if (vals.includes('')) arms.push(`${col}.is.null`, `${col}.eq.""`);
+    return arms.join(',');
+  };
+  for (const [k, vals] of Object.entries(ff)) {
+    if (k === 'lead') { q = q.eq('ff_lead.is_lead', true); q = people('ff_lead', vals); }
+    else if (k === 'crew') q = people('ff_crew', vals);
+    else if (k === 'client') {
+      const ids = vals.filter(v => v !== '');
+      q = q.or([...(ids.length ? [`client_id.in.(${ids.join(',')})`] : []), ...(vals.includes('') ? ['client_id.is.null'] : [])].join(','));
+    } else if (k === 'priority') {
+      q = q.or([`priority.in.(${vals.map(pq).join(',')})`, ...(vals.includes('normal') ? ['priority.is.null'] : [])].join(','));
+    } else if (k === 'state') q = q.or(column('job_state', vals, true));
+    else if (k === 'city') q = q.or(column('job_city', vals, true));
+    else if (k.startsWith('cf:')) q = q.or(column(`custom_fields->>${k.slice(3)}`, vals));
+  }
+  return q;
 }
 
 /** Group dimensions whose per-group jobs can be loaded with a plain column
@@ -199,10 +284,12 @@ export async function fetchJobsPage<T extends { id: string; created_at?: string 
   const term = params.search?.trim() ?? '';
   const tabs = params.tabs ?? [];
 
-  let q = supabase.from('jobs').select(select).eq('business_id', params.businessId);
+  const ff = jobFieldFiltersArg(params.fieldFilters);
+  let q = supabase.from('jobs').select(select + fieldFilterSelect(ff)).eq('business_id', params.businessId);
   if (params.locationId) q = q.eq('location_id', params.locationId);
   if (params.dateFrom) q = q.gte('scheduled_date', params.dateFrom);
   if (params.dateTo) q = q.lte('scheduled_date', params.dateTo);
+  q = applyFieldFilters(q, ff);
   // Lazy group loading: restrict to a single group (column-based dims only).
   if (params.groupKey !== undefined && params.groupBy) {
     const col = params.groupBy === 'client' ? 'client_id' : params.groupBy === 'state' ? 'job_state' : null;
@@ -288,6 +375,7 @@ export async function fetchJobGroupIndex(
   params: {
     businessId: string; groupBy: string; tabs?: string[]; search?: string;
     locationId?: string | null; dateFrom?: string | null; dateTo?: string | null;
+    fieldFilters?: JobFieldFilters | null;
   },
   searchIds?: SearchIds | null,
 ): Promise<JobGroup[] | null> {
@@ -313,6 +401,8 @@ export async function fetchJobGroupIndex(
     p_location_id: params.locationId ?? null,
     p_date_from: params.dateFrom ?? null,
     p_date_to: params.dateTo ?? null,
+    // Only sent when set, so calls work on a DB without migration 253.
+    ...(jobFieldFiltersArg(params.fieldFilters) ? { p_filters: jobFieldFiltersArg(params.fieldFilters) } : {}),
   });
   if (error) throw new Error(error.message);
   return (data ?? []).map((r: { group_key: string; group_label: string; cnt: number | string }) => ({
@@ -331,7 +421,7 @@ export async function fetchJobGroupIndex(
  *  SECURITY INVOKER — counts reflect exactly what the caller's RLS allows. */
 export async function fetchJobTabCounts(
   supabase: AnySupabase,
-  params: Pick<JobsQueryParams, 'businessId' | 'locationId' | 'search' | 'dateFrom' | 'dateTo'>,
+  params: Pick<JobsQueryParams, 'businessId' | 'locationId' | 'search' | 'dateFrom' | 'dateTo' | 'fieldFilters'>,
   searchIds?: SearchIds | null,
 ): Promise<Record<string, number>> {
   const term = params.search?.trim() ?? '';
@@ -345,12 +435,15 @@ export async function fetchJobTabCounts(
     p_client_ids: ids?.clientIds ?? null,
     p_crew_job_ids: ids?.crewJobIds ?? null,
   };
-  const hasRange = !!(params.dateFrom || params.dateTo);
+  const ffArg = jobFieldFiltersArg(params.fieldFilters);
+  // Field filters need the date params too (the 253 signature is positional
+  // superset of 195's) — send both whenever filters are on.
+  const hasRange = !!(params.dateFrom || params.dateTo) || !!ffArg;
   // Date args only when a range is set: on a DB where migration 195 hasn't
   // run, the 7-arg call 404s — retry date-less so counts still load (they're
   // just unfiltered, the pre-195 behavior).
   let res = await supabase.rpc('job_tab_counts', hasRange
-    ? { ...baseArgs, p_date_from: params.dateFrom ?? null, p_date_to: params.dateTo ?? null }
+    ? { ...baseArgs, p_date_from: params.dateFrom ?? null, p_date_to: params.dateTo ?? null, ...(ffArg ? { p_filters: ffArg } : {}) }
     : baseArgs);
   if (res.error && hasRange) res = await supabase.rpc('job_tab_counts', baseArgs);
   if (res.error) throw new Error(res.error.message);
@@ -399,6 +492,7 @@ export async function fetchJobsPageSorted<T extends { id: string }>(
     p_offset: params.offset,
     // Direction (migration 249). null = the sort's default (dates newest-first).
     p_sort_desc: params.sortDesc ?? null,
+    ...(jobFieldFiltersArg(params.fieldFilters) ? { p_filters: jobFieldFiltersArg(params.fieldFilters) } : {}),
   };
   let { data, error } = await supabase.rpc('jobs_page_ids', rpcArgs);
   // PGRST202 = no function with these params: migration 249 not run yet. Retry
@@ -496,7 +590,7 @@ export function jobSummaryFilterParams(
  */
 export async function fetchJobsSummary(
   supabase: AnySupabase,
-  params: Pick<JobsQueryParams, 'businessId' | 'locationId' | 'tabs' | 'search' | 'dateFrom' | 'dateTo'>,
+  params: Pick<JobsQueryParams, 'businessId' | 'locationId' | 'tabs' | 'search' | 'dateFrom' | 'dateTo' | 'fieldFilters'>,
   opts?: { jcfKeys?: string[] | null; jobIds?: string[] | null },
   searchIds?: SearchIds | null,
 ): Promise<JobsSummary | null> {
@@ -527,6 +621,7 @@ export async function fetchJobsSummary(
     p_date_from: params.dateFrom ?? null,
     p_date_to: params.dateTo ?? null,
     p_jcf_keys: opts?.jcfKeys?.length ? opts.jcfKeys : null,
+    ...(jobFieldFiltersArg(params.fieldFilters) ? { p_filters: jobFieldFiltersArg(params.fieldFilters) } : {}),
   });
   if (error) throw new Error(error.message);
   return parseJobsSummary(data);
