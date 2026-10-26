@@ -40,7 +40,6 @@ import {
   ScanLine,
   RotateCw,
   Star,
-  Layers,
   Image as ImageIcon,
   Camera,
   ImagePlus,
@@ -52,6 +51,8 @@ import {
   Tag,
   Wallet,
   CalendarClock,
+  ArrowUp,
+  ArrowDown,
   type LucideIcon,
   ClipboardPaste,
 } from 'lucide-react-native';
@@ -67,6 +68,8 @@ import { queuedInsert, queuedUpdate, queuedDelete, queuedUpload } from '@/lib/of
 import { newUuid } from '@/lib/offline/ids';
 import { isOnlineNow } from '@/lib/offline/network';
 import { Button, Input, DatePicker, Toggle, Fab } from '@amixos/shared/ui';
+import { FilterSheet, FilterSection, Segmented, FilterChip, ChipWrap, FilterButton, showResultsLabel } from '@amixos/shared/ui/FilterSheet';
+import { cycleSort, sortTapClears } from '@amixos/shared/lib/sortCycle';
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import {
   fetchEquipmentPage,
@@ -91,10 +94,21 @@ import { nextRotation } from '@amixos/shared/lib/jobPhotos';
 import {
   groupEquipment,
   parseEquipmentGroupKey,
-  equipmentMatchesQuickFilter,
+  EQUIPMENT_SORT_KEYS,
+  EQUIPMENT_EXPIRY_FILTERS,
+  EQUIPMENT_VIEW_KEY,
+  DEFAULT_EQUIPMENT_VIEW,
+  equipmentSortIsDesc,
+  equipmentSortCaption,
+  sortEquipment,
+  parseEquipmentView,
+  equipmentMatchesView,
+  equipmentViewNeedsAll,
+  type EquipmentView,
+  type EquipmentSortKey,
+  type EquipmentAssigned,
   EQUIPMENT_GROUP_KEY,
   type EquipmentGroupKey,
-  type EquipmentQuickFilter,
 } from '@amixos/shared/lib/equipmentGroups';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMoreBack } from '@/lib/useMoreBack';
@@ -328,7 +342,10 @@ export default function EquipmentScreen() {
   // Group-by — persists across navigation + refresh, scoped per business so it
   // doesn't carry across companies.
   const [groupBy, setGroupBy] = useState<EquipmentGroupKey>('none');
-  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
+  // The one Filters sheet: sort, group, expirations, assignment.
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [view, setView] = useState<EquipmentView>(DEFAULT_EQUIPMENT_VIEW);
+  const viewKey = business?.id ? `${EQUIPMENT_VIEW_KEY}.${business.id}` : EQUIPMENT_VIEW_KEY;
   const groupHydrated = useRef(false);
   // State mirror so the server-query effect re-runs once hydration finishes.
   const [ready, setReady] = useState(false);
@@ -336,15 +353,37 @@ export default function EquipmentScreen() {
   useEffect(() => {
     let cancelled = false;
     groupHydrated.current = false;
-    AsyncStorage.getItem(groupKey)
-      .then((raw) => { if (!cancelled) setGroupBy(parseEquipmentGroupKey(raw)); })
+    Promise.all([AsyncStorage.getItem(groupKey), AsyncStorage.getItem(viewKey)])
+      .then(([rawGroup, rawView]) => {
+        if (cancelled) return;
+        setGroupBy(parseEquipmentGroupKey(rawGroup));
+        setView(parseEquipmentView(rawView));
+      })
+      .catch(() => {})
       .finally(() => { groupHydrated.current = true; setReady(true); });
     return () => { cancelled = true; };
-  }, [groupKey]);
+  }, [groupKey, viewKey]);
   useEffect(() => {
     if (!groupHydrated.current) return;
     void AsyncStorage.setItem(groupKey, groupBy).catch(() => {});
   }, [groupKey, groupBy]);
+  useEffect(() => {
+    if (!groupHydrated.current) return;
+    void AsyncStorage.setItem(viewKey, JSON.stringify(view)).catch(() => {});
+  }, [viewKey, view]);
+  const sortDefaultDesc = (k: EquipmentSortKey) => equipmentSortIsDesc(k, null);
+  // Tap → select, again → reverse, third tap → back to Name (sortCycle).
+  const applySortTap = (k: EquipmentSortKey) => {
+    const n = cycleSort(k, view.sortBy, view.sortDesc, sortDefaultDesc, 'name');
+    setView(v => ({ ...v, ...n }));
+  };
+  const sortHint = sortTapClears(view.sortBy, view.sortDesc, sortDefaultDesc, 'name') ? tc.filters.tapToClear : tc.filters.tapToReverse;
+  const sortActive = view.sortBy !== 'name' || view.sortDesc === true;
+  const viewFiltered = view.expiry.length > 0 || view.assigned !== 'any';
+  const filterCount = (sortActive ? 1 : 0) + (groupBy !== 'none' ? 1 : 0) + view.expiry.length + (view.assigned !== 'any' ? 1 : 0);
+  const toggleExpiry = (k: (typeof EQUIPMENT_EXPIRY_FILTERS)[number]) =>
+    setView(v => ({ ...v, expiry: v.expiry.includes(k) ? v.expiry.filter(x => x !== k) : [...v.expiry, k] }));
+  const resetSheet = () => { setGroupBy('none'); setView({ ...DEFAULT_EQUIPMENT_VIEW, expiry: [] }); };
   const groupOptions: { key: EquipmentGroupKey; label: string; Icon: LucideIcon }[] = [
     { key: 'none', label: t.groups.none, Icon: List },
     { key: 'lead', label: t.groups.lead, Icon: UserIcon },
@@ -352,16 +391,12 @@ export default function EquipmentScreen() {
     { key: 'property', label: t.groups.property, Icon: Wallet },
     { key: 'expiration', label: t.groups.expiration, Icon: CalendarClock },
   ];
-  // Quick filter — transient (not persisted) so a forgotten filter can't
-  // quietly hide equipment on the next visit. Lives in the group-by sheet.
-  const [quickFilter, setQuickFilter] = useState<EquipmentQuickFilter>('all');
-  const filterOptions: { key: EquipmentQuickFilter; label: string }[] = [
-    { key: 'all', label: t.filters.all },
-    { key: 'plate_expired', label: t.filters.plateExpired },
-    { key: 'plate_expiring', label: t.filters.plateExpiring },
-    { key: 'policy_expired', label: t.filters.policyExpired },
-    { key: 'policy_expiring', label: t.filters.policyExpiring },
-  ];
+  const expiryLabels: Record<(typeof EQUIPMENT_EXPIRY_FILTERS)[number], string> = {
+    plate_expired: t.filters.plateExpired,
+    plate_expiring: t.filters.plateExpiring,
+    policy_expired: t.filters.policyExpired,
+    policy_expiring: t.filters.policyExpiring,
+  };
 
   const sheetScrim = {
     position: 'absolute' as const,
@@ -491,14 +526,14 @@ export default function EquipmentScreen() {
     const searching = debouncedSearch.trim().length > 0;
     // A quick filter buckets client-side, so (like grouping) it needs every
     // matching row — a filtered page-1 would silently miss later pages.
-    const needsAll = equipmentNeedsAll(groupBy, searching) || quickFilter !== 'all';
+    const needsAll = equipmentNeedsAll(groupBy, searching) || equipmentViewNeedsAll(view);
     const base: EquipmentQueryParams = { businessId: business.id, locationId: activeLocationId ?? null, search: debouncedSearch };
     paramsRef.current = base;
     modeRef.current = needsAll ? 'all' : 'page';
     setLoading(true);
     cursorRef.current = null;
     setHasMore(false);
-    const isDefault = !searching && groupBy === 'none' && quickFilter === 'all';
+    const isDefault = !searching && groupBy === 'none' && !equipmentViewNeedsAll(view);
     try {
       if (isDefault) {
         // Cache-first: paint the last snapshot instantly, then fetch fresh.
@@ -594,7 +629,7 @@ export default function EquipmentScreen() {
     if (!business || !ready) return;
     void runQuery();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [business, ready, debouncedSearch, groupBy, quickFilter, activeLocationId]);
+  }, [business, ready, debouncedSearch, groupBy, view, activeLocationId]);
 
   const loadPhotosFor = useCallback(async (equipmentId: string) => {
     const { data } = await supabase
@@ -612,9 +647,7 @@ export default function EquipmentScreen() {
   };
 
   const filtered = useMemo(() => {
-    const base = quickFilter === 'all'
-      ? equipment
-      : equipment.filter((e) => equipmentMatchesQuickFilter(e, quickFilter));
+    const base = viewFiltered ? equipment.filter((e) => equipmentMatchesView(e, view)) : equipment;
     const q = search.trim().toLowerCase();
     if (!q) return base;
     return base.filter((e) =>
@@ -624,12 +657,13 @@ export default function EquipmentScreen() {
       (e.plate_number ?? '').toLowerCase().includes(q) ||
       (e.equipment_type ?? '').toLowerCase().includes(q),
     );
-  }, [equipment, search, quickFilter]);
+  }, [equipment, search, view, viewFiltered]);
 
   // Grouped sections (or a single flat section when grouping is off / searching).
   const sections = useMemo(
     () =>
-      groupEquipment(filtered, groupBy, search.trim().length > 0, {
+      groupEquipment(sortActive ? sortEquipment(filtered, view.sortBy, view.sortDesc) : filtered, groupBy, search.trim().length > 0, {
+        keepOrder: sortActive,
         leadName: employeeName,
         labels: {
           unassigned: t.groups.unassigned,
@@ -643,7 +677,7 @@ export default function EquipmentScreen() {
         },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filtered, groupBy, search, employees],
+    [filtered, groupBy, search, employees, sortActive, view.sortBy, view.sortDesc],
   );
 
   const openAdd = () => {
@@ -1003,18 +1037,11 @@ export default function EquipmentScreen() {
         <View className="ml-1 flex-1">
           <Text className="text-lg font-semibold text-ink">{t.title}</Text>
           <Text className="text-xs text-muted">
-            {t.countTotal.replace('{{count}}', String(quickFilter !== 'all' ? filtered.length : serverTotal))} · {t.subtitle}
+            {t.countTotal.replace('{{count}}', String(viewFiltered ? filtered.length : serverTotal))} · {t.subtitle}
           </Text>
         </View>
-        {/* Group-by + quick filter — icon-only, highlighted when active. */}
-        <Pressable
-          onPress={() => setGroupMenuOpen(true)}
-          className={`p-2.5 rounded-xl border active:opacity-80 ${
-            groupBy !== 'none' || quickFilter !== 'all' ? 'bg-primary/10 border-primary' : 'bg-card border-border'
-          }`}
-        >
-          <Layers size={18} color={groupBy !== 'none' || quickFilter !== 'all' ? c.primary : c.muted} />
-        </Pressable>
+        {/* Filters — sort, group, expirations and assignment in one sheet. */}
+        <FilterButton count={filterCount} onPress={() => setFilterOpen(true)} label={tc.filters.button} />
       </View>
       <LocationSwitcher />
 
@@ -1034,20 +1061,6 @@ export default function EquipmentScreen() {
             </Pressable>
           ) : null}
         </View>
-        {/* Active quick filter — always visible so a filtered list can't read
-            as "missing equipment"; tap the X to clear. */}
-        {quickFilter !== 'all' ? (
-          <View className="flex-row mt-2">
-            <View className="flex-row items-center gap-1.5 bg-primary/10 border border-primary/30 rounded-full pl-3 pr-2 py-1.5">
-              <Text className="text-xs font-semibold text-primary">
-                {filterOptions.find((o) => o.key === quickFilter)?.label}
-              </Text>
-              <Pressable onPress={() => setQuickFilter('all')} hitSlop={8} className="active:opacity-60">
-                <X size={14} color={c.primary} />
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
       </View>
 
       {/* List — SectionList virtualizes rows (+ their images) for large fleets. */}
@@ -1704,64 +1717,62 @@ export default function EquipmentScreen() {
         </View>
       </RNModal>
 
-      {/* Group-by — bottom sheet. */}
-      <RNModal
-        visible={groupMenuOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setGroupMenuOpen(false)}
+      <FilterSheet
+        open={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        title={tc.filters.title}
+        resetLabel={tc.filters.reset}
+        onReset={resetSheet}
+        canReset={filterCount > 0}
+        showLabel={showResultsLabel(tc.filters, viewFiltered ? filtered.length : serverTotal)}
       >
-        <View className="flex-1 justify-end">
-          <Pressable onPress={() => setGroupMenuOpen(false)} style={sheetScrim} />
-          <View
-            className="bg-card rounded-3xl px-4 pt-3 mx-3 overflow-hidden"
-            style={{ paddingBottom: insets.bottom + 12, ...sheetShadow }}
-          >
-            <View className="items-center mb-3">
-              <View className="w-10 h-1 bg-border rounded-full" />
-            </View>
-            <Text className="text-lg font-bold text-ink px-1 mb-3">{t.groups.title}</Text>
-            <View className="gap-1">
-              {groupOptions.map((o) => {
-                const active = groupBy === o.key;
-                return (
-                  <Pressable
-                    key={o.key}
-                    onPress={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
-                    className={`flex-row items-center gap-3 px-3 py-3 rounded-2xl ${active ? 'bg-primary/10' : 'active:bg-surface'}`}
-                  >
-                    <View className={`w-9 h-9 rounded-xl items-center justify-center ${active ? 'bg-primary' : 'bg-border-soft'}`}>
-                      <o.Icon size={18} color={active ? '#FFFFFF' : c.muted} />
-                    </View>
-                    <Text className={`flex-1 text-base ${active ? 'text-primary font-semibold' : 'text-ink'}`}>
-                      {o.label}
-                    </Text>
-                    {active ? <Check size={20} color={c.primary} /> : null}
-                  </Pressable>
-                );
-              })}
-            </View>
-            {/* Quick filter — pill row (composes with any grouping). */}
-            <Text className="text-lg font-bold text-ink px-1 mt-4 mb-3">{t.filters.title}</Text>
-            <View className="flex-row flex-wrap gap-2 px-1 pb-1">
-              {filterOptions.map((o) => {
-                const active = quickFilter === o.key;
-                return (
-                  <Pressable
-                    key={o.key}
-                    onPress={() => { setQuickFilter(o.key); setGroupMenuOpen(false); }}
-                    className={`px-3.5 py-2 rounded-full border ${
-                      active ? 'bg-primary border-primary' : 'bg-card border-border active:bg-surface'
-                    }`}
-                  >
-                    <Text className={`text-sm font-medium ${active ? 'text-white' : 'text-ink'}`}>{o.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        </View>
-      </RNModal>
+        <FilterSection
+          title={tc.filters.sortBy}
+          right={<Text className="text-xs text-faint">{t.view.dir[equipmentSortCaption(view.sortBy, equipmentSortIsDesc(view.sortBy, view.sortDesc))]}</Text>}
+        >
+          <ChipWrap>
+            {EQUIPMENT_SORT_KEYS.map((k) => {
+              const selected = view.sortBy === k;
+              const desc = equipmentSortIsDesc(k, selected ? view.sortDesc : null);
+              return (
+                <FilterChip
+                  key={k}
+                  label={t.view.sort[k]}
+                  on={selected}
+                  onPress={() => applySortTap(k)}
+                  leading={selected ? (desc ? <ArrowDown size={15} color={c.primary} /> : <ArrowUp size={15} color={c.primary} />) : undefined}
+                />
+              );
+            })}
+          </ChipWrap>
+          <Text className="text-xs text-faint mt-2">{sortHint}</Text>
+        </FilterSection>
+
+        <FilterSection title={tc.filters.groupBy}>
+          <ChipWrap>
+            {groupOptions.map((o) => (
+              <FilterChip key={o.key} label={o.label} Icon={o.Icon} on={groupBy === o.key}
+                onPress={() => setGroupBy(groupBy === o.key ? 'none' : o.key)} />
+            ))}
+          </ChipWrap>
+        </FilterSection>
+
+        <FilterSection title={t.view.expirations}>
+          <ChipWrap>
+            {EQUIPMENT_EXPIRY_FILTERS.map((k) => (
+              <FilterChip key={k} check label={expiryLabels[k]} Icon={CalendarClock} on={view.expiry.includes(k)} onPress={() => toggleExpiry(k)} />
+            ))}
+          </ChipWrap>
+        </FilterSection>
+
+        <FilterSection title={t.view.assignment}>
+          <Segmented<EquipmentAssigned>
+            options={(['any', 'assigned', 'unassigned'] as EquipmentAssigned[]).map((k) => ({ key: k, label: t.view.assigned[k] }))}
+            value={view.assigned}
+            onChange={(a) => setView((v) => ({ ...v, assigned: a }))}
+          />
+        </FilterSection>
+      </FilterSheet>
     </SafeAreaView>
   );
 }

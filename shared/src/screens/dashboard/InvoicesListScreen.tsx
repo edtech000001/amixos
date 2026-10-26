@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, Pressable, SectionList, ActivityIndicator } from 'react-native';
 import { FileText, Search, List, Building2, MapPin, ListChecks, Trash2, X, DollarSign, Bell, BellRing, AlertTriangle, ArrowUp, ArrowDown, BadgeCheck, History, CalendarClock, CircleDollarSign } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { cycleSort, sortTapClears } from '../../lib/sortCycle';
 import { Input } from '../../ui/Input';
 import { FilterSheet, FilterSection, Segmented, FilterChip, ChipWrap, DateRangeFields, FilterButton, showResultsLabel } from '../../ui/FilterSheet';
 import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset } from '../../lib/dateRangePresets';
@@ -182,6 +183,13 @@ export function InvoicesListScreen({
   const [quick, setQuick] = useState<InvoiceQuickFilter[]>([]);
   const [sortBy, setSortBy] = useState<InvoiceSortKey>('newest');
   const [sortDesc, setSortDesc] = useState<boolean | null>(null);
+  // Sort chips: tap → select, again → reverse, third tap → back to 'newest' (sortCycle).
+  const sortDefaultDesc = (k: InvoiceSortKey) => invoiceSortIsDesc(k, null);
+  const applySortTap = (k: InvoiceSortKey) => {
+    const n = cycleSort(k, sortBy, sortDesc, sortDefaultDesc, 'newest');
+    setSortBy(n.sortBy); setSortDesc(n.sortDesc);
+  };
+  const sortHint = sortTapClears(sortBy, sortDesc, sortDefaultDesc, 'newest') ? full.common.filters.tapToClear : full.common.filters.tapToReverse;
   // Group the list into sections — persisted per device+business, like the
   // jobs list, so leaving the screen keeps the chosen grouping.
   const groupStoreKey = businessId ? `amixos.invoicesGroupBy.v1.${businessId}` : 'amixos.invoicesGroupBy.v1';
@@ -716,18 +724,19 @@ export function InvoicesListScreen({
                 label={tl.sort[k]}
                 on={selected}
                 // New sort → its default direction; the selected one again → reverse.
-                onPress={() => (selected ? setSortDesc(!desc) : (setSortBy(k), setSortDesc(null)))}
+                onPress={() => applySortTap(k)}
                 leading={selected ? (desc ? <ArrowDown size={15} color={c.primary} /> : <ArrowUp size={15} color={c.primary} />) : undefined}
               />
             );
           })}
         </ChipWrap>
+        <Text className="text-xs text-faint mt-2">{sortHint}</Text>
       </FilterSection>
 
       <FilterSection title={tf.groupBy}>
         <ChipWrap>
           {groupOptions.map(o => (
-            <FilterChip key={o.key} label={o.label} Icon={o.Icon} on={groupBy === o.key} onPress={() => setGroupBy(o.key)} />
+            <FilterChip key={o.key} label={o.label} Icon={o.Icon} on={groupBy === o.key} onPress={() => setGroupBy(groupBy === o.key ? 'none' : o.key)} />
           ))}
         </ChipWrap>
       </FilterSection>

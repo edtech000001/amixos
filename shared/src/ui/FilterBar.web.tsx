@@ -306,3 +306,57 @@ export function dateRangeChipText(
   if (to) return `≤ ${f(to)}`;
   return '';
 }
+
+/** Pick-several panel (checkbox rows with counts + search), applied on Apply. */
+export function CheckListFilterPanel({
+  title,
+  options,
+  value,
+  onApply,
+  onClose,
+  cancelLabel,
+  applyLabel,
+  searchPlaceholder,
+}: {
+  title: string;
+  options: { key: string; label: string; count?: number; muted?: boolean }[];
+  value: string[];
+  onApply: (keys: string[]) => void;
+  onClose: () => void;
+  cancelLabel: string;
+  applyLabel: string;
+  searchPlaceholder?: string;
+}) {
+  const [draft, setDraft] = useState<string[]>(value);
+  const [q, setQ] = useState('');
+  const norm = (x: string) => x.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const shown = q.trim() ? options.filter(o => norm(o.label).includes(norm(q.trim()))) : options;
+  return (
+    <FilterPanel title={title} onCancel={onClose} onApply={() => { onApply(draft); onClose(); }} cancelLabel={cancelLabel} applyLabel={applyLabel}>
+      {options.length > 8 ? (
+        <input
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          placeholder={searchPlaceholder}
+          className="w-full mb-2 rounded-xl border border-border bg-card px-3 py-1.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+      ) : null}
+      <div className="max-h-60 overflow-y-auto space-y-0.5">
+        {shown.map(o => {
+          const on = draft.includes(o.key);
+          return (
+            <button key={o.key || '(empty)'} type="button"
+              onClick={() => setDraft(d => (on ? d.filter(k => k !== o.key) : [...d, o.key]))}
+              className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-xl text-sm text-left ${on ? 'bg-primary/10' : 'hover:bg-surface'}`}>
+              <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${on ? 'bg-primary border-primary' : 'border-border bg-card'}`}>
+                {on ? <Check size={11} className="text-white" /> : null}
+              </span>
+              <span className={`flex-1 truncate ${o.muted ? 'italic text-faint' : on ? 'text-primary font-semibold' : 'text-ink'}`}>{o.label}</span>
+              {o.count != null ? <span className="text-xs text-faint">{o.count}</span> : null}
+            </button>
+          );
+        })}
+      </div>
+    </FilterPanel>
+  );
+}

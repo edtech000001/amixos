@@ -28,6 +28,74 @@ export interface ClientsCursor {
   firstName: string;
   lastName: string;
   id: string;
+  /** Any order but A–Z pages by offset instead of the name keyset. */
+  offset?: number;
+}
+
+// ── Sort + filters (migration 252) ─────────────────────────────────────────
+export type ClientSortKey = 'name' | 'recent' | 'invoiced' | 'balance' | 'billed' | 'updated';
+export const CLIENT_SORT_KEYS: ClientSortKey[] = ['name', 'recent', 'invoiced', 'balance', 'billed', 'updated'];
+/** Default direction per sort: A–Z ascending, everything else biggest /
+ *  latest first. Tap again to flip. */
+const CLIENT_SORT_DEFAULT_DESC: Record<ClientSortKey, boolean> = {
+  name: false, recent: true, invoiced: true, balance: true, billed: true, updated: true,
+};
+export function clientSortIsDesc(sortBy: ClientSortKey, sortDesc?: boolean | null): boolean {
+  return sortDesc ?? CLIENT_SORT_DEFAULT_DESC[sortBy];
+}
+/** The default A–Z view — keyset paged, letter sections + the A–Z index. */
+export function clientSortIsAlpha(sortBy: ClientSortKey | undefined, sortDesc?: boolean | null): boolean {
+  return (sortBy ?? 'name') === 'name' && !clientSortIsDesc('name', sortDesc);
+}
+/** Caption key (t.listTools.dir) for a sort in its current direction. */
+export function clientSortCaption(sortBy: ClientSortKey, desc: boolean):
+  'az' | 'za' | 'newest' | 'oldest' | 'highest' | 'lowest' {
+  if (sortBy === 'name') return desc ? 'za' : 'az';
+  if (sortBy === 'balance' || sortBy === 'billed') return desc ? 'highest' : 'lowest';
+  return desc ? 'newest' : 'oldest';
+}
+const CLIENT_SORT_COLUMN: Record<Exclude<ClientSortKey, 'name'>, string> = {
+  recent: 'created_at', invoiced: 'last_invoice_date', balance: 'balance_due', billed: 'lifetime_billed', updated: 'updated_at',
+};
+
+export type ClientDateField = 'added' | 'invoiced';
+export type ClientQuickFilter =
+  | 'recent_added' | 'recent_invoiced' | 'owes' | 'overdue' | 'active_jobs' | 'inactive' | 'no_email';
+export const CLIENT_QUICK_KEYS: ClientQuickFilter[] =
+  ['recent_added', 'recent_invoiced', 'owes', 'overdue', 'active_jobs', 'inactive', 'no_email'];
+
+const ymdLocal = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000);
+
+/** Date range + quick filters — shared by the page, count and load-all
+ *  queries so the header count always matches the rows. */
+function applyClientFilters(q: any, params: ClientsQueryParams): any {
+  if (params.dateField === 'invoiced') {
+    if (params.dateFrom) q = q.gte('last_invoice_date', params.dateFrom);
+    if (params.dateTo) q = q.lte('last_invoice_date', params.dateTo);
+  } else {
+    if (params.dateFrom) q = q.gte('created_at', `${params.dateFrom}T00:00:00`);
+    if (params.dateTo) q = q.lte('created_at', `${params.dateTo}T23:59:59.999`);
+  }
+  for (const f of params.quick ?? []) {
+    if (f === 'recent_added') q = q.gte('created_at', daysAgo(30).toISOString());
+    else if (f === 'recent_invoiced') q = q.gte('last_invoice_date', ymdLocal(daysAgo(30)));
+    else if (f === 'owes') q = q.gt('balance_due', 0);
+    else if (f === 'overdue') q = q.gt('overdue_count', 0);
+    else if (f === 'active_jobs') q = q.gt('open_jobs', 0);
+    else if (f === 'inactive') {
+      const cut = daysAgo(180);
+      q = q.lt('created_at', cut.toISOString()).eq('open_jobs', 0)
+        .or(`last_invoice_date.is.null,last_invoice_date.lt.${ymdLocal(cut)}`)
+        .or(`last_job_at.is.null,last_job_at.lt.${cut.toISOString()}`);
+    } else if (f === 'no_email') {
+      q = q.or('email_office.is.null,email_office.eq.')
+        .or('email_home.is.null,email_home.eq.')
+        .or('email.is.null,email.eq.');
+    }
+  }
+  return q;
 }
 
 export interface ClientsQueryParams {
@@ -53,6 +121,16 @@ export interface ClientsQueryParams {
    *  cursor is supplied (paging within an already-jumped-to letter). */
   startAtLetter?: string | null;
   pageSize?: number;
+  /** Order; default A–Z (keyset). Others page by offset (migration 252). */
+  sortBy?: ClientSortKey;
+  /** null/undefined = the sort's default direction. */
+  sortDesc?: boolean | null;
+  /** Quick filters, ANDed. */
+  quick?: ClientQuickFilter[];
+  /** Date range (YYYY-MM-DD) on `dateField` (default: date added). */
+  dateField?: ClientDateField;
+  dateFrom?: string | null;
+  dateTo?: string | null;
 }
 
 export interface ClientsPage<T extends { id: string; first_name: string; last_name: string }> {
@@ -148,6 +226,28 @@ export async function fetchClientsPage<T extends { id: string; first_name: strin
     ? params.searchOr
     : await searchOrClause(supabase, params.businessId, term, params.signal);
   if (searchOr) q = q.or(searchOr);
+  q = applyClientFilters(q, params);
+
+  // Any order but A–Z pages by OFFSET (the keyset only covers name order).
+  // Missing values (never invoiced) sort last; name breaks ties.
+  if (!clientSortIsAlpha(params.sortBy, params.sortDesc)) {
+    const sortBy = params.sortBy ?? 'name';
+    const desc = clientSortIsDesc(sortBy, params.sortDesc);
+    const offset = params.cursor?.offset ?? 0;
+    q = sortBy === 'name'
+      ? q.order('first_name', { ascending: false }).order('last_name', { ascending: false })
+      : q.order(CLIENT_SORT_COLUMN[sortBy], { ascending: !desc, nullsFirst: false })
+        .order('first_name', { ascending: true }).order('last_name', { ascending: true });
+    q = q.order('id', { ascending: !desc }).range(offset, offset + pageSize - 1);
+    if (params.signal) q = q.abortSignal(params.signal);
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    const clients = (data ?? []) as T[];
+    return {
+      clients,
+      nextCursor: clients.length === pageSize ? { firstName: '', lastName: '', id: '', offset: offset + clients.length } : null,
+    };
+  }
 
   if (params.cursor) {
     const c = params.cursor;
@@ -211,7 +311,7 @@ export async function fetchAllClientsMatching<T extends { id: string; first_name
 /** Total clients matching the filters (for the header count) — a count-only query. */
 export async function fetchClientCount(
   supabase: AnySupabase,
-  params: Pick<ClientsQueryParams, 'businessId' | 'search' | 'excludeIds' | 'searchOr' | 'signal'>,
+  params: Pick<ClientsQueryParams, 'businessId' | 'search' | 'excludeIds' | 'searchOr' | 'signal' | 'quick' | 'dateField' | 'dateFrom' | 'dateTo'>,
 ): Promise<number> {
   const term = params.search?.trim() ?? '';
   const searchOr = params.searchOr !== undefined
@@ -221,6 +321,7 @@ export async function fetchClientCount(
     .eq('business_id', params.businessId);
   if (params.excludeIds?.length) q = q.not('id', 'in', `(${params.excludeIds.join(',')})`);
   if (searchOr) q = q.or(searchOr);
+  q = applyClientFilters(q, params);
   if (params.signal) q = q.abortSignal(params.signal);
   const { count, error } = await q;
   if (error) throw new Error(error.message);

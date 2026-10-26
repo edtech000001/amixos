@@ -46,6 +46,7 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
+import { cycleSort, sortTapClears } from '../../lib/sortCycle';
 import { formatDateLong, formatTime12h } from '../../lib/format';
 import { formatProjectDuration } from '../../lib/duration';
 import { searchMatches, usStateName } from '../../lib/usStates';
@@ -330,6 +331,13 @@ export function JobsListScreen({
   const [sortBy, setSortBy] = useState<JobSortKey>('recent');
   // null = the sort's default direction (dates newest-first — jobSort.ts).
   const [sortDesc, setSortDesc] = useState<boolean | null>(null);
+  // Sort chips: tap → select, again → reverse, third tap → back to 'recent' (sortCycle).
+  const sortDefaultDesc = (k: JobSortKey) => sortIsDesc(k, null);
+  const applySortTap = (k: JobSortKey) => {
+    const n = cycleSort(k, sortBy, sortDesc, sortDefaultDesc, 'recent');
+    setSortBy(n.sortBy); setSortDesc(n.sortDesc);
+  };
+  const sortHint = sortTapClears(sortBy, sortDesc, sortDefaultDesc, 'recent') ? full.common.filters.tapToClear : full.common.filters.tapToReverse;
   const [groupBy, setGroupBy] = useState<JobGroupKey>('none');
   // Scheduled-date range filter (yyyy-mm-dd). null = open-ended that side.
   const [dateFrom, setDateFrom] = useState<string | null>(null);
@@ -994,11 +1002,8 @@ export function JobsListScreen({
                         key={k}
                         // New sort → its default direction; the active one
                         // again → reverse it.
-                        onClick={() => {
-                          if (selected) setSortDesc(!sortIsDesc(k, sortDesc));
-                          else { setSortBy(k); setSortDesc(null); }
-                        }}
-                        title={selected ? `${t.sort.dir[sortDirCaption(k, desc)]} · ${t.sort.dir.tapToReverse}` : undefined}
+                        onClick={() => applySortTap(k)}
+                        title={selected ? `${t.sort.dir[sortDirCaption(k, desc)]} · ${sortHint}` : undefined}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
                           selected ? 'bg-primary border-primary text-white' : 'bg-card border-border text-muted hover:border-border'
                         }`}
@@ -1020,7 +1025,7 @@ export function JobsListScreen({
                     return (
                       <button
                         key={k}
-                        onClick={() => setGroupBy(k)}
+                        onClick={() => setGroupBy(groupBy === k ? 'none' : k)}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
                           selected ? 'bg-primary border-primary text-white' : 'bg-card border-border text-muted hover:border-border'
                         }`}

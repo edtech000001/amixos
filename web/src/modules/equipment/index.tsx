@@ -30,6 +30,10 @@ import {
   Tag,
   Wallet,
   CalendarClock,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  UserCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -68,11 +72,25 @@ import { Tooltip } from '@amixos/shared/ui/Tooltip';
 import {
   groupEquipment,
   parseEquipmentGroupKey,
-  equipmentMatchesQuickFilter,
   EQUIPMENT_GROUP_KEY,
+  EQUIPMENT_SORT_KEYS,
+  EQUIPMENT_EXPIRY_FILTERS,
+  EQUIPMENT_VIEW_KEY,
+  DEFAULT_EQUIPMENT_VIEW,
+  equipmentSortIsDesc,
+  equipmentSortCaption,
+  sortEquipment,
+  parseEquipmentView,
+  equipmentMatchesView,
+  equipmentViewNeedsAll,
   type EquipmentGroupKey,
-  type EquipmentQuickFilter,
+  type EquipmentView,
+  type EquipmentSortKey,
+  type EquipmentExpiryFilter,
+  type EquipmentAssigned,
 } from '@amixos/shared/lib/equipmentGroups';
+import { FilterBar, CheckListFilterPanel, RadioFilterPanel, type BarFilter } from '@amixos/shared/ui/FilterBar.web';
+import { cycleSort, sortTapClears } from '@amixos/shared/lib/sortCycle';
 
 interface EmployeeOption {
   id: string;
@@ -269,14 +287,14 @@ export default function EquipmentModule() {
     const seq = ++loadSeqRef.current;
     // A quick filter buckets client-side, so (like grouping) it needs every
     // matching row — a filtered page-1 would silently miss later pages.
-    const needsAll = equipmentNeedsAll(groupBy, debouncedSearch.trim().length > 0) || quickFilter !== 'all';
+    const needsAll = equipmentNeedsAll(groupBy, debouncedSearch.trim().length > 0) || equipmentViewNeedsAll(view);
     const base: EquipmentQueryParams = { businessId: business.id, locationId: activeLocationId ?? null, search: debouncedSearch };
     paramsRef.current = base;
     modeRef.current = needsAll ? 'all' : 'page';
     setLoading(true);
     cursorRef.current = null;
     setHasMore(false);
-    const isDefault = !debouncedSearch.trim() && groupBy === 'none' && quickFilter === 'all';
+    const isDefault = !debouncedSearch.trim() && groupBy === 'none' && !equipmentViewNeedsAll(view);
     try {
       // Cache-first for the default view: paint the last snapshot instantly.
       const cacheKey = `equipment_v2_${business.id}_${activeLocationId ?? 'all'}`;
@@ -378,14 +396,68 @@ export default function EquipmentModule() {
     return e ? `${e.first_name} ${e.last_name}` : null;
   };
 
-  // Quick filter — transient (not persisted) so a forgotten filter can't
-  // quietly hide equipment on the next visit. Lives in the group-by dropdown.
-  const [quickFilter, setQuickFilter] = useState<EquipmentQuickFilter>('all');
+  // Sort + expiration / assignment filters (equipmentGroups.ts), saved per
+  // business with the group-by. Sorting/filtering runs over the load-all set.
+  const [view, setView] = useState<EquipmentView>(DEFAULT_EQUIPMENT_VIEW);
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortActive = view.sortBy !== 'name' || view.sortDesc === true;
+  const viewFiltered = view.expiry.length > 0 || view.assigned !== 'any';
+  const sortDefaultDesc = (k: EquipmentSortKey) => equipmentSortIsDesc(k, null);
+  // Tap → select, again → reverse, third tap → back to Name (sortCycle).
+  const applySortTap = (k: EquipmentSortKey) => {
+    const n = cycleSort(k, view.sortBy, view.sortDesc, sortDefaultDesc, 'name');
+    setView(v => ({ ...v, ...n }));
+  };
+  const sortHint = sortTapClears(view.sortBy, view.sortDesc, sortDefaultDesc, 'name') ? tc.filters.tapToClear : tc.filters.tapToReverse;
+  const expiryLabels: Record<EquipmentExpiryFilter, string> = {
+    plate_expired: t.filters.plateExpired,
+    plate_expiring: t.filters.plateExpiring,
+    policy_expired: t.filters.policyExpired,
+    policy_expiring: t.filters.policyExpiring,
+  };
+  const barFilters: BarFilter[] = [
+    {
+      key: 'expiry',
+      label: t.view.expirations,
+      Icon: CalendarClock,
+      active: view.expiry.length > 0,
+      value: view.expiry.map(k => expiryLabels[k]).join(', '),
+      onRemove: () => setView(v => ({ ...v, expiry: [] })),
+      panel: close => (
+        <CheckListFilterPanel
+          title={t.view.expirations}
+          options={EQUIPMENT_EXPIRY_FILTERS.map(k => ({ key: k, label: expiryLabels[k] }))}
+          value={view.expiry}
+          onApply={keys => setView(v => ({ ...v, expiry: keys as EquipmentExpiryFilter[] }))}
+          onClose={close}
+          cancelLabel={tc.filters.cancel}
+          applyLabel={tc.filters.apply}
+        />
+      ),
+    },
+    {
+      key: 'assigned',
+      label: t.view.assignment,
+      Icon: UserCheck,
+      active: view.assigned !== 'any',
+      value: view.assigned !== 'any' ? t.view.assigned[view.assigned] : undefined,
+      onRemove: () => setView(v => ({ ...v, assigned: 'any' })),
+      panel: close => (
+        <RadioFilterPanel<Exclude<EquipmentAssigned, 'any'>>
+          title={t.view.assignment}
+          options={[{ key: 'assigned', label: t.view.assigned.assigned }, { key: 'unassigned', label: t.view.assigned.unassigned }]}
+          value={view.assigned === 'any' ? null : view.assigned}
+          onApply={a => setView(v => ({ ...v, assigned: a }))}
+          onClose={close}
+          cancelLabel={tc.filters.cancel}
+          applyLabel={tc.filters.apply}
+        />
+      ),
+    },
+  ];
 
   const filtered = useMemo(() => {
-    const base = quickFilter === 'all'
-      ? equipment
-      : equipment.filter(e => equipmentMatchesQuickFilter(e, quickFilter));
+    const base = viewFiltered ? equipment.filter(e => equipmentMatchesView(e, view)) : equipment;
     const q = search.trim().toLowerCase();
     if (!q) return base;
     return base.filter(e =>
@@ -396,21 +468,31 @@ export default function EquipmentModule() {
       (e.equipment_type ?? '').toLowerCase().includes(q),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [equipment, search, quickFilter]);
+  }, [equipment, search, view, viewFiltered]);
 
   // Group-by — persists across navigation + refresh, scoped per business so it
   // doesn't carry across companies.
   const groupKey = business?.id ? `${EQUIPMENT_GROUP_KEY}.${business.id}` : EQUIPMENT_GROUP_KEY;
   const [groupBy, setGroupBy] = useState<EquipmentGroupKey>('none');
   const [groupHydrated, setGroupHydrated] = useState(false);
+  const viewKey = business?.id ? `${EQUIPMENT_VIEW_KEY}.${business.id}` : EQUIPMENT_VIEW_KEY;
   useEffect(() => {
-    if (typeof window !== 'undefined') setGroupBy(parseEquipmentGroupKey(window.localStorage.getItem(groupKey)));
+    if (typeof window !== 'undefined') {
+      setGroupBy(parseEquipmentGroupKey(window.localStorage.getItem(groupKey)));
+      let raw: string | null = null;
+      try { raw = window.localStorage.getItem(viewKey); } catch { /* private mode */ }
+      setView(parseEquipmentView(raw));
+    }
     setGroupHydrated(true);
-  }, [groupKey]);
+  }, [groupKey, viewKey]);
   useEffect(() => {
     if (!groupHydrated || typeof window === 'undefined') return;
     window.localStorage.setItem(groupKey, groupBy);
   }, [groupHydrated, groupKey, groupBy]);
+  useEffect(() => {
+    if (!groupHydrated) return;
+    try { window.localStorage.setItem(viewKey, JSON.stringify(view)); } catch { /* private mode */ }
+  }, [groupHydrated, viewKey, view]);
   // Drive the server query: re-run on branch / group / debounced-search change,
   // once the saved group-by has hydrated so the first query uses it. 'none' (and
   // any search) pages; a real grouping loads all matching and groups.
@@ -418,7 +500,7 @@ export default function EquipmentModule() {
     if (!business || !groupHydrated) return;
     void runQuery();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [business, groupHydrated, debouncedSearch, groupBy, quickFilter, activeLocationId]);
+  }, [business, groupHydrated, debouncedSearch, groupBy, view, activeLocationId]);
   // Infinite scroll (flat/search view): load the next page when the sentinel nears view.
   useEffect(() => {
     const el = sentinelRef.current;
@@ -439,16 +521,10 @@ export default function EquipmentModule() {
     { key: 'property', label: t.groups.property, Icon: Wallet },
     { key: 'expiration', label: t.groups.expiration, Icon: CalendarClock },
   ];
-  const filterOptions: { key: EquipmentQuickFilter; label: string }[] = [
-    { key: 'all', label: t.filters.all },
-    { key: 'plate_expired', label: t.filters.plateExpired },
-    { key: 'plate_expiring', label: t.filters.plateExpiring },
-    { key: 'policy_expired', label: t.filters.policyExpired },
-    { key: 'policy_expiring', label: t.filters.policyExpiring },
-  ];
   const sections = useMemo(
     () =>
-      groupEquipment(filtered, groupBy, search.trim().length > 0, {
+      groupEquipment(sortActive ? sortEquipment(filtered, view.sortBy, view.sortDesc) : filtered, groupBy, search.trim().length > 0, {
+        keepOrder: sortActive,
         leadName: employeeName,
         labels: {
           unassigned: t.groups.unassigned,
@@ -462,7 +538,7 @@ export default function EquipmentModule() {
         },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filtered, groupBy, search, employees],
+    [filtered, groupBy, search, employees, sortActive, view.sortBy, view.sortDesc],
   );
 
   const openAdd = () => {
@@ -755,7 +831,7 @@ export default function EquipmentModule() {
           <div>
             <h1 className="text-2xl font-bold text-ink">{t.title}</h1>
             <p className="text-xs text-muted">
-              {t.countTotal.replace('{{count}}', String(quickFilter !== 'all' ? filtered.length : serverTotal))} · {t.subtitle}
+              {t.countTotal.replace('{{count}}', String(viewFiltered ? filtered.length : serverTotal))} · {t.subtitle}
             </p>
           </div>
         </div>
@@ -777,23 +853,46 @@ export default function EquipmentModule() {
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
-        {/* Active quick filter — visible outside the menu so a filtered list
-            can't read as "missing equipment"; click the X to clear. */}
-        {quickFilter !== 'all' ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 pl-3 pr-1.5 py-1.5 text-xs font-semibold text-primary">
-            {filterOptions.find(o => o.key === quickFilter)?.label}
-            <button onClick={() => setQuickFilter('all')} className="rounded-full p-0.5 hover:bg-primary/10">
-              <X size={13} />
-            </button>
-          </span>
-        ) : null}
+        {/* Sort — tap → select, again → reverse, third tap → back to Name. */}
+        <div className="relative">
+          <button
+            onClick={() => { setGroupMenuOpen(false); setSortOpen(o => !o); }}
+            className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm font-medium ${
+              sortActive ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border bg-card text-ink hover:bg-surface'
+            }`}
+          >
+            <ArrowUpDown size={15} /> {t.view.sort[view.sortBy]}
+          </button>
+          {sortOpen ? (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setSortOpen(false)} />
+              <div className="absolute right-0 z-20 mt-1 w-64 rounded-xl border border-border-soft bg-card shadow-lg p-1.5">
+                <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-faint">{tc.filters.sortBy}</p>
+                {EQUIPMENT_SORT_KEYS.map(k => {
+                  const selected = view.sortBy === k;
+                  const desc = equipmentSortIsDesc(k, selected ? view.sortDesc : null);
+                  return (
+                    <button key={k} onClick={() => applySortTap(k)}
+                      className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left ${selected ? 'bg-primary/10' : 'hover:bg-surface'}`}>
+                      <span className="flex-1">
+                        <span className={`block text-sm ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>{t.view.sort[k]}</span>
+                        {selected ? <span className="block text-[11px] text-muted">{t.view.dir[equipmentSortCaption(k, desc)]} · {sortHint}</span> : null}
+                      </span>
+                      {selected ? (desc ? <ArrowDown size={15} className="text-primary" /> : <ArrowUp size={15} className="text-primary" />) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : null}
+        </div>
         {/* Group-by + quick-filter dropdown */}
         <div className="relative">
           <button
-            onClick={() => setGroupMenuOpen(o => !o)}
+            onClick={() => { setSortOpen(false); setGroupMenuOpen(o => !o); }}
             onBlur={() => setTimeout(() => setGroupMenuOpen(false), 150)}
             className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm font-medium ${
-              groupBy === 'none' && quickFilter === 'all'
+              groupBy === 'none'
                 ? 'border-border bg-card text-ink hover:bg-surface'
                 : 'border-primary/30 bg-primary/10 text-primary'
             }`}
@@ -809,7 +908,8 @@ export default function EquipmentModule() {
                 return (
                   <button
                     key={o.key}
-                    onMouseDown={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
+                    // Tap the selected group again to clear it.
+                    onMouseDown={() => { setGroupBy(active && o.key !== 'none' ? 'none' : o.key); setGroupMenuOpen(false); }}
                     className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm ${active ? 'bg-primary/10' : 'hover:bg-surface'}`}
                   >
                     <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${active ? 'bg-primary text-white' : 'bg-border-soft text-muted'}`}>
@@ -820,27 +920,13 @@ export default function EquipmentModule() {
                   </button>
                 );
               })}
-              <p className="px-2.5 py-1.5 mt-1 border-t border-border-soft text-[11px] font-semibold uppercase tracking-wide text-faint">{t.filters.title}</p>
-              <div className="flex flex-wrap gap-1.5 px-2 pb-1.5">
-                {filterOptions.map(o => {
-                  const active = quickFilter === o.key;
-                  return (
-                    <button
-                      key={o.key}
-                      onMouseDown={() => { setQuickFilter(o.key); setGroupMenuOpen(false); }}
-                      className={`px-2.5 py-1.5 rounded-full border text-xs font-medium ${
-                        active ? 'bg-primary border-primary text-white' : 'bg-card border-border text-ink hover:bg-surface'
-                      }`}
-                    >
-                      {o.label}
-                    </button>
-                  );
-                })}
-              </div>
             </div>
           ) : null}
         </div>
       </div>
+
+      {/* Filters — expirations (any of the picked ones) + assignment. */}
+      <FilterBar filters={barFilters} addLabel={tc.filters.add} clearAllLabel={tc.filters.clearAll} className="-mt-2 mb-5" />
 
       {loading && equipment.length === 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">

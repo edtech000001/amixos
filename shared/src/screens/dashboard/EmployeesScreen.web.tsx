@@ -5,14 +5,14 @@
 // API as EmployeesScreen.tsx so the web page wrapper is untouched and the
 // bundler resolves this .web.tsx variant automatically.
 
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Plus,
   Clock,
   ClipboardList,
   UserCheck,
   Pencil, Trash2,
-  Search, X, SlidersHorizontal, ChevronDown, Check, ListChecks } from 'lucide-react';
+  Search, X, Check, ListChecks, ArrowUpDown, ArrowUp, ArrowDown, Layers } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { roleLabel } from '../../lib/permissions';
@@ -21,6 +21,20 @@ import { splitMultiValue } from '../../lib/fieldTemplates';
 import { SkeletonList } from '../../ui/Skeleton';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { Tooltip } from '../../ui/Tooltip';
+import { FilterBar, CheckListFilterPanel, type BarFilter } from '../../ui/FilterBar.web';
+import { cycleSort, sortTapClears } from '../../lib/sortCycle';
+import {
+  EMPLOYEE_SORT_KEYS,
+  EMPLOYEE_GROUP_KEYS,
+  EMPLOYEES_VIEW_KEY,
+  employeeSortIsDesc,
+  employeeSortCaption,
+  sortEmployees,
+  groupEmployees,
+  parseEmployeesView,
+  type EmployeeSortKey,
+  type EmployeeGroupKey,
+} from '../../lib/employeesView';
 
 export interface EmployeeListItem {
   id: string;
@@ -45,6 +59,8 @@ export interface EmployeeListItem {
    *  columns is decided by customFieldDefs — stale keys from deleted
    *  fields are ignored. */
   customFields?: Record<string, string>;
+  /** For the "Recently added" sort. */
+  createdAt?: string | null;
 }
 
 /** A filterable column: pick the field, then check the values you want. */
@@ -111,6 +127,8 @@ export interface EmployeesScreenProps {
    *  filter panel so deleted fields never appear and labels are the real
    *  field names, not the snake_case keys. */
   customFieldDefs?: CustomFieldDef[];
+  /** Active business — scopes the saved sort/group per business. */
+  businessId?: string;
 }
 
 type Tab = 'empleados' | 'horas' | 'historial';
@@ -131,6 +149,7 @@ export function EmployeesScreen({
   customFieldDefs,
   modalsSlot,
   loading,
+  businessId,
 }: EmployeesScreenProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.employees;
@@ -143,17 +162,35 @@ export function EmployeesScreen({
   // Column-value filters (AppSheet-style): pick a field, then check the
   // values you want. Values come from the data itself, so custom fields and
   // any set of options work without hardcoding. AND across fields, OR within.
-  const [filterOpen, setFilterOpen] = useState(false);
   const [filterSel, setFilterSel] = useState<Record<string, string[]>>({});
-  const [openField, setOpenField] = useState<string | null>(null);
-  const [valueSearch, setValueSearch] = useState('');
+  // Sort + group (header dropdowns), persisted per business (employeesView.ts).
+  // Restored after mount — localStorage during render breaks hydration.
+  const [sortBy, setSortBy] = useState<EmployeeSortKey>('name');
+  const [sortDesc, setSortDesc] = useState<boolean | null>(null);
+  const [groupBy, setGroupBy] = useState<EmployeeGroupKey>('none');
+  const [viewMenu, setViewMenu] = useState<'sort' | 'group' | null>(null);
+  const [viewHydrated, setViewHydrated] = useState(false);
+  const viewKey = businessId ? `${EMPLOYEES_VIEW_KEY}.${businessId}` : EMPLOYEES_VIEW_KEY;
+  useEffect(() => {
+    let raw: string | null = null;
+    try { raw = window.localStorage.getItem(viewKey); } catch { /* private mode */ }
+    const v = parseEmployeesView(raw);
+    setSortBy(v.sortBy); setSortDesc(v.sortDesc); setGroupBy(v.groupBy);
+    setViewHydrated(true);
+  }, [viewKey]);
+  useEffect(() => {
+    if (!viewHydrated) return;
+    try { window.localStorage.setItem(viewKey, JSON.stringify({ sortBy, sortDesc, groupBy })); } catch { /* private mode */ }
+  }, [viewHydrated, viewKey, sortBy, sortDesc, groupBy]);
+  const sortDefaultDesc = (k: EmployeeSortKey) => employeeSortIsDesc(k, null);
+  // Tap → select, again → reverse, third tap → back to Name (sortCycle).
+  const applySortTap = (k: EmployeeSortKey) => {
+    const n = cycleSort(k, sortBy, sortDesc, sortDefaultDesc, 'name');
+    setSortBy(n.sortBy); setSortDesc(n.sortDesc);
+  };
+  const sortHint = sortTapClears(sortBy, sortDesc, sortDefaultDesc, 'name') ? full.common.filters.tapToClear : full.common.filters.tapToReverse;
   const filtersActive = Object.values(filterSel).some(v => v.length > 0);
   const clearFilters = () => setFilterSel({});
-  const toggleFilterValue = (fieldKey: string, v: string) =>
-    setFilterSel(prev => {
-      const cur = prev[fieldKey] ?? [];
-      return { ...prev, [fieldKey]: cur.includes(v) ? cur.filter(x => x !== v) : [...cur, v] };
-    });
 
   // roleLabel() covers EVERY system role plus custom ones (business_roles).
   // A local map here listed only owner/manager/worker, so 'field' and 'office'
@@ -221,6 +258,43 @@ export function EmployeesScreen({
   }, [employees, search, filterFields, filterSel, statusView]);
   // Row-hiding filters (search + field filters) — the Activos/Inactivos
   // segment is a view, not a filter, so the empty-state clear leaves it alone.
+  const tv = t.view;
+  const tf = full.common.filters;
+  const sections = useMemo(
+    () => groupEmployees(sortEmployees(filteredEmployees, sortBy, sortDesc), groupBy,
+      (g, v) => (g === 'role' ? roleLabel(v, lang) : PAY_TYPES[v] ?? v)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filteredEmployees, sortBy, sortDesc, groupBy, lang],
+  );
+  // Visible order (shift-click ranges follow what's on screen).
+  const orderedEmployees = useMemo(() => sections.flatMap(sct => sct.data), [sections]);
+  const orderIndex = useMemo(() => new Map(orderedEmployees.map((e, i) => [e.id, i])), [orderedEmployees]);
+  // One bar filter per column with something to choose between.
+  const barFilters: BarFilter[] = filterFields.flatMap((f): BarFilter[] => {
+    const sel = filterSel[f.key] ?? [];
+    const values = valueCounts(f);
+    if (values.length < 2 && !sel.length) return [];
+    const labelOf = (v: string) => (v === '' ? t.filter.empty : f.labelOf(v));
+    return [{
+      key: f.key,
+      label: f.label,
+      active: sel.length > 0,
+      value: sel.length > 2 ? `${labelOf(sel[0])}, ${labelOf(sel[1])} +${sel.length - 2}` : sel.map(labelOf).join(', '),
+      onRemove: () => setFilterSel(prev => ({ ...prev, [f.key]: [] })),
+      panel: close => (
+        <CheckListFilterPanel
+          title={f.label}
+          options={values.map(([v, count]) => ({ key: v, label: labelOf(v), count, muted: v === '' }))}
+          value={sel}
+          onApply={keys => setFilterSel(prev => ({ ...prev, [f.key]: keys }))}
+          onClose={close}
+          cancelLabel={tf.cancel}
+          applyLabel={tf.apply}
+          searchPlaceholder={t.filter.searchValue}
+        />
+      ),
+    }];
+  });
   const narrowed = search.trim() !== '' || filtersActive;
   const clearNarrowing = () => { setSearch(''); clearFilters(); };
 
@@ -242,7 +316,7 @@ export function EmployeesScreen({
       const [a, b] = lastIdxRef.current < index ? [lastIdxRef.current, index] : [index, lastIdxRef.current];
       setSelectedIds(prev => {
         const n = new Set(prev);
-        for (let i = a; i <= b; i++) n.add(filteredEmployees[i].id);
+        for (let i = a; i <= b; i++) if (orderedEmployees[i]) n.add(orderedEmployees[i].id);
         return n;
       });
     } else {
@@ -350,89 +424,67 @@ export function EmployeesScreen({
             </button>
           ) : null}
         </div>
-        {/* Column filters — facet chips in a dropdown (like Group menus). */}
+        {/* Sort — tap → select, again → reverse, third tap → back to Name. */}
         <div className="relative shrink-0">
           <button
             type="button"
-            onClick={() => setFilterOpen(o => !o)}
+            onClick={() => setViewMenu(m => (m === 'sort' ? null : 'sort'))}
             className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
-              filtersActive ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
+              sortBy !== 'name' || sortDesc === true ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
             }`}
           >
-            <SlidersHorizontal size={15} /> {t.filter.button}
+            <ArrowUpDown size={15} /> {tv.sort[sortBy]}
           </button>
-          {filterOpen ? (
+          {viewMenu === 'sort' ? (
             <>
-              <div className="fixed inset-0 z-10" onClick={() => setFilterOpen(false)} />
-              <div className="absolute right-0 top-full mt-2 z-20 w-80 bg-card rounded-2xl border border-border-soft shadow-lg py-2 max-h-[28rem] overflow-y-auto">
-                {filterFields.map(f => {
-                  const sel = filterSel[f.key] ?? [];
-                  const open = openField === f.key;
-                  const values = open ? valueCounts(f) : [];
-                  const vq = norm(valueSearch.trim());
-                  const shown = vq
-                    ? values.filter(([v]) => norm(v === '' ? t.filter.empty : f.labelOf(v)).includes(vq))
-                    : values;
+              <div className="fixed inset-0 z-10" onClick={() => setViewMenu(null)} />
+              <div className="absolute right-0 top-full mt-2 z-20 w-64 bg-card rounded-2xl border border-border-soft shadow-lg p-2">
+                <p className="text-[11px] font-semibold text-faint uppercase tracking-wider px-2 pt-1 pb-2">{tf.sortBy}</p>
+                {EMPLOYEE_SORT_KEYS.map(k => {
+                  const selected = sortBy === k;
+                  const desc = employeeSortIsDesc(k, selected ? sortDesc : null);
                   return (
-                    <div key={f.key} className="border-b border-border-soft last:border-0">
-                      <button
-                        type="button"
-                        onClick={() => { setOpenField(open ? null : f.key); setValueSearch(''); }}
-                        className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-ink hover:bg-surface"
-                      >
-                        <span className="flex items-center gap-2">
-                          {f.label}
-                          {sel.length ? (
-                            <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-white text-[10px] font-bold inline-flex items-center justify-center">
-                              {sel.length}
-                            </span>
-                          ) : null}
-                        </span>
-                        <ChevronDown size={15} className={`text-faint transition-transform ${open ? 'rotate-180' : ''}`} />
-                      </button>
-                      {open ? (
-                        <div className="px-2 pb-2">
-                          {values.length > 8 ? (
-                            <input
-                              value={valueSearch}
-                              onChange={ev => setValueSearch(ev.target.value)}
-                              placeholder={t.filter.searchValue}
-                              className="w-full mb-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                            />
-                          ) : null}
-                          <div className="max-h-52 overflow-y-auto">
-                            {shown.map(([v, count]) => {
-                              const on = sel.includes(v);
-                              return (
-                                <button
-                                  key={v || '(empty)'}
-                                  type="button"
-                                  onClick={() => toggleFilterValue(f.key, v)}
-                                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm hover:bg-surface text-left"
-                                >
-                                  <span className={`w-4 h-4 rounded border inline-flex items-center justify-center shrink-0 ${on ? 'bg-primary border-primary' : 'border-border bg-card'}`}>
-                                    {on ? <Check size={11} className="text-white" /> : null}
-                                  </span>
-                                  <span className={`flex-1 truncate ${v === '' ? 'italic text-faint' : 'text-ink'}`}>
-                                    {v === '' ? t.filter.empty : f.labelOf(v)}
-                                  </span>
-                                  <span className="text-xs text-faint">{count}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
+                    <button key={k} type="button" onClick={() => applySortTap(k)}
+                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left ${selected ? 'bg-primary/10' : 'hover:bg-surface'}`}>
+                      <span className="flex-1">
+                        <span className={`block text-sm ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>{tv.sort[k]}</span>
+                        {selected ? <span className="block text-[11px] text-muted">{tv.dir[employeeSortCaption(k, desc)]} · {sortHint}</span> : null}
+                      </span>
+                      {selected ? (desc ? <ArrowDown size={15} className="text-primary" /> : <ArrowUp size={15} className="text-primary" />) : null}
+                    </button>
                   );
                 })}
-                {filtersActive ? (
-                  <div className="px-2 pt-2">
-                    <button type="button" onClick={clearFilters} className="w-full py-2 rounded-xl bg-border-soft text-sm font-semibold text-ink hover:bg-border">
-                      {t.filter.clear}
+              </div>
+            </>
+          ) : null}
+        </div>
+        {/* Group — tap the selected one again to clear it. */}
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setViewMenu(m => (m === 'group' ? null : 'group'))}
+            className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
+              groupBy !== 'none' ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
+            }`}
+          >
+            <Layers size={15} /> {tf.groupBy}
+          </button>
+          {viewMenu === 'group' ? (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setViewMenu(null)} />
+              <div className="absolute right-0 top-full mt-2 z-20 w-56 bg-card rounded-2xl border border-border-soft shadow-lg p-2">
+                {EMPLOYEE_GROUP_KEYS.map(k => {
+                  const selected = groupBy === k;
+                  return (
+                    <button key={k} type="button"
+                      onClick={() => { setGroupBy(selected ? 'none' : k); setViewMenu(null); }}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm text-left ${selected ? 'bg-primary/10 text-primary font-semibold' : 'text-ink hover:bg-surface'}`}>
+                      {tv.group[k]}
+                      {selected ? <Check size={14} /> : null}
                     </button>
-                  </div>
-                ) : null}              </div>
+                  );
+                })}
+              </div>
             </>
           ) : null}
         </div>
@@ -449,6 +501,9 @@ export function EmployeesScreen({
           </button>
         ) : null}
         </div>
+        {/* Column filters — removable chips + "＋ Filter" (values come from the
+            data, so custom fields work too). AND across fields, OR within. */}
+        <FilterBar filters={barFilters} addLabel={tf.add} clearAllLabel={tf.clearAll} className="mb-4" />
         {/* Active/Inactive segment — the list shows one group at a time (active
             by default). Hidden while everyone is active: nothing to switch to. */}
         {employees.length - activeCount > 0 ? (
@@ -512,7 +567,16 @@ export function EmployeesScreen({
           <FilteredEmpty onClear={clearNarrowing} icon={<UserCheck size={40} className="text-faint" />} />
         ) : (
           <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
-            {filteredEmployees.map((e, i) => {
+            {sections.map(sct => (
+            <Fragment key={sct.key || 'all'}>
+            {sct.title ? (
+              <div className="flex items-center gap-2 px-5 py-1.5 bg-surface border-b border-border-soft">
+                <span className="text-xs font-bold text-muted uppercase tracking-wider">{sct.title}</span>
+                <span className="text-xs font-bold text-faint">{sct.data.length}</span>
+              </div>
+            ) : null}
+            {sct.data.map(e => {
+              const i = orderIndex.get(e.id) ?? 0;
               // App-access / inactive badges — rendered in their own column on
               // wide windows, under the name on small ones.
               const badges = (!e.active || e.access?.kind === 'active' || e.access?.kind === 'invited') ? (
@@ -543,7 +607,7 @@ export function EmployeesScreen({
                 onClick={(ev) => rowClick(ev, e.id, i)}
                 className={`[content-visibility:auto] [contain-intrinsic-size:auto_72px] w-full text-left flex items-center gap-3 px-5 py-4 hover:bg-surface transition-colors select-none ${
                   selectedIds.has(e.id) ? 'bg-primary/5' : ''
-                } ${i < filteredEmployees.length - 1 ? 'border-b border-border-soft' : ''}`}
+                } ${i < orderedEmployees.length - 1 ? 'border-b border-border-soft' : ''}`}
               >
                 {selectionMode ? (
                   <div className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 ${
@@ -589,6 +653,8 @@ export function EmployeesScreen({
               </button>
               );
             })}
+            </Fragment>
+            ))}
           </div>
         )}
         </>

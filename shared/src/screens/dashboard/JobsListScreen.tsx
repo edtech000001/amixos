@@ -38,6 +38,7 @@ import {
   BarChart3,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { cycleSort, sortTapClears } from '../../lib/sortCycle';
 import { useThemeColors } from '../../theme';
 import { Input } from '../../ui/Input';
 import { FilterSheet, FilterSection, FilterChip, ChipWrap, DateRangeFields, FilterButton, showResultsLabel } from '../../ui/FilterSheet';
@@ -335,6 +336,13 @@ export function JobsListScreen({
   const [sortBy, setSortBy] = useState<JobSortKey>('recent');
   // null = the sort's default direction (dates newest-first — jobSort.ts).
   const [sortDesc, setSortDesc] = useState<boolean | null>(null);
+  // Sort chips: tap → select, again → reverse, third tap → back to 'recent' (sortCycle).
+  const sortDefaultDesc = (k: JobSortKey) => sortIsDesc(k, null);
+  const applySortTap = (k: JobSortKey) => {
+    const n = cycleSort(k, sortBy, sortDesc, sortDefaultDesc, 'recent');
+    setSortBy(n.sortBy); setSortDesc(n.sortDesc);
+  };
+  const sortHint = sortTapClears(sortBy, sortDesc, sortDefaultDesc, 'recent') ? full.common.filters.tapToClear : full.common.filters.tapToReverse;
   const [groupBy, setGroupBy] = useState<JobGroupKey>('none');
   // Scheduled-date range filter (yyyy-mm-dd). null = open-ended that side.
   const [dateFrom, setDateFrom] = useState<string | null>(null);
@@ -1454,18 +1462,19 @@ export function JobsListScreen({
                 Icon={SORT_ICON[k]}
                 on={selected}
                 // New sort → its default direction; the active one again → reverse.
-                onPress={() => (selected ? setSortDesc(!desc) : (setSortBy(k), setSortDesc(null)))}
+                onPress={() => applySortTap(k)}
                 leading={selected ? (desc ? <ArrowDown size={15} color={c.primary} /> : <ArrowUp size={15} color={c.primary} />) : undefined}
               />
             );
           })}
         </ChipWrap>
+        <Text className="text-xs text-faint mt-2">{sortHint}</Text>
       </FilterSection>
 
       <FilterSection title={tf.groupBy}>
         <ChipWrap>
           {JOB_GROUP_KEYS.map(k => (
-            <FilterChip key={k} label={t.sort.group[k]} Icon={GROUP_ICON[k]} on={groupBy === k} onPress={() => setGroupBy(k)} />
+            <FilterChip key={k} label={t.sort.group[k]} Icon={GROUP_ICON[k]} on={groupBy === k} onPress={() => setGroupBy(groupBy === k ? 'none' : k)} />
           ))}
         </ChipWrap>
       </FilterSection>

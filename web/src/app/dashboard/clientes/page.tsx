@@ -20,6 +20,8 @@ import {
   fetchClientCount,
   clientGroupNeedsAll,
   type ClientsCursor,
+  clientSortIsAlpha,
+  type ClientsQueryParams,
 } from '@amixos/shared/lib/clientsQuery';
 import { fetchClientLocations, setClientLocations as saveClientLocations, clientIdsAtLocation, clientsWithAnyLocation, type ClientLocation } from '@amixos/shared/lib/locations';
 import { usePersistedSearch } from '@amixos/shared/lib/usePersistedSearch';
@@ -31,6 +33,7 @@ import { useSwr } from '@amixos/shared/lib/swrCache';
 import {
   ClientsListScreen,
   type ClientListItem,
+  type ClientsFiltersChange,
 } from '@amixos/shared/screens/dashboard/ClientsListScreen';
 import {
   ClientFormModal,
@@ -62,6 +65,10 @@ interface Client {
   zip_code: string | null;
   notes: string | null;
   custom_fields: Record<string, string> | null;
+  // Activity stats (migration 252).
+  balance_due?: number | null;
+  lifetime_billed?: number | null;
+  last_invoice_date?: string | null;
   created_at: string;
   updated_at: string;
   /** Contact people, embedded on the page query (server mode). */
@@ -71,6 +78,10 @@ interface Client {
 // Full page includes contact people (searched + shown under a matched row).
 // A page is ≤50 rows, so the nested join is cheap. The load-all path (group-by)
 // isn't a search, so it skips contacts entirely to stay light at scale.
+/** The query a list view runs: search + sort/filters (+ an A–Z jump). */
+type ClientsBase = { businessId: string; search: string; startAtLetter?: string | null }
+  & Pick<ClientsQueryParams, 'sortBy' | 'sortDesc' | 'quick' | 'dateField' | 'dateFrom' | 'dateTo'>;
+
 const CLIENT_PAGE_SELECT = '*, client_contacts(name, role, is_primary)';
 const CLIENT_GROUP_SELECT = '*';
 
@@ -125,15 +136,16 @@ export default function ClientesPage() {
   const cursorRef = useRef<ClientsCursor | null>(null);
   // The last base params (search) so a re-run (branch switch, mutation) reuses
   // them; excludeIds is injected fresh each call from the ref below.
-  const paramsRef = useRef<{ businessId: string; search: string; startAtLetter?: string | null } | null>(null);
+  const paramsRef = useRef<ClientsBase | null>(null);
   // See the mobile route: a jump replaces the first page, so SWR must stop
   // owning the view or the cached page is restored on the next revalidate.
   const [jumpLetter, setJumpLetter] = useState<string | null>(null);
   const loadAllRef = useRef(false);
 
   // ── SWR default view (no search, name grouping): instant from cache ───────
-  const [filters, setFilters] = useState<{ search: string; groupBy: string } | null>(null);
-  const isDefaultFilters = (f: { search: string; groupBy: string }) => !f.search && !clientGroupNeedsAll(f.groupBy);
+  const [filters, setFilters] = useState<ClientsFiltersChange | null>(null);
+  const isDefaultFilters = (f: ClientsFiltersChange) => !f.search && !clientGroupNeedsAll(f.groupBy)
+    && !f.quick.length && !f.dateFrom && !f.dateTo && clientSortIsAlpha(f.sortBy, f.sortDesc);
   const defaultActive = !!business && !!filters && isDefaultFilters(filters) && !jumpLetter;
 
   // Branch scoping: clients restricted to OTHER branches are hidden. Restricted
@@ -161,7 +173,7 @@ export default function ClientesPage() {
   useEffect(() => { void loadMeta(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [business, locale]);
 
   const runQuery = async (
-    base: { businessId: string; search: string; startAtLetter?: string | null },
+    base: ClientsBase,
     loadAll = false,
   ) => {
     const seq = ++loadSeqRef.current;
@@ -269,12 +281,15 @@ export default function ClientesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [excludeIds]);
 
-  const handleFiltersChange = (f: { search: string; groupBy: string }) => {
+  const handleFiltersChange = (f: ClientsFiltersChange) => {
     if (!business) return;
     setFilters(f);
     setJumpLetter(null); // searching or regrouping starts from the top again
     if (isDefaultFilters(f)) return; // SWR owns the default view
-    void runQuery({ businessId: business.id, search: f.search }, clientGroupNeedsAll(f.groupBy));
+    void runQuery({
+      businessId: business.id, search: f.search,
+      sortBy: f.sortBy, sortDesc: f.sortDesc, quick: f.quick, dateField: f.dateField, dateFrom: f.dateFrom, dateTo: f.dateTo,
+    }, clientGroupNeedsAll(f.groupBy));
   };
 
   // New client defaults to ALL branches selected = shared everywhere; an edited
@@ -444,6 +459,10 @@ export default function ClientesPage() {
       .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
       .map(ct => ({ name: ct.name, role: ct.role })),
     customFields: c.custom_fields,
+    balanceDue: c.balance_due,
+    lifetimeBilled: c.lifetime_billed,
+    lastInvoiceDate: c.last_invoice_date,
+    createdAt: c.created_at,
   })), [rawClients]);
 
   // In server mode the loaded rows ARE the matching set, so select-all /

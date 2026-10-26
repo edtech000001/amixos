@@ -550,6 +550,16 @@ export type DashboardDict = {
       noValue: string;
     };
     importBtn: string;
+    /** Clients list sort / filters / row stats (migration 252). */
+    listTools: {
+      sortTitle: string;
+      sort: { name: string; recent: string; invoiced: string; balance: string; billed: string; updated: string };
+      dir: { az: string; za: string; newest: string; oldest: string; highest: string; lowest: string };
+      dateField: string;
+      fields: { added: string; invoiced: string };
+      quick: { recent_added: string; recent_invoiced: string; owes: string; overdue: string; active_jobs: string; inactive: string; no_email: string };
+      stat: { owes: string; billed: string; lastInvoiced: string; neverInvoiced: string; added: string };
+    };
     dupTitle: string; dupBody: string;
     dupMerge: string; dupMergeHint: string;
     dupReplace: string; dupReplaceHint: string;
@@ -1344,6 +1354,13 @@ export type DashboardDict = {
       empty: string;
       searchValue: string;
       clear: string;
+    };
+    /** Team list sort / group (Filters sheet + web filter bar). */
+    view: {
+      sort: { name: string; recent: string; payRate: string };
+      dir: { az: string; za: string; newest: string; oldest: string; highest: string; lowest: string };
+      group: { none: string; role: string; payType: string };
+      more: string;
     };
     addBtn: string;
     deleteBtn: string;
@@ -2789,6 +2806,14 @@ export type DashboardDict = {
         policyExpired: string;
         policyExpiring: string;
       };
+      /** Sort / assignment / expiration section (Filters sheet + web bar). */
+      view: {
+        sort: { name: string; recent: string; plate: string; policy: string };
+        dir: { az: string; za: string; newest: string; oldest: string; soonest: string; latest: string };
+        expirations: string;
+        assignment: string;
+        assigned: { any: string; assigned: string; unassigned: string };
+      };
     };
     rentals: {
       title: string;
@@ -4007,6 +4032,15 @@ export const dashboard: Record<Locale, DashboardDict> = {
         noValue: 'Sin valor',
       },
       importBtn: 'Importar clientes desde CSV',
+      listTools: {
+        sortTitle: 'Ordenar clientes',
+        sort: { name: 'Nombre', recent: 'Agregados recientemente', invoiced: 'Última factura', balance: 'Saldo pendiente', billed: 'Total facturado', updated: 'Editados recientemente' },
+        dir: { az: 'A → Z', za: 'Z → A', newest: 'Más recientes primero', oldest: 'Más antiguos primero', highest: 'Mayor primero', lowest: 'Menor primero' },
+        dateField: '¿Qué fecha?',
+        fields: { added: 'Agregado', invoiced: 'Última factura' },
+        quick: { recent_added: 'Agregados recientemente', recent_invoiced: 'Facturados recientemente', owes: 'Con saldo pendiente', overdue: 'Facturas vencidas', active_jobs: 'Trabajos activos', inactive: 'Inactivos (6+ meses)', no_email: 'Sin correo' },
+        stat: { owes: 'Debe {{amount}}', billed: 'Facturado {{amount}}', lastInvoiced: 'Últ. factura {{date}}', neverInvoiced: 'Sin facturas', added: 'Agregado {{date}}' },
+      },
       dupTitle: 'Algunos clientes ya existen',
       dupBody: '{{count}} de {{total}} ya están en este negocio. ¿Qué hacemos con esos?',
       dupMerge: 'Completar lo que falta',
@@ -4781,6 +4815,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         empty: '(Vacío)',
         searchValue: 'Buscar valor…',
         clear: 'Limpiar filtros',
+      },
+      view: {
+        sort: { name: 'Nombre', recent: 'Agregados recientemente', payRate: 'Tarifa de pago' },
+        dir: { az: 'A → Z', za: 'Z → A', newest: 'Más recientes primero', oldest: 'Más antiguos primero', highest: 'Mayor primero', lowest: 'Menor primero' },
+        group: { none: 'Ninguno', role: 'Rol', payType: 'Tipo de pago' },
+        more: '+{{count}} más',
       },
       addBtn: 'Agregar',
       deleteBtn: 'Eliminar empleado',
@@ -6181,6 +6221,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
             policyExpired: 'Póliza vencida',
             policyExpiring: 'Póliza por vencer',
           },
+          view: {
+            sort: { name: 'Nombre', recent: 'Agregados recientemente', plate: 'Vence la placa', policy: 'Vence la póliza' },
+            dir: { az: 'A → Z', za: 'Z → A', newest: 'Más recientes primero', oldest: 'Más antiguos primero', soonest: 'Vence antes primero', latest: 'Vence después primero' },
+            expirations: 'Vencimientos',
+            assignment: 'Asignación',
+            assigned: { any: 'Todos', assigned: 'Asignados', unassigned: 'Sin asignar' },
+          },
         },
       rentals: {
         title: 'Propiedades en renta',
@@ -7432,6 +7479,15 @@ export const dashboard: Record<Locale, DashboardDict> = {
         noValue: 'No value',
       },
       importBtn: 'Import clients from CSV',
+      listTools: {
+        sortTitle: 'Sort clients',
+        sort: { name: 'Name', recent: 'Recently added', invoiced: 'Last invoiced', balance: 'Balance owed', billed: 'Total billed', updated: 'Recently updated' },
+        dir: { az: 'A → Z', za: 'Z → A', newest: 'Newest first', oldest: 'Oldest first', highest: 'Highest first', lowest: 'Lowest first' },
+        dateField: 'Which date?',
+        fields: { added: 'Added', invoiced: 'Last invoiced' },
+        quick: { recent_added: 'Recently added', recent_invoiced: 'Recently invoiced', owes: 'Owes money', overdue: 'Overdue invoices', active_jobs: 'Active jobs', inactive: 'Inactive (6+ months)', no_email: 'No email' },
+        stat: { owes: 'Owes {{amount}}', billed: 'Billed {{amount}}', lastInvoiced: 'Last invoice {{date}}', neverInvoiced: 'No invoices', added: 'Added {{date}}' },
+      },
       dupTitle: 'Some clients already exist',
       dupBody: '{{count}} of {{total}} are already in this business. What should happen to those?',
       dupMerge: 'Fill in what is missing',
@@ -8203,6 +8259,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
         empty: '(Empty)',
         searchValue: 'Search value…',
         clear: 'Clear filters',
+      },
+      view: {
+        sort: { name: 'Name', recent: 'Recently added', payRate: 'Pay rate' },
+        dir: { az: 'A → Z', za: 'Z → A', newest: 'Newest first', oldest: 'Oldest first', highest: 'Highest first', lowest: 'Lowest first' },
+        group: { none: 'None', role: 'Role', payType: 'Pay type' },
+        more: '+{{count}} more',
       },
       addBtn: 'Add',
       deleteBtn: 'Delete employee',
@@ -9602,6 +9664,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
             plateExpiring: 'Plate expiring soon',
             policyExpired: 'Policy expired',
             policyExpiring: 'Policy expiring soon',
+          },
+          view: {
+            sort: { name: 'Name', recent: 'Recently added', plate: 'Plate expiration', policy: 'Policy expiration' },
+            dir: { az: 'A → Z', za: 'Z → A', newest: 'Newest first', oldest: 'Oldest first', soonest: 'Expiring soonest first', latest: 'Expiring latest first' },
+            expirations: 'Expirations',
+            assignment: 'Assignment',
+            assigned: { any: 'Any', assigned: 'Assigned', unassigned: 'Unassigned' },
           },
         },
       rentals: {

@@ -8,14 +8,27 @@
 import { Fragment, memo, useEffect, useMemo, useState, type ReactNode, useRef } from 'react';
 import { SkeletonRow } from '../../ui/Skeleton';
 import { Plus, Search, Upload, Trash2, Phone, Mail, MapPin, Pencil, User, Users, X, Layers, Check, ListChecks,
-  AlertTriangle,
+  AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, Calendar, UserPlus, Receipt, CircleDollarSign, AlertCircle, Briefcase, Moon, MailX,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
+import { cycleSort, sortTapClears } from '../../lib/sortCycle';
 import { clientMatchesSearch, matchingContacts } from '../../lib/clientSearch';
 import { groupClients, parseClientGroupKey, CLIENTS_GROUP_KEY, type ClientGroupKey } from '../../lib/clientSections';
 import { usStateName } from '../../lib/usStates';
 import { Tooltip } from '../../ui/Tooltip';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
+import { FilterBar, DateFilterPanel, dateRangeChipText, type BarFilter } from '../../ui/FilterBar.web';
+import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset } from '../../lib/dateRangePresets';
+import {
+  CLIENT_SORT_KEYS,
+  clientSortIsDesc,
+  clientSortIsAlpha,
+  clientSortCaption,
+  type ClientDateField,
+  type ClientQuickFilter,
+  type ClientSortKey,
+} from '../../lib/clientsQuery';
+import { CLIENTS_FILTERS_KEY, parseClientsFilters, clientRowStat, type ClientRowStats } from '../../lib/clientsFilters';
 
 export interface ClientListItem {
   id: string;
@@ -30,7 +43,35 @@ export interface ClientListItem {
   contacts?: { name: string; role: string | null }[];
   /** Custom field values (key → value) — used for "group by custom field". */
   customFields?: Record<string, string> | null;
+  /** Activity stats (migration 252) — shown on the row for the active sort. */
+  balanceDue?: ClientRowStats['balanceDue'];
+  lifetimeBilled?: ClientRowStats['lifetimeBilled'];
+  lastInvoiceDate?: ClientRowStats['lastInvoiceDate'];
+  createdAt?: ClientRowStats['createdAt'];
 }
+
+/** What the screen reports up in server mode (same as the native screen). */
+export interface ClientsFiltersChange {
+  search: string;
+  groupBy: ClientGroupKey;
+  sortBy: ClientSortKey;
+  sortDesc: boolean | null;
+  quick: ClientQuickFilter[];
+  dateField: ClientDateField;
+  dateFrom: string | null;
+  dateTo: string | null;
+}
+
+/** One-tap filters in the bar. */
+const CLIENT_QUICK_CHIPS: { key: ClientQuickFilter; Icon: typeof User }[] = [
+  { key: 'recent_added', Icon: UserPlus },
+  { key: 'recent_invoiced', Icon: Receipt },
+  { key: 'owes', Icon: CircleDollarSign },
+  { key: 'overdue', Icon: AlertCircle },
+  { key: 'active_jobs', Icon: Briefcase },
+  { key: 'inactive', Icon: Moon },
+  { key: 'no_email', Icon: MailX },
+];
 
 export interface ClientsListScreenProps {
   loading: boolean;
@@ -74,7 +115,7 @@ export interface ClientsListScreenProps {
    *  like "no results". */
   loadError?: boolean;
   onRetryLoad?: () => void;
-  onFiltersChange?: (f: { search: string; groupBy: ClientGroupKey }) => void;
+  onFiltersChange?: (f: ClientsFiltersChange) => void;
 }
 
 export function ClientsListScreen({
@@ -117,10 +158,89 @@ export function ClientsListScreen({
   const [groupHydrated, setGroupHydrated] = useState(false);
   // Scope the group-by per business so it doesn't carry across companies.
   const groupKey = businessId ? `${CLIENTS_GROUP_KEY}.${businessId}` : CLIENTS_GROUP_KEY;
+  // Sort, filters and date range (migration 252) — restored with the group.
+  const [sortBy, setSortBy] = useState<ClientSortKey>('name');
+  const [sortDesc, setSortDesc] = useState<boolean | null>(null);
+  // Sort chips: tap → select, again → reverse, third tap → back to 'name' (sortCycle).
+  const sortDefaultDesc = (k: ClientSortKey) => clientSortIsDesc(k, null);
+  const applySortTap = (k: ClientSortKey) => {
+    const n = cycleSort(k, sortBy, sortDesc, sortDefaultDesc, 'name');
+    setSortBy(n.sortBy); setSortDesc(n.sortDesc);
+  };
+  const sortHint = sortTapClears(sortBy, sortDesc, sortDefaultDesc, 'name') ? full.common.filters.tapToClear : full.common.filters.tapToReverse;
+  const [sortOpen, setSortOpen] = useState(false);
+  const [quick, setQuick] = useState<ClientQuickFilter[]>([]);
+  const [dateField, setDateField] = useState<ClientDateField>('added');
+  const [dateFrom, setDateFrom] = useState<string | null>(null);
+  const [dateTo, setDateTo] = useState<string | null>(null);
+  const [datePreset, setDatePreset] = useState<AppliedDatePreset | null>(null);
+  const filtersKey = businessId ? `${CLIENTS_FILTERS_KEY}.${businessId}` : CLIENTS_FILTERS_KEY;
   useEffect(() => {
-    if (typeof window !== 'undefined') setGroupBy(parseClientGroupKey(window.localStorage.getItem(groupKey)));
+    if (typeof window !== 'undefined') {
+      setGroupBy(parseClientGroupKey(window.localStorage.getItem(groupKey)));
+      let raw: string | null = null;
+      try { raw = window.localStorage.getItem(filtersKey); } catch { /* private mode */ }
+      const f = parseClientsFilters(raw);
+      setSortBy(f.sortBy); setSortDesc(f.sortDesc); setQuick(f.quick);
+      setDateField(f.dateField); setDateFrom(f.dateFrom); setDateTo(f.dateTo); setDatePreset(f.datePreset);
+    }
     setGroupHydrated(true);
-  }, [groupKey]);
+  }, [groupKey, filtersKey]);
+  useEffect(() => {
+    if (!groupHydrated) return;
+    try {
+      window.localStorage.setItem(filtersKey, JSON.stringify({ sortBy, sortDesc, quick, dateField, dateFrom, dateTo, datePreset }));
+    } catch { /* private mode */ }
+  }, [groupHydrated, filtersKey, sortBy, sortDesc, quick, dateField, dateFrom, dateTo, datePreset]);
+  const tl = t.listTools;
+  const tf = full.common.filters;
+  const tdate = full.dashboard.jobs.dateFilter;
+  const dateLocale = locale === 'es' ? 'es-MX' : 'en-US';
+  const dateRangePresets = buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets);
+  const rolledPreset = rollDatePreset(dateRangePresets, datePreset, dateFrom, dateTo);
+  useEffect(() => {
+    if (!rolledPreset) return;
+    setDateFrom(rolledPreset.from); setDateTo(rolledPreset.to); setDatePreset(rolledPreset);
+  }, [rolledPreset?.key, rolledPreset?.from, rolledPreset?.to]);
+  const alpha = clientSortIsAlpha(sortBy, sortDesc);
+  const dateActive = !!dateFrom || !!dateTo;
+  const toggleQuick = (k: ClientQuickFilter) =>
+    setQuick(prev => (prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]));
+  const barFilters: BarFilter[] = [
+    {
+      key: 'date',
+      label: tf.date,
+      Icon: Calendar,
+      active: dateActive,
+      value: `${tl.fields[dateField]} · ${dateRangeChipText(dateFrom, dateTo, dateRangePresets.find(p => p.key === datePreset?.key)?.label, dateLocale)}`,
+      onRemove: () => { setDateFrom(null); setDateTo(null); setDatePreset(null); },
+      panel: close => (
+        <DateFilterPanel<ClientDateField>
+          title={tf.date}
+          fieldLabel={tl.dateField}
+          fields={(['added', 'invoiced'] as ClientDateField[]).map(k => ({ key: k, label: tl.fields[k] }))}
+          field={dateField}
+          presets={dateRangePresets}
+          from={dateFrom}
+          to={dateTo}
+          onApply={({ field, from, to, preset }) => {
+            if (field) setDateField(field);
+            setDateFrom(from); setDateTo(to); setDatePreset(toAppliedDatePreset(preset));
+          }}
+          onClose={close}
+          labels={{ from: tdate.from, to: tdate.to, cancel: tf.cancel, apply: tf.apply }}
+        />
+      ),
+    },
+    ...CLIENT_QUICK_CHIPS.map(({ key, Icon }): BarFilter => ({
+      key,
+      label: tl.quick[key],
+      Icon,
+      active: quick.includes(key),
+      onToggle: () => toggleQuick(key),
+      onRemove: () => toggleQuick(key),
+    })),
+  ];
   useEffect(() => {
     if (!groupHydrated || typeof window === 'undefined') return;
     window.localStorage.setItem(groupKey, groupBy);
@@ -165,9 +285,9 @@ export function ClientsListScreen({
   }, [search]);
   useEffect(() => {
     if (!serverMode || !onFiltersChange || !groupHydrated) return;
-    onFiltersChange({ search: debouncedSearch, groupBy });
+    onFiltersChange({ search: debouncedSearch, groupBy, sortBy, sortDesc, quick, dateField, dateFrom, dateTo });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverMode, groupHydrated, debouncedSearch, groupBy]);
+  }, [serverMode, groupHydrated, debouncedSearch, groupBy, sortBy, sortDesc, quick, dateField, dateFrom, dateTo]);
 
   // Infinite scroll: load the next page when a sentinel near the list bottom
   // scrolls into view.
@@ -184,9 +304,14 @@ export function ClientsListScreen({
     return () => obs.disconnect();
   }, [serverMode, onLoadMore, hasMore, loadingMore]);
   // Sections by the chosen group key; A–Z by default. Flat while searching.
+  // Any sort but A–Z (with the default name grouping) keeps the server's order
+  // as one flat list — letter sections would re-sort it by name.
+  const flatOrdered = !alpha && groupBy === 'name';
   const sections = useMemo(
-    () => groupClients(filtered, groupBy, searching, { emptyLabel, formatState: s => usStateName(s, locale) }),
-    [filtered, groupBy, searching, emptyLabel, locale],
+    () => flatOrdered
+      ? (filtered.length ? [{ title: '', data: filtered }] : [])
+      : groupClients(filtered, groupBy, searching, { emptyLabel, formatState: s => usStateName(s, locale) }),
+    [filtered, groupBy, searching, emptyLabel, locale, flatOrdered],
   );
 
   const allSelected = filtered.length > 0 && selectedIds.size === filtered.length;
@@ -228,7 +353,7 @@ export function ClientsListScreen({
         <div>
           <h1 className="text-2xl font-bold text-ink">{t.title}</h1>
           <p className="text-sm text-muted mt-0.5">
-            {search.trim()
+            {search.trim() || quick.length || dateActive
               ? t.countFound.replace('{{count}}', String(serverMode ? (serverTotal ?? filtered.length) : filtered.length))
               : t.countTotal.replace('{{count}}', String(serverMode ? (serverTotal ?? clients.length) : clients.length))}
           </p>
@@ -285,10 +410,47 @@ export function ClientsListScreen({
           </button>
         ) : null}
       </div>
+          {/* Sort — tap a new sort for its default direction, the selected one
+              again to reverse it. */}
+          <div className="relative">
+            <button
+              onClick={() => { setGroupMenuOpen(false); setSortOpen(o => !o); }}
+              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
+                !alpha ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-ink hover:bg-surface'
+              }`}
+            >
+              <ArrowUpDown size={15} /> {tl.sort[sortBy]}
+            </button>
+            {sortOpen ? (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setSortOpen(false)} />
+                <div className="absolute right-0 mt-2 z-20 w-64 bg-card rounded-2xl border border-border-soft shadow-lg p-2">
+                  <p className="text-[11px] font-semibold text-faint uppercase tracking-wider px-2 pt-1 pb-2">{tl.sortTitle}</p>
+                  {CLIENT_SORT_KEYS.map(k => {
+                    const selected = sortBy === k;
+                    const desc = clientSortIsDesc(k, selected ? sortDesc : null);
+                    return (
+                      <button
+                        key={k}
+                        onClick={() => applySortTap(k)}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left ${selected ? 'bg-primary/10' : 'hover:bg-surface'}`}
+                      >
+                        <span className="flex-1">
+                          <span className={`block text-sm ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>{tl.sort[k]}</span>
+                          {selected ? <span className="block text-[11px] text-muted">{tl.dir[clientSortCaption(k, desc)]} · {sortHint}</span> : null}
+                        </span>
+                        {selected ? (desc ? <ArrowDown size={15} className="text-primary" /> : <ArrowUp size={15} className="text-primary" />) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            ) : null}
+          </div>
           {/* Group-by control — highlighted when not the default A–Z. */}
           <div className="relative">
             <button
-              onClick={() => setGroupMenuOpen(o => !o)}
+              onClick={() => { setSortOpen(false); setGroupMenuOpen(o => !o); }}
               className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
                 groupBy !== 'name' ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-ink hover:bg-surface'
               }`}
@@ -306,7 +468,7 @@ export function ClientsListScreen({
                       return (
                         <button
                           key={o.key}
-                          onClick={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
+                          onClick={() => { setGroupBy(groupBy === o.key ? 'name' : o.key); setGroupMenuOpen(false); }}
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
                             selected ? 'bg-primary border-primary text-white' : 'bg-card border-border text-muted hover:border-border'
                           }`}
@@ -333,6 +495,10 @@ export function ClientsListScreen({
             </button>
           ) : null}
       </div>
+
+      {/* Filters — active ones as removable chips, "＋ Filter" adds more
+          (mobile twin: the Filters sheet). */}
+      <FilterBar filters={barFilters} addLabel={tf.add} clearAllLabel={tf.clearAll} className="mb-4" />
 
       {/* Selection bar — visible while select mode is on (jobs-list pattern). */}
       {selectMode ? (
@@ -402,6 +568,7 @@ export function ClientsListScreen({
                   onClientPress={onClientPress}
                   onEditPress={onEditPress}
                   onDeletePress={onDeletePress}
+                  stat={clientRowStat(c, { sortBy, quick }, tl.stat, dateLocale)}
                 />
               ))}
             </Fragment>
@@ -440,7 +607,9 @@ const ClientRow = memo(function ClientRow({
   onClientPress,
   onEditPress,
   onDeletePress,
+  stat,
 }: {
+  stat?: { text: string; tone: 'danger' | 'muted' } | null;
   client: ClientListItem;
   search: string;
   selectMode: boolean;
@@ -513,6 +682,9 @@ const ClientRow = memo(function ClientRow({
           {c.city ? (<><MapPin size={11} className="shrink-0" /> <span className="truncate">{c.city}{c.state ? `, ${c.state}` : ''}</span></>) : null}
         </span>
       </button>
+      {stat ? (
+        <span className={`shrink-0 text-xs font-semibold ${stat.tone === 'danger' ? 'text-red-500' : 'text-muted'}`}>{stat.text}</span>
+      ) : null}
       {/* Hover actions — web idiom; hidden while selecting. Each button only
          renders when its callback is present (role gating). */}
       {onEditPress || onDeletePress ? (

@@ -7,8 +7,6 @@ import {
   Text,
   Pressable,
   FlatList,
-  ScrollView,
-  Modal as RNModal,
   type ViewToken,
 } from 'react-native';
 import {
@@ -21,12 +19,20 @@ import {
   Users,
   Upload,
   X,
-  Layers,
-  Check,
+  ArrowUp,
+  ArrowDown,
+  UserPlus,
+  Receipt,
+  CircleDollarSign,
+  AlertCircle,
+  Briefcase,
+  Moon,
+  MailX,
   ListChecks,
   AlertTriangle,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
+import { cycleSort, sortTapClears } from '../../lib/sortCycle';
 import { useThemeColors } from '../../theme';
 import { Input } from '../../ui/Input';
 import { Fab } from '../../ui/Fab';
@@ -36,6 +42,18 @@ import { clientMatchesSearch, matchingContacts } from '../../lib/clientSearch';
 import { groupClients, parseClientGroupKey, CLIENTS_GROUP_KEY, type ClientSection, type ClientGroupKey } from '../../lib/clientSections';
 import { usStateName } from '../../lib/usStates';
 import { ScreenTitle } from '../../ui/ScreenTitle';
+import { FilterSheet, FilterSection, Segmented, FilterChip, ChipWrap, DateRangeFields, FilterButton, showResultsLabel } from '../../ui/FilterSheet';
+import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset } from '../../lib/dateRangePresets';
+import {
+  CLIENT_SORT_KEYS,
+  clientSortIsDesc,
+  clientSortIsAlpha,
+  clientSortCaption,
+  type ClientDateField,
+  type ClientQuickFilter,
+  type ClientSortKey,
+} from '../../lib/clientsQuery';
+import { CLIENTS_FILTERS_KEY, DEFAULT_CLIENTS_FILTERS, parseClientsFilters, clientRowStat, type ClientRowStats } from '../../lib/clientsFilters';
 
 export interface ClientListItem {
   id: string;
@@ -50,7 +68,35 @@ export interface ClientListItem {
   contacts?: { name: string; role: string | null }[];
   /** Custom field values (key → value) — used for "group by custom field". */
   customFields?: Record<string, string> | null;
+  /** Activity stats (migration 252) — shown on the row for the active sort. */
+  balanceDue?: ClientRowStats['balanceDue'];
+  lifetimeBilled?: ClientRowStats['lifetimeBilled'];
+  lastInvoiceDate?: ClientRowStats['lastInvoiceDate'];
+  createdAt?: ClientRowStats['createdAt'];
 }
+
+/** What the screen reports up in server mode. */
+export interface ClientsFiltersChange {
+  search: string;
+  groupBy: ClientGroupKey;
+  sortBy: ClientSortKey;
+  sortDesc: boolean | null;
+  quick: ClientQuickFilter[];
+  dateField: ClientDateField;
+  dateFrom: string | null;
+  dateTo: string | null;
+}
+
+/** "Show only" chips in the Filters sheet / web filter bar. */
+export const CLIENT_QUICK_CHIPS: { key: ClientQuickFilter; Icon: typeof User }[] = [
+  { key: 'recent_added', Icon: UserPlus },
+  { key: 'recent_invoiced', Icon: Receipt },
+  { key: 'owes', Icon: CircleDollarSign },
+  { key: 'overdue', Icon: AlertCircle },
+  { key: 'active_jobs', Icon: Briefcase },
+  { key: 'inactive', Icon: Moon },
+  { key: 'no_email', Icon: MailX },
+];
 
 export interface ClientsListScreenProps {
   /** Mobile: shown as a ← before the title when opened from Más. */
@@ -97,7 +143,7 @@ export interface ClientsListScreenProps {
    *  like "no results". */
   loadError?: boolean;
   onRetryLoad?: () => void;
-  onFiltersChange?: (f: { search: string; groupBy: ClientGroupKey }) => void;
+  onFiltersChange?: (f: ClientsFiltersChange) => void;
   /** Server mode only: reload the list starting at `letter` ('#' = names that
    *  do not begin with A–Z). Without this the A–Z index can only reach rows
    *  that happen to be loaded, which with 50-row pages is the first two or
@@ -163,25 +209,75 @@ export function ClientsListScreen({
   // Group-by control (mirrors the jobs list). 'name' = A–Z (default). The
   // choice persists across navigation + refresh via AsyncStorage.
   const [groupBy, setGroupBy] = useState<ClientGroupKey>('name');
-  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
+  // Sort, filters and date range (migration 252) — all in the Filters sheet.
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [sortBy, setSortBy] = useState<ClientSortKey>('name');
+  const [sortDesc, setSortDesc] = useState<boolean | null>(null);
+  // Sort chips: tap → select, again → reverse, third tap → back to 'name' (sortCycle).
+  const sortDefaultDesc = (k: ClientSortKey) => clientSortIsDesc(k, null);
+  const applySortTap = (k: ClientSortKey) => {
+    const n = cycleSort(k, sortBy, sortDesc, sortDefaultDesc, 'name');
+    setSortBy(n.sortBy); setSortDesc(n.sortDesc);
+  };
+  const sortHint = sortTapClears(sortBy, sortDesc, sortDefaultDesc, 'name') ? full.common.filters.tapToClear : full.common.filters.tapToReverse;
+  const [quick, setQuick] = useState<ClientQuickFilter[]>([]);
+  const [dateField, setDateField] = useState<ClientDateField>('added');
+  const [dateFrom, setDateFrom] = useState<string | null>(null);
+  const [dateTo, setDateTo] = useState<string | null>(null);
+  const [datePreset, setDatePreset] = useState<AppliedDatePreset | null>(null);
   const groupHydrated = useRef(false);
   // A state mirror of groupHydrated so the server-mode report effect (below)
   // re-runs once hydration finishes — a ref alone wouldn't trigger it.
   const [ready, setReady] = useState(false);
   // Scope the group-by per business so it doesn't carry across companies.
   const groupKey = businessId ? `${CLIENTS_GROUP_KEY}.${businessId}` : CLIENTS_GROUP_KEY;
+  const filtersKey = businessId ? `${CLIENTS_FILTERS_KEY}.${businessId}` : CLIENTS_FILTERS_KEY;
   useEffect(() => {
     let cancelled = false;
     groupHydrated.current = false;
-    AsyncStorage.getItem(groupKey)
-      .then(raw => { if (!cancelled) setGroupBy(parseClientGroupKey(raw)); })
+    Promise.all([AsyncStorage.getItem(groupKey), AsyncStorage.getItem(filtersKey)])
+      .then(([rawGroup, rawFilters]) => {
+        if (cancelled) return;
+        setGroupBy(parseClientGroupKey(rawGroup));
+        const f = parseClientsFilters(rawFilters);
+        setSortBy(f.sortBy); setSortDesc(f.sortDesc); setQuick(f.quick);
+        setDateField(f.dateField); setDateFrom(f.dateFrom); setDateTo(f.dateTo); setDatePreset(f.datePreset);
+      })
+      .catch(() => {})
       .finally(() => { groupHydrated.current = true; setReady(true); });
     return () => { cancelled = true; };
-  }, [groupKey]);
+  }, [groupKey, filtersKey]);
   useEffect(() => {
     if (!groupHydrated.current) return;
     void AsyncStorage.setItem(groupKey, groupBy).catch(() => {});
   }, [groupKey, groupBy]);
+  useEffect(() => {
+    if (!groupHydrated.current) return;
+    void AsyncStorage.setItem(filtersKey, JSON.stringify({ sortBy, sortDesc, quick, dateField, dateFrom, dateTo, datePreset })).catch(() => {});
+  }, [filtersKey, sortBy, sortDesc, quick, dateField, dateFrom, dateTo, datePreset]);
+
+  const tl = t.listTools;
+  const tf = full.common.filters;
+  const tdate = full.dashboard.jobs.dateFilter;
+  const dateRangePresets = buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets);
+  // A picked relative preset ("This month") rolls forward with the calendar.
+  const rolledPreset = rollDatePreset(dateRangePresets, datePreset, dateFrom, dateTo);
+  useEffect(() => {
+    if (!rolledPreset) return;
+    setDateFrom(rolledPreset.from); setDateTo(rolledPreset.to); setDatePreset(rolledPreset);
+  }, [rolledPreset?.key, rolledPreset?.from, rolledPreset?.to]);
+  const alpha = clientSortIsAlpha(sortBy, sortDesc);
+  const dateActive = !!dateFrom || !!dateTo;
+  // Badge on the Filters button: one per active section / quick filter.
+  const filterCount = (alpha ? 0 : 1) + (groupBy !== 'name' ? 1 : 0) + (dateActive ? 1 : 0) + quick.length;
+  const resetFilters = () => {
+    setGroupBy('name');
+    const d = DEFAULT_CLIENTS_FILTERS;
+    setSortBy(d.sortBy); setSortDesc(d.sortDesc); setQuick(d.quick);
+    setDateField(d.dateField); setDateFrom(null); setDateTo(null); setDatePreset(null);
+  };
+  const toggleQuick = (k: ClientQuickFilter) =>
+    setQuick(prev => (prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]));
   const groupOptions = useMemo<{ key: ClientGroupKey; label: string }[]>(() => [
     { key: 'name', label: t.group.name },
     { key: 'company', label: t.group.company },
@@ -230,13 +326,18 @@ export function ClientsListScreen({
   }, [search]);
   useEffect(() => {
     if (!serverMode || !onFiltersChange || !ready) return;
-    onFiltersChange({ search: debouncedSearch, groupBy });
+    onFiltersChange({ search: debouncedSearch, groupBy, sortBy, sortDesc, quick, dateField, dateFrom, dateTo });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverMode, ready, debouncedSearch, groupBy]);
+  }, [serverMode, ready, debouncedSearch, groupBy, sortBy, sortDesc, quick, dateField, dateFrom, dateTo]);
   // Sections by the chosen group key; A–Z by default. Flat while searching.
+  // Any sort but A–Z (with the default name grouping) keeps the server's order
+  // as one flat list — letter sections would re-sort it by name.
+  const flatOrdered = !alpha && groupBy === 'name';
   const sections = useMemo(
-    () => groupClients(filtered, groupBy, searching, { emptyLabel, formatState: s => usStateName(s, locale) }),
-    [filtered, groupBy, searching, emptyLabel, locale],
+    () => flatOrdered
+      ? (filtered.length ? [{ title: '', data: filtered }] : [])
+      : groupClients(filtered, groupBy, searching, { emptyLabel, formatState: s => usStateName(s, locale) }),
+    [filtered, groupBy, searching, emptyLabel, locale, flatOrdered],
   );
   const serverJump = serverMode && !!onJumpToLetter;
   const letters = useMemo(
@@ -384,7 +485,7 @@ export function ClientsListScreen({
         <View>
           <ScreenTitle title={t.title} onBack={onBack} />
           <Text className="text-sm text-muted mt-0.5">
-            {search.trim()
+            {search.trim() || quick.length || dateActive
               ? t.countFound.replace('{{count}}', String(serverMode ? (serverTotal ?? filtered.length) : filtered.length))
               : t.countTotal.replace('{{count}}', String(serverMode ? (serverTotal ?? clients.length) : clients.length))}
           </Text>
@@ -403,18 +504,9 @@ export function ClientsListScreen({
               <ListChecks size={15} color={selectionMode ? c.primary : c.muted} />
             </Pressable>
           ) : null}
-          {/* Group-by control — highlighted when not the default A–Z. */}
-          <Pressable
-            onPress={() => setGroupMenuOpen(true)}
-            className={`flex-row items-center gap-1.5 px-4 py-2.5 rounded-xl border active:opacity-80 ${
-              groupBy !== 'name' ? 'bg-primary/10 border-primary' : 'bg-card border-border'
-            }`}
-          >
-            <Layers size={15} color={groupBy !== 'name' ? c.primary : c.muted} />
-            <Text className={`text-sm font-semibold ${groupBy !== 'name' ? 'text-primary' : 'text-ink'}`}>
-              {t.group.button}
-            </Text>
-          </Pressable>
+          {/* Filters — sort, group, date and quick filters in one sheet
+              (FilterSheet at the screen root). */}
+          <FilterButton count={filterCount} onPress={() => setFilterOpen(true)} label={tf.button} />
           {onImportPress ? (
             <Pressable
               onPress={onImportPress}
@@ -541,6 +633,7 @@ export function ClientsListScreen({
           onToggleSelect={onToggleSelect}
           onClientPress={onClientPress}
           onExitSelect={exitSelect}
+          stat={clientRowStat(item.client, { sortBy, quick }, tl.stat, locale === 'es' ? 'es-MX' : 'en-US')}
         />
       );
     }
@@ -593,7 +686,7 @@ export function ClientsListScreen({
 
       {/* A–Z index — only meaningful for the alphabetical (name) grouping.
          Hugs the right edge (the Fab sits 20px in, no overlap). */}
-      {showList && !searching && groupBy === 'name' && letters.length > 1 ? (
+      {showList && !searching && groupBy === 'name' && alpha && letters.length > 1 ? (
         <AlphabetScrubber
           letters={letters}
           activeLetter={activeLetter}
@@ -624,56 +717,72 @@ export function ClientsListScreen({
         </Pressable>
       ) : null}
 
-      {/* Group-by bottom sheet — pills, mirrors the jobs sort menu. */}
-      <RNModal
-        visible={groupMenuOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setGroupMenuOpen(false)}
+      <FilterSheet
+        open={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        title={tf.title}
+        resetLabel={tf.reset}
+        onReset={resetFilters}
+        canReset={filterCount > 0}
+        showLabel={showResultsLabel(tf, serverMode ? (serverTotal ?? filtered.length) : filtered.length)}
       >
-        {/* Backdrop is an absolute FIRST child and the card a plain sibling,
-            per the sheet contract in CLAUDE.md: nesting the card inside the
-            backdrop Pressable stops its ScrollView receiving drags. */}
-        <View className="flex-1 justify-end">
-          <Pressable
-            onPress={() => setGroupMenuOpen(false)}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
-          />
-          <View className="bg-card rounded-t-3xl px-6 pt-3 pb-10">
-            <View className="self-center w-10 h-1 rounded-full bg-border mb-4" />
-            <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-base font-bold text-ink">{t.group.title}</Text>
-              <Pressable onPress={() => setGroupMenuOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-                <X size={22} color={c.faint} />
-              </Pressable>
-            </View>
-            <ScrollView className="max-h-96" keyboardShouldPersistTaps="handled"
-              automaticallyAdjustKeyboardInsets
-              keyboardDismissMode="interactive"
-            >
-              <View className="flex-row flex-wrap gap-2">
-                {groupOptions.map(o => {
-                  const selected = groupBy === o.key;
-                  return (
-                    <Pressable
-                      key={o.key}
-                      onPress={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
-                      className={`flex-row items-center gap-1.5 px-3.5 py-2.5 rounded-full border active:opacity-80 ${
-                        selected ? 'bg-primary border-primary' : 'bg-card border-border'
-                      }`}
-                    >
-                      {selected ? <Check size={13} color="#FFFFFF" /> : null}
-                      <Text className={`text-[13px] font-semibold ${selected ? 'text-white' : 'text-muted'}`}>
-                        {o.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </ScrollView>
+        <FilterSection
+          title={tf.sortBy}
+          right={<Text className="text-xs text-faint">{tl.dir[clientSortCaption(sortBy, clientSortIsDesc(sortBy, sortDesc))]}</Text>}
+        >
+          <ChipWrap>
+            {CLIENT_SORT_KEYS.map(k => {
+              const selected = sortBy === k;
+              const desc = clientSortIsDesc(k, selected ? sortDesc : null);
+              return (
+                <FilterChip
+                  key={k}
+                  label={tl.sort[k]}
+                  on={selected}
+                  // New sort → its default direction; the selected one again → reverse.
+                  onPress={() => applySortTap(k)}
+                  leading={selected ? (desc ? <ArrowDown size={15} color={c.primary} /> : <ArrowUp size={15} color={c.primary} />) : undefined}
+                />
+              );
+            })}
+          </ChipWrap>
+          <Text className="text-xs text-faint mt-2">{sortHint}</Text>
+        </FilterSection>
+
+        <FilterSection title={tf.groupBy}>
+          <ChipWrap>
+            {groupOptions.map(o => (
+              <FilterChip key={o.key} label={o.label} on={groupBy === o.key} onPress={() => setGroupBy(groupBy === o.key ? 'name' : o.key)} />
+            ))}
+          </ChipWrap>
+        </FilterSection>
+
+        <FilterSection title={tf.date}>
+          <View className="gap-3">
+            <Segmented<ClientDateField>
+              options={(['added', 'invoiced'] as ClientDateField[]).map(k => ({ key: k, label: tl.fields[k] }))}
+              value={dateField}
+              onChange={setDateField}
+            />
+            <DateRangeFields
+              presets={dateRangePresets}
+              from={dateFrom}
+              to={dateTo}
+              onChange={({ from, to, preset }) => { setDateFrom(from); setDateTo(to); setDatePreset(toAppliedDatePreset(preset)); }}
+              fromLabel={tdate.from}
+              toLabel={tdate.to}
+            />
           </View>
-        </View>
-      </RNModal>
+        </FilterSection>
+
+        <FilterSection title={tf.showOnly}>
+          <ChipWrap>
+            {CLIENT_QUICK_CHIPS.map(({ key, Icon }) => (
+              <FilterChip key={key} check label={tl.quick[key]} Icon={Icon} on={quick.includes(key)} onPress={() => toggleQuick(key)} />
+            ))}
+          </ChipWrap>
+        </FilterSection>
+      </FilterSheet>
     </View>
   );
 }
@@ -828,6 +937,8 @@ interface ClientRowProps {
   onToggleSelect: (id: string) => void;
   onClientPress: (id: string) => void;
   onExitSelect: () => void;
+  /** Right-side stat for the active sort/filter ("Owes $1,240"). */
+  stat?: { text: string; tone: 'danger' | 'muted' } | null;
 }
 
 const ClientRow = memo(function ClientRow({
@@ -841,6 +952,7 @@ const ClientRow = memo(function ClientRow({
   onToggleSelect,
   onClientPress,
   onExitSelect,
+  stat,
 }: ClientRowProps) {
   const tc = useThemeColors();
   const matchedContacts = matchingContacts(c, search);
@@ -927,6 +1039,11 @@ const ClientRow = memo(function ClientRow({
           ) : null}
         </View>
       </View>
+      {stat ? (
+        <Text className={`ml-2 text-xs font-semibold ${stat.tone === 'danger' ? 'text-red-500' : 'text-muted'}`} numberOfLines={1}>
+          {stat.text}
+        </Text>
+      ) : null}
     </Pressable>
   );
 });

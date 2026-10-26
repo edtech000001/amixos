@@ -612,6 +612,7 @@ export default function EmpleadosPage() {
       city: e.city,
       state: e.state,
       customFields: (e.custom_fields ?? {}) as Record<string, string>,
+      createdAt: (e as { created_at?: string | null }).created_at ?? null,
     }));
   }, [employees, members, invites, activeLocationId, empLocations]);
 
@@ -1333,6 +1334,7 @@ export default function EmpleadosPage() {
 
   return (
     <EmployeesScreen
+      businessId={business?.id}
       customFieldDefs={templates.map(tpl => ({
         key: tpl.field_key,
         label: tpl.field_label,

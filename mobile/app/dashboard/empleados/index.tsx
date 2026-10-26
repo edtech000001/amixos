@@ -494,6 +494,7 @@ export default function EmpleadosRoute() {
           city: e.city,
           state: e.state,
           customFields: (e.custom_fields ?? {}) as Record<string, string>,
+          createdAt: (e as { created_at?: string | null }).created_at ?? null,
         };
       });
     },
@@ -1105,6 +1106,7 @@ export default function EmpleadosRoute() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <LocationSwitcher />
       <EmployeesScreen
+        businessId={business?.id}
         onBack={moreBack}
         customFieldDefs={templates.map((tpl) => ({
           key: tpl.field_key,

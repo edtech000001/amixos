@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { SkeletonRow } from '../../ui/Skeleton';
 import { Plus, FileText, Search, X, Calendar, List, Layers, Building2, MapPin, Check, ListChecks, Trash2, DollarSign, Bell, BellRing, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, BadgeCheck, History, CalendarClock, CircleDollarSign } from 'lucide-react';
 import { useLang } from '../../i18n';
+import { cycleSort, sortTapClears } from '../../lib/sortCycle';
 import { formatDateLong, daysOverdue, daysSince } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
@@ -168,6 +169,13 @@ export function InvoicesListScreen({
   const [quick, setQuick] = useState<InvoiceQuickFilter[]>([]);
   const [sortBy, setSortBy] = useState<InvoiceSortKey>('newest');
   const [sortDesc, setSortDesc] = useState<boolean | null>(null);
+  // Sort chips: tap → select, again → reverse, third tap → back to 'newest' (sortCycle).
+  const sortDefaultDesc = (k: InvoiceSortKey) => invoiceSortIsDesc(k, null);
+  const applySortTap = (k: InvoiceSortKey) => {
+    const n = cycleSort(k, sortBy, sortDesc, sortDefaultDesc, 'newest');
+    setSortBy(n.sortBy); setSortDesc(n.sortDesc);
+  };
+  const sortHint = sortTapClears(sortBy, sortDesc, sortDefaultDesc, 'newest') ? full.common.filters.tapToClear : full.common.filters.tapToReverse;
   const [sortOpen, setSortOpen] = useState(false);
   // Group the list into sections — persisted per device+business, like the
   // jobs list, so leaving the page keeps the chosen grouping.
@@ -556,16 +564,12 @@ export function InvoicesListScreen({
                   return (
                     <button
                       key={k}
-                      onClick={() => {
-                        // New sort → its default direction; the selected one again → reverse.
-                        if (selected) setSortDesc(!invoiceSortIsDesc(k, sortDesc));
-                        else { setSortBy(k); setSortDesc(null); }
-                      }}
+                      onClick={() => applySortTap(k)}
                       className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left ${selected ? 'bg-primary/10' : 'hover:bg-surface'}`}
                     >
                       <span className="flex-1">
                         <span className={`block text-sm ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>{tl.sort[k]}</span>
-                        {selected ? <span className="block text-[11px] text-muted">{tl.dir[invoiceSortCaption(k, desc)]} · {tl.dir.tapToReverse}</span> : null}
+                        {selected ? <span className="block text-[11px] text-muted">{tl.dir[invoiceSortCaption(k, desc)]} · {sortHint}</span> : null}
                       </span>
                       {selected ? (desc ? <ArrowDown size={15} className="text-primary" /> : <ArrowUp size={15} className="text-primary" />) : null}
                     </button>
@@ -596,7 +600,7 @@ export function InvoicesListScreen({
                   return (
                     <button
                       key={o.key}
-                      onClick={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
+                      onClick={() => { setGroupBy(groupBy === o.key ? 'none' : o.key); setGroupMenuOpen(false); }}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left ${active ? 'bg-primary/10' : 'hover:bg-surface'}`}
                     >
                       <span className={`w-8 h-8 rounded-lg flex items-center justify-center ${active ? 'bg-primary text-white' : 'bg-border-soft text-muted'}`}>

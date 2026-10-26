@@ -1,11 +1,12 @@
-import { useMemo, useState, type ReactNode } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput, FlatList, Modal as RNModal, KeyboardAvoidingView, Platform } from 'react-native';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { View, Text, Pressable, ScrollView, TextInput, FlatList } from 'react-native';
 import {
   Clock,
   ClipboardList,
   UserCheck,
   Plus, Pencil, Trash2, X,
-  Search, SlidersHorizontal, ChevronDown, Check, ListChecks } from 'lucide-react-native';
+  Search, Check, ListChecks, ArrowUp, ArrowDown } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
@@ -16,6 +17,20 @@ import { splitMultiValue } from '../../lib/fieldTemplates';
 import { SkeletonList } from '../../ui/Skeleton';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { ScreenTitle } from '../../ui/ScreenTitle';
+import { FilterSheet, FilterSection, FilterChip, ChipWrap, FilterButton, showResultsLabel } from '../../ui/FilterSheet';
+import { cycleSort, sortTapClears } from '../../lib/sortCycle';
+import {
+  EMPLOYEE_SORT_KEYS,
+  EMPLOYEE_GROUP_KEYS,
+  EMPLOYEES_VIEW_KEY,
+  employeeSortIsDesc,
+  employeeSortCaption,
+  sortEmployees,
+  groupEmployees,
+  parseEmployeesView,
+  type EmployeeSortKey,
+  type EmployeeGroupKey,
+} from '../../lib/employeesView';
 
 export interface EmployeeListItem {
   id: string;
@@ -39,6 +54,8 @@ export interface EmployeeListItem {
    *  columns is decided by customFieldDefs — stale keys from deleted
    *  fields are ignored. */
   customFields?: Record<string, string>;
+  /** For the "Recently added" sort. */
+  createdAt?: string | null;
 }
 
 /** A filterable column: pick the field, then check the values you want. */
@@ -108,7 +125,18 @@ export interface EmployeesScreenProps {
    *  filter panel so deleted fields never appear and labels are the real
    *  field names, not the snake_case keys. */
   customFieldDefs?: CustomFieldDef[];
+  /** Active business — scopes the saved sort/group per business. */
+  businessId?: string;
 }
+
+/** FlatList rows: optional group headers + employee rows (first/last round
+ *  the card corners per group). */
+type EmpRow =
+  | { type: 'header'; key: string; title: string; count: number }
+  | { type: 'emp'; key: string; e: EmployeeListItem; first: boolean; last: boolean };
+
+// Chips shown per filter field before "+N more".
+const CHIP_LIMIT = 10;
 
 type Tab = 'empleados' | 'horas' | 'historial';
 
@@ -129,6 +157,7 @@ export function EmployeesScreen({
   customFieldDefs,
   modalsSlot,
   loading,
+  businessId,
 }: EmployeesScreenProps) {
   const { t: full, locale } = useLang();
   const c = useThemeColors();
@@ -144,8 +173,38 @@ export function EmployeesScreen({
   // any set of options work without hardcoding. AND across fields, OR within.
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterSel, setFilterSel] = useState<Record<string, string[]>>({});
-  const [openField, setOpenField] = useState<string | null>(null);
-  const [valueSearch, setValueSearch] = useState('');
+  // Fields whose value chips are expanded past CHIP_LIMIT.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // Sort + group, persisted per business (employeesView.ts).
+  const [sortBy, setSortBy] = useState<EmployeeSortKey>('name');
+  const [sortDesc, setSortDesc] = useState<boolean | null>(null);
+  const [groupBy, setGroupBy] = useState<EmployeeGroupKey>('none');
+  const viewKey = businessId ? `${EMPLOYEES_VIEW_KEY}.${businessId}` : EMPLOYEES_VIEW_KEY;
+  const viewHydrated = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    viewHydrated.current = false;
+    AsyncStorage.getItem(viewKey)
+      .then(raw => {
+        if (cancelled) return;
+        const v = parseEmployeesView(raw);
+        setSortBy(v.sortBy); setSortDesc(v.sortDesc); setGroupBy(v.groupBy);
+      })
+      .catch(() => {})
+      .finally(() => { viewHydrated.current = true; });
+    return () => { cancelled = true; };
+  }, [viewKey]);
+  useEffect(() => {
+    if (!viewHydrated.current) return;
+    void AsyncStorage.setItem(viewKey, JSON.stringify({ sortBy, sortDesc, groupBy })).catch(() => {});
+  }, [viewKey, sortBy, sortDesc, groupBy]);
+  const sortDefaultDesc = (k: EmployeeSortKey) => employeeSortIsDesc(k, null);
+  // Tap → select, again → reverse, third tap → back to Name (sortCycle).
+  const applySortTap = (k: EmployeeSortKey) => {
+    const n = cycleSort(k, sortBy, sortDesc, sortDefaultDesc, 'name');
+    setSortBy(n.sortBy); setSortDesc(n.sortDesc);
+  };
+  const sortHint = sortTapClears(sortBy, sortDesc, sortDefaultDesc, 'name') ? full.common.filters.tapToClear : full.common.filters.tapToReverse;
   const filtersActive = Object.values(filterSel).some(v => v.length > 0);
   const clearFilters = () => setFilterSel({});
   const toggleFilterValue = (fieldKey: string, v: string) =>
@@ -220,6 +279,24 @@ export function EmployeesScreen({
   }, [employees, search, filterFields, filterSel, statusView]);
   // Row-hiding filters (search + field filters) — the Activos/Inactivos
   // segment is a view, not a filter, so the empty-state clear leaves it alone.
+  const tv = t.view;
+  const sections = useMemo(
+    () => groupEmployees(sortEmployees(filteredEmployees, sortBy, sortDesc), groupBy,
+      (g, v) => (g === 'role' ? roleLabel(v, lang) : PAY_TYPES[v] ?? v)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filteredEmployees, sortBy, sortDesc, groupBy, lang],
+  );
+  const empRows = useMemo<EmpRow[]>(() => {
+    const out: EmpRow[] = [];
+    for (const sct of sections) {
+      if (sct.title) out.push({ type: 'header', key: `__h_${sct.key}`, title: sct.title, count: sct.data.length });
+      sct.data.forEach((e, i) => out.push({ type: 'emp', key: e.id, e, first: i === 0, last: i === sct.data.length - 1 }));
+    }
+    return out;
+  }, [sections]);
+  const filterCount = Object.values(filterSel).filter(v => v.length).length
+    + (sortBy !== 'name' || sortDesc === true ? 1 : 0) + (groupBy !== 'none' ? 1 : 0);
+  const resetSheet = () => { clearFilters(); setSortBy('name'); setSortDesc(null); setGroupBy('none'); };
   const narrowed = search.trim() !== '' || filtersActive;
   const clearNarrowing = () => { setSearch(''); clearFilters(); };
 
@@ -324,14 +401,7 @@ export function EmployeesScreen({
             </Pressable>
           ) : null}
         </View>
-        <Pressable
-          onPress={() => setFilterOpen(o => !o)}
-          className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
-            filtersActive || filterOpen ? 'bg-primary/10 border-primary' : 'bg-card border-border'
-          }`}
-        >
-          <SlidersHorizontal size={16} color={filtersActive || filterOpen ? c.primary : c.muted} />
-        </Pressable>
+        <FilterButton count={filterCount} onPress={() => setFilterOpen(true)} label={full.common.filters.button} />
         {canBulkDelete && employees.length > 0 ? (
           <Pressable
             onPress={() => (selectionMode ? exitSelect() : setSelectMode(true))}
@@ -385,10 +455,19 @@ export function EmployeesScreen({
   );
 
   // One employee row (first/last rounding recreates the section card look).
-  const renderEmployee = ({ item: e, index }: { item: EmployeeListItem; index: number }) => {
+  const renderEmployee = ({ item }: { item: EmpRow }) => {
+    if (item.type === 'header') {
+      return (
+        <View className="flex-row items-center gap-2 px-1 pt-3 pb-2">
+          <Text className="text-xs font-bold text-muted uppercase tracking-wider">{item.title}</Text>
+          <Text className="text-xs font-bold text-faint">{item.count}</Text>
+        </View>
+      );
+    }
+    const e = item.e;
     const selected = selectedIds.has(e.id);
-    const isFirst = index === 0;
-    const isLast = index === filteredEmployees.length - 1;
+    const isFirst = item.first;
+    const isLast = item.last;
     return (
       <Pressable
         onPress={() => rowPress(e.id)}
@@ -548,8 +627,8 @@ export function EmployeesScreen({
     <View className="flex-1 bg-surface">
       {tab === 'empleados' ? (
         <FlatList
-          data={employees.length === 0 ? [] : filteredEmployees}
-          keyExtractor={e => e.id}
+          data={employees.length === 0 ? [] : empRows}
+          keyExtractor={r => r.key}
           renderItem={renderEmployee}
           ListHeaderComponent={teamHeader}
           ListEmptyComponent={
@@ -634,102 +713,78 @@ export function EmployeesScreen({
       </Pressable>
     ) : null}
 
-    {/* Filter bottom sheet — matches the jobs sort/group sheet. fade (not slide)
-       so the dim backdrop doesn't read as a gray bar rising. */}
-    <RNModal visible={filterOpen} transparent animationType="fade" onRequestClose={() => setFilterOpen(false)}>
-      {/* KeyboardAvoidingView: the sheet is anchored to the bottom, exactly
-          where the keyboard opens, so the lower fields sat underneath it. */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        className="flex-1 justify-end"
+    {/* Filters — sort, group and the column filters (values come from the
+        data, so custom fields work too). AND across fields, OR within one. */}
+    <FilterSheet
+      open={filterOpen}
+      onClose={() => setFilterOpen(false)}
+      title={full.common.filters.title}
+      resetLabel={full.common.filters.reset}
+      onReset={resetSheet}
+      canReset={filterCount > 0}
+      showLabel={showResultsLabel(full.common.filters, filteredEmployees.length)}
+    >
+      <FilterSection
+        title={full.common.filters.sortBy}
+        right={<Text className="text-xs text-faint">{tv.dir[employeeSortCaption(sortBy, employeeSortIsDesc(sortBy, sortDesc))]}</Text>}
       >
-        <Pressable
-          onPress={() => setFilterOpen(false)}
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
-        />
-        <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10 max-h-[85%]">
-          <View className="self-center w-10 h-1 rounded-full bg-border mb-4" />
-          <View className="flex-row items-center justify-between mb-4">
-            <Text className="text-base font-bold text-ink">{t.filter.button}</Text>
-            <View className="flex-row items-center gap-3">
-              {filtersActive ? (
-                <Pressable onPress={clearFilters} hitSlop={8}>
-                  <Text className="text-sm font-semibold text-muted">{t.filter.clear}</Text>
-                </Pressable>
+        <ChipWrap>
+          {EMPLOYEE_SORT_KEYS.map(k => {
+            const selected = sortBy === k;
+            const desc = employeeSortIsDesc(k, selected ? sortDesc : null);
+            return (
+              <FilterChip
+                key={k}
+                label={tv.sort[k]}
+                on={selected}
+                onPress={() => applySortTap(k)}
+                leading={selected ? (desc ? <ArrowDown size={15} color={c.primary} /> : <ArrowUp size={15} color={c.primary} />) : undefined}
+              />
+            );
+          })}
+        </ChipWrap>
+        <Text className="text-xs text-faint mt-2">{sortHint}</Text>
+      </FilterSection>
+
+      <FilterSection title={full.common.filters.groupBy}>
+        <ChipWrap>
+          {EMPLOYEE_GROUP_KEYS.map(k => (
+            <FilterChip key={k} label={tv.group[k]} on={groupBy === k} onPress={() => setGroupBy(groupBy === k ? 'none' : k)} />
+          ))}
+        </ChipWrap>
+      </FilterSection>
+
+      {filterFields.map(f => {
+        const sel = filterSel[f.key] ?? [];
+        const values = valueCounts(f);
+        // A field where everyone has the same value can't narrow anything.
+        if (values.length < 2 && !sel.length) return null;
+        const open = expanded.has(f.key);
+        const shown = open ? values : values.slice(0, CHIP_LIMIT);
+        return (
+          <FilterSection key={f.key} title={f.label}>
+            <ChipWrap>
+              {shown.map(([v, count]) => (
+                <FilterChip
+                  key={v || '(empty)'}
+                  check
+                  label={`${v === '' ? t.filter.empty : f.labelOf(v)} · ${count}`}
+                  on={sel.includes(v)}
+                  onPress={() => toggleFilterValue(f.key, v)}
+                />
+              ))}
+              {values.length > CHIP_LIMIT && !open ? (
+                <FilterChip
+                  label={tv.more.replace('{{count}}', String(values.length - CHIP_LIMIT))}
+                  on={false}
+                  onPress={() => setExpanded(prev => new Set(prev).add(f.key))}
+                />
               ) : null}
-              <Pressable onPress={() => setFilterOpen(false)} hitSlop={8}>
-                <Text className="text-sm font-semibold text-primary">{full.common.buttons.done}</Text>
-              </Pressable>
-            </View>
-          </View>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <View className="gap-1.5">
-              {filterFields.map(f => {
-                const sel = filterSel[f.key] ?? [];
-                const open = openField === f.key;
-                const values = open ? valueCounts(f) : [];
-                const vq = norm(valueSearch.trim());
-                const shown = vq
-                  ? values.filter(([v]) => norm(v === '' ? t.filter.empty : f.labelOf(v)).includes(vq))
-                  : values;
-                return (
-                  <View key={f.key} className={`rounded-2xl overflow-hidden ${open ? 'bg-surface' : ''}`}>
-                    <Pressable
-                      onPress={() => { setOpenField(open ? null : f.key); setValueSearch(''); }}
-                      className={`flex-row items-center justify-between px-4 py-3.5 rounded-2xl ${open ? '' : 'active:bg-surface'}`}
-                    >
-                      <View className="flex-row items-center gap-2">
-                        <Text className={`text-base ${sel.length ? 'text-primary font-semibold' : 'text-ink font-medium'}`}>{f.label}</Text>
-                        {sel.length ? (
-                          <View className="min-w-[20px] h-5 px-1.5 rounded-full bg-primary items-center justify-center">
-                            <Text className="text-[11px] font-bold text-white">{sel.length}</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      <ChevronDown size={17} color={c.faint} style={open ? { transform: [{ rotate: '180deg' }] } : undefined} />
-                    </Pressable>
-                    {open ? (
-                      <View className="px-2 pb-2">
-                        {values.length > 8 ? (
-                          <TextInput
-                            value={valueSearch}
-                            onChangeText={setValueSearch}
-                            placeholder={t.filter.searchValue}
-                            placeholderTextColor={c.faint}
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                            className="mb-1.5 rounded-xl border border-border bg-card px-3 py-2 text-ink" style={{ fontSize: 14 }} />
-                        ) : null}
-                        <ScrollView className="max-h-64" nestedScrollEnabled>
-                          {shown.map(([v, count]) => {
-                            const on = sel.includes(v);
-                            return (
-                              <Pressable
-                                key={v || '(empty)'}
-                                onPress={() => toggleFilterValue(f.key, v)}
-                                className="flex-row items-center gap-3 px-3 py-2.5 rounded-xl active:bg-card"
-                              >
-                                <View className={`w-5 h-5 rounded-md border items-center justify-center ${on ? 'bg-primary border-primary' : 'border-border bg-card'}`}>
-                                  {on ? <Check size={13} color="#fff" /> : null}
-                                </View>
-                                <Text className={`flex-1 text-base ${v === '' ? 'italic text-faint' : on ? 'text-primary font-medium' : 'text-ink'}`} numberOfLines={1}>
-                                  {v === '' ? t.filter.empty : f.labelOf(v)}
-                                </Text>
-                                <Text className="text-xs text-faint">{count}</Text>
-                              </Pressable>
-                            );
-                          })}
-                        </ScrollView>
-                      </View>
-                    ) : null}
-                  </View>
-                );
-              })}
-            </View>
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
-    </RNModal>
+            </ChipWrap>
+          </FilterSection>
+        );
+      })}
+    </FilterSheet>
     </View>
   );
 }
