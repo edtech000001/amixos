@@ -28,6 +28,57 @@ type AnySupabase = { from: (table: string) => any; rpc: (fn: string, params?: an
 export interface InvoicesCursor {
   createdAt: string;
   id: string;
+  /** Sorted (non-default) order pages by offset instead of the keyset. */
+  offset?: number;
+}
+
+// ── Sort + quick filters (migration 251) ───────────────────────────────────
+export type InvoiceSortKey = 'newest' | 'due' | 'amount' | 'paid' | 'updated';
+export const INVOICE_SORT_KEYS: InvoiceSortKey[] = ['newest', 'due', 'amount', 'paid', 'updated'];
+/** Default direction per sort — newest / latest / biggest first, except due
+ *  date, where the SOONEST due is what you act on. Tap again to flip. */
+const INVOICE_SORT_DEFAULT_DESC: Record<InvoiceSortKey, boolean> = {
+  newest: true, due: false, amount: true, paid: true, updated: true,
+};
+export function invoiceSortIsDesc(sortBy: InvoiceSortKey, sortDesc?: boolean | null): boolean {
+  return sortDesc ?? INVOICE_SORT_DEFAULT_DESC[sortBy];
+}
+/** Caption key (t.listTools.dir) for a sort in its current direction. */
+export function invoiceSortCaption(sortBy: InvoiceSortKey, desc: boolean):
+  'newest' | 'oldest' | 'soonest' | 'latest' | 'highest' | 'lowest' {
+  if (sortBy === 'due') return desc ? 'latest' : 'soonest';
+  if (sortBy === 'amount') return desc ? 'highest' : 'lowest';
+  return desc ? 'newest' : 'oldest';
+}
+const SORT_COLUMN: Record<InvoiceSortKey, string> = {
+  newest: 'created_at', due: 'due_date', amount: 'total_amount', paid: 'paid_at', updated: 'updated_at',
+};
+
+export type InvoiceDateField = 'issue' | 'due' | 'paid';
+export type InvoiceQuickFilter =
+  | 'recent_paid' | 'recent_updated' | 'reminded' | 'not_reminded' | 'due_soon' | 'partial' | 'collect';
+
+const ymdLocal = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** Mirror of invoice_tab_counts' p_quick predicates (migration 251). */
+function applyQuickFilters(q: any, quick: InvoiceQuickFilter[] | undefined): any {
+  if (!quick?.length) return q;
+  const now = Date.now();
+  for (const f of quick) {
+    if (f === 'recent_paid') q = q.eq('status', 'paid').gte('paid_at', new Date(now - 30 * 86_400_000).toISOString());
+    else if (f === 'recent_updated') q = q.gte('updated_at', new Date(now - 7 * 86_400_000).toISOString());
+    else if (f === 'reminded') q = q.gt('reminder_count', 0);
+    else if (f === 'not_reminded') q = q.eq('reminder_count', 0).in('status', ['sent', 'overdue']);
+    else if (f === 'due_soon') {
+      const today = new Date();
+      q = q.in('status', ['draft', 'sent', 'overdue'])
+        .gte('due_date', ymdLocal(today))
+        .lte('due_date', ymdLocal(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7)));
+    } else if (f === 'partial') q = q.neq('status', 'paid').gt('amount_paid', 0);
+    else if (f === 'collect') q = q.eq('collect_from_partner', true).not('status', 'in', '(paid,cancelled)');
+  }
+  return q;
 }
 
 export interface InvoicesQueryParams {
@@ -38,9 +89,17 @@ export interface InvoicesQueryParams {
   statuses?: string[];
   /** Free-text search across invoice number, amount, client names, linked jobs. */
   search?: string;
-  /** Issue-date range (YYYY-MM-DD). */
+  /** Date range (YYYY-MM-DD) on `dateField` (default the issue date). */
   dateFrom?: string | null;
   dateTo?: string | null;
+  /** Which date the range applies to (migration 251). */
+  dateField?: InvoiceDateField;
+  /** Quick filters, ANDed (migration 251). */
+  quick?: InvoiceQuickFilter[];
+  /** Order; default newest-first (keyset). Others page by offset. */
+  sortBy?: InvoiceSortKey;
+  /** null/undefined = the sort's default direction. */
+  sortDesc?: boolean | null;
   /** Keyset cursor from the previous page's last row; null for the first page. */
   cursor?: InvoicesCursor | null;
   pageSize?: number;
@@ -159,8 +218,16 @@ async function searchOrClause(
 /** Apply the shared base filters (location, date range, status, group) to a query. */
 function applyBaseFilters(q: any, params: InvoicesQueryParams): any {
   if (params.locationId) q = q.eq('location_id', params.locationId);
-  if (params.dateFrom) q = q.gte('issue_date', params.dateFrom);
-  if (params.dateTo) q = q.lte('issue_date', params.dateTo);
+  // paid_at is a timestamp — widen the day bounds; the others are dates.
+  if (params.dateField === 'paid') {
+    if (params.dateFrom) q = q.gte('paid_at', `${params.dateFrom}T00:00:00`);
+    if (params.dateTo) q = q.lte('paid_at', `${params.dateTo}T23:59:59.999`);
+  } else {
+    const col = params.dateField === 'due' ? 'due_date' : 'issue_date';
+    if (params.dateFrom) q = q.gte(col, params.dateFrom);
+    if (params.dateTo) q = q.lte(col, params.dateTo);
+  }
+  q = applyQuickFilters(q, params.quick);
   // Lazy status-group loading pins a single status; otherwise the selected tabs.
   if (params.groupStatus) q = q.eq('status', params.groupStatus);
   else if (params.statuses?.length) q = q.in('status', params.statuses);
@@ -186,10 +253,21 @@ export async function fetchInvoicesPage<T extends { id: string; created_at?: str
   const term = params.search?.trim() ?? '';
   const searchOr = await searchOrClause(supabase, params.businessId, term);
 
+  // Any order other than newest-first pages by OFFSET (the keyset only works
+  // on created_at desc). Missing values (no due/paid date) sort last.
+  const sortBy: InvoiceSortKey = params.sortBy ?? 'newest';
+  const desc = invoiceSortIsDesc(sortBy, params.sortDesc);
+  const sorted = !(sortBy === 'newest' && desc);
+  const offset = params.cursor?.offset ?? 0;
   const run = (sel: string, or: string | null) => {
     let q = supabase.from('invoices').select(sel).eq('business_id', params.businessId);
     q = applyBaseFilters(q, params);
     if (or) q = q.or(or);
+    if (sorted) {
+      return q.order(SORT_COLUMN[sortBy], { ascending: !desc, nullsFirst: false })
+        .order('id', { ascending: !desc })
+        .range(offset, offset + pageSize - 1);
+    }
     if (params.cursor) {
       const c = params.cursor;
       q = q.or(`created_at.lt.${c.createdAt},and(created_at.eq.${c.createdAt},id.lt.${c.id})`);
@@ -213,8 +291,11 @@ export async function fetchInvoicesPage<T extends { id: string; created_at?: str
   if (error) throw new Error(error.message);
   const invoices = (data ?? []) as T[];
   const last = invoices[invoices.length - 1] as any;
-  const nextCursor =
-    invoices.length === pageSize && last?.created_at ? { createdAt: last.created_at, id: last.id } : null;
+  const nextCursor = invoices.length < pageSize
+    ? null
+    : sorted
+      ? { createdAt: '', id: '', offset: offset + invoices.length }
+      : last?.created_at ? { createdAt: last.created_at, id: last.id } : null;
   return { invoices, nextCursor };
 }
 
@@ -242,7 +323,7 @@ export async function fetchAllInvoicesMatching<T extends { id: string; created_a
  *  status), for the header total. */
 export async function fetchInvoiceStatusCounts(
   supabase: AnySupabase,
-  params: Pick<InvoicesQueryParams, 'businessId' | 'locationId' | 'search' | 'dateFrom' | 'dateTo'>,
+  params: Pick<InvoicesQueryParams, 'businessId' | 'locationId' | 'search' | 'dateFrom' | 'dateTo' | 'dateField' | 'quick'>,
 ): Promise<Record<string, number>> {
   // ONE grouped scan via the invoice_tab_counts RPC (migration 183) — was six
   // parallel count:'exact' queries, each paying the full RLS cost.
@@ -250,7 +331,7 @@ export async function fetchInvoiceStatusCounts(
   const ids = term ? await resolveSearchIds(supabase, params.businessId, term) : null;
   const qAmount = term.replace(/[$,\s]/g, '');
   const amount = term && qAmount !== '' && /^\d+(\.\d+)?$/.test(qAmount) ? qAmount : null;
-  const { data, error } = await supabase.rpc('invoice_tab_counts', {
+  const base = {
     p_business_id: params.businessId,
     p_location_id: params.locationId ?? null,
     p_date_from: params.dateFrom ?? null,
@@ -259,7 +340,15 @@ export async function fetchInvoiceStatusCounts(
     p_search_amount: amount,
     p_client_ids: ids?.clientIds?.length ? ids.clientIds : null,
     p_invoice_ids: ids?.invoiceIds?.length ? ids.invoiceIds : null,
+  };
+  let { data, error } = await supabase.rpc('invoice_tab_counts', {
+    ...base,
+    p_date_field: params.dateField ?? 'issue',
+    p_quick: params.quick?.length ? params.quick : null,
   });
+  // PGRST202 = migration 251 not run yet: the old signature (issue date, no
+  // quick filters) still gives badges rather than none.
+  if (error?.code === 'PGRST202') ({ data, error } = await supabase.rpc('invoice_tab_counts', base));
   // A counts failure must NOT take the rows down with it: the caller runs this
   // in the same Promise.all as the page fetch, so a throw here used to mean an
   // empty screen. Badges degrade to zero instead.

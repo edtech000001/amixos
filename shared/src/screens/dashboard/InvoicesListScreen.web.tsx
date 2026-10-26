@@ -6,14 +6,15 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SkeletonRow } from '../../ui/Skeleton';
-import { Plus, FileText, Search, X, Calendar, XCircle, List, Layers, Building2, MapPin, Check, ListChecks, Trash2, DollarSign, Bell, BellRing, AlertTriangle } from 'lucide-react';
+import { Plus, FileText, Search, X, Calendar, List, Layers, Building2, MapPin, Check, ListChecks, Trash2, DollarSign, Bell, BellRing, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, BadgeCheck, History, CalendarClock, CircleDollarSign } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { formatDateLong, daysOverdue, daysSince } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { INVOICES_FILTERS_KEY, parseInvoicesFilters } from '../../lib/invoicesFilters';
+import { FilterBar, DateFilterPanel, RadioFilterPanel, dateRangeChipText, type BarFilter } from '../../ui/FilterBar.web';
+import { INVOICE_SORT_KEYS, invoiceSortIsDesc, invoiceSortCaption, type InvoiceDateField, type InvoiceQuickFilter, type InvoiceSortKey } from '../../lib/invoicesQuery';
 import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset } from '../../lib/dateRangePresets';
-import { Tooltip } from '../../ui/Tooltip';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { reminderBadge } from '../../lib/invoiceReminders';
 
@@ -45,6 +46,9 @@ export interface InvoicesListScreenProps {
   /** Business payroll config — powers the pay-period presets in the date
    *  filter (same quick chips as the jobs list). */
   payPeriod?: { frequency: unknown; anchorDate: unknown; customDays?: unknown };
+  /** Show the "Collect from partner" filter — only for businesses that
+   *  have ever billed through (businessUsesBillThrough). */
+  showCollectFilter?: boolean;
   loading: boolean;
   invoices: InvoiceListItem[];
   onInvoicePress: (id: string) => void;
@@ -85,6 +89,10 @@ export interface InvoicesListScreenProps {
     groupBy: GroupKey;
     dateFrom: string | null;
     dateTo: string | null;
+    dateField?: InvoiceDateField;
+    quick?: InvoiceQuickFilter[];
+    sortBy?: InvoiceSortKey;
+    sortDesc?: boolean | null;
   }) => void;
 }
 
@@ -106,8 +114,18 @@ function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
+// One-tap quick filters in the bar (reminders have their own panel).
+const QUICK_CHIPS: { key: InvoiceQuickFilter; Icon: typeof Bell }[] = [
+  { key: 'recent_paid', Icon: BadgeCheck },
+  { key: 'recent_updated', Icon: History },
+  { key: 'due_soon', Icon: CalendarClock },
+  { key: 'partial', Icon: CircleDollarSign },
+  { key: 'collect', Icon: Building2 },
+];
+
 export function InvoicesListScreen({
   payPeriod,
+  showCollectFilter,
   loading,
   invoices,
   onInvoicePress,
@@ -131,7 +149,9 @@ export function InvoicesListScreen({
   const t = full.dashboard.invoices;
   const tg = t.group;
   const tdate = full.dashboard.jobs.dateFilter; // reuse the jobs date-filter labels
-  const dateRangePresets = buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets, payPeriod);
+  // No pay-period presets: a payroll idea that only confused invoices.
+  void payPeriod;
+  const dateRangePresets = buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets);
   const tStatus = full.dashboard.invoiceStatus;
 
   const [statuses, setStatuses] = useState<StatusKey[]>([]);
@@ -142,7 +162,13 @@ export function InvoicesListScreen({
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
   const [datePreset, setDatePreset] = useState<AppliedDatePreset | null>(null);
-  const [dateOpen, setDateOpen] = useState(false);
+  // Which date the range applies to, quick-filter pills, and the sort
+  // (migration 251). Persisted with the other filters.
+  const [dateField, setDateField] = useState<InvoiceDateField>('issue');
+  const [quick, setQuick] = useState<InvoiceQuickFilter[]>([]);
+  const [sortBy, setSortBy] = useState<InvoiceSortKey>('newest');
+  const [sortDesc, setSortDesc] = useState<boolean | null>(null);
+  const [sortOpen, setSortOpen] = useState(false);
   // Group the list into sections — persisted per device+business, like the
   // jobs list, so leaving the page keeps the chosen grouping.
   const groupStoreKey = businessId ? `amixos.invoicesGroupBy.v1.${businessId}` : 'amixos.invoicesGroupBy.v1';
@@ -169,6 +195,10 @@ export function InvoicesListScreen({
     setDateFrom(f?.dateFrom ?? null);
     setDateTo(f?.dateTo ?? null);
     setDatePreset(f?.datePreset ?? null);
+    setDateField(f?.dateField ?? 'issue');
+    setQuick(f?.quick ?? []);
+    setSortBy(f?.sortBy ?? 'newest');
+    setSortDesc(f?.sortDesc ?? null);
     setHydrated(true);
     // Re-run when the business changes so filters are scoped per company.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -180,8 +210,8 @@ export function InvoicesListScreen({
   // Persist status + date filters on change (after the restore).
   useEffect(() => {
     if (!hydrated) return;
-    try { window.localStorage.setItem(filtersKey, JSON.stringify({ statuses, dateFrom, dateTo, datePreset })); } catch { /* private mode */ }
-  }, [hydrated, filtersKey, statuses, dateFrom, dateTo, datePreset]);
+    try { window.localStorage.setItem(filtersKey, JSON.stringify({ statuses, dateFrom, dateTo, datePreset, dateField, quick, sortBy, sortDesc })); } catch { /* private mode */ }
+  }, [hydrated, filtersKey, statuses, dateFrom, dateTo, datePreset, dateField, quick, sortBy, sortDesc]);
   // A tapped relative preset ("This pay period", "This week"…) rolls forward
   // to its current range once the period turns over, instead of pinning the
   // dates it had when it was picked.
@@ -222,9 +252,77 @@ export function InvoicesListScreen({
   const dateActive = !!dateFrom || !!dateTo;
   // Filters that can HIDE invoices (group only regroups) — drives the
   // empty-state "clear filters" prompt, whose clear keeps grouping.
-  const narrowed = statuses.length > 0 || search.trim() !== '' || dateActive;
-  const clearNarrowing = () => { setStatuses([]); setSearch(''); setDateFrom(null); setDateTo(null); };
-  const clearDate = () => { setDateFrom(null); setDateTo(null); };
+  const narrowed = statuses.length > 0 || search.trim() !== '' || dateActive || quick.length > 0;
+  const clearNarrowing = () => { setStatuses([]); setSearch(''); setDateFrom(null); setDateTo(null); setQuick([]); };
+  const tl = t.listTools;
+  const sortActive = sortBy !== 'newest' || sortDesc === false;
+  // "Collect from partner" only where bill-through has happened — but kept
+  // while it's on, so a saved filter can still be turned off.
+  const visibleQuick = ({ key }: { key: InvoiceQuickFilter }) =>
+    key !== 'collect' || !!showCollectFilter || quick.includes('collect');
+  const toggleQuick = (k: InvoiceQuickFilter) =>
+    setQuick(prev => (prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]));
+  const reminderMode: 'reminded' | 'not_reminded' | null =
+    quick.includes('reminded') ? 'reminded' : quick.includes('not_reminded') ? 'not_reminded' : null;
+  const setReminderMode = (m: 'reminded' | 'not_reminded' | null) =>
+    setQuick(prev => [...prev.filter(x => x !== 'reminded' && x !== 'not_reminded'), ...(m ? [m] : [])]);
+  const tf = full.common.filters;
+  // The filter bar: date + reminders open a panel, the rest toggle.
+  const barFilters: BarFilter[] = [
+    {
+      key: 'date',
+      label: tf.date,
+      Icon: Calendar,
+      active: dateActive,
+      value: `${tl.fields[dateField]} · ${dateRangeChipText(dateFrom, dateTo, dateRangePresets.find(pr => pr.key === datePreset?.key)?.label, locale === 'es' ? 'es-MX' : 'en-US')}`,
+      onRemove: () => clearDate(),
+      panel: close => (
+        <DateFilterPanel<InvoiceDateField>
+          title={tf.date}
+          fieldLabel={tl.dateField}
+          fields={(['issue', 'due', 'paid'] as InvoiceDateField[]).map(k => ({ key: k, label: tl.fields[k] }))}
+          field={dateField}
+          presets={dateRangePresets}
+          from={dateFrom}
+          to={dateTo}
+          onApply={({ field, from, to, preset }) => {
+            if (field) setDateField(field);
+            setDateFrom(from); setDateTo(to); setDatePreset(toAppliedDatePreset(preset));
+          }}
+          onClose={close}
+          labels={{ from: tdate.from, to: tdate.to, cancel: tf.cancel, apply: tf.apply }}
+        />
+      ),
+    },
+    {
+      key: 'reminders',
+      label: tf.reminders,
+      Icon: BellRing,
+      active: !!reminderMode,
+      value: reminderMode ? tl.quick[reminderMode] : undefined,
+      onRemove: () => setReminderMode(null),
+      panel: close => (
+        <RadioFilterPanel<'reminded' | 'not_reminded'>
+          title={tf.reminders}
+          options={[{ key: 'reminded', label: tl.quick.reminded }, { key: 'not_reminded', label: tl.quick.not_reminded }]}
+          value={reminderMode}
+          onApply={setReminderMode}
+          onClose={close}
+          cancelLabel={tf.cancel}
+          applyLabel={tf.apply}
+        />
+      ),
+    },
+    ...QUICK_CHIPS.filter(visibleQuick).map(({ key, Icon }): BarFilter => ({
+      key,
+      label: tl.quick[key],
+      Icon,
+      active: quick.includes(key),
+      onToggle: () => toggleQuick(key),
+      onRemove: () => toggleQuick(key),
+    })),
+  ];
+  const clearDate = () => { setDateFrom(null); setDateTo(null); setDatePreset(null); };
 
   const inDateRange = (d: string | null) => {
     if (!dateFrom && !dateTo) return true;
@@ -301,9 +399,9 @@ export function InvoicesListScreen({
   // debouncedSearch comes from usePersistedSearch (restore-aware).
   useEffect(() => {
     if (!serverMode || !onFiltersChange || !hydrated) return;
-    onFiltersChange({ search: debouncedSearch, statuses, groupBy, dateFrom, dateTo });
+    onFiltersChange({ search: debouncedSearch, statuses, groupBy, dateFrom, dateTo, dateField, quick, sortBy, sortDesc });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverMode, hydrated, debouncedSearch, statuses, groupBy, dateFrom, dateTo]);
+  }, [serverMode, hydrated, debouncedSearch, statuses, groupBy, dateFrom, dateTo, dateField, quick, sortBy, sortDesc]);
 
   // Infinite scroll: load the next page when a sentinel near the list bottom
   // scrolls into view.
@@ -370,7 +468,7 @@ export function InvoicesListScreen({
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-ink">{t.title}</h1>
-          <p className="text-sm text-muted mt-0.5">{search.trim() || statuses.length || dateFrom || dateTo
+          <p className="text-sm text-muted mt-0.5">{search.trim() || statuses.length || dateFrom || dateTo || quick.length
               ? t.countFound.replace('{{count}}', String(serverMode ? (serverTotal ?? filtered.length) : filtered.length))
               : t.countTotal.replace('{{count}}', String(serverMode ? (serverTotal ?? invoices.length) : invoices.length))}</p>
         </div>
@@ -435,72 +533,44 @@ export function InvoicesListScreen({
             <ListChecks size={15} /> {t.selectButton}
           </button>
         ) : null}
-        {dateActive ? (
-          <Tooltip tip="clearDate">
-            <button
-              onClick={clearDate}
-              className="shrink-0 flex items-center justify-center p-2.5 rounded-2xl border border-red-200 bg-red-500/10 text-red-600 shadow-sm hover:bg-red-100 transition-colors"
-            >
-              <XCircle size={16} />
-            </button>
-          </Tooltip>
-        ) : null}
-        {/* Date range */}
+        {/* Sort */}
         <div className="relative shrink-0">
           <button
-            onClick={() => { setGroupMenuOpen(false); setDateOpen(o => !o); }}
-            title={tdate.button}
-            aria-label={tdate.button}
-            className={`flex items-center justify-center p-2.5 rounded-2xl border shadow-sm transition-colors ${
-              dateActive ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
+            onClick={() => { setGroupMenuOpen(false); setSortOpen(o => !o); }}
+            title={tl.sortTitle}
+            aria-label={tl.sortTitle}
+            className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
+              sortActive ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
             }`}
           >
-            <Calendar size={16} />
+            <ArrowUpDown size={15} /> {tl.sort[sortBy]}
           </button>
-          {dateOpen ? (
+          {sortOpen ? (
             <>
-              <div className="fixed inset-0 z-10" onClick={() => setDateOpen(false)} />
-              <div className="absolute right-0 top-full mt-2 z-20 w-72 bg-card rounded-2xl border border-border-soft shadow-lg p-4">
-                <p className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-1">{tdate.title}</p>
-                <p className="text-[11px] text-faint mb-2">{t.dateFilterBasis}</p>
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  {dateRangePresets.map(pr => {
-                    const active = dateFrom === pr.from && dateTo === pr.to;
-                    return (
-                      <button
-                        key={pr.label}
-                        onClick={() => { setDateFrom(pr.from); setDateTo(pr.to); setDatePreset(toAppliedDatePreset(pr)); }}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-                          active ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
-                        }`}
-                      >
-                        {pr.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <label className="block text-xs font-medium text-muted mb-1">{tdate.from}</label>
-                <input
-                  type="date"
-                  value={dateFrom ?? ''}
-                  onChange={e => setDateFrom(e.target.value || null)}
-                  className="w-full mb-3 rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-                <label className="block text-xs font-medium text-muted mb-1">{tdate.to}</label>
-                <input
-                  type="date"
-                  value={dateTo ?? ''}
-                  onChange={e => setDateTo(e.target.value || null)}
-                  className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-                {dateActive ? (
-                  <button
-                    onClick={clearDate}
-                    className="mt-3 w-full py-2 rounded-xl bg-border-soft text-sm font-semibold text-ink hover:bg-border"
-                  >
-                    {tdate.clear}
-                  </button>
-                ) : null}
+              <div className="fixed inset-0 z-10" onClick={() => setSortOpen(false)} />
+              <div className="absolute right-0 top-full mt-2 z-20 w-64 bg-card rounded-2xl border border-border-soft shadow-lg p-2">
+                <p className="text-[11px] font-semibold text-faint uppercase tracking-wider px-2 pt-1 pb-2">{tl.sortTitle}</p>
+                {INVOICE_SORT_KEYS.map(k => {
+                  const selected = sortBy === k;
+                  const desc = invoiceSortIsDesc(k, selected ? sortDesc : null);
+                  return (
+                    <button
+                      key={k}
+                      onClick={() => {
+                        // New sort → its default direction; the selected one again → reverse.
+                        if (selected) setSortDesc(!invoiceSortIsDesc(k, sortDesc));
+                        else { setSortBy(k); setSortDesc(null); }
+                      }}
+                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left ${selected ? 'bg-primary/10' : 'hover:bg-surface'}`}
+                    >
+                      <span className="flex-1">
+                        <span className={`block text-sm ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>{tl.sort[k]}</span>
+                        {selected ? <span className="block text-[11px] text-muted">{tl.dir[invoiceSortCaption(k, desc)]} · {tl.dir.tapToReverse}</span> : null}
+                      </span>
+                      {selected ? (desc ? <ArrowDown size={15} className="text-primary" /> : <ArrowUp size={15} className="text-primary" />) : null}
+                    </button>
+                  );
+                })}
               </div>
             </>
           ) : null}
@@ -508,7 +578,7 @@ export function InvoicesListScreen({
         {/* Group by */}
         <div className="relative shrink-0">
           <button
-            onClick={() => { setDateOpen(false); setGroupMenuOpen(o => !o); }}
+            onClick={() => { setSortOpen(false); setGroupMenuOpen(o => !o); }}
             title={tg.button}
             aria-label={tg.button}
             className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
@@ -568,6 +638,10 @@ export function InvoicesListScreen({
           );
         })}
       </div>
+
+      {/* Filters — active ones as removable chips, "＋ Filter" adds more
+          (mobile twin: the Filters sheet). Sort + group stay in the header. */}
+      <FilterBar filters={barFilters} addLabel={tf.add} clearAllLabel={tf.clearAll} className="mb-4 -mt-2" />
 
       {/* Selection bar — fixed to the bottom of the screen (matches the Jobs
          list) so it doesn't push the list down. */}

@@ -342,6 +342,16 @@ export type DashboardDict = {
     /** Caption in the date popover: the filter matches issue_date, while the
      *  rows show the DUE date, which reads like the filter is being ignored. */
     dateFilterBasis: string;
+    /** Invoice list sort / quick filters / date field (migration 251). */
+    listTools: {
+      sortTitle: string;
+      sort: { newest: string; due: string; amount: string; paid: string; updated: string };
+      dir: { newest: string; oldest: string; soonest: string; latest: string; highest: string; lowest: string; tapToReverse: string };
+      dateChip: string;
+      dateField: string;
+      fields: { issue: string; due: string; paid: string };
+      quick: { recent_paid: string; recent_updated: string; reminded: string; not_reminded: string; due_soon: string; partial: string; collect: string };
+    };
     sendInvoice: string;
     /** Re-send an already-sent invoice without touching its sent date. */
     resendInvoice: string;
@@ -3803,6 +3813,15 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       loadFailed: 'No se pudieron cargar las facturas.',
       dateFilterBasis: 'Filtra por fecha de emisión (las filas muestran el vencimiento).',
+      listTools: {
+        sortTitle: 'Ordenar facturas',
+        sort: { newest: 'Más recientes', due: 'Fecha de vencimiento', amount: 'Monto', paid: 'Fecha de pago', updated: 'Editadas recientemente' },
+        dir: { newest: 'Más recientes primero', oldest: 'Más antiguas primero', soonest: 'Vencen antes primero', latest: 'Vencen después primero', highest: 'Mayor monto primero', lowest: 'Menor monto primero', tapToReverse: 'Toca de nuevo para invertir' },
+        dateChip: 'Fecha',
+        dateField: '¿Qué fecha?',
+        fields: { issue: 'Emitida', due: 'Vence', paid: 'Pagada' },
+        quick: { recent_paid: 'Pagadas recientemente', recent_updated: 'Editadas recientemente', reminded: 'Recordadas', not_reminded: 'Sin recordatorio', due_soon: 'Vencen pronto', partial: 'Pago parcial', collect: 'Cobrar a otra empresa' },
+      },
       sendInvoice: 'Enviar factura',
       resendInvoice: 'Reenviar por correo',
       resendHint: 'Vuelve a enviar el correo sin cambiar la fecha de envío.',
@@ -7219,6 +7238,15 @@ export const dashboard: Record<Locale, DashboardDict> = {
       },
       loadFailed: "Couldn't load the invoices.",
       dateFilterBasis: 'Filters by issue date (rows show the due date).',
+      listTools: {
+        sortTitle: 'Sort invoices',
+        sort: { newest: 'Newest', due: 'Due date', amount: 'Amount', paid: 'Paid date', updated: 'Recently updated' },
+        dir: { newest: 'Newest first', oldest: 'Oldest first', soonest: 'Due soonest first', latest: 'Due latest first', highest: 'Highest first', lowest: 'Lowest first', tapToReverse: 'Tap again to reverse' },
+        dateChip: 'Date',
+        dateField: 'Which date?',
+        fields: { issue: 'Issued', due: 'Due', paid: 'Paid' },
+        quick: { recent_paid: 'Recently paid', recent_updated: 'Recently updated', reminded: 'Reminded', not_reminded: 'Not reminded', due_soon: 'Due soon', partial: 'Partially paid', collect: 'Collect from partner' },
+      },
       sendInvoice: 'Send invoice',
       resendInvoice: 'Email again',
       resendHint: 'Re-sends the email without changing the sent date.',

@@ -6,6 +6,9 @@
 // jobsFilters.ts.
 
 import { parseAppliedDatePreset, type AppliedDatePreset } from './dateRangePresets';
+import { INVOICE_SORT_KEYS, type InvoiceDateField, type InvoiceQuickFilter, type InvoiceSortKey } from './invoicesQuery';
+
+const QUICK_KEYS: InvoiceQuickFilter[] = ['recent_paid', 'recent_updated', 'reminded', 'not_reminded', 'due_soon', 'partial', 'collect'];
 
 export interface InvoicesFilters {
   /** Selected status filters (multi-select). Empty = "all" (no status filter). */
@@ -16,6 +19,13 @@ export interface InvoicesFilters {
   /** The quick preset that produced dateFrom/dateTo, so "This pay period"
    *  etc. roll forward on later visits (see rollDatePreset). */
   datePreset?: AppliedDatePreset | null;
+  /** Which date the range applies to (default issue). */
+  dateField?: InvoiceDateField;
+  /** Quick-filter pills (migration 251). */
+  quick?: InvoiceQuickFilter[];
+  /** Sort + direction (null = the sort's default). */
+  sortBy?: InvoiceSortKey;
+  sortDesc?: boolean | null;
 }
 
 export const INVOICES_FILTERS_KEY = 'amixos.invoicesFilters.v1';
@@ -33,6 +43,10 @@ export function parseInvoicesFilters(raw: string | null | undefined): Partial<In
     if (typeof o.dateFrom === 'string') out.dateFrom = o.dateFrom;
     if (typeof o.dateTo === 'string') out.dateTo = o.dateTo;
     out.datePreset = parseAppliedDatePreset(o.datePreset);
+    if (o.dateField === 'issue' || o.dateField === 'due' || o.dateField === 'paid') out.dateField = o.dateField;
+    if (Array.isArray(o.quick)) out.quick = o.quick.filter((k: unknown): k is InvoiceQuickFilter => QUICK_KEYS.includes(k as InvoiceQuickFilter));
+    if (INVOICE_SORT_KEYS.includes(o.sortBy)) out.sortBy = o.sortBy;
+    if (typeof o.sortDesc === 'boolean') out.sortDesc = o.sortDesc;
     return out;
   } catch {
     return null;

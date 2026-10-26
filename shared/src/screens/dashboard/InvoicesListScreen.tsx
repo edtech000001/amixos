@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, Pressable, ScrollView, SectionList, ActivityIndicator, Modal as RNModal } from 'react-native';
-import { FileText, Search, Calendar, Layers, XCircle, List, Building2, MapPin, Check, ListChecks, Trash2, X, DollarSign, Bell, BellRing, AlertTriangle } from 'lucide-react-native';
+import { View, Text, Pressable, SectionList, ActivityIndicator } from 'react-native';
+import { FileText, Search, List, Building2, MapPin, ListChecks, Trash2, X, DollarSign, Bell, BellRing, AlertTriangle, ArrowUp, ArrowDown, BadgeCheck, History, CalendarClock, CircleDollarSign } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { Input } from '../../ui/Input';
-import { DateRangeSheet } from '../../ui/DateRangeSheet';
+import { FilterSheet, FilterSection, Segmented, FilterChip, ChipWrap, DateRangeFields, FilterButton, showResultsLabel } from '../../ui/FilterSheet';
 import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset } from '../../lib/dateRangePresets';
 import { Fab } from '../../ui/Fab';
 import { formatDateLong, daysOverdue, daysSince } from '../../lib/format';
@@ -13,6 +13,7 @@ import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { SkeletonList, SkeletonRow } from '../../ui/Skeleton';
 import { ChipScroll } from '../../ui/ChipScroll';
 import { INVOICES_FILTERS_KEY, parseInvoicesFilters } from '../../lib/invoicesFilters';
+import { INVOICE_SORT_KEYS, invoiceSortIsDesc, invoiceSortCaption, type InvoiceDateField, type InvoiceQuickFilter, type InvoiceSortKey } from '../../lib/invoicesQuery';
 import { useThemeColors } from '../../theme';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { reminderBadge } from '../../lib/invoiceReminders';
@@ -48,6 +49,9 @@ export interface InvoicesListScreenProps {
   /** Business payroll config — powers the pay-period presets in the date
    *  filter (same quick chips as the jobs list). */
   payPeriod?: { frequency: unknown; anchorDate: unknown; customDays?: unknown };
+  /** Show the "Collect from partner" filter — only for businesses that
+   *  have ever billed through (businessUsesBillThrough). */
+  showCollectFilter?: boolean;
   loading: boolean;
   invoices: InvoiceListItem[];
   onInvoicePress: (id: string) => void;
@@ -88,6 +92,10 @@ export interface InvoicesListScreenProps {
     groupBy: GroupKey;
     dateFrom: string | null;
     dateTo: string | null;
+    dateField?: InvoiceDateField;
+    quick?: InvoiceQuickFilter[];
+    sortBy?: InvoiceSortKey;
+    sortDesc?: boolean | null;
   }) => void;
 }
 
@@ -117,9 +125,19 @@ function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
+// "Show only" chips in the Filters sheet (reminders have their own switch).
+const QUICK_CHIPS: { key: InvoiceQuickFilter; Icon: typeof Bell }[] = [
+  { key: 'recent_paid', Icon: BadgeCheck },
+  { key: 'recent_updated', Icon: History },
+  { key: 'due_soon', Icon: CalendarClock },
+  { key: 'partial', Icon: CircleDollarSign },
+  { key: 'collect', Icon: Building2 },
+];
+
 export function InvoicesListScreen({
   onBack,
   payPeriod,
+  showCollectFilter,
   loading,
   invoices,
   onInvoicePress,
@@ -156,7 +174,14 @@ export function InvoicesListScreen({
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
   const [datePreset, setDatePreset] = useState<AppliedDatePreset | null>(null);
-  const [dateOpen, setDateOpen] = useState(false);
+  // The one Filters sheet: sort, group, date, reminders, quick filters.
+  const [filterOpen, setFilterOpen] = useState(false);
+  // Which date the range applies to, quick-filter pills, and the sort
+  // (migration 251). Persisted with the other filters.
+  const [dateField, setDateField] = useState<InvoiceDateField>('issue');
+  const [quick, setQuick] = useState<InvoiceQuickFilter[]>([]);
+  const [sortBy, setSortBy] = useState<InvoiceSortKey>('newest');
+  const [sortDesc, setSortDesc] = useState<boolean | null>(null);
   // Group the list into sections — persisted per device+business, like the
   // jobs list, so leaving the screen keeps the chosen grouping.
   const groupStoreKey = businessId ? `amixos.invoicesGroupBy.v1.${businessId}` : 'amixos.invoicesGroupBy.v1';
@@ -177,7 +202,6 @@ export function InvoicesListScreen({
     setGroupByState(g);
     void AsyncStorage.setItem(groupStoreKey, g).catch(() => {});
   };
-  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
 
   // Status + date filters persist per device+business (like the jobs list) so
   // navigating into an invoice and back keeps them, not just the search/group.
@@ -200,6 +224,10 @@ export function InvoicesListScreen({
         setDateFrom(f?.dateFrom ?? null);
         setDateTo(f?.dateTo ?? null);
         setDatePreset(f?.datePreset ?? null);
+        setDateField(f?.dateField ?? 'issue');
+        setQuick(f?.quick ?? []);
+        setSortBy(f?.sortBy ?? 'newest');
+        setSortDesc(f?.sortDesc ?? null);
         filtersHydrated.current = true;
       })
       .catch(() => { filtersHydrated.current = true; });
@@ -208,10 +236,24 @@ export function InvoicesListScreen({
   }, [filtersKey, initialStatuses]);
   useEffect(() => {
     if (!filtersHydrated.current) return;
-    void AsyncStorage.setItem(filtersKey, JSON.stringify({ statuses, dateFrom, dateTo, datePreset })).catch(() => {});
-  }, [filtersKey, statuses, dateFrom, dateTo, datePreset]);
+    void AsyncStorage.setItem(filtersKey, JSON.stringify({ statuses, dateFrom, dateTo, datePreset, dateField, quick, sortBy, sortDesc })).catch(() => {});
+  }, [filtersKey, statuses, dateFrom, dateTo, datePreset, dateField, quick, sortBy, sortDesc]);
 
-  const dateRangePresets = buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets, payPeriod);
+  // No pay-period presets: pay periods are a payroll idea and only confused
+  // the invoice list. (payPeriod stays a prop for other callers.)
+  void payPeriod;
+  const dateRangePresets = buildHistoryRangePresets(full.dashboard.reports.payroll.historyPresets);
+  const tl = t.listTools;
+  // "Collect from partner" only where bill-through has happened — but kept
+  // while it's on, so a saved filter can still be turned off.
+  const visibleQuick = ({ key }: { key: InvoiceQuickFilter }) =>
+    key !== 'collect' || !!showCollectFilter || quick.includes('collect');
+  const toggleQuick = (k: InvoiceQuickFilter) =>
+    setQuick(prev => (prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]));
+  const reminderMode: 'any' | 'reminded' | 'not_reminded' =
+    quick.includes('reminded') ? 'reminded' : quick.includes('not_reminded') ? 'not_reminded' : 'any';
+  const setReminderMode = (m: 'any' | 'reminded' | 'not_reminded') =>
+    setQuick(prev => [...prev.filter(x => x !== 'reminded' && x !== 'not_reminded'), ...(m === 'any' ? [] : [m])]);
   // A tapped relative preset ("This pay period", "This week"…) rolls forward
   // to its current range once the period turns over, instead of pinning the
   // dates it had when it was picked.
@@ -252,9 +294,17 @@ export function InvoicesListScreen({
   const dateActive = !!dateFrom || !!dateTo;
   // Filters that can HIDE invoices (group only regroups) — drives the
   // empty-state "clear filters" prompt, whose clear keeps grouping.
-  const narrowed = statuses.length > 0 || search.trim() !== '' || dateActive;
-  const clearNarrowing = () => { setStatuses([]); setSearch(''); setDateFrom(null); setDateTo(null); };
-  const clearDate = () => { setDateFrom(null); setDateTo(null); };
+  const narrowed = statuses.length > 0 || search.trim() !== '' || dateActive || quick.length > 0;
+  const clearNarrowing = () => { setStatuses([]); setSearch(''); setDateFrom(null); setDateTo(null); setQuick([]); };
+  const clearDate = () => { setDateFrom(null); setDateTo(null); setDatePreset(null); };
+  const tf = full.common.filters;
+  const sortActive = sortBy !== 'newest' || sortDesc === false;
+  // Badge on the Filters button: one per active section / quick filter.
+  const filterCount = (sortActive ? 1 : 0) + (groupBy !== 'none' ? 1 : 0) + (dateActive ? 1 : 0) + quick.length;
+  const resetFilters = () => {
+    setSortBy('newest'); setSortDesc(null); setGroupBy('none');
+    clearDate(); setDateField('issue'); setQuick([]);
+  };
 
   const inDateRange = (d: string | null) => {
     if (!dateFrom && !dateTo) return true;
@@ -332,9 +382,9 @@ export function InvoicesListScreen({
   // debouncedSearch comes from usePersistedSearch (restore-aware).
   useEffect(() => {
     if (!serverMode || !onFiltersChange || !ready) return;
-    onFiltersChange({ search: debouncedSearch, statuses, groupBy, dateFrom, dateTo });
+    onFiltersChange({ search: debouncedSearch, statuses, groupBy, dateFrom, dateTo, dateField, quick, sortBy, sortDesc });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverMode, ready, debouncedSearch, statuses, groupBy, dateFrom, dateTo]);
+  }, [serverMode, ready, debouncedSearch, statuses, groupBy, dateFrom, dateTo, dateField, quick, sortBy, sortDesc]);
 
   // ── Selection mode (mass delete) — jobs/clients mobile pattern.
   const [selectMode, setSelectMode] = useState(false);
@@ -371,7 +421,7 @@ export function InvoicesListScreen({
         <View className="flex-1">
           <ScreenTitle title={t.title} onBack={onBack} />
           <Text className="text-sm text-muted mt-0.5">
-            {search.trim() || statuses.length || dateFrom || dateTo
+            {search.trim() || statuses.length || dateFrom || dateTo || quick.length
               ? t.countFound.replace('{{count}}', String(serverMode ? (serverTotal ?? filtered.length) : filtered.length))
               : t.countTotal.replace('{{count}}', String(serverMode ? (serverTotal ?? invoices.length) : invoices.length))}
           </Text>
@@ -386,24 +436,9 @@ export function InvoicesListScreen({
               <DollarSign size={16} color={c.muted} />
             </Pressable>
           ) : null}
-          {dateActive ? (
-            <Pressable
-              onPress={clearDate}
-              accessibilityLabel={tdate.clear}
-              className="w-11 h-11 rounded-xl border border-red-200 bg-red-500/10 items-center justify-center active:opacity-80"
-            >
-              <XCircle size={16} color={c.danger} />
-            </Pressable>
-          ) : null}
-          <Pressable
-            onPress={() => setDateOpen(o => !o)}
-            accessibilityLabel={tdate.button}
-            className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
-              dateActive ? 'bg-primary/10 border-primary' : 'bg-card border-border'
-            }`}
-          >
-            <Calendar size={16} color={dateActive ? c.primary : c.muted} />
-          </Pressable>
+          {/* Filters — sort, group, date, reminders and quick filters in one
+              sheet (FilterSheet at the screen root). */}
+          <FilterButton count={filterCount} onPress={() => setFilterOpen(true)} label={tf.button} />
           {onBulkDelete ? (
             <Pressable
               onPress={() => (selectMode ? exitSelect() : setSelectMode(true))}
@@ -415,15 +450,6 @@ export function InvoicesListScreen({
               <ListChecks size={16} color={selectMode ? c.primary : c.muted} />
             </Pressable>
           ) : null}
-          <Pressable
-            onPress={() => setGroupMenuOpen(true)}
-            accessibilityLabel={tg.button}
-            className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
-              groupBy !== 'none' ? 'bg-primary/10 border-primary' : 'bg-card border-border'
-            }`}
-          >
-            <Layers size={16} color={groupBy !== 'none' ? c.primary : c.muted} />
-          </Pressable>
         </View>
       </View>
 
@@ -457,8 +483,6 @@ export function InvoicesListScreen({
         />
       </View>
 
-      {/* Date-range filter now lives in a bottom sheet (DateRangeSheet at the
-          screen root) for one-hand reach. */}
 
       {/* Status tabs — multi-select chips; "all" is an icon reset.
          activeIndex reveals the selected chip: a filter restored with the
@@ -500,6 +524,7 @@ export function InvoicesListScreen({
           );
         })}
       </ChipScroll>
+
 
       {/* Selection banner — ✕ / count / Todas (clients mobile pattern). */}
       {selectMode ? (
@@ -662,73 +687,89 @@ export function InvoicesListScreen({
       </Pressable>
     ) : null}
 
-    {/* Group-by bottom sheet — mirrors the equipment "Agrupar por" menu. */}
-    <RNModal
-      visible={groupMenuOpen}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setGroupMenuOpen(false)}
-    >
-      {/* Backdrop is an absolute FIRST child and the card a plain sibling,
-          per the sheet contract in CLAUDE.md: nesting the card inside the
-          backdrop Pressable stops its ScrollView receiving drags. */}
-      <View className="flex-1 justify-end">
-        <Pressable
-          onPress={() => setGroupMenuOpen(false)}
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
-        />
-        <View className="bg-card rounded-t-3xl px-4 pt-3 pb-10">
-          <View className="items-center mb-3">
-            <View className="w-10 h-1 bg-border rounded-full" />
-          </View>
-          <View className="flex-row items-center justify-between mb-4">
-            <Text className="text-lg font-bold text-ink px-1">{tg.title}</Text>
-            <Pressable onPress={() => setGroupMenuOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
-              <X size={22} color={c.faint} />
-            </Pressable>
-          </View>
-          <View className="gap-1">
-            {groupOptions.map(o => {
-              const active = groupBy === o.key;
-              return (
-                <Pressable
-                  key={o.key}
-                  onPress={() => { setGroupBy(o.key); setGroupMenuOpen(false); }}
-                  className={`flex-row items-center gap-3 px-3 py-3 rounded-2xl ${active ? 'bg-primary/10' : 'active:bg-surface'}`}
-                >
-                  <View className={`w-9 h-9 rounded-xl items-center justify-center ${active ? 'bg-primary' : 'bg-border-soft'}`}>
-                    <o.Icon size={18} color={active ? '#FFFFFF' : c.muted} />
-                  </View>
-                  <Text className={`flex-1 text-base ${active ? 'text-primary font-semibold' : 'text-ink'}`}>
-                    {o.label}
-                  </Text>
-                  {active ? <Check size={20} color={c.primary} /> : null}
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      </View>
-    </RNModal>
+
 
     {/* New invoice — floating action, bottom-right thumb reach. Hidden when the
        caller can't create invoices. */}
     {onNewInvoicePress ? <Fab onPress={onNewInvoicePress} /> : null}
 
-    <DateRangeSheet
-      open={dateOpen}
-      onClose={() => setDateOpen(false)}
-      from={dateFrom}
-      to={dateTo}
-      onChange={({ from, to, preset }) => { setDateFrom(from); setDateTo(to); setDatePreset(toAppliedDatePreset(preset)); }}
-      title={tdate.title}
-      subtitle={t.dateFilterBasis}
-      fromLabel={tdate.from}
-      toLabel={tdate.to}
-      clearLabel={tdate.clear}
-      applyLabel={tdate.apply}
-      presets={dateRangePresets}
-    />
+    <FilterSheet
+      open={filterOpen}
+      onClose={() => setFilterOpen(false)}
+      title={tf.title}
+      resetLabel={tf.reset}
+      onReset={resetFilters}
+      canReset={filterCount > 0}
+      showLabel={showResultsLabel(tf, serverMode ? serverTotal : filtered.length)}
+    >
+      <FilterSection
+        title={tf.sortBy}
+        right={<Text className="text-xs text-faint">{tl.dir[invoiceSortCaption(sortBy, invoiceSortIsDesc(sortBy, sortDesc))]}</Text>}
+      >
+        <ChipWrap>
+          {INVOICE_SORT_KEYS.map(k => {
+            const selected = sortBy === k;
+            const desc = invoiceSortIsDesc(k, selected ? sortDesc : null);
+            return (
+              <FilterChip
+                key={k}
+                label={tl.sort[k]}
+                on={selected}
+                // New sort → its default direction; the selected one again → reverse.
+                onPress={() => (selected ? setSortDesc(!desc) : (setSortBy(k), setSortDesc(null)))}
+                leading={selected ? (desc ? <ArrowDown size={15} color={c.primary} /> : <ArrowUp size={15} color={c.primary} />) : undefined}
+              />
+            );
+          })}
+        </ChipWrap>
+      </FilterSection>
+
+      <FilterSection title={tf.groupBy}>
+        <ChipWrap>
+          {groupOptions.map(o => (
+            <FilterChip key={o.key} label={o.label} Icon={o.Icon} on={groupBy === o.key} onPress={() => setGroupBy(o.key)} />
+          ))}
+        </ChipWrap>
+      </FilterSection>
+
+      <FilterSection title={tf.date}>
+        <View className="gap-3">
+          <Segmented<InvoiceDateField>
+            options={(['issue', 'due', 'paid'] as InvoiceDateField[]).map(k => ({ key: k, label: tl.fields[k] }))}
+            value={dateField}
+            onChange={setDateField}
+          />
+          <DateRangeFields
+            presets={dateRangePresets}
+            from={dateFrom}
+            to={dateTo}
+            onChange={({ from, to, preset }) => { setDateFrom(from); setDateTo(to); setDatePreset(toAppliedDatePreset(preset)); }}
+            fromLabel={tdate.from}
+            toLabel={tdate.to}
+          />
+        </View>
+      </FilterSection>
+
+      <FilterSection title={tf.reminders}>
+        <Segmented
+          options={[
+            { key: 'any' as const, label: tf.any },
+            { key: 'reminded' as const, label: tl.quick.reminded, Icon: BellRing },
+            { key: 'not_reminded' as const, label: tl.quick.not_reminded, Icon: Bell },
+          ]}
+          value={reminderMode}
+          onChange={setReminderMode}
+        />
+      </FilterSection>
+
+      <FilterSection title={tf.showOnly}>
+        <ChipWrap>
+          {QUICK_CHIPS.filter(visibleQuick).map(({ key, Icon }) => (
+            <FilterChip key={key} check label={tl.quick[key]} Icon={Icon} on={quick.includes(key)} onPress={() => toggleQuick(key)} />
+          ))}
+        </ChipWrap>
+      </FilterSection>
+    </FilterSheet>
     </View>
   );
 }

@@ -20,7 +20,6 @@ import {
   ArrowRight,
   Send,
   Building2,
-  ArrowUpDown,
   ArrowUp,
   ArrowDown,
   Check,
@@ -41,7 +40,7 @@ import {
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { Input } from '../../ui/Input';
-import { DateRangeSheet } from '../../ui/DateRangeSheet';
+import { FilterSheet, FilterSection, FilterChip, ChipWrap, DateRangeFields, FilterButton, showResultsLabel } from '../../ui/FilterSheet';
 import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset } from '../../lib/dateRangePresets';
 import { Fab } from '../../ui/Fab';
 import { SkeletonList, SkeletonRow } from '../../ui/Skeleton';
@@ -333,7 +332,6 @@ export function JobsListScreen({
   // persisted filters have loaded (hydrated is a ref, which doesn't re-render).
   const [ready, setReady] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
-  const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [sortBy, setSortBy] = useState<JobSortKey>('recent');
   // null = the sort's default direction (dates newest-first — jobSort.ts).
   const [sortDesc, setSortDesc] = useState<boolean | null>(null);
@@ -342,7 +340,8 @@ export function JobsListScreen({
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
   const [datePreset, setDatePreset] = useState<AppliedDatePreset | null>(null);
-  const [dateMenuOpen, setDateMenuOpen] = useState(false);
+  // The one Filters sheet: sort, group and scheduled-date range.
+  const [filterOpen, setFilterOpen] = useState(false);
 
   // Re-anchor after returning from a job detail. The screen stays mounted so
   // the native scroll offset survives, but the on-focus refresh can regroup /
@@ -536,7 +535,14 @@ export function JobsListScreen({
     }, (v) => usStateName(v, locale)),
     [filtered, sortBy, groupBy, t, locale],
   );
-  const sortActive = sortBy !== 'recent' || sortDesc === false || groupBy !== 'none';
+  const tf = full.common.filters;
+  // Badge on the Filters button: one per active section.
+  const filterCount = (sortBy !== 'recent' || sortDesc === false ? 1 : 0) + (groupBy !== 'none' ? 1 : 0) + (dateActive ? 1 : 0);
+  // Sheet reset — sort/group/date only; status tabs + search live outside it.
+  const resetSheetFilters = () => {
+    setSortBy('recent'); setSortDesc(null); setGroupBy('none');
+    setDateFrom(null); setDateTo(null); setDatePreset(null);
+  };
 
   // SectionList data + an id → {sectionIndex,itemIndex} map for scroll-restore.
   const flatSections = useMemo<JobFlatSection[]>(
@@ -1058,24 +1064,9 @@ export function JobsListScreen({
               <BarChart3 size={17} color={c.primary} />
             </Pressable>
           ) : null}
-          <Pressable
-            onPress={() => setDateMenuOpen(o => !o)}
-            accessibilityLabel={t.dateFilter.button}
-            className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
-              dateActive ? 'bg-primary/10 border-primary' : 'bg-card border-border'
-            }`}
-          >
-            <Calendar size={16} color={dateActive ? c.primary : c.muted} />
-          </Pressable>
-          <Pressable
-            onPress={() => setSortMenuOpen(true)}
-            accessibilityLabel={t.sort.button}
-            className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
-              sortActive ? 'bg-primary/10 border-primary' : 'bg-card border-border'
-            }`}
-          >
-            <ArrowUpDown size={16} color={sortActive ? c.primary : c.muted} />
-          </Pressable>
+          {/* Filters — sort, group and date in one sheet (FilterSheet at the
+              screen root). */}
+          <FilterButton count={filterCount} onPress={() => setFilterOpen(true)} label={tf.button} />
           {/* Select-all moved into the selection banner below (Todos). */}
           {onCreateInvoice || canDelete ? (
             <Pressable
@@ -1141,8 +1132,6 @@ export function JobsListScreen({
           autoCapitalize="none"
           autoCorrect={false}
         />
-        {/* Date-range filter now lives in a bottom sheet (DateRangeSheet,
-            rendered at the screen root) for one-hand reach. */}
         {/* activeIndex reveals the selected chip — same reason as the invoices
            list: a filter can sit past the right edge, leaving "0 found" with
            no visible cause. Child 0 is the "all" reset, so the status keys
@@ -1294,112 +1283,6 @@ export function JobsListScreen({
       )}
         />
 
-      {/* Sort & group bottom sheet — selectable chips instead of long
-          radio rows. animationType="fade" (not "slide") on purpose: slide
-          animates the whole overlay INCLUDING the dim backdrop up from the
-          bottom, which reads as a gray bar rising. Fade matches the
-          delegate target picker. */}
-      <RNModal
-        visible={sortMenuOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSortMenuOpen(false)}
-      >
-        {/* Canonical sheet structure (see CLAUDE.md): absolute backdrop
-            Pressable FIRST, card as plain sibling — the card's ScrollView
-            gets drags natively (7 sort + 5 group rows overflow small phones). */}
-        <View className="flex-1 justify-end">
-          <Pressable
-            onPress={() => setSortMenuOpen(false)}
-            style={SHEET_BACKDROP}
-          />
-          {/* Compact rows so all 12 options fit without scrolling on most
-              phones; the ScrollView + visible indicator cover small screens. */}
-          <View className="bg-card rounded-t-3xl px-6 pt-3 pb-6" style={{ maxHeight: '85%' }}>
-            <View className="self-center w-10 h-1 rounded-full bg-border mb-3" />
-            <View className="flex-row items-center justify-between mb-3">
-              <Text className="text-base font-bold text-ink">{t.sort.title}</Text>
-              <Pressable onPress={() => setSortMenuOpen(false)} hitSlop={8}>
-                <Text className="text-sm font-semibold text-primary">{full.common.buttons.done}</Text>
-              </Pressable>
-            </View>
-
-            <ScrollView
-              automaticallyAdjustKeyboardInsets
-              keyboardDismissMode="interactive"
-            >
-            <Text className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-1.5">
-              {t.sort.sortByTitle}
-            </Text>
-            <View className="gap-0.5 mb-4">
-              {JOB_SORT_KEYS.map(k => {
-                const selected = sortBy === k;
-                const Icon = SORT_ICON[k];
-                const desc = sortIsDesc(k, selected ? sortDesc : null);
-                return (
-                  <Pressable
-                    key={k}
-                    // Tap a new sort → its default direction. Tap the active
-                    // one again → reverse it.
-                    onPress={() => {
-                      if (selected) setSortDesc(!sortIsDesc(k, sortDesc));
-                      else { setSortBy(k); setSortDesc(null); }
-                    }}
-                    className={`flex-row items-center gap-3 px-3 py-1.5 rounded-2xl ${
-                      selected ? 'bg-primary/10' : 'active:bg-surface'
-                    }`}
-                  >
-                    <View className={`w-8 h-8 rounded-xl items-center justify-center ${selected ? 'bg-primary' : 'bg-border-soft'}`}>
-                      <Icon size={16} color={selected ? '#FFFFFF' : '#6B7280'} />
-                    </View>
-                    <View className="flex-1">
-                      <Text className={`text-[15px] ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>
-                        {t.sort.by[k]}
-                      </Text>
-                      {selected ? (
-                        <Text className="text-[11px] text-muted mt-0.5">
-                          {t.sort.dir[sortDirCaption(k, desc)]} · {t.sort.dir.tapToReverse}
-                        </Text>
-                      ) : null}
-                    </View>
-                    {selected
-                      ? (desc ? <ArrowDown size={18} color={c.primary} /> : <ArrowUp size={18} color={c.primary} />)
-                      : null}
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <Text className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-1.5">
-              {t.sort.groupByTitle}
-            </Text>
-            <View className="gap-0.5">
-              {JOB_GROUP_KEYS.map(k => {
-                const selected = groupBy === k;
-                const Icon = GROUP_ICON[k];
-                return (
-                  <Pressable
-                    key={k}
-                    onPress={() => setGroupBy(k)}
-                    className={`flex-row items-center gap-3 px-3 py-1.5 rounded-2xl ${
-                      selected ? 'bg-primary/10' : 'active:bg-surface'
-                    }`}
-                  >
-                    <View className={`w-8 h-8 rounded-xl items-center justify-center ${selected ? 'bg-primary' : 'bg-border-soft'}`}>
-                      <Icon size={16} color={selected ? '#FFFFFF' : '#6B7280'} />
-                    </View>
-                    <Text className={`flex-1 text-[15px] ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>
-                      {t.sort.group[k]}
-                    </Text>
-                    {selected ? <Check size={18} color={c.primary} /> : null}
-                  </Pressable>
-                );
-              })}
-            </View>
-            </ScrollView>
-          </View>
-        </View>
-      </RNModal>
 
       {/* New job/proposal action sheet — bottom sheet, one-handed reach.
           animationType="fade" (not "slide") — slide animates the dim
@@ -1545,19 +1428,59 @@ export function JobsListScreen({
       </>
     ) : null}
 
-    <DateRangeSheet
-      open={dateMenuOpen}
-      onClose={() => setDateMenuOpen(false)}
-      from={dateFrom}
-      to={dateTo}
-      onChange={({ from, to, preset }) => { setDateFrom(from); setDateTo(to); setDatePreset(toAppliedDatePreset(preset)); }}
-      title={t.dateFilter.title}
-      fromLabel={t.dateFilter.from}
-      toLabel={t.dateFilter.to}
-      clearLabel={t.dateFilter.clear}
-      applyLabel={t.dateFilter.apply}
-      presets={dateRangePresets}
-    />
+    <FilterSheet
+      open={filterOpen}
+      onClose={() => setFilterOpen(false)}
+      title={tf.title}
+      resetLabel={tf.reset}
+      onReset={resetSheetFilters}
+      canReset={filterCount > 0}
+      showLabel={showResultsLabel(tf, serverMode
+        ? (tabs.length ? tabs.reduce((n, k) => n + (counts[k] ?? 0), 0) : counts.all ?? filtered.length)
+        : filtered.length)}
+    >
+      <FilterSection
+        title={tf.sortBy}
+        right={<Text className="text-xs text-faint">{t.sort.dir[sortDirCaption(sortBy, sortIsDesc(sortBy, sortDesc))]}</Text>}
+      >
+        <ChipWrap>
+          {JOB_SORT_KEYS.map(k => {
+            const selected = sortBy === k;
+            const desc = sortIsDesc(k, selected ? sortDesc : null);
+            return (
+              <FilterChip
+                key={k}
+                label={t.sort.by[k]}
+                Icon={SORT_ICON[k]}
+                on={selected}
+                // New sort → its default direction; the active one again → reverse.
+                onPress={() => (selected ? setSortDesc(!desc) : (setSortBy(k), setSortDesc(null)))}
+                leading={selected ? (desc ? <ArrowDown size={15} color={c.primary} /> : <ArrowUp size={15} color={c.primary} />) : undefined}
+              />
+            );
+          })}
+        </ChipWrap>
+      </FilterSection>
+
+      <FilterSection title={tf.groupBy}>
+        <ChipWrap>
+          {JOB_GROUP_KEYS.map(k => (
+            <FilterChip key={k} label={t.sort.group[k]} Icon={GROUP_ICON[k]} on={groupBy === k} onPress={() => setGroupBy(k)} />
+          ))}
+        </ChipWrap>
+      </FilterSection>
+
+      <FilterSection title={t.dateFilter.title}>
+        <DateRangeFields
+          presets={dateRangePresets}
+          from={dateFrom}
+          to={dateTo}
+          onChange={({ from, to, preset }) => { setDateFrom(from); setDateTo(to); setDatePreset(toAppliedDatePreset(preset)); }}
+          fromLabel={t.dateFilter.from}
+          toLabel={t.dateFilter.to}
+        />
+      </FilterSection>
+    </FilterSheet>
     <JobsSummarySheet
       open={summaryOpen}
       onClose={() => setSummaryOpen(false)}

@@ -24,6 +24,14 @@ export type CommonDict = {
     done: string;
     clear: string;
   };
+  /** Filter sheet (mobile) / filter bar (web) shared by the list screens. */
+  filters: {
+    button: string; title: string; reset: string;
+    show: string; showOne: string; showNone: string;
+    sortBy: string; groupBy: string; date: string;
+    add: string; apply: string; cancel: string; any: string;
+    showOnly: string; reminders: string; from: string; to: string; clearAll: string;
+  };
   states: {
     loading: string;
     saving: string;
@@ -199,6 +207,26 @@ export const common: Record<Locale, CommonDict> = {
       done: 'Listo',
       clear: 'Borrar',
     },
+    filters: {
+      button: 'Filtros',
+      title: 'Filtros',
+      reset: 'Restablecer',
+      show: 'Ver {{count}} resultados',
+      showOne: 'Ver 1 resultado',
+      showNone: 'Sin resultados',
+      sortBy: 'Ordenar por',
+      groupBy: 'Agrupar por',
+      date: 'Fecha',
+      add: 'Filtro',
+      apply: 'Aplicar',
+      cancel: 'Cancelar',
+      any: 'Todas',
+      showOnly: 'Mostrar solo',
+      reminders: 'Recordatorios',
+      from: 'Desde',
+      to: 'Hasta',
+      clearAll: 'Quitar filtros',
+    },
     states: {
       loading: 'Cargando',
       saving: 'Guardando',
@@ -343,6 +371,26 @@ export const common: Record<Locale, CommonDict> = {
       close: 'Close',
       done: 'Done',
       clear: 'Clear',
+    },
+    filters: {
+      button: 'Filters',
+      title: 'Filters',
+      reset: 'Reset',
+      show: 'Show {{count}} results',
+      showOne: 'Show 1 result',
+      showNone: 'No results',
+      sortBy: 'Sort by',
+      groupBy: 'Group by',
+      date: 'Date',
+      add: 'Filter',
+      apply: 'Apply',
+      cancel: 'Cancel',
+      any: 'Any',
+      showOnly: 'Show only',
+      reminders: 'Reminders',
+      from: 'From',
+      to: 'To',
+      clearAll: 'Clear filters',
     },
     states: {
       loading: 'Loading',

@@ -74,9 +74,10 @@ import {
   parseJobsFilters,
   type JobsFilters,
 } from '../../lib/jobsFilters';
-import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset, type DateRangePreset } from '../../lib/dateRangePresets';
+import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset } from '../../lib/dateRangePresets';
 import { formatHours } from '../../lib/fieldHome';
 import { Tooltip } from '../../ui/Tooltip';
+import { FilterBar, DateFilterPanel, dateRangeChipText, type BarFilter } from '../../ui/FilterBar.web';
 
 export interface JobListItem {
   id: string;
@@ -334,7 +335,6 @@ export function JobsListScreen({
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
   const [datePreset, setDatePreset] = useState<AppliedDatePreset | null>(null);
-  const [dateMenuOpen, setDateMenuOpen] = useState(false);
   // Gate persistence until after the restore pass, so we don't overwrite saved
   // filters with defaults on the first render.
   const [hydrated, setHydrated] = useState(false);
@@ -443,7 +443,28 @@ export function JobsListScreen({
   };
   const staleCaption = stale && cachedAt ? swrT.updatedAgo.replace('{{time}}', relTime(cachedAt)) : null;
 
-  const applyDatePreset = (p: DateRangePreset) => { setDateFrom(p.from); setDateTo(p.to); setDatePreset(toAppliedDatePreset(p)); };
+  // Filter bar: the scheduled-date range (more filters slot in here).
+  const barFilters: BarFilter[] = [
+    {
+      key: 'date',
+      label: t.dateFilter.title,
+      Icon: Calendar,
+      active: dateActive,
+      value: dateRangeChipText(dateFrom, dateTo, dateRangePresets.find(p => p.key === datePreset?.key)?.label, locale === 'es' ? 'es-MX' : 'en-US'),
+      onRemove: () => { setDateFrom(null); setDateTo(null); setDatePreset(null); },
+      panel: close => (
+        <DateFilterPanel
+          title={t.dateFilter.title}
+          presets={dateRangePresets}
+          from={dateFrom}
+          to={dateTo}
+          onApply={({ from, to, preset }) => { setDateFrom(from); setDateTo(to); setDatePreset(toAppliedDatePreset(preset)); }}
+          onClose={close}
+          labels={{ from: t.dateFilter.from, to: t.dateFilter.to, cancel: full.common.filters.cancel, apply: full.common.filters.apply }}
+        />
+      ),
+    },
+  ];
   const clearFilters = () => { setTabs([]); setSearch(''); setSortBy('recent'); setSortDesc(null); setGroupBy('none'); setDateFrom(null); setDateTo(null); };
 
   const tabLabels: Record<TabKey, string> = {
@@ -947,68 +968,6 @@ export function JobsListScreen({
         ) : null}
         <div className="relative shrink-0">
           <button
-            onClick={() => setDateMenuOpen(o => !o)}
-            title={t.dateFilter.button}
-            aria-label={t.dateFilter.button}
-            className={`flex items-center justify-center p-2.5 rounded-2xl border shadow-sm transition-colors ${
-              dateActive
-                ? 'bg-primary/10 border-primary text-primary'
-                : 'bg-card border-border text-muted hover:bg-surface'
-            }`}
-          >
-            <Calendar size={16} />
-          </button>
-          {dateMenuOpen ? (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setDateMenuOpen(false)} />
-              <div className="absolute right-0 top-full mt-2 z-20 w-80 bg-card rounded-2xl border border-border-soft shadow-lg p-4">
-                <p className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-2">
-                  {t.dateFilter.title}
-                </p>
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  {dateRangePresets.map(p => {
-                    const active = dateFrom === p.from && dateTo === p.to;
-                    return (
-                      <button
-                        key={p.label}
-                        onClick={() => applyDatePreset(p)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-                          active ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
-                        }`}
-                      >
-                        {p.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <label className="block text-xs font-medium text-muted mb-1">{t.dateFilter.from}</label>
-                <input
-                  type="date"
-                  value={dateFrom ?? ''}
-                  onChange={e => setDateFrom(e.target.value || null)}
-                  className="w-full mb-3 rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-                <label className="block text-xs font-medium text-muted mb-1">{t.dateFilter.to}</label>
-                <input
-                  type="date"
-                  value={dateTo ?? ''}
-                  onChange={e => setDateTo(e.target.value || null)}
-                  className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-                {dateActive ? (
-                  <button
-                    onClick={() => { setDateFrom(null); setDateTo(null); }}
-                    className="mt-3 w-full py-2 rounded-xl bg-border-soft text-sm font-semibold text-ink hover:bg-border"
-                  >
-                    {t.dateFilter.clear}
-                  </button>
-                ) : null}
-              </div>
-            </>
-          ) : null}
-        </div>
-        <div className="relative shrink-0">
-          <button
             onClick={() => setSortMenuOpen(o => !o)}
             className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
               sortActive
@@ -1113,6 +1072,10 @@ export function JobsListScreen({
           );
         })}
       </div>
+
+      {/* Filters — active ones as removable chips, "＋ Filter" adds more
+          (mobile twin: the Filters sheet). Sort + group stay in the header. */}
+      <FilterBar filters={barFilters} addLabel={full.common.filters.add} clearAllLabel={full.common.filters.clearAll} className="-mt-3 mb-5" />
 
       {/* Job list — loading only shows a skeleton when there are NO rows;
           otherwise the previous rows stay on screen while `refreshing`. */}

@@ -20,6 +20,9 @@ import {
   type InvoicesCursor,
   type InvoicesQueryParams,
   type InvoiceGroup,
+  type InvoiceDateField,
+  type InvoiceQuickFilter,
+  type InvoiceSortKey,
 } from '@amixos/shared/lib/invoicesQuery';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
@@ -28,7 +31,7 @@ import { useSwr } from '@amixos/shared/lib/swrCache';
 import ImportModal from '@/components/dashboard/ImportModal';
 import { confirm } from '@amixos/shared/ui/confirmBus';
 import { useScrollRestore, saveScrollAnchor } from '@/lib/useScrollRestore';
-import { collectFromPartner, type BillThroughLink } from '@amixos/shared/lib/invoiceBillThrough';
+import { collectFromPartner, businessUsesBillThrough, businessUsesBillThroughCached, type BillThroughLink } from '@amixos/shared/lib/invoiceBillThrough';
 
 interface InvoiceClient { first_name: string; last_name: string; company: string | null; state: string | null }
 interface RawInvoice {
@@ -73,6 +76,17 @@ export default function FacturasPage() {
     : null;
   const supabase = createSupabaseClient();
   const { business, currentRole, activeLocationId } = useApp();
+  // "Collect from partner" filter shows only once this business has billed
+  // through at least once.
+  const [usesBillThrough, setUsesBillThrough] = useState(() => businessUsesBillThroughCached(business?.id));
+  useEffect(() => {
+    if (!business?.id) return;
+    let active = true;
+    setUsesBillThrough(businessUsesBillThroughCached(business.id));
+    void businessUsesBillThrough(supabase, business.id).then(v => { if (active && v !== null) setUsesBillThrough(v); });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id]);
   const { t: full } = useLang();
   // Server-side pagination: rawInvoices holds the loaded page(s), not the table.
   const [rawInvoices, setRawInvoices] = useState<RawInvoice[]>([]);
@@ -156,6 +170,7 @@ export default function FacturasPage() {
       const countsP = fetchInvoiceStatusCounts(supabase, {
         businessId: params.businessId, locationId: params.locationId,
         search: params.search, dateFrom: params.dateFrom, dateTo: params.dateTo,
+        dateField: params.dateField, quick: params.quick,
       });
       if (loadAll) {
         // Load every matching row (in big pages) so company/state grouping is
@@ -194,9 +209,10 @@ export default function FacturasPage() {
   };
 
   // ── SWR default view (no search/status/date, no grouping) ─────────────────
-  const [filters, setFilters] = useState<{ search: string; statuses: string[]; groupBy: string; dateFrom: string | null; dateTo: string | null } | null>(null);
+  const [filters, setFilters] = useState<{ search: string; statuses: string[]; groupBy: string; dateFrom: string | null; dateTo: string | null; dateField?: InvoiceDateField; quick?: InvoiceQuickFilter[]; sortBy?: InvoiceSortKey; sortDesc?: boolean | null } | null>(null);
   const isDefaultFilters = (f: NonNullable<typeof filters>) =>
-    !f.search && f.statuses.length === 0 && f.groupBy === 'none' && !f.dateFrom && !f.dateTo;
+    !f.search && f.statuses.length === 0 && f.groupBy === 'none' && !f.dateFrom && !f.dateTo
+    && !f.quick?.length && (f.sortBy ?? 'newest') === 'newest' && f.sortDesc !== false;
   const defaultActive = !!business && !!filters && isDefaultFilters(filters);
   type InvoicesPayload = { invoices: RawInvoice[]; nextCursor: InvoicesCursor | null; counts: Record<string, number> };
   const swrKey = defaultActive ? `invoices_list_v2_${business.id}_${activeLocationId ?? 'all'}` : null;
@@ -306,6 +322,7 @@ export default function FacturasPage() {
       const counts = await fetchInvoiceStatusCounts(supabase, {
         businessId: params.businessId, locationId: params.locationId,
         search: params.search, dateFrom: params.dateFrom, dateTo: params.dateTo,
+        dateField: params.dateField, quick: params.quick,
       });
       if (seq !== loadSeqRef.current) return;
       setServerCounts(counts);
@@ -339,13 +356,14 @@ export default function FacturasPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLocationId]);
 
-  const handleFiltersChange = (f: { search: string; statuses: string[]; groupBy: string; dateFrom: string | null; dateTo: string | null }) => {
+  const handleFiltersChange = (f: { search: string; statuses: string[]; groupBy: string; dateFrom: string | null; dateTo: string | null; dateField?: InvoiceDateField; quick?: InvoiceQuickFilter[]; sortBy?: InvoiceSortKey; sortDesc?: boolean | null }) => {
     if (!business) return;
     setFilters(f);
     if (isDefaultFilters(f)) return; // SWR owns the default view
     const params: InvoicesQueryParams = {
       businessId: business.id, locationId: activeLocationId ?? null,
       statuses: f.statuses, search: f.search, dateFrom: f.dateFrom, dateTo: f.dateTo,
+      dateField: f.dateField, quick: f.quick, sortBy: f.sortBy, sortDesc: f.sortDesc,
     };
     if (f.groupBy !== 'none' && INVOICE_LAZY_GROUP_DIMS.includes(f.groupBy)) {
       void runGroupLazy(params);
@@ -410,6 +428,7 @@ export default function FacturasPage() {
     )}
     <InvoicesListScreen
       initialStatuses={initialStatuses}
+        showCollectFilter={usesBillThrough}
         payPeriod={business ? { frequency: business.payroll_frequency, anchorDate: business.payroll_anchor_date, customDays: business.payroll_custom_days } : undefined}
       loading={loading}
       invoices={invoices}

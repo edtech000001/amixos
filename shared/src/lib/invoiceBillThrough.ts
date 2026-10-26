@@ -631,3 +631,35 @@ export async function linkExistingBillThrough(
   if (sErr) return { ok: false, error: 'failed', message: sErr.message };
   return { ok: true };
 }
+
+// ── Has this business ever billed through? ─────────────────────────────────
+
+const usedCache = new Map<string, boolean>();
+
+/**
+ * True once ANY invoice of the business carries a bill-through stamp — gates
+ * the invoice list's "Collect from partner" filter so businesses that never
+ * bill through don't see it. Cached per session; null on a failed lookup
+ * (offline) so callers keep what they had.
+ */
+export async function businessUsesBillThrough(supabase: Supa, businessId: string): Promise<boolean | null> {
+  const hit = usedCache.get(businessId);
+  if (hit !== undefined) return hit;
+  const { data, error } = await supabase
+    .from('invoices')
+    .select('id')
+    .eq('business_id', businessId)
+    .not('billed_through', 'is', null)
+    .neq('billed_through', '[]')
+    .limit(1);
+  if (error) return null;
+  const used = (data?.length ?? 0) > 0;
+  // Only cache a yes: a "no" can flip the moment someone bills through.
+  if (used) usedCache.set(businessId, true);
+  return used;
+}
+
+/** Sync read of the cache (first render, before the lookup returns). */
+export function businessUsesBillThroughCached(businessId: string | null | undefined): boolean {
+  return !!businessId && usedCache.get(businessId) === true;
+}
