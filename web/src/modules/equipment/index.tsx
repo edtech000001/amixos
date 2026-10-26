@@ -23,16 +23,12 @@ import {
   RotateCw,
   ChevronLeft,
   ChevronRight,
-  Layers,
   Check,
   Star,
   List,
   Tag,
   Wallet,
   CalendarClock,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
   UserCheck,
   type LucideIcon,
 } from 'lucide-react';
@@ -89,7 +85,7 @@ import {
   type EquipmentExpiryFilter,
   type EquipmentAssigned,
 } from '@amixos/shared/lib/equipmentGroups';
-import { FilterBar, CheckListFilterPanel, RadioFilterPanel, type BarFilter } from '@amixos/shared/ui/FilterBar.web';
+import { FilterBar, CheckListFilterPanel, RadioFilterPanel, SortGroupMenu, type BarFilter } from '@amixos/shared/ui/FilterBar.web';
 import { cycleSort, sortTapClears } from '@amixos/shared/lib/sortCycle';
 
 interface EmployeeOption {
@@ -399,7 +395,6 @@ export default function EquipmentModule() {
   // Sort + expiration / assignment filters (equipmentGroups.ts), saved per
   // business with the group-by. Sorting/filtering runs over the load-all set.
   const [view, setView] = useState<EquipmentView>(DEFAULT_EQUIPMENT_VIEW);
-  const [sortOpen, setSortOpen] = useState(false);
   const sortActive = view.sortBy !== 'name' || view.sortDesc === true;
   const viewFiltered = view.expiry.length > 0 || view.assigned !== 'any';
   const sortDefaultDesc = (k: EquipmentSortKey) => equipmentSortIsDesc(k, null);
@@ -513,7 +508,6 @@ export default function EquipmentModule() {
     return () => obs.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasMore, loadingMore]);
-  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const groupOptions: { key: EquipmentGroupKey; label: string; Icon: LucideIcon }[] = [
     { key: 'none', label: t.groups.none, Icon: List },
     { key: 'lead', label: t.groups.lead, Icon: User },
@@ -843,8 +837,8 @@ export default function EquipmentModule() {
         ) : null}
       </div>
 
-      <div className="flex items-center gap-3 mb-5">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap justify-end items-center gap-3 mb-5">
+        <div className="relative flex-1 min-w-[14rem]">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
           <input
             value={search}
@@ -853,76 +847,21 @@ export default function EquipmentModule() {
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
-        {/* Sort — tap → select, again → reverse, third tap → back to Name. */}
-        <div className="relative">
-          <button
-            onClick={() => { setGroupMenuOpen(false); setSortOpen(o => !o); }}
-            className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm font-medium ${
-              sortActive ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border bg-card text-ink hover:bg-surface'
-            }`}
-          >
-            <ArrowUpDown size={15} /> {t.view.sort[view.sortBy]}
-          </button>
-          {sortOpen ? (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setSortOpen(false)} />
-              <div className="absolute right-0 z-20 mt-1 w-64 rounded-xl border border-border-soft bg-card shadow-lg p-1.5">
-                <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-faint">{tc.filters.sortBy}</p>
-                {EQUIPMENT_SORT_KEYS.map(k => {
-                  const selected = view.sortBy === k;
-                  const desc = equipmentSortIsDesc(k, selected ? view.sortDesc : null);
-                  return (
-                    <button key={k} onClick={() => applySortTap(k)}
-                      className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left ${selected ? 'bg-primary/10' : 'hover:bg-surface'}`}>
-                      <span className="flex-1">
-                        <span className={`block text-sm ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>{t.view.sort[k]}</span>
-                        {selected ? <span className="block text-[11px] text-muted">{t.view.dir[equipmentSortCaption(k, desc)]} · {sortHint}</span> : null}
-                      </span>
-                      {selected ? (desc ? <ArrowDown size={15} className="text-primary" /> : <ArrowUp size={15} className="text-primary" />) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          ) : null}
-        </div>
-        {/* Group-by + quick-filter dropdown */}
-        <div className="relative">
-          <button
-            onClick={() => { setSortOpen(false); setGroupMenuOpen(o => !o); }}
-            onBlur={() => setTimeout(() => setGroupMenuOpen(false), 150)}
-            className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm font-medium ${
-              groupBy === 'none'
-                ? 'border-border bg-card text-ink hover:bg-surface'
-                : 'border-primary/30 bg-primary/10 text-primary'
-            }`}
-          >
-            <Layers size={15} />
-            {groupBy === 'none' ? t.groups.button : groupOptions.find(o => o.key === groupBy)?.label}
-          </button>
-          {groupMenuOpen ? (
-            <div className="absolute right-0 z-20 mt-1 w-56 rounded-xl border border-border-soft bg-card shadow-lg p-1.5">
-              <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-faint">{t.groups.title}</p>
-              {groupOptions.map(o => {
-                const active = groupBy === o.key;
-                return (
-                  <button
-                    key={o.key}
-                    // Tap the selected group again to clear it.
-                    onMouseDown={() => { setGroupBy(active && o.key !== 'none' ? 'none' : o.key); setGroupMenuOpen(false); }}
-                    className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-sm ${active ? 'bg-primary/10' : 'hover:bg-surface'}`}
-                  >
-                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${active ? 'bg-primary text-white' : 'bg-border-soft text-muted'}`}>
-                      <o.Icon size={15} />
-                    </span>
-                    <span className={`flex-1 text-left ${active ? 'text-primary font-semibold' : 'text-ink'}`}>{o.label}</span>
-                    {active ? <Check size={15} className="text-primary" /> : null}
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-        </div>
+        {/* Sort & group — one button, same as mobile's Filters sheet. */}
+        <SortGroupMenu
+          sortOptions={EQUIPMENT_SORT_KEYS.map(k => ({ key: k, label: t.view.sort[k] }))}
+          sortBy={view.sortBy}
+          sortDesc={equipmentSortIsDesc(view.sortBy, view.sortDesc)}
+          caption={(k, d) => t.view.dir[equipmentSortCaption(k, d)]}
+          hint={sortHint}
+          onSortTap={applySortTap}
+          groupOptions={groupOptions}
+          groupBy={groupBy}
+          baseGroup="none"
+          onGroupTap={k => setGroupBy(groupBy === k ? 'none' : k)}
+          active={sortActive || groupBy !== 'none'}
+          labels={{ sortBy: tc.filters.sortBy, groupBy: tc.filters.groupBy, buttonLabel: full.common.filters.sortButton }}
+        />
       </div>
 
       {/* Filters — expirations (any of the picked ones) + assignment. */}

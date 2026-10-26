@@ -7,8 +7,29 @@
 
 import { Fragment, memo, useEffect, useMemo, useState, type ReactNode, useRef } from 'react';
 import { SkeletonRow } from '../../ui/Skeleton';
-import { Plus, Search, Upload, Trash2, Phone, Mail, MapPin, Pencil, User, Users, X, Layers, Check, ListChecks,
-  AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, Calendar, UserPlus, Receipt, CircleDollarSign, AlertCircle, Briefcase, Moon, MailX,
+import {
+  Plus,
+  Search,
+  Upload,
+  Trash2,
+  Phone,
+  Mail,
+  MapPin,
+  Pencil,
+  User,
+  Users,
+  X,
+  Check,
+  ListChecks,
+  AlertTriangle,
+  Calendar,
+  UserPlus,
+  Receipt,
+  CircleDollarSign,
+  AlertCircle,
+  Briefcase,
+  Moon,
+  MailX,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { cycleSort, sortTapClears } from '../../lib/sortCycle';
@@ -17,7 +38,7 @@ import { groupClients, parseClientGroupKey, CLIENTS_GROUP_KEY, type ClientGroupK
 import { usStateName } from '../../lib/usStates';
 import { Tooltip } from '../../ui/Tooltip';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
-import { FilterBar, DateFilterPanel, dateRangeChipText, type BarFilter } from '../../ui/FilterBar.web';
+import { FilterBar, DateFilterPanel, SortGroupMenu, dateRangeChipText, type BarFilter } from '../../ui/FilterBar.web';
 import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset } from '../../lib/dateRangePresets';
 import {
   CLIENT_SORT_KEYS,
@@ -168,7 +189,6 @@ export function ClientsListScreen({
     setSortBy(n.sortBy); setSortDesc(n.sortDesc);
   };
   const sortHint = sortTapClears(sortBy, sortDesc, sortDefaultDesc, 'name') ? full.common.filters.tapToClear : full.common.filters.tapToReverse;
-  const [sortOpen, setSortOpen] = useState(false);
   const [quick, setQuick] = useState<ClientQuickFilter[]>([]);
   const [dateField, setDateField] = useState<ClientDateField>('added');
   const [dateFrom, setDateFrom] = useState<string | null>(null);
@@ -245,7 +265,6 @@ export function ClientsListScreen({
     if (!groupHydrated || typeof window === 'undefined') return;
     window.localStorage.setItem(groupKey, groupBy);
   }, [groupHydrated, groupKey, groupBy]);
-  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const groupOptions = useMemo<{ key: ClientGroupKey; label: string }[]>(() => [
     { key: 'name', label: t.group.name },
     { key: 'company', label: t.group.company },
@@ -388,8 +407,8 @@ export function ClientsListScreen({
       ) : null}
 
       {/* Search + view controls (jobs-layout pattern: controls beside the bar) */}
-      <div className="flex items-start gap-2 mb-4">
-      <div className="relative flex-1">
+      <div className="flex flex-wrap justify-end items-start gap-2 mb-4">
+      <div className="relative flex-1 min-w-[14rem]">
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
         <input
           value={search}
@@ -410,79 +429,21 @@ export function ClientsListScreen({
           </button>
         ) : null}
       </div>
-          {/* Sort — tap a new sort for its default direction, the selected one
-              again to reverse it. */}
-          <div className="relative">
-            <button
-              onClick={() => { setGroupMenuOpen(false); setSortOpen(o => !o); }}
-              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
-                !alpha ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-ink hover:bg-surface'
-              }`}
-            >
-              <ArrowUpDown size={15} /> {tl.sort[sortBy]}
-            </button>
-            {sortOpen ? (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setSortOpen(false)} />
-                <div className="absolute right-0 mt-2 z-20 w-64 bg-card rounded-2xl border border-border-soft shadow-lg p-2">
-                  <p className="text-[11px] font-semibold text-faint uppercase tracking-wider px-2 pt-1 pb-2">{tl.sortTitle}</p>
-                  {CLIENT_SORT_KEYS.map(k => {
-                    const selected = sortBy === k;
-                    const desc = clientSortIsDesc(k, selected ? sortDesc : null);
-                    return (
-                      <button
-                        key={k}
-                        onClick={() => applySortTap(k)}
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left ${selected ? 'bg-primary/10' : 'hover:bg-surface'}`}
-                      >
-                        <span className="flex-1">
-                          <span className={`block text-sm ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>{tl.sort[k]}</span>
-                          {selected ? <span className="block text-[11px] text-muted">{tl.dir[clientSortCaption(k, desc)]} · {sortHint}</span> : null}
-                        </span>
-                        {selected ? (desc ? <ArrowDown size={15} className="text-primary" /> : <ArrowUp size={15} className="text-primary" />) : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            ) : null}
-          </div>
-          {/* Group-by control — highlighted when not the default A–Z. */}
-          <div className="relative">
-            <button
-              onClick={() => { setSortOpen(false); setGroupMenuOpen(o => !o); }}
-              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors ${
-                groupBy !== 'name' ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-ink hover:bg-surface'
-              }`}
-            >
-              <Layers size={15} /> {t.group.button}
-            </button>
-            {groupMenuOpen ? (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setGroupMenuOpen(false)} />
-                <div className="absolute right-0 mt-2 z-20 bg-card rounded-2xl border border-border-soft shadow-lg p-3 w-64">
-                  <p className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-2">{t.group.title}</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {groupOptions.map(o => {
-                      const selected = groupBy === o.key;
-                      return (
-                        <button
-                          key={o.key}
-                          onClick={() => { setGroupBy(groupBy === o.key ? 'name' : o.key); setGroupMenuOpen(false); }}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
-                            selected ? 'bg-primary border-primary text-white' : 'bg-card border-border text-muted hover:border-border'
-                          }`}
-                        >
-                          {selected ? <Check size={12} /> : null}
-                          {o.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </>
-            ) : null}
-          </div>
+          {/* Sort & group — one button, same as mobile's Filters sheet. */}
+          <SortGroupMenu
+            sortOptions={CLIENT_SORT_KEYS.map(k => ({ key: k, label: tl.sort[k] }))}
+            sortBy={sortBy}
+            sortDesc={clientSortIsDesc(sortBy, sortDesc)}
+            caption={(k, d) => tl.dir[clientSortCaption(k, d)]}
+            hint={sortHint}
+            onSortTap={applySortTap}
+            groupOptions={groupOptions}
+            groupBy={groupBy}
+            baseGroup="name"
+            onGroupTap={k => setGroupBy(groupBy === k ? 'name' : k)}
+            active={!alpha || groupBy !== 'name'}
+            labels={{ sortBy: tf.sortBy, groupBy: tf.groupBy, buttonLabel: full.common.filters.sortButton }}
+          />
           {onBulkDeletePress ? (
             <button
               onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
@@ -498,7 +459,7 @@ export function ClientsListScreen({
 
       {/* Filters — active ones as removable chips, "＋ Filter" adds more
           (mobile twin: the Filters sheet). */}
-      <FilterBar filters={barFilters} addLabel={tf.add} clearAllLabel={tf.clearAll} className="mb-4" />
+      <FilterBar filters={barFilters} addLabel={tf.add} clearAllLabel={tf.clearAll} toggleSectionLabel={tf.showOnly} className="mb-4" />
 
       {/* Selection bar — visible while select mode is on (jobs-list pattern). */}
       {selectMode ? (

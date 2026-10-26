@@ -27,9 +27,6 @@ import {
   Send,
   ChevronDown,
   Building2,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
   Check,
   AlertTriangle,
   Clock,
@@ -78,7 +75,7 @@ import {
 import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset } from '../../lib/dateRangePresets';
 import { formatHours } from '../../lib/fieldHome';
 import { Tooltip } from '../../ui/Tooltip';
-import { FilterBar, DateFilterPanel, dateRangeChipText, type BarFilter } from '../../ui/FilterBar.web';
+import { FilterBar, DateFilterPanel, SortGroupMenu, dateRangeChipText, type BarFilter } from '../../ui/FilterBar.web';
 
 export interface JobListItem {
   id: string;
@@ -139,17 +136,6 @@ const TAB_ICON: Record<StatusTabKey, typeof List> = {
 
 // Icons for the sort/group menu chips — mirror the mobile sort sheet so both
 // platforms read the same (clock = newest, calendar = start date, etc.).
-const SORT_ICON: Record<JobSortKey, typeof List> = {
-  recent: Clock,
-  status: ListChecks,
-  startDate: Calendar,
-  endDate: CalendarClock,
-  priority: Flag,
-  updated: History,
-  title: ArrowDownAZ,
-  client: User,
-  lead: Users,
-};
 const GROUP_ICON: Record<JobGroupKey, typeof List> = {
   none: List,
   client: User,
@@ -327,7 +313,6 @@ export function JobsListScreen({
   const toggleTab = (k: StatusTabKey) =>
     setTabs(prev => (prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k]));
   const [newMenuOpen, setNewMenuOpen] = useState(false);
-  const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [sortBy, setSortBy] = useState<JobSortKey>('recent');
   // null = the sort's default direction (dates newest-first — jobSort.ts).
   const [sortDesc, setSortDesc] = useState<boolean | null>(null);
@@ -917,8 +902,8 @@ export function JobsListScreen({
       ) : null}
 
       {/* Search + sort */}
-      <div className="flex items-center gap-2 mb-3">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap justify-end items-center gap-2 mb-3">
+        <div className="relative flex-1 min-w-[14rem]">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
           <input
             value={search}
@@ -974,72 +959,21 @@ export function JobsListScreen({
             {selectMode ? t.batchInvoice.cancel : canDelete ? t.selectButton : t.batchInvoice.selectButton}
           </button>
         ) : null}
-        <div className="relative shrink-0">
-          <button
-            onClick={() => setSortMenuOpen(o => !o)}
-            className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
-              sortActive
-                ? 'bg-primary/10 border-primary text-primary'
-                : 'bg-card border-border text-muted hover:bg-surface'
-            }`}
-          >
-            <ArrowUpDown size={15} /> {t.sort.button}
-          </button>
-          {sortMenuOpen ? (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setSortMenuOpen(false)} />
-              <div className="absolute right-0 top-full mt-2 z-20 w-80 bg-card rounded-2xl border border-border-soft shadow-lg p-4">
-                <p className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-2">
-                  {t.sort.sortByTitle}
-                </p>
-                <div className="flex flex-wrap gap-1.5 mb-4">
-                  {JOB_SORT_KEYS.map(k => {
-                    const selected = sortBy === k;
-                    const Icon = SORT_ICON[k];
-                    const desc = sortIsDesc(k, selected ? sortDesc : null);
-                    return (
-                      <button
-                        key={k}
-                        // New sort → its default direction; the active one
-                        // again → reverse it.
-                        onClick={() => applySortTap(k)}
-                        title={selected ? `${t.sort.dir[sortDirCaption(k, desc)]} · ${sortHint}` : undefined}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
-                          selected ? 'bg-primary border-primary text-white' : 'bg-card border-border text-muted hover:border-border'
-                        }`}
-                      >
-                        {selected ? (desc ? <ArrowDown size={12} /> : <ArrowUp size={12} />) : <Icon size={12} />}
-                        {t.sort.by[k]}
-                        {selected ? <span className="font-normal opacity-80">· {t.sort.dir[sortDirCaption(k, desc)]}</span> : null}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-[11px] font-semibold text-faint uppercase tracking-wider mb-2">
-                  {t.sort.groupByTitle}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {JOB_GROUP_KEYS.map(k => {
-                    const selected = groupBy === k;
-                    const Icon = GROUP_ICON[k];
-                    return (
-                      <button
-                        key={k}
-                        onClick={() => setGroupBy(groupBy === k ? 'none' : k)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
-                          selected ? 'bg-primary border-primary text-white' : 'bg-card border-border text-muted hover:border-border'
-                        }`}
-                      >
-                        {selected ? <Check size={12} /> : <Icon size={12} />}
-                        {t.sort.group[k]}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </>
-          ) : null}
-        </div>
+        {/* Sort & group — one button (shared with the other lists). */}
+        <SortGroupMenu
+          sortOptions={JOB_SORT_KEYS.map(k => ({ key: k, label: t.sort.by[k] }))}
+          sortBy={sortBy}
+          sortDesc={sortIsDesc(sortBy, sortDesc)}
+          caption={(k, d) => t.sort.dir[sortDirCaption(k, d)]}
+          hint={sortHint}
+          onSortTap={applySortTap}
+          groupOptions={JOB_GROUP_KEYS.map(k => ({ key: k, label: t.sort.group[k], Icon: GROUP_ICON[k] }))}
+          groupBy={groupBy}
+          baseGroup="none"
+          onGroupTap={k => setGroupBy(groupBy === k ? 'none' : k)}
+          active={sortActive}
+          labels={{ sortBy: t.sort.sortByTitle, groupBy: t.sort.groupByTitle, buttonLabel: full.common.filters.sortButton }}
+        />
       </div>
 
       {/* Tabs — multi-select status filters. The leading "all" reset is an icon,

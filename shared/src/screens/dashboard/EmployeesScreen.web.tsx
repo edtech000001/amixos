@@ -11,8 +11,13 @@ import {
   Clock,
   ClipboardList,
   UserCheck,
-  Pencil, Trash2,
-  Search, X, Check, ListChecks, ArrowUpDown, ArrowUp, ArrowDown, Layers } from 'lucide-react';
+  Pencil,
+  Trash2,
+  Search,
+  X,
+  Check,
+  ListChecks,
+} from 'lucide-react';
 import { useLang } from '../../i18n';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { roleLabel } from '../../lib/permissions';
@@ -21,7 +26,7 @@ import { splitMultiValue } from '../../lib/fieldTemplates';
 import { SkeletonList } from '../../ui/Skeleton';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { Tooltip } from '../../ui/Tooltip';
-import { FilterBar, CheckListFilterPanel, type BarFilter } from '../../ui/FilterBar.web';
+import { FilterBar, CheckListFilterPanel, SortGroupMenu, type BarFilter } from '../../ui/FilterBar.web';
 import { cycleSort, sortTapClears } from '../../lib/sortCycle';
 import {
   EMPLOYEE_SORT_KEYS,
@@ -168,7 +173,6 @@ export function EmployeesScreen({
   const [sortBy, setSortBy] = useState<EmployeeSortKey>('name');
   const [sortDesc, setSortDesc] = useState<boolean | null>(null);
   const [groupBy, setGroupBy] = useState<EmployeeGroupKey>('none');
-  const [viewMenu, setViewMenu] = useState<'sort' | 'group' | null>(null);
   const [viewHydrated, setViewHydrated] = useState(false);
   const viewKey = businessId ? `${EMPLOYEES_VIEW_KEY}.${businessId}` : EMPLOYEES_VIEW_KEY;
   useEffect(() => {
@@ -407,8 +411,8 @@ export function EmployeesScreen({
 
       {tab === 'empleados' ? (
         <>
-        <div className="flex items-start gap-2 mb-4">
-        <div className="relative flex-1">
+        <div className="flex flex-wrap justify-end items-start gap-2 mb-4">
+        <div className="relative flex-1 min-w-[14rem]">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
           <input
             value={search}
@@ -424,70 +428,21 @@ export function EmployeesScreen({
             </button>
           ) : null}
         </div>
-        {/* Sort — tap → select, again → reverse, third tap → back to Name. */}
-        <div className="relative shrink-0">
-          <button
-            type="button"
-            onClick={() => setViewMenu(m => (m === 'sort' ? null : 'sort'))}
-            className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
-              sortBy !== 'name' || sortDesc === true ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
-            }`}
-          >
-            <ArrowUpDown size={15} /> {tv.sort[sortBy]}
-          </button>
-          {viewMenu === 'sort' ? (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setViewMenu(null)} />
-              <div className="absolute right-0 top-full mt-2 z-20 w-64 bg-card rounded-2xl border border-border-soft shadow-lg p-2">
-                <p className="text-[11px] font-semibold text-faint uppercase tracking-wider px-2 pt-1 pb-2">{tf.sortBy}</p>
-                {EMPLOYEE_SORT_KEYS.map(k => {
-                  const selected = sortBy === k;
-                  const desc = employeeSortIsDesc(k, selected ? sortDesc : null);
-                  return (
-                    <button key={k} type="button" onClick={() => applySortTap(k)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left ${selected ? 'bg-primary/10' : 'hover:bg-surface'}`}>
-                      <span className="flex-1">
-                        <span className={`block text-sm ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>{tv.sort[k]}</span>
-                        {selected ? <span className="block text-[11px] text-muted">{tv.dir[employeeSortCaption(k, desc)]} · {sortHint}</span> : null}
-                      </span>
-                      {selected ? (desc ? <ArrowDown size={15} className="text-primary" /> : <ArrowUp size={15} className="text-primary" />) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          ) : null}
-        </div>
-        {/* Group — tap the selected one again to clear it. */}
-        <div className="relative shrink-0">
-          <button
-            type="button"
-            onClick={() => setViewMenu(m => (m === 'group' ? null : 'group'))}
-            className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
-              groupBy !== 'none' ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
-            }`}
-          >
-            <Layers size={15} /> {tf.groupBy}
-          </button>
-          {viewMenu === 'group' ? (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setViewMenu(null)} />
-              <div className="absolute right-0 top-full mt-2 z-20 w-56 bg-card rounded-2xl border border-border-soft shadow-lg p-2">
-                {EMPLOYEE_GROUP_KEYS.map(k => {
-                  const selected = groupBy === k;
-                  return (
-                    <button key={k} type="button"
-                      onClick={() => { setGroupBy(selected ? 'none' : k); setViewMenu(null); }}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm text-left ${selected ? 'bg-primary/10 text-primary font-semibold' : 'text-ink hover:bg-surface'}`}>
-                      {tv.group[k]}
-                      {selected ? <Check size={14} /> : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          ) : null}
-        </div>
+        {/* Sort & group — one button, same as mobile's Filters sheet. */}
+        <SortGroupMenu
+          sortOptions={EMPLOYEE_SORT_KEYS.map(k => ({ key: k, label: tv.sort[k] }))}
+          sortBy={sortBy}
+          sortDesc={employeeSortIsDesc(sortBy, sortDesc)}
+          caption={(k, d) => tv.dir[employeeSortCaption(k, d)]}
+          hint={sortHint}
+          onSortTap={applySortTap}
+          groupOptions={EMPLOYEE_GROUP_KEYS.map(k => ({ key: k, label: tv.group[k] }))}
+          groupBy={groupBy}
+          baseGroup="none"
+          onGroupTap={k => setGroupBy(groupBy === k ? 'none' : k)}
+          active={sortBy !== 'name' || sortDesc === true || groupBy !== 'none'}
+          labels={{ sortBy: tf.sortBy, groupBy: tf.groupBy, buttonLabel: full.common.filters.sortButton }}
+        />
         {canBulkDelete && employees.length > 0 ? (
           <button
             type="button"

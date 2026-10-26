@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Plus, X, Check } from 'lucide-react';
+import { Plus, X, Check, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { DateRangePreset } from '../lib/dateRangePresets';
 
 type Icon = typeof Plus;
@@ -30,11 +30,14 @@ export function FilterBar({
   filters,
   addLabel,
   clearAllLabel,
+  toggleSectionLabel,
   className = '',
 }: {
   filters: BarFilter[];
   addLabel: string;
   clearAllLabel: string;
+  /** Caption above the one-tap filters in the add menu (e.g. "Show only"). */
+  toggleSectionLabel?: string;
   className?: string;
 }) {
   // 'menu' = the add menu; otherwise the key of the filter whose panel is
@@ -98,19 +101,31 @@ export function FilterBar({
           </button>
           {open === 'menu' ? popover(
             <div className="p-1.5">
-              {addable.map(f => (
-                <button
-                  key={f.key}
-                  type="button"
-                  onClick={() => {
-                    if (f.panel) setOpen(`add:${f.key}`);
-                    else { f.onToggle?.(); close(); }
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-ink text-left hover:bg-surface"
-                >
-                  {f.Icon ? <f.Icon size={15} className="text-muted" /> : null}
-                  {f.label}
-                </button>
+              {/* Filters that open a panel (›) first, then — under a divider —
+                  the one-tap ones, so the menu doesn't read as one block. */}
+              {[addable.filter(f => f.panel), addable.filter(f => !f.panel)].map((group, gi) => (
+                group.length ? (
+                  <div key={gi} className={gi === 1 && addable.some(f => f.panel) ? 'mt-1.5 pt-1.5 border-t border-border-soft' : ''}>
+                    {gi === 1 && toggleSectionLabel ? (
+                      <p className="px-3 pt-1 pb-1 text-[11px] font-semibold text-faint uppercase tracking-wider">{toggleSectionLabel}</p>
+                    ) : null}
+                    {group.map(f => (
+                      <button
+                        key={f.key}
+                        type="button"
+                        onClick={() => {
+                          if (f.panel) setOpen(`add:${f.key}`);
+                          else { f.onToggle?.(); close(); }
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-ink text-left hover:bg-surface"
+                      >
+                        {f.Icon ? <f.Icon size={15} className="text-muted" /> : null}
+                        <span className="flex-1">{f.label}</span>
+                        {f.panel ? <ChevronRight size={14} className="text-faint" /> : null}
+                      </button>
+                    ))}
+                  </div>
+                ) : null
               ))}
             </div>,
             'w-60',
@@ -358,5 +373,110 @@ export function CheckListFilterPanel({
         })}
       </div>
     </FilterPanel>
+  );
+}
+
+/**
+ * Web lists' one "Sort & group" header button (mobile: the Filters sheet's
+ * first two sections). Sort rows: tap → select, again → reverse, third tap →
+ * clear (sortCycle — the caller's onSortTap). Group rows: tap the selected one
+ * again to clear it (the caller's onGroupTap).
+ */
+export function SortGroupMenu<S extends string, G extends string>({
+  sortOptions,
+  sortBy,
+  sortDesc,
+  caption,
+  hint,
+  onSortTap,
+  groupOptions,
+  groupBy,
+  baseGroup,
+  onGroupTap,
+  active,
+  labels,
+}: {
+  sortOptions: { key: S; label: string }[];
+  sortBy: S;
+  /** Effective direction of the CURRENT sort. */
+  sortDesc: boolean;
+  /** Direction caption for a sort ("Newest first"). */
+  caption: (k: S, desc: boolean) => string;
+  /** "Tap again to reverse" / "Tap again to clear". */
+  hint: string;
+  onSortTap: (k: S) => void;
+  /** Omit to show sort only. */
+  groupOptions?: { key: G; label: string; Icon?: Icon }[];
+  groupBy?: G;
+  baseGroup?: G;
+  onGroupTap?: (k: G) => void;
+  /** Highlight the button (non-default sort or any grouping). */
+  active: boolean;
+  /** buttonLabel: the button's FIXED text — the current sort/group would
+   *  change its width and shift the header on every pick. */
+  labels: { sortBy: string; groupBy: string; buttonLabel: string };
+}) {
+  const [open, setOpen] = useState(false);
+  void baseGroup;
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
+          active ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
+        }`}
+      >
+        <ArrowUpDown size={15} />
+        {labels.buttonLabel}
+      </button>
+      {open ? (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-2 z-20 w-72 bg-card rounded-2xl border border-border-soft shadow-lg p-2">
+            <p className="text-[11px] font-semibold text-faint uppercase tracking-wider px-2 pt-1 pb-2">{labels.sortBy}</p>
+            {sortOptions.map(o => {
+              const selected = sortBy === o.key;
+              return (
+                <button
+                  key={o.key}
+                  type="button"
+                  onClick={() => onSortTap(o.key)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left ${selected ? 'bg-primary/10' : 'hover:bg-surface'}`}
+                >
+                  <span className="flex-1">
+                    <span className={`block text-sm ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>{o.label}</span>
+                    {selected ? <span className="block text-[11px] text-muted">{caption(o.key, sortDesc)} · {hint}</span> : null}
+                  </span>
+                  {selected ? (sortDesc ? <ArrowDown size={15} className="text-primary" /> : <ArrowUp size={15} className="text-primary" />) : null}
+                </button>
+              );
+            })}
+            {groupOptions?.length && onGroupTap ? (
+              <div className="mt-2 pt-2 border-t border-border-soft">
+                <p className="text-[11px] font-semibold text-faint uppercase tracking-wider px-2 pt-1 pb-2">{labels.groupBy}</p>
+                {groupOptions.map(o => {
+                  const selected = groupBy === o.key;
+                  return (
+                    <button
+                      key={o.key}
+                      type="button"
+                      onClick={() => onGroupTap(o.key)}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-sm ${
+                        selected ? 'bg-primary/10 text-primary font-semibold' : 'text-ink hover:bg-surface'
+                      }`}
+                    >
+                      {o.Icon ? <o.Icon size={15} className={selected ? 'text-primary' : 'text-muted'} /> : null}
+                      <span className="flex-1">{o.label}</span>
+                      {selected ? <Check size={15} className="text-primary" /> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+    </div>
   );
 }

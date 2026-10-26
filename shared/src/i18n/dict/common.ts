@@ -32,6 +32,8 @@ export type CommonDict = {
     add: string; apply: string; cancel: string; any: string;
     showOnly: string; reminders: string; from: string; to: string; clearAll: string;
     tapToReverse: string; tapToClear: string;
+    /** Fixed label of the web Sort & group button. */
+    sortButton: string;
   };
   states: {
     loading: string;
@@ -227,6 +229,7 @@ export const common: Record<Locale, CommonDict> = {
       from: 'Desde',
       to: 'Hasta',
       clearAll: 'Quitar filtros',
+      sortButton: 'Ordenar',
       tapToReverse: 'Toca de nuevo para invertir',
       tapToClear: 'Toca de nuevo para quitar',
     },
@@ -394,6 +397,7 @@ export const common: Record<Locale, CommonDict> = {
       from: 'From',
       to: 'To',
       clearAll: 'Clear filters',
+      sortButton: 'Sort',
       tapToReverse: 'Tap again to reverse',
       tapToClear: 'Tap again to clear',
     },

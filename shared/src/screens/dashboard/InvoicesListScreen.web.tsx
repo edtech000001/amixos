@@ -6,14 +6,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SkeletonRow } from '../../ui/Skeleton';
-import { Plus, FileText, Search, X, Calendar, List, Layers, Building2, MapPin, Check, ListChecks, Trash2, DollarSign, Bell, BellRing, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown, BadgeCheck, History, CalendarClock, CircleDollarSign } from 'lucide-react';
+import { Plus, FileText, Search, X, Calendar, List, Building2, MapPin, Check, ListChecks, Trash2, DollarSign, Bell, BellRing, AlertTriangle, BadgeCheck, History, CalendarClock, CircleDollarSign } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { cycleSort, sortTapClears } from '../../lib/sortCycle';
 import { formatDateLong, daysOverdue, daysSince } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { INVOICES_FILTERS_KEY, parseInvoicesFilters } from '../../lib/invoicesFilters';
-import { FilterBar, DateFilterPanel, RadioFilterPanel, dateRangeChipText, type BarFilter } from '../../ui/FilterBar.web';
+import { FilterBar, DateFilterPanel, RadioFilterPanel, SortGroupMenu, dateRangeChipText, type BarFilter } from '../../ui/FilterBar.web';
 import { INVOICE_SORT_KEYS, invoiceSortIsDesc, invoiceSortCaption, type InvoiceDateField, type InvoiceQuickFilter, type InvoiceSortKey } from '../../lib/invoicesQuery';
 import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset } from '../../lib/dateRangePresets';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
@@ -176,7 +176,6 @@ export function InvoicesListScreen({
     setSortBy(n.sortBy); setSortDesc(n.sortDesc);
   };
   const sortHint = sortTapClears(sortBy, sortDesc, sortDefaultDesc, 'newest') ? full.common.filters.tapToClear : full.common.filters.tapToReverse;
-  const [sortOpen, setSortOpen] = useState(false);
   // Group the list into sections — persisted per device+business, like the
   // jobs list, so leaving the page keeps the chosen grouping.
   const groupStoreKey = businessId ? `amixos.invoicesGroupBy.v1.${businessId}` : 'amixos.invoicesGroupBy.v1';
@@ -230,7 +229,6 @@ export function InvoicesListScreen({
     setDateTo(rolledPreset.to);
     setDatePreset(rolledPreset);
   }, [rolledPreset?.key, rolledPreset?.from, rolledPreset?.to]);
-  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
 
   const statusLabels: Record<StatusKey, string> = {
     draft: t.filters.drafts,
@@ -508,8 +506,8 @@ export function InvoicesListScreen({
       ) : null}
 
       {/* Search + filter controls */}
-      <div className="flex items-center gap-2 mb-4">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap justify-end items-center gap-2 mb-4">
+        <div className="relative flex-1 min-w-[14rem]">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
           <input
             value={search}
@@ -541,80 +539,21 @@ export function InvoicesListScreen({
             <ListChecks size={15} /> {t.selectButton}
           </button>
         ) : null}
-        {/* Sort */}
-        <div className="relative shrink-0">
-          <button
-            onClick={() => { setGroupMenuOpen(false); setSortOpen(o => !o); }}
-            title={tl.sortTitle}
-            aria-label={tl.sortTitle}
-            className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
-              sortActive ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
-            }`}
-          >
-            <ArrowUpDown size={15} /> {tl.sort[sortBy]}
-          </button>
-          {sortOpen ? (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setSortOpen(false)} />
-              <div className="absolute right-0 top-full mt-2 z-20 w-64 bg-card rounded-2xl border border-border-soft shadow-lg p-2">
-                <p className="text-[11px] font-semibold text-faint uppercase tracking-wider px-2 pt-1 pb-2">{tl.sortTitle}</p>
-                {INVOICE_SORT_KEYS.map(k => {
-                  const selected = sortBy === k;
-                  const desc = invoiceSortIsDesc(k, selected ? sortDesc : null);
-                  return (
-                    <button
-                      key={k}
-                      onClick={() => applySortTap(k)}
-                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left ${selected ? 'bg-primary/10' : 'hover:bg-surface'}`}
-                    >
-                      <span className="flex-1">
-                        <span className={`block text-sm ${selected ? 'text-primary font-semibold' : 'text-ink'}`}>{tl.sort[k]}</span>
-                        {selected ? <span className="block text-[11px] text-muted">{tl.dir[invoiceSortCaption(k, desc)]} · {sortHint}</span> : null}
-                      </span>
-                      {selected ? (desc ? <ArrowDown size={15} className="text-primary" /> : <ArrowUp size={15} className="text-primary" />) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          ) : null}
-        </div>
-        {/* Group by */}
-        <div className="relative shrink-0">
-          <button
-            onClick={() => { setSortOpen(false); setGroupMenuOpen(o => !o); }}
-            title={tg.button}
-            aria-label={tg.button}
-            className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${
-              groupBy !== 'none' ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'
-            }`}
-          >
-            <Layers size={15} /> {tg.button}
-          </button>
-          {groupMenuOpen ? (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setGroupMenuOpen(false)} />
-              <div className="absolute right-0 top-full mt-2 z-20 w-56 bg-card rounded-2xl border border-border-soft shadow-lg p-2">
-                {groupOptions.map(o => {
-                  const active = groupBy === o.key;
-                  return (
-                    <button
-                      key={o.key}
-                      onClick={() => { setGroupBy(groupBy === o.key ? 'none' : o.key); setGroupMenuOpen(false); }}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left ${active ? 'bg-primary/10' : 'hover:bg-surface'}`}
-                    >
-                      <span className={`w-8 h-8 rounded-lg flex items-center justify-center ${active ? 'bg-primary text-white' : 'bg-border-soft text-muted'}`}>
-                        <o.Icon size={16} />
-                      </span>
-                      <span className={`flex-1 text-sm ${active ? 'text-primary font-semibold' : 'text-ink'}`}>{o.label}</span>
-                      {active ? <Check size={16} className="text-primary" /> : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          ) : null}
-        </div>
+        {/* Sort & group — one button, same as mobile's Filters sheet. */}
+        <SortGroupMenu
+          sortOptions={INVOICE_SORT_KEYS.map(k => ({ key: k, label: tl.sort[k] }))}
+          sortBy={sortBy}
+          sortDesc={invoiceSortIsDesc(sortBy, sortDesc)}
+          caption={(k, d) => tl.dir[invoiceSortCaption(k, d)]}
+          hint={sortHint}
+          onSortTap={applySortTap}
+          groupOptions={groupOptions}
+          groupBy={groupBy}
+          baseGroup="none"
+          onGroupTap={k => setGroupBy(groupBy === k ? 'none' : k)}
+          active={sortActive || groupBy !== 'none'}
+          labels={{ sortBy: full.common.filters.sortBy, groupBy: full.common.filters.groupBy, buttonLabel: full.common.filters.sortButton }}
+        />
       </div>
 
       {/* Status tabs — multi-select; "all" is an icon reset. */}
@@ -645,7 +584,7 @@ export function InvoicesListScreen({
 
       {/* Filters — active ones as removable chips, "＋ Filter" adds more
           (mobile twin: the Filters sheet). Sort + group stay in the header. */}
-      <FilterBar filters={barFilters} addLabel={tf.add} clearAllLabel={tf.clearAll} className="mb-4 -mt-2" />
+      <FilterBar filters={barFilters} addLabel={tf.add} clearAllLabel={tf.clearAll} toggleSectionLabel={tf.showOnly} className="mb-4 -mt-2" />
 
       {/* Selection bar — fixed to the bottom of the screen (matches the Jobs
          list) so it doesn't push the list down. */}
