@@ -928,7 +928,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       ? `/dashboard/facturas/${backSearch.get('invoice')}`
       : backSearch?.get('from') === 'nomina'
         ? `/dashboard/reportes/nomina${backSearch.get('worker') ? `?worker=${backSearch.get('worker')}` : ''}`
-        : '/dashboard/trabajos';
+        : backSearch?.get('from') === 'calendar'
+          ? '/dashboard/calendario'
+          : '/dashboard/trabajos';
   // Carry the origin (from/invoice/worker) through the Edit form so returning
   // here keeps the same back target instead of falling back to the jobs list.
   const backCtx = (() => {

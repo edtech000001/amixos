@@ -107,6 +107,9 @@ export function Select({
             }}
           >
             <Text
+              // One line: a long value in a narrow box truncates ("North
+              // Caroli…") instead of wrapping and doubling the field height.
+              numberOfLines={1}
               className={clsx(
                 'text-base flex-1',
                 selected ? 'text-ink' : 'text-faint',

@@ -64,6 +64,9 @@ export interface CalItem {
   status: string | null;
   /** Jobs only — name of the assigned crew lead (is_lead assignment). */
   leadName: string | null;
+  /** Jobs only — the lead's identity (employee id, or 'w:<name>' for a
+   *  free-text worker) — what lead-overlap detection compares. */
+  leadKey?: string | null;
   /** Jobs only — employee ids + names assigned to this job (drives the
       team availability panel: who is booked on a given day). */
   assignees: { id: string; name: string }[];
@@ -212,6 +215,7 @@ export interface RawJob {
   job_state: string | null;
   client_name?: string | null;
   lead_name?: string | null;
+  lead_key?: string | null;
   assignees?: { id: string; name: string }[];
 }
 
@@ -276,8 +280,104 @@ export function jobToItem(j: RawJob): CalItem | null {
     clientId: null,
     status: j.status,
     leadName: j.lead_name ?? null,
+    leadKey: j.lead_key ?? null,
     assignees: j.assignees ?? [],
     spanStart,
     spanEnd,
   };
+}
+
+// ── At-a-glance job styling (status color, delayed, faded, lead overlaps) ──
+
+/** Job bar color per status — same palette as the status pills. */
+export const JOB_STATUS_HEX: Record<string, string> = {
+  posible: '#14B8A6',
+  proposal: '#64748B',
+  sent: '#64748B',
+  accepted: '#0EA5E9',
+  scheduled: '#2563EB',
+  in_progress: '#F59E0B',
+  paused: '#F97316',
+  completed: '#10B981',
+  invoiced: '#8B5CF6',
+  cancelled: '#9CA3AF',
+  declined: '#9CA3AF',
+};
+/** Past-due, still-open work. */
+export const JOB_DELAYED_HEX = '#EF4444';
+const OPEN_STATUSES = new Set(['posible', 'accepted', 'scheduled', 'in_progress', 'paused']);
+const DONE_STATUSES = new Set(['completed', 'invoiced', 'cancelled', 'declined']);
+
+/** A job whose last day is before today but is still open (not completed). */
+export function jobIsDelayed(item: CalItem, today: Date): boolean {
+  return item.kind === 'job' && !!item.status && OPEN_STATUSES.has(item.status)
+    && item.spanEnd.getTime() < startOfDay(today).getTime();
+}
+
+/** Bar color for a job: delayed red, else its status color. null = not a job
+ *  (events keep their type color). */
+export function jobBarHex(item: CalItem, today: Date): string | null {
+  if (item.kind !== 'job') return null;
+  if (jobIsDelayed(item, today)) return JOB_DELAYED_HEX;
+  return JOB_STATUS_HEX[item.status ?? ''] ?? JOB_STATUS_HEX.scheduled;
+}
+
+/** Faded: finished in the past — completed/invoiced/cancelled jobs, and
+ *  events whose last day has passed — so current + upcoming work stands out. */
+export function calItemFaded(item: CalItem, today: Date): boolean {
+  if (item.spanEnd.getTime() >= startOfDay(today).getTime()) return false;
+  return item.kind === 'job' ? DONE_STATUSES.has(item.status ?? '') : true;
+}
+
+/** Minutes since midnight. */
+const minuteOfDay = (d: Date) => d.getHours() * 60 + d.getMinutes();
+
+/** A job's daily hours, or null when it has none to compare (all-day, or no
+ *  end time). A job's time_start/time_end are its hours on EACH of its days. */
+function dailyWindow(it: CalItem): [number, number] | null {
+  if (it.allDay || !it.end) return null;
+  const from = minuteOfDay(it.start);
+  const to = minuteOfDay(it.end);
+  return to > from ? [from, to] : null;
+}
+
+/** Do two jobs collide? Their days must intersect; when BOTH have hours,
+ *  the hours must intersect too (8–12 and 1–5 on the same day don't clash).
+ *  Back-to-back (ends 12:00, next starts 12:00) is not a clash. */
+export function jobsCollide(a: CalItem, b: CalItem): boolean {
+  const daysMeet = a.spanStart.getTime() <= b.spanEnd.getTime() && b.spanStart.getTime() <= a.spanEnd.getTime();
+  if (!daysMeet) return false;
+  const wa = dailyWindow(a), wb = dailyWindow(b);
+  if (!wa || !wb) return true;
+  return wa[0] < wb[1] && wb[0] < wa[1];
+}
+
+/**
+ * Same-lead overlaps: open jobs sharing a lead that collide (jobsCollide —
+ * same days, and overlapping hours when both have times).
+ * Returns item key → titles of the jobs it collides with (the visual twin of
+ * the job form's double-booking alert).
+ */
+export function leadOverlaps(items: CalItem[]): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  const byLead = new Map<string, CalItem[]>();
+  for (const it of items) {
+    if (it.kind !== 'job' || !it.leadKey || DONE_STATUSES.has(it.status ?? '')) continue;
+    const list = byLead.get(it.leadKey) ?? [];
+    list.push(it);
+    byLead.set(it.leadKey, list);
+  }
+  // forEach, not for…of: web's TS target can't iterate a Map directly.
+  byLead.forEach(list => {
+    for (let i = 0; i < list.length; i++) {
+      for (let k = i + 1; k < list.length; k++) {
+        const a = list[i], b = list[k];
+        if (jobsCollide(a, b)) {
+          out.set(a.key, [...(out.get(a.key) ?? []), b.title]);
+          out.set(b.key, [...(out.get(b.key) ?? []), a.title]);
+        }
+      }
+    }
+  });
+  return out;
 }

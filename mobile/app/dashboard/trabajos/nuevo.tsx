@@ -1054,7 +1054,9 @@ export default function NuevoTrabajoRoute() {
           </View>
           )}
           {!fHidden('job_state') && (
-          <View style={fHidden('job_city') ? { flex: 1 } : { width: 110 }}>
+          // Same width as City — a fixed 110pt box wrapped longer state
+          // names ("Nebrask / a") while City took the rest of the row.
+          <View className="flex-1">
             <Select
               label={jrl('job_state', t.stateLabel)}
               value={state}

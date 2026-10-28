@@ -1598,6 +1598,8 @@ export type DashboardDict = {
     title: string;
     newEvent: string;
     moreCount: string;
+    /** Job bars at a glance: delayed status, same-lead overlap marker. */
+    glance: { delayed: string; overlap: string; overlapsWith: string };
     noClient: string;
     today: string;
     views: {
@@ -5054,6 +5056,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       title: 'Calendario',
       newEvent: 'Nuevo evento',
       moreCount: '+{{count}} más',
+      glance: { delayed: 'Retrasado', overlap: 'Mismo líder, se cruzan', overlapsWith: 'Se cruza con: {{titles}}' },
       noClient: 'Sin cliente',
       today: 'Hoy',
       views: {
@@ -8502,6 +8505,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       title: 'Calendar',
       newEvent: 'New event',
       moreCount: '+{{count}} more',
+      glance: { delayed: 'Delayed', overlap: 'Same lead, overlapping', overlapsWith: 'Overlaps with: {{titles}}' },
       noClient: 'No client',
       today: 'Today',
       views: {

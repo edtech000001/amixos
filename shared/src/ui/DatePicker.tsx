@@ -236,7 +236,9 @@ function NativePicker({
                   onChange={(_e: unknown, d?: Date) => {
                     if (d) setIosDraft(d);
                   }}
-                  style={{ height: iosPickerHeight }}
+                  // width: the native picker otherwise sizes to its minimum
+                  // and hugs the left edge, leaving a blank strip on the right.
+                  style={{ height: iosPickerHeight, width: '100%' }}
                 />
               </View>
               <View style={{ height: 24 }} />

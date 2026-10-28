@@ -54,6 +54,14 @@ function joinedClientName(c: ClientJoin | ClientJoin[] | null): string | null {
   return `${obj.first_name ?? ''} ${obj.last_name ?? ''}`.trim() || null;
 }
 
+// The lead's identity for overlap detection — employee id, or the free-text
+// worker name (same 'w:' form as the jobs field filters).
+function leadKey(assignments: AssignmentJoin[] | null): string | null {
+  const lead = assignments?.find(a => a.is_lead);
+  if (!lead) return null;
+  return lead.employee_id ?? (lead.worker_name ? `w:${lead.worker_name}` : null);
+}
+
 function leadName(assignments: AssignmentJoin[] | null): string | null {
   const lead = assignments?.find(a => a.is_lead);
   if (!lead) return null;
@@ -180,6 +188,7 @@ export default function CalendarioRoute() {
             job_state: j.job_state,
             client_name: joinedClientName(j.clients),
             lead_name: leadName(j.job_assignments),
+            lead_key: leadKey(j.job_assignments),
             assignees: jobAssignees(j.job_assignments),
           }))
           .map(jobToItem)

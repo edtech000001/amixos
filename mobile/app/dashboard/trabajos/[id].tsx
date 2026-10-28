@@ -241,7 +241,11 @@ export default function JobDetailRoute() {
   // to the calendar; ?from=invoice → back to that invoice; ?from=nomina → back
   // to payroll, reopening that worker's breakdown; ?from=home → back to the
   // dashboard. Otherwise default behavior (trabajos list).
+  // Set while goBack is navigating away, so the beforeRemove hook below
+  // (and the blur pop) don't re-run it.
+  const leavingRef = useRef(false);
   const goBack = () => {
+    leavingRef.current = true;
     if (from === 'map') {
       router.replace(appHref('map') as never);
     } else if (from === 'calendar') {
@@ -293,9 +297,30 @@ export default function JobDetailRoute() {
       // dock reads ?from on the section's top route to spot a visitor and
       // clears it on entry — wiping the param here would disguise this
       // screen as one the user opened from the list, and it would stay.
-      if ((st?.index ?? 0) > 0) navigation.dispatch(StackActions.pop());
+      if ((st?.index ?? 0) > 0) {
+        // Our own cleanup pop (tab switch) — not a back gesture to reroute.
+        leavingRef.current = true;
+        navigation.dispatch(StackActions.pop());
+      }
     });
   }, [from, navigation, routeKey]);
+  // The back ARROW calls goBack, but the iOS swipe-back gesture and Android's
+  // back button pop the stack directly — landing on the jobs list under this
+  // visitor instead of the section it came from (e.g. the calendar). Route
+  // those through goBack too. Our own exits set leavingRef and pass through.
+  const goBackRef = useRef(goBack);
+  goBackRef.current = goBack;
+  useEffect(() => {
+    if (!from) return undefined;
+    return navigation.addListener('beforeRemove', (e) => {
+      if (leavingRef.current) return;
+      const type = e.data.action.type;
+      if (type !== 'GO_BACK' && type !== 'POP') return;
+      // beforeRemove IS preventable; the untyped useNavigation() just doesn't say so.
+      (e as unknown as { preventDefault: () => void }).preventDefault();
+      goBackRef.current();
+    });
+  }, [from, navigation]);
   const supabase = createSupabaseClient();
   const c = useThemeColors();
   // currentRole from useApp is impersonation-aware — under "Ver como" it is

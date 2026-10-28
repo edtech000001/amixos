@@ -26,6 +26,7 @@ import {
   UserRound,
   ChevronRight as Chevron,
   X,
+  AlertTriangle,
 } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { DatePicker } from '../../ui/DatePicker';
@@ -47,6 +48,12 @@ import {
   itemsForDay,
   countForDay,
   visibleRange,
+  jobBarHex,
+  jobIsDelayed,
+  calItemFaded,
+  leadOverlaps,
+  JOB_STATUS_HEX,
+  JOB_DELAYED_HEX,
 } from '../../lib/calendarModel';
 
 // ── Re-exported so the page wrappers share one source of truth ──────────────
@@ -241,6 +248,9 @@ export function CalendarScreen({
   const t = full.dashboard.calendar;
   const tc = full.common;
   const jobStatuses = full.dashboard.jobs.statuses;
+  // Same-lead overlaps across everything loaded (hiding a type shouldn't
+  // hide a double booking).
+  const overlaps = useMemo(() => leadOverlaps(items), [items]);
   const dateLocale = full.dashboard.dateLocale;
   const today = useMemo(() => startOfDay(new Date()), []);
 
@@ -415,7 +425,7 @@ export function CalendarScreen({
         {/* View body */}
         {view === 'month' ? (
           <MonthGrid cursor={cursor} items={visibleItems} today={today} selectedDay={selectedDay} dateLocale={dateLocale}
-            moreLabel={t.moreCount} onDayPress={setSelectedDay} onItemPress={onItemPress} />
+            moreLabel={t.moreCount} onDayPress={setSelectedDay} onItemPress={onItemPress} overlaps={overlaps} />
         ) : view === 'week' ? (
           <WeekStrip cursor={cursor} items={visibleItems} today={today} selectedDay={selectedDay} dateLocale={dateLocale} onDayPress={setSelectedDay} />
         ) : null}
@@ -442,6 +452,25 @@ export function CalendarScreen({
                 </button>
               );
             })}
+          </div>
+        ) : null}
+        {/* Job colors: status (as the pills), delayed, same-lead overlap. */}
+        {view !== 'day' && typeFilter.has('job') ? (
+          <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-2">
+            {(['scheduled', 'in_progress', 'completed'] as const).map(st => (
+              <span key={st} className="flex items-center gap-1.5 text-xs text-muted">
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: JOB_STATUS_HEX[st] }} />
+                {(jobStatuses as Record<string, string>)[st] ?? st}
+              </span>
+            ))}
+            <span className="flex items-center gap-1.5 text-xs text-muted">
+              <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: JOB_DELAYED_HEX }} />
+              {t.glance.delayed}
+            </span>
+            <span className="flex items-center gap-1 text-xs text-muted">
+              <AlertTriangle size={11} color={JOB_DELAYED_HEX} />
+              {t.glance.overlap}
+            </span>
           </div>
         ) : null}
 
@@ -481,7 +510,8 @@ export function CalendarScreen({
             <div className="flex flex-col gap-2">
               {agendaItems.map(it => (
                 <AgendaRow key={it.key} item={it} t={t}
-                  jobStatusLabel={it.status ? (jobStatuses as Record<string, string>)[it.status] ?? it.status : ''}
+                  jobStatusLabel={jobIsDelayed(it, today) ? t.glance.delayed : it.status ? (jobStatuses as Record<string, string>)[it.status] ?? it.status : ''}
+                  today={today} overlapsWith={overlaps.get(it.key) ?? null}
                   onPress={() => onItemPress(it)} />
               ))}
             </div>
@@ -602,13 +632,21 @@ export function CalendarScreen({
 }
 
 // ── Agenda row ───────────────────────────────────────────────────────────────
-function AgendaRow({ item, t, jobStatusLabel, onPress }: { item: CalItem; t: CalDict; jobStatusLabel: string; onPress: () => void }) {
+function AgendaRow({ item, t, jobStatusLabel, today, overlapsWith, onPress }: {
+  item: CalItem; t: CalDict; jobStatusLabel: string; today: Date;
+  /** Titles of same-lead jobs this one overlaps (null = none). */
+  overlapsWith: string[] | null;
+  onPress: () => void;
+}) {
+  const hex = jobBarHex(item, today);
+  const delayed = jobIsDelayed(item, today);
   const Icon = TYPE_ICON[item.eventType];
   const subtitle = [item.clientName, item.location].filter(Boolean).join(' · ');
   return (
     <button type="button" onClick={onPress}
+      style={calItemFaded(item, today) ? { opacity: 0.5 } : undefined}
       className="w-full flex items-stretch bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden hover:bg-surface text-left">
-      <div className={`w-1.5 shrink-0 ${TYPE_BAR[item.eventType]}`} />
+      <div className={`w-1.5 shrink-0 ${hex ? '' : TYPE_BAR[item.eventType]}`} style={hex ? { backgroundColor: hex } : undefined} />
       <div className="flex-1 flex items-center gap-3 px-3.5 py-3 min-w-0">
         <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${TYPE_CHIP_BG[item.eventType]}`}>
           <Icon size={16} color={TYPE_HEX[item.eventType]} />
@@ -617,8 +655,8 @@ function AgendaRow({ item, t, jobStatusLabel, onPress }: { item: CalItem; t: Cal
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-ink flex-1 truncate">{item.title}</span>
             {item.kind === 'job' && item.status ? (
-              <span className={`px-2 py-0.5 rounded-full shrink-0 ${JOB_STATUS_BG[item.status] ?? 'bg-border-soft'}`}>
-                <span className={`text-[10px] font-semibold ${JOB_STATUS_TEXT[item.status] ?? 'text-muted'}`}>{jobStatusLabel}</span>
+              <span className={`px-2 py-0.5 rounded-full shrink-0 ${delayed ? 'bg-red-100' : JOB_STATUS_BG[item.status] ?? 'bg-border-soft'}`}>
+                <span className={`text-[10px] font-semibold ${delayed ? 'text-red-700' : JOB_STATUS_TEXT[item.status] ?? 'text-muted'}`}>{jobStatusLabel}</span>
               </span>
             ) : null}
           </div>
@@ -627,6 +665,12 @@ function AgendaRow({ item, t, jobStatusLabel, onPress }: { item: CalItem; t: Cal
             {!item.allDay && item.end ? ` – ${formatTime12h(item.end)}` : ''}
             {subtitle ? `  ·  ${subtitle}` : ''}
           </div>
+          {overlapsWith?.length ? (
+            <div className="flex items-center gap-1 mt-1 text-[11px] font-semibold text-red-500 min-w-0">
+              <AlertTriangle size={11} className="shrink-0" />
+              <span className="truncate">{t.glance.overlapsWith.replace('{{titles}}', overlapsWith.join(', '))}</span>
+            </div>
+          ) : null}
           {item.kind === 'job' && item.leadName ? (
             <div className="inline-flex items-center gap-1 mt-1 bg-border-soft rounded-full pl-1 pr-2 py-0.5 max-w-full">
               <span className="w-4 h-4 rounded-full bg-primary/15 flex items-center justify-center shrink-0"><UserRound size={9} color="#4F46E5" /></span>
@@ -679,9 +723,11 @@ function layOutWeek(week: Date[], items: CalItem[]): { visible: WeekSeg[]; overf
   return { visible: segs.filter(s => s.lane < MAX_LANES), overflow };
 }
 
-function MonthGrid({ cursor, items, today, selectedDay, dateLocale, moreLabel, onDayPress, onItemPress }: {
+function MonthGrid({ cursor, items, today, selectedDay, dateLocale, moreLabel, onDayPress, onItemPress, overlaps }: {
   cursor: Date; items: CalItem[]; today: Date; selectedDay: Date; dateLocale: string; moreLabel: string;
   onDayPress: (d: Date) => void; onItemPress: (it: CalItem) => void;
+  /** Same-lead overlaps (leadOverlaps) — ringed + ⚠ on the bar. */
+  overlaps: Map<string, string[]>;
 }) {
   const weeks = useMemo(() => monthWeeks(cursor), [cursor]);
   const dayHeaders = useMemo(
@@ -718,8 +764,13 @@ function MonthGrid({ cursor, items, today, selectedDay, dateLocale, moreLabel, o
             </div>
             {visible.map(seg => {
               const it = seg.item;
+              // Jobs: status color (delayed = red); finished past work fades;
+              // a same-lead overlap gets a red ring + ⚠.
+              const hex = jobBarHex(it, today);
+              const clash = overlaps.get(it.key);
               return (
                 <button key={it.key} type="button" onClick={() => onItemPress(it)}
+                  title={clash ? `⚠ ${clash.join(', ')}` : it.title}
                   style={{
                     position: 'absolute',
                     left: `${(seg.startCol / 7) * 100}%`,
@@ -729,8 +780,11 @@ function MonthGrid({ cursor, items, today, selectedDay, dateLocale, moreLabel, o
                     paddingLeft: seg.continuesLeft ? 0 : 3,
                     paddingRight: seg.continuesRight ? 0 : 3,
                     zIndex: 1,
+                    opacity: calItemFaded(it, today) ? 0.4 : 1,
                   }}>
-                  <div className={`h-full flex items-center px-1.5 ${TYPE_BAR[it.eventType]} ${seg.continuesLeft ? '' : 'rounded-l-md'} ${seg.continuesRight ? '' : 'rounded-r-md'}`}>
+                  <div className={`h-full flex items-center gap-0.5 px-1.5 ${hex ? '' : TYPE_BAR[it.eventType]} ${seg.continuesLeft ? '' : 'rounded-l-md'} ${seg.continuesRight ? '' : 'rounded-r-md'}`}
+                    style={{ ...(hex ? { backgroundColor: hex } : {}), ...(clash ? { boxShadow: `inset 0 0 0 1.5px ${JOB_DELAYED_HEX}` } : {}) }}>
+                    {clash ? <AlertTriangle size={9} className="text-white shrink-0" /> : null}
                     <span className="text-[10px] font-medium text-white truncate">{it.title}</span>
                   </div>
                 </button>

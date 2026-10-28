@@ -17,6 +17,7 @@ import {
   CalendarDays,
   UserRound,
   ChevronRight as Chevron,
+  AlertTriangle,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
@@ -44,6 +45,12 @@ import {
   itemsForDay,
   countForDay,
   visibleRange,
+  jobBarHex,
+  jobIsDelayed,
+  calItemFaded,
+  leadOverlaps,
+  JOB_STATUS_HEX,
+  JOB_DELAYED_HEX,
 } from '../../lib/calendarModel';
 import { ScreenTitle } from '../../ui/ScreenTitle';
 
@@ -179,6 +186,9 @@ export function CalendarScreen({
   const t = full.dashboard.calendar;
   const tc = full.common;
   const jobStatuses = full.dashboard.jobs.statuses;
+  // Same-lead overlaps across everything loaded (not just the type-filtered
+  // view — hiding a type shouldn't hide a double booking).
+  const overlaps = useMemo(() => leadOverlaps(items), [items]);
   const dateLocale = full.dashboard.dateLocale;
   const today = useMemo(() => startOfDay(new Date()), []);
 
@@ -460,6 +470,7 @@ export function CalendarScreen({
             moreLabel={t.moreCount}
             onDayPress={focusDay}
             onItemPress={onItemPress}
+            overlaps={overlaps}
           />
         ) : view === 'week' ? (
           <WeekStrip
@@ -495,6 +506,25 @@ export function CalendarScreen({
                 </Pressable>
               );
             })}
+          </View>
+        ) : null}
+        {/* Job colors: status (as the pills), delayed, same-lead overlap. */}
+        {view !== 'day' && typeFilter.has('job') ? (
+          <View className="flex-row flex-wrap gap-x-3 gap-y-1.5 mt-2">
+            {(['scheduled', 'in_progress', 'completed'] as const).map(st => (
+              <View key={st} className="flex-row items-center gap-1.5">
+                <View className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: JOB_STATUS_HEX[st] }} />
+                <Text className="text-xs text-muted">{(jobStatuses as Record<string, string>)[st] ?? st}</Text>
+              </View>
+            ))}
+            <View className="flex-row items-center gap-1.5">
+              <View className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: JOB_DELAYED_HEX }} />
+              <Text className="text-xs text-muted">{t.glance.delayed}</Text>
+            </View>
+            <View className="flex-row items-center gap-1">
+              <AlertTriangle size={11} color={JOB_DELAYED_HEX} />
+              <Text className="text-xs text-muted">{t.glance.overlap}</Text>
+            </View>
           </View>
         ) : null}
 
@@ -534,7 +564,9 @@ export function CalendarScreen({
                   key={it.key}
                   item={it}
                   t={t}
-                  jobStatusLabel={it.status ? (jobStatuses as Record<string, string>)[it.status] ?? it.status : ''}
+                  jobStatusLabel={jobIsDelayed(it, today) ? t.glance.delayed : it.status ? (jobStatuses as Record<string, string>)[it.status] ?? it.status : ''}
+                  today={today}
+                  overlapsWith={overlaps.get(it.key) ?? null}
                   onPress={() => onItemPress(it)}
                 />
               ))}
@@ -862,11 +894,16 @@ function AgendaRow({
   item,
   t,
   jobStatusLabel,
+  today,
+  overlapsWith,
   onPress,
 }: {
   item: CalItem;
   t: CalDict;
   jobStatusLabel: string;
+  today: Date;
+  /** Titles of same-lead jobs this one overlaps (null = none). */
+  overlapsWith: string[] | null;
   onPress: () => void;
 }) {
   const c = useThemeColors();
@@ -876,8 +913,10 @@ function AgendaRow({
     <Pressable
       onPress={onPress}
       className="flex-row items-stretch bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden active:bg-surface"
+      style={calItemFaded(item, today) ? { opacity: 0.5 } : undefined}
     >
-      <View className={`w-1.5 ${TYPE_BAR[item.eventType]}`} />
+      <View className={`w-1.5 ${jobBarHex(item, today) ? '' : TYPE_BAR[item.eventType]}`}
+        style={jobBarHex(item, today) ? { backgroundColor: jobBarHex(item, today)! } : undefined} />
       <View className="flex-1 flex-row items-center gap-3 px-3.5 py-3">
         <View className={`w-9 h-9 rounded-xl items-center justify-center ${TYPE_CHIP_BG[item.eventType]}`}>
           <Icon size={16} color={TYPE_HEX[item.eventType]} />
@@ -888,8 +927,8 @@ function AgendaRow({
               {item.title}
             </Text>
             {item.kind === 'job' && item.status ? (
-              <View className={`px-2 py-0.5 rounded-full ${JOB_STATUS_BG[item.status] ?? 'bg-border-soft'}`}>
-                <Text className={`text-[10px] font-semibold ${JOB_STATUS_TEXT[item.status] ?? 'text-muted'}`}>
+              <View className={`px-2 py-0.5 rounded-full ${jobIsDelayed(item, today) ? 'bg-red-100' : JOB_STATUS_BG[item.status] ?? 'bg-border-soft'}`}>
+                <Text className={`text-[10px] font-semibold ${jobIsDelayed(item, today) ? 'text-red-700' : JOB_STATUS_TEXT[item.status] ?? 'text-muted'}`}>
                   {jobStatusLabel}
                 </Text>
               </View>
@@ -900,6 +939,14 @@ function AgendaRow({
             {!item.allDay && item.end ? ` – ${formatTime12h(item.end)}` : ''}
             {subtitle ? `  ·  ${subtitle}` : ''}
           </Text>
+          {overlapsWith?.length ? (
+            <View className="flex-row items-center gap-1 mt-1">
+              <AlertTriangle size={11} color={JOB_DELAYED_HEX} />
+              <Text className="text-[11px] font-semibold text-red-500 flex-1" numberOfLines={1}>
+                {t.glance.overlapsWith.replace('{{titles}}', overlapsWith.join(', '))}
+              </Text>
+            </View>
+          ) : null}
           {item.kind === 'job' && item.leadName ? (
             <View className="flex-row items-center gap-1 mt-1 self-start bg-border-soft rounded-full pl-1 pr-2 py-0.5">
               <View className="w-4 h-4 rounded-full bg-primary/15 items-center justify-center">
@@ -994,6 +1041,7 @@ function MonthGrid({
   moreLabel,
   onDayPress,
   onItemPress,
+  overlaps,
 }: {
   cursor: Date;
   items: CalItem[];
@@ -1003,6 +1051,8 @@ function MonthGrid({
   moreLabel: string;
   onDayPress: (d: Date) => void;
   onItemPress: (it: CalItem) => void;
+  /** Same-lead overlaps (leadOverlaps) — ringed + ⚠ on the bar. */
+  overlaps: Map<string, string[]>;
 }) {
   const weeks = useMemo(() => monthWeeks(cursor), [cursor]);
   const dayHeaders = useMemo(
@@ -1063,6 +1113,10 @@ function MonthGrid({
             {/* Spanning event bars (one element per item across its days) */}
             {visible.map(seg => {
               const it = seg.item;
+              // Jobs: status color (delayed = red); finished past work fades;
+              // a same-lead overlap gets a red ring + ⚠.
+              const hex = jobBarHex(it, today);
+              const clash = overlaps.has(it.key);
               return (
                 <Pressable
                   key={it.key}
@@ -1076,14 +1130,20 @@ function MonthGrid({
                     paddingLeft: seg.continuesLeft ? 0 : 3,
                     paddingRight: seg.continuesRight ? 0 : 3,
                     zIndex: 1,
+                    opacity: calItemFaded(it, today) ? 0.4 : 1,
                   }}
                 >
                   <View
-                    className={`flex-1 justify-center px-1.5 ${TYPE_BAR[it.eventType]} ${
+                    className={`flex-1 flex-row items-center gap-0.5 px-1.5 ${hex ? '' : TYPE_BAR[it.eventType]} ${
                       seg.continuesLeft ? '' : 'rounded-l-md'
                     } ${seg.continuesRight ? '' : 'rounded-r-md'}`}
+                    style={[
+                      hex ? { backgroundColor: hex } : null,
+                      clash ? { borderWidth: 1.5, borderColor: JOB_DELAYED_HEX } : null,
+                    ]}
                   >
-                    <Text className="text-[10px] font-medium text-white" numberOfLines={1}>
+                    {clash ? <AlertTriangle size={9} color="#FFFFFF" /> : null}
+                    <Text className="flex-1 text-[10px] font-medium text-white" numberOfLines={1}>
                       {it.title}
                     </Text>
                   </View>

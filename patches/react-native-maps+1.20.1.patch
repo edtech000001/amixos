@@ -1,8 +1,24 @@
 diff --git a/node_modules/react-native-maps/ios/AirMaps/AIRMap.m b/node_modules/react-native-maps/ios/AirMaps/AIRMap.m
-index 07a4638..2264e2e 100644
+index 07a4638..e91f276 100644
 --- a/node_modules/react-native-maps/ios/AirMaps/AIRMap.m
 +++ b/node_modules/react-native-maps/ios/AirMaps/AIRMap.m
-@@ -135,7 +135,13 @@ - (void)insertReactSubview:(id<RCTComponent>)subview atIndex:(NSInteger)atIndex
+@@ -104,6 +104,11 @@ -(void)addSubview:(UIView *)view {
+ #pragma clang diagnostic push
+ #pragma clang diagnostic ignored "-Wobjc-missing-super-calls"
+ - (void)insertReactSubview:(id<RCTComponent>)subview atIndex:(NSInteger)atIndex {
++    // Amixos patch: the New Architecture's legacy-interop mount can hand us a
++    // nil child (a marker view already recycled mid-burst while panning with
++    // clustering) → "-[__NSArrayM insertObject:atIndex:]: object cannot be
++    // nil" crash. Nothing to add for a nil view — skip it.
++    if (subview == nil) return;
+     // Our desired API is to pass up markers/overlays as children to the mapview component.
+     // This is where we intercept them and do the appropriate underlying mapview action.
+     if ([subview isKindOfClass:[AIRMapMarker class]]) {
+@@ -132,16 +137,25 @@ - (void)insertReactSubview:(id<RCTComponent>)subview atIndex:(NSInteger)atIndex
+     } else {
+         NSArray<id<RCTComponent>> *childSubviews = [subview reactSubviews];
+         for (int i = 0; i < childSubviews.count; i++) {
++            if (childSubviews[i] == nil) continue;
              [self insertReactSubview:(UIView *)childSubviews[i] atIndex:atIndex];
          }
      }
@@ -17,3 +33,11 @@ index 07a4638..2264e2e 100644
  }
  #pragma clang diagnostic pop
  
+ #pragma clang diagnostic push
+ #pragma clang diagnostic ignored "-Wobjc-missing-super-calls"
+ - (void)removeReactSubview:(id<RCTComponent>)subview {
++    // Amixos patch: same nil-child guard as insertReactSubview.
++    if (subview == nil) return;
+     // similarly, when the children are being removed we have to do the appropriate
+     // underlying mapview action here.
+     if ([subview isKindOfClass:[AIRMapMarker class]]) {
