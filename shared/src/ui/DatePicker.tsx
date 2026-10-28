@@ -220,7 +220,11 @@ function NativePicker({
                   <Text className="text-base font-semibold text-primary">{tc.done}</Text>
                 </Pressable>
               </View>
-              <View style={{ paddingHorizontal: 8 }}>
+              {/* Centered: on the New Architecture the native picker keeps its
+                  own width (a width style is ignored), so stretching it isn't
+                  possible — centering splits the spare space evenly instead of
+                  leaving a blank strip on the right. */}
+              <View style={{ paddingHorizontal: 8, alignItems: 'center' }}>
                 <DateTimePicker
                   value={iosDraft ?? new Date()}
                   mode={mode === 'datetime-local' ? 'datetime' : mode}
@@ -236,9 +240,7 @@ function NativePicker({
                   onChange={(_e: unknown, d?: Date) => {
                     if (d) setIosDraft(d);
                   }}
-                  // width: the native picker otherwise sizes to its minimum
-                  // and hugs the left edge, leaving a blank strip on the right.
-                  style={{ height: iosPickerHeight, width: '100%' }}
+                  style={{ height: iosPickerHeight }}
                 />
               </View>
               <View style={{ height: 24 }} />
