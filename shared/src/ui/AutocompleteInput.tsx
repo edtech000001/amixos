@@ -60,6 +60,15 @@ export function AutocompleteInput({
   })();
 
   const showDropdown = focused && filtered.length > 0;
+  // Only a long list scrolls inside itself. A short one is a plain list, so
+  // dragging on it scrolls the PAGE — as a nested scroll view it captured the
+  // drag, couldn't hand it to the form, and could drag its rows out of view
+  // (an empty box), so you couldn't scroll past the suggestions.
+  const scrollable = filtered.length > 6;
+  const List = scrollable ? ScrollView : View;
+  const listProps = scrollable
+    ? { keyboardShouldPersistTaps: 'always' as const, nestedScrollEnabled: true, bounces: false, overScrollMode: 'never' as const, style: { maxHeight: 264 } }
+    : {};
 
   return (
     <View>
@@ -108,7 +117,7 @@ export function AutocompleteInput({
             elevation: 4,
           }}
         >
-          <ScrollView keyboardShouldPersistTaps="always" nestedScrollEnabled style={{ maxHeight: 200 }}>
+          <List {...listProps}>
             {filtered.map((s, i) => {
               const selected = browse && norm(s) === q;
               return (
@@ -132,7 +141,7 @@ export function AutocompleteInput({
                 </Pressable>
               );
             })}
-          </ScrollView>
+          </List>
         </View>
       ) : null}
     </View>

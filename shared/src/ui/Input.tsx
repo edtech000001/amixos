@@ -83,7 +83,8 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
             // a lineHeight on a TextInput makes iOS sit the text low in the box
             // and clip descenders — the tail of a "g" was being cut off. Size is
             // set in `style` below so no line-height comes with it.
-            'flex-1 py-3.5 text-ink',
+            // Single-line: fixed height, no vertical padding (style below).
+            rest.multiline ? 'flex-1 py-3.5 text-ink' : 'flex-1 text-ink',
             className,
           )}
           // The colour is ALSO set as a real style, not just via text-ink.
@@ -92,7 +93,11 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
           // its dots in the system default — black, which is invisible against
           // the dark theme. Only showed in dark mode, because in light mode the
           // default happens to match.
-          style={[{ color: c.ink, fontSize: 16 }, style]}
+          // Single-line height is FIXED (48 = the old py-3.5 + text) with no
+          // vertical padding: iOS centres single-line text in the box itself.
+          // With padding, the New Architecture's text insets sat the text and
+          // placeholder a few points BELOW the left icon (search bars).
+          style={[{ color: c.ink, fontSize: 16 }, rest.multiline ? null : { height: 48, paddingVertical: 0 }, style]}
           textAlign={centerText ? 'center' : undefined}
           {...rest}
         />

@@ -1382,9 +1382,13 @@ export default function FacturaDetailRoute() {
             onPress={closeAdd}
             style={SHEET_BACKDROP}
           />
+          {/* flexShrink: when the keyboard opens, the avoider pads the
+              bottom by its height — without shrinking, a sheet full of
+              completed jobs overflowed the TOP of the screen and the line
+              item name field (first in the scroll) went out of sight. */}
           <View
             className="bg-card rounded-t-3xl px-5 pt-5 pb-10"
-            style={{ maxHeight: photoScreenH - insets.top - 24 }}
+            style={{ maxHeight: photoScreenH - insets.top - 24, flexShrink: 1 }}
           >
             <View className="flex-row items-center justify-between mb-3">
               <Text className="text-lg font-bold text-ink">{linkIndex !== null ? jobsT.linkTitle : jobsT.addTitle}</Text>
