@@ -15,6 +15,7 @@ import {
 } from '@amixos/shared/screens/dashboard/JobsListScreen';
 import { fetchJobsPage, fetchJobsPageSorted, fetchJobTabCounts, fetchJobGroupIndex, fetchAllJobsInGroup, fetchJobFilterValues, resolveSearchIds, LAZY_GROUP_DIMS, type JobsCursor, type JobsQueryParams, type JobGroup, type SearchIds, type JobFieldFilters } from '@amixos/shared/lib/jobsQuery';
 import { fetchJobsSummary } from '@amixos/shared/lib/jobsQuery';
+import { listViewKey, readListView, writeListView } from '@amixos/shared/lib/listViewMemo';
 import { computeJobsSummaryTotals, payrollJcfKeys } from '@amixos/shared/lib/jobsSummary';
 import { usStateName } from '@amixos/shared/lib/usStates';
 import { can } from '@amixos/shared/lib/permissions';
@@ -196,6 +197,11 @@ export default function TrabajosTab() {
     setLoadError(false);
     cursorRef.current = null;
     setHasMore(false);
+    // Last result for this exact view paints at once (no skeleton on
+    // return from a job); the fetch below refreshes it.
+    const memoKey = listViewKey('recent', params);
+    const memo = readListView<RawJob>(memoKey);
+    if (memo) { setRawJobs(memo.rows); setServerCounts(memo.counts); }
     try {
       const ids = await resolveIds(params);
       if (seq !== loadSeqRef.current) return;
@@ -209,6 +215,7 @@ export default function TrabajosTab() {
       cursorRef.current = page.nextCursor;
       setHasMore(!!page.nextCursor);
       setServerCounts(counts);
+      writeListView(memoKey, page.jobs, counts);
     } catch { setLoadError(true); }
     finally { if (seq === loadSeqRef.current) setLoading(false); }
   };
@@ -225,6 +232,9 @@ export default function TrabajosTab() {
     sortOffsetRef.current = 0;
     setLoading(true);
     setHasMore(false);
+    const memoKey = listViewKey('sorted', sortKey, sortDesc, params);
+    const memo = readListView<RawJob>(memoKey);
+    if (memo) { setRawJobs(memo.rows); setServerCounts(memo.counts); }
     try {
       const ids = await resolveIds(params);
       if (seq !== loadSeqRef.current) return;
@@ -237,6 +247,7 @@ export default function TrabajosTab() {
       setServerCounts(counts);
       if (pageRes === null) { await runQuery(params); return; }
       setRawJobs(pageRes.jobs);
+      writeListView(memoKey, pageRes.jobs, counts);
       sortOffsetRef.current = pageRes.jobs.length;
       setHasMore(pageRes.hasMore);
     } catch { setLoadError(true); }

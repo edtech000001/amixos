@@ -9,6 +9,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { fetchJobsPage, fetchJobsPageSorted, fetchJobTabCounts, fetchJobGroupIndex, fetchAllJobsInGroup, fetchJobFilterValues, resolveSearchIds, LAZY_GROUP_DIMS, type JobsCursor, type JobsQueryParams, type JobGroup, type SearchIds, type JobFieldFilters } from '@amixos/shared/lib/jobsQuery';
 import { fetchJobsSummary } from '@amixos/shared/lib/jobsQuery';
+import { listViewKey, readListView, writeListView } from '@amixos/shared/lib/listViewMemo';
 import { computeJobsSummaryTotals, payrollJcfKeys } from '@amixos/shared/lib/jobsSummary';
 import { useSwr } from '@amixos/shared/lib/swrCache';
 import { usStateName } from '@amixos/shared/lib/usStates';
@@ -211,6 +212,11 @@ export default function TrabajosPage() {
     setLoadError(false);
     cursorRef.current = null;
     setHasMore(false);
+    // Last result for this exact view paints at once (no skeleton on
+    // return from a job); the fetch below refreshes it.
+    const memoKey = listViewKey('recent', params);
+    const memo = readListView<RawJob>(memoKey);
+    if (memo) { setRawJobs(memo.rows); setServerCounts(memo.counts); }
     try {
       const ids = await resolveIds(params);
       if (seq !== loadSeqRef.current) return;
@@ -224,6 +230,7 @@ export default function TrabajosPage() {
       cursorRef.current = page.nextCursor;
       setHasMore(!!page.nextCursor);
       setServerCounts(counts);
+      writeListView(memoKey, page.jobs, counts);
     } catch (e) {
       console.error('Jobs query failed', e);
       setLoadError(true);
@@ -244,6 +251,9 @@ export default function TrabajosPage() {
     sortOffsetRef.current = 0;
     setLoading(true);
     setHasMore(false);
+    const memoKey = listViewKey('sorted', sortKey, sortDesc, params);
+    const memo = readListView<RawJob>(memoKey);
+    if (memo) { setRawJobs(memo.rows); setServerCounts(memo.counts); }
     try {
       const ids = await resolveIds(params);
       if (seq !== loadSeqRef.current) return;
@@ -256,6 +266,7 @@ export default function TrabajosPage() {
       setServerCounts(counts);
       if (pageRes === null) { await runQuery(params); return; }
       setRawJobs(pageRes.jobs);
+      writeListView(memoKey, pageRes.jobs, counts);
       sortOffsetRef.current = pageRes.jobs.length;
       setHasMore(pageRes.hasMore);
     } catch (e) {
