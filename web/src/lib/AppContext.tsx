@@ -576,7 +576,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
               setLoading(false);
             }
           }
-          await fetchBusinesses(u.id);
+          // A failed business fetch is NOT a wedged session — log it and
+          // keep the user signed in (the catch below wipes auth cookies).
+          await fetchBusinesses(u.id).catch((e) => console.error('Business fetch failed', e));
         } else if (window.location.pathname.startsWith('/dashboard')) {
           window.location.href = '/auth/login';
           return;
