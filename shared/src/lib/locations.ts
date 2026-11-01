@@ -182,22 +182,18 @@ export async function fetchMyHomeLocation(
   businessId: string,
   userId: string,
 ): Promise<string | null> {
-  const { data: emp } = await supabase
-    .from('employees')
-    .select('id')
-    .eq('business_id', businessId)
-    .eq('user_id', userId)
-    .limit(1)
-    .maybeSingle();
-  if (!emp?.id) return null;
+  // ONE round trip: the primary branch link, filtered through an inner join
+  // to the caller's employee row. This runs on every app start, and used to
+  // be two sequential queries (employee id, then its link).
   const { data: link } = await supabase
     .from('employee_locations')
-    .select('location_id')
-    .eq('employee_id', emp.id)
+    .select('location_id, employees!inner(user_id)')
+    .eq('business_id', businessId)
     .eq('is_primary', true)
+    .eq('employees.user_id', userId)
     .limit(1)
     .maybeSingle();
-  return link?.location_id ?? null;
+  return (link as { location_id?: string } | null)?.location_id ?? null;
 }
 
 // Toggle whether a worker is "shared" into a branch (lent there). Adds or

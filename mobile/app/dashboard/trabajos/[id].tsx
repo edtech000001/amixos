@@ -1146,8 +1146,16 @@ export default function JobDetailRoute() {
 
   // Pause history (migration 247) — shown on the banner so a job that keeps
   // stalling is visible without opening a report.
+  const pauseFetchedFor = useRef<string | null>(null);
   useEffect(() => {
     if (!id) return;
+    // Fetch on open, then only when the status really CHANGES — not when it
+    // first arrives with the job load (that re-fetched the same pause history
+    // a second time on every open). Keyed by id so another job refetches.
+    const key = `${id}|${job?.status ?? ''}`;
+    const prev = pauseFetchedFor.current;
+    pauseFetchedFor.current = key;
+    if (prev === key || (prev === `${id}|` && job?.status)) return;
     let active = true;
     void fetchPauseSummary(supabase, id).then(r => { if (active) setPauseSummary(r); });
     void fetchPauseLog(supabase, id).then(r => { if (active) setPauseLog(r); });
