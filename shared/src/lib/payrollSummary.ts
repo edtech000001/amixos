@@ -131,61 +131,51 @@ export async function fetchPayrollPeriodSummary(
   // meaningful if the two numbers are computed identically — a "previous
   // total" from a cheaper approximation would show phantom swings whenever the
   // pay rules (overtime, driver pay, formulas) did any real work.
-  const rowsFor = async (per: PayrollPeriod) => {
-    const { data, error } = await supabase.rpc('payroll_period_inputs', {
+  const inputsFor = (per: PayrollPeriod) =>
+    supabase.rpc('payroll_period_inputs', {
       p_business_id: business.id,
       p_start: per.startStr,
       p_end: per.endStr,
       p_jcf_keys: jcfKeys.length ? jcfKeys : null,
     });
-    if (error || !data) return null;
-    return computePayrollRowsFromAggregates({
-      aggregates: scopeToBranch(toAggregates(data as RawInput[])),
-      period: per,
-      includeZero: false,
-      config,
-    });
-  };
 
-  // Branch membership, fetched once and applied to both periods so the
-  // comparison is like-for-like. Failure leaves the scope open rather than
-  // reporting zero payroll for a branch that clearly has some.
-  let branchEmployeeIds: Set<string> | null = null;
-  if (locationId) {
-    try {
-      const links = await fetchEmployeeLocations(supabase as never, business.id);
-      branchEmployeeIds = employeeIdsAtLocation(links, locationId);
-    } catch {
-      branchEmployeeIds = null;
-    }
-  }
+  // Branch membership (fetched once, applied to both periods so the comparison
+  // is like-for-like), the current period and the previous one all start
+  // TOGETHER. They used to run one after another — branch links, then this
+  // period, then the previous — tripling the tile's wait; the RPC is cheap
+  // since the RLS initplan rewrites (256/257). A failed branch lookup leaves
+  // the scope open rather than reporting zero payroll for a branch that
+  // clearly has some.
+  const [branchEmployeeIds, cur, prev] = await Promise.all([
+    locationId
+      ? fetchEmployeeLocations(supabase as never, business.id)
+          .then(links => employeeIdsAtLocation(links, locationId))
+          .catch(() => null)
+      : Promise.resolve(null),
+    inputsFor(period),
+    inputsFor(currentPayrollPeriod(business, -1)),
+  ]);
   const scopeToBranch = <T extends { employee: { id: string } }>(rows: T[]): T[] =>
-    branchEmployeeIds ? rows.filter(r => branchEmployeeIds!.has(r.employee.id)) : rows;
+    branchEmployeeIds ? rows.filter(r => branchEmployeeIds.has(r.employee.id)) : rows;
 
-  const { data, error } = await supabase.rpc('payroll_period_inputs', {
-    p_business_id: business.id,
-    p_start: period.startStr,
-    p_end: period.endStr,
-    p_jcf_keys: jcfKeys.length ? jcfKeys : null,
-  });
-  if (error || !data) return empty;
-
-  const aggregates = scopeToBranch(toAggregates(data as RawInput[]));
+  if (cur.error || !cur.data) return empty;
 
   // includeZero: false — a worker with no hours contributes nothing to the
   // total, and counting them would make "3 workers" mean "3 on the roster"
   // rather than "3 worked this period".
   const rows = computePayrollRowsFromAggregates({
-    aggregates,
+    aggregates: scopeToBranch(toAggregates(cur.data as RawInput[])),
     period,
     includeZero: false,
     config,
   });
-
-  // Previous period, for the trend line at lg. Runs after the current one
-  // rather than in parallel: it is secondary information, and a dashboard tile
-  // should not fire two heavy RPCs at once on a phone connection.
-  const prevRows = await rowsFor(currentPayrollPeriod(business, -1));
+  // Previous period, for the trend line at lg.
+  const prevRows = prev.error || !prev.data ? null : computePayrollRowsFromAggregates({
+    aggregates: scopeToBranch(toAggregates(prev.data as RawInput[])),
+    period: currentPayrollPeriod(business, -1),
+    includeZero: false,
+    config,
+  });
 
   return {
     previousTotal: prevRows ? prevRows.reduce((sum, r) => sum + (r.pay || 0), 0) : null,
