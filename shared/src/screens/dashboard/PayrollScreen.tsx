@@ -659,8 +659,14 @@ export function PayrollScreen({
             </Text>
             <View className="flex-row gap-1 bg-border-soft p-1 rounded-lg">
               {([['list', List], ['grid', LayoutGrid]] as const).map(([v, Icon]) => (
+                // Selected look via `style`, not a toggled className — adding
+                // shadow-sm to a mounted component forces a NativeWind remount.
                 <Pressable key={v} onPress={() => changeView(v)}
-                  className={`p-1.5 rounded-md ${view === v ? 'bg-card shadow-sm' : ''}`}>
+                  className="p-1.5 rounded-md"
+                  style={view === v ? {
+                    backgroundColor: c.card,
+                    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1,
+                  } : undefined}>
                   <Icon size={15} color={view === v ? c.ink : c.faint} />
                 </Pressable>
               ))}
@@ -674,7 +680,12 @@ export function PayrollScreen({
         ) : rows.length === 0 ? (
           <Text className="text-sm text-faint text-center py-10">{t.empty}</Text>
         ) : view === 'grid' ? (
-          <View className="flex-row flex-wrap justify-between">
+          // Distinct keys on the grid / list containers: in the same slot,
+          // React reused the list rows as grid cards and only swapped their
+          // classNames — adding shadow-sm to a mounted component triggers a
+          // NativeWind "upgrade" whose dev warning crashed the screen
+          // ("Couldn't find a navigation context"). Fresh mounts never upgrade.
+          <View key="grid" className="flex-row flex-wrap justify-between">
             {sortedRows.map(r => {
               // The status badge / "Mark paid" action. On single-column cards it
               // sits on the RIGHT (bigger, more tappable); on 2-up it stacks below.
@@ -732,7 +743,7 @@ export function PayrollScreen({
             })}
           </View>
         ) : (
-          <View className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
+          <View key="list" className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
             {sortedRows.map((r, i) => (
               // The WHOLE row opens the hours breakdown — the payment badge
               // below nests its own Pressable, so its taps don't fall through.
