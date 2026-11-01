@@ -353,16 +353,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMyHomeLocationId(null);
       return;
     }
-    const rows = await fetchLocations(supabase, activeBusinessId);
-    setLocations(rows);
     // The caller's OWN home branch — used to auto-select a branch on new records
     // and as the default active filter. Under "Ver como" resolve the TARGET
     // member's home instead (their JWT is on data requests), and ignore the
-    // admin's saved branch choice.
+    // admin's saved branch choice. Started ALONGSIDE the branch list (it was
+    // a second round trip after it); only used when there are 2+ branches.
     const uid = impersonation?.target.userId ?? realUser?.id;
-    const home = rows.length >= 2 && uid
-      ? await fetchMyHomeLocation(supabase, activeBusinessId, uid)
-      : null;
+    const homeP = uid
+      ? fetchMyHomeLocation(supabase, activeBusinessId, uid).catch(() => null)
+      : Promise.resolve(null);
+    const rows = await fetchLocations(supabase, activeBusinessId);
+    setLocations(rows);
+    const home = rows.length >= 2 ? await homeP : null;
     const validHome = home && rows.some((l) => l.id === home) ? home : null;
     setMyHomeLocationId(validHome);
     const saved = impersonation ? undefined : readActiveLocCookie()[activeBusinessId];

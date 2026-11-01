@@ -501,15 +501,18 @@ export const useAuthStore = create<AuthStore>()(
           return;
         }
         try {
-          const rows = await fetchLocations(supabase, businessId);
           // Under "Ver como", resolve the TARGET member's home branch and role —
           // queries already run under their JWT, so their employee row is the
           // one visible; the admin's saved branch choice doesn't apply.
+          // The home lookup starts ALONGSIDE the branch list (it used to be a
+          // second round trip after it); only used when there are 2+ branches.
           const imp = getImpersonation();
           const uid = imp?.target.userId ?? get().user?.id;
-          const home = rows.length >= 2 && uid
-            ? await fetchMyHomeLocation(supabase, businessId, uid)
-            : null;
+          const homeP = uid
+            ? fetchMyHomeLocation(supabase, businessId, uid).catch(() => null)
+            : Promise.resolve(null);
+          const rows = await fetchLocations(supabase, businessId);
+          const home = rows.length >= 2 ? await homeP : null;
           const validHome = home && rows.some((l) => l.id === home) ? home : null;
           const saved = imp ? undefined : get().activeLocationByBiz[businessId];
           const roleForLock = imp ? imp.target.role : get().currentRole;
