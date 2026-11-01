@@ -276,10 +276,14 @@ export default function ClientesPage() {
     if (paramsRef.current) void runQuery(paramsRef.current, loadAllRef.current);
   };
   // Re-run when the branch scope changes (locations load, or branch switch).
+  // Keyed on the joined ids, not the array: client locations load after the
+  // first query and hand back a fresh (often identical, e.g. empty for "All")
+  // array, which re-ran the whole list + count on every open. Mirrors mobile.
+  const excludeKey = excludeIds.join(',');
   useEffect(() => {
     if (paramsRef.current) void runQuery(paramsRef.current, loadAllRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [excludeIds]);
+  }, [excludeKey]);
 
   const handleFiltersChange = (f: ClientsFiltersChange) => {
     if (!business) return;

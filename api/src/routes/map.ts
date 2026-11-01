@@ -143,6 +143,36 @@ interface EmployeePin {
  * surfaces a "X clients need geocoding" hint that calls the backfill
  * endpoint below to populate them.
  */
+/** Geocoding breakdown counts for /pins (head-only count queries). */
+async function geocodeCounts(businessId: string) {
+  const [{ count: needsGeocoding }, { count: noAddress }, { count: unresolved }] = await Promise.all([
+    supabase
+      .from('clients')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId)
+      .eq('geocoding_ignored', false)
+      .is('lat', null),
+    supabase
+      .from('clients')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId)
+      .eq('geocoding_ignored', false)
+      .is('lat', null)
+      .is('address', null)
+      .is('city', null)
+      .is('state', null)
+      .is('zip_code', null),
+    supabase
+      .from('clients')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId)
+      .eq('geocoding_ignored', false)
+      .is('lat', null)
+      .not('lat_lookup_attempted_at', 'is', null),
+  ]);
+  return { needsGeocoding, noAddress, unresolved };
+}
+
 mapRouter.get('/pins', async (req: AuthRequest, res) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ success: false, message: 'Unauthenticated' });
@@ -171,7 +201,7 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
   //
   // The v_client_last_contact read below already looped — the rule was applied
   // to one query out of four.
-  const [clientRows, jobRows, assignmentRows] = await Promise.all([
+  const [clientRows, jobRows, assignmentRows, lastContactByClient, counts] = await Promise.all([
     fetchAll<ClientRow>((from, to) =>
       asPage<ClientRow>(supabase
         .from('clients')
@@ -191,35 +221,44 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
         .range(from, to))),
     // Employees assigned to a job scheduled TODAY with coords. One query
     // joins employees → assignments → jobs so we have everything in hand.
+    //
+    // Scoped by job_assignments.business_id (stamped since migration 181) and
+    // an INNER join on today's jobs. The old form filtered only the EMBEDDED
+    // jobs (`jobs.business_id` / `jobs.scheduled_date` without !inner), which
+    // in PostgREST nulls the embed but keeps every row — and with the service
+    // role (no RLS) that downloaded EVERY assignment of EVERY business, 1000
+    // at a time (~8.5s and growing with the platform).
     fetchAll<AssignmentRow>((from, to) =>
       asPage<AssignmentRow>(supabase
         .from('job_assignments')
-        .select('id, employees(id, first_name, last_name, role), jobs(id, title, job_lat, job_lng, scheduled_date, business_id)')
+        .select('id, employees(id, first_name, last_name, role), jobs!inner(id, title, job_lat, job_lng, scheduled_date, business_id)')
+        .eq('business_id', businessId)
         .eq('jobs.business_id', businessId)
         .eq('jobs.scheduled_date', today)
         .range(from, to))),
-  ]);
-
-  // Most-recent contact per client. Read from the v_client_last_contact
-  // view (one row per client). Paginated with .range() — communication
-  // volume grows faster than any other client-scoped table.
-  const lastContactByClient = new Map<string, string>();
-  {
-    const pageSize = 1000;
-    for (let from = 0; ; from += pageSize) {
-      const { data, error } = await supabase
-        .from('v_client_last_contact')
-        .select('client_id, last_contacted_at')
-        .eq('business_id', businessId)
-        .range(from, from + pageSize - 1);
-      if (error) break; // view may not exist yet (pre-migration) — degrade gracefully
-      const rows = (data ?? []) as Array<{ client_id: string; last_contacted_at: string | null }>;
-      for (const r of rows) {
-        if (r.last_contacted_at) lastContactByClient.set(r.client_id, r.last_contacted_at);
+    // Most-recent contact per client (v_client_last_contact, one row per
+    // client), paginated — run alongside the pin reads instead of after them.
+    (async () => {
+      const lastContact = new Map<string, string>();
+      const pageSize = 1000;
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from('v_client_last_contact')
+          .select('client_id, last_contacted_at')
+          .eq('business_id', businessId)
+          .range(from, from + pageSize - 1);
+        if (error) break; // view may not exist yet (pre-migration) — degrade gracefully
+        const rows = (data ?? []) as Array<{ client_id: string; last_contacted_at: string | null }>;
+        for (const r of rows) {
+          if (r.last_contacted_at) lastContact.set(r.client_id, r.last_contacted_at);
+        }
+        if (rows.length < pageSize) break;
       }
-      if (rows.length < pageSize) break;
-    }
-  }
+      return lastContact;
+    })(),
+    // Geocoding breakdown counts — also in the same wave (see below).
+    geocodeCounts(businessId),
+  ]);
 
   const clients: ClientPin[] = clientRows.map(c => ({
     id: c.id,
@@ -292,31 +331,7 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
   // count of all rows with NULL lat regardless of attempt history.
   // All three counts exclude `geocoding_ignored = true` clients (migration
   // 047) so the user can permanently silence rows they don't want pinned.
-  const [{ count: needsGeocoding }, { count: noAddress }, { count: unresolved }] = await Promise.all([
-    supabase
-      .from('clients')
-      .select('id', { count: 'exact', head: true })
-      .eq('business_id', businessId)
-      .eq('geocoding_ignored', false)
-      .is('lat', null),
-    supabase
-      .from('clients')
-      .select('id', { count: 'exact', head: true })
-      .eq('business_id', businessId)
-      .eq('geocoding_ignored', false)
-      .is('lat', null)
-      .is('address', null)
-      .is('city', null)
-      .is('state', null)
-      .is('zip_code', null),
-    supabase
-      .from('clients')
-      .select('id', { count: 'exact', head: true })
-      .eq('business_id', businessId)
-      .eq('geocoding_ignored', false)
-      .is('lat', null)
-      .not('lat_lookup_attempted_at', 'is', null),
-  ]);
+  const { needsGeocoding, noAddress, unresolved } = counts;
 
   const total = needsGeocoding ?? 0;
   const noAddrCount = noAddress ?? 0;
