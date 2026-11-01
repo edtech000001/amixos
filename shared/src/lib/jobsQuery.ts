@@ -445,7 +445,11 @@ export async function fetchJobTabCounts(
   let res = await supabase.rpc('job_tab_counts', hasRange
     ? { ...baseArgs, p_date_from: params.dateFrom ?? null, p_date_to: params.dateTo ?? null, ...(ffArg ? { p_filters: ffArg } : {}) }
     : baseArgs);
-  if (res.error && hasRange) res = await supabase.rpc('job_tab_counts', baseArgs);
+  // Retry the old signature ONLY when the function itself is missing
+  // (PGRST202 — an un-run migration). Any other error (e.g. a timeout) used to
+  // retry WITHOUT the date range / field filters too, so the badges silently
+  // showed unfiltered totals.
+  if (res.error && hasRange && res.error.code === 'PGRST202') res = await supabase.rpc('job_tab_counts', baseArgs);
   if (res.error) throw new Error(res.error.message);
   const out: Record<string, number> = {};
   for (const row of (res.data ?? []) as { tab: string; cnt: number | string }[]) {

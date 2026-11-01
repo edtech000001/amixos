@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
-import { fetchJobsPage, fetchJobsPageSorted, fetchJobTabCounts, fetchJobGroupIndex, fetchAllJobsInGroup, fetchJobFilterValues, resolveSearchIds, LAZY_GROUP_DIMS, type JobsCursor, type JobsQueryParams, type JobGroup, type SearchIds, type JobFieldFilters } from '@amixos/shared/lib/jobsQuery';
+import { fetchJobsPage, fetchJobsPageSorted, fetchJobTabCounts, fetchJobGroupIndex, fetchAllJobsInGroup, fetchJobFilterValues, jobTabFilterParams, resolveSearchIds, LAZY_GROUP_DIMS, type JobsCursor, type JobsQueryParams, type JobGroup, type SearchIds, type JobFieldFilters } from '@amixos/shared/lib/jobsQuery';
 import { fetchJobsSummary } from '@amixos/shared/lib/jobsQuery';
 import { listViewKey, readListView, writeListView } from '@amixos/shared/lib/listViewMemo';
 import { computeJobsSummaryTotals, payrollJcfKeys } from '@amixos/shared/lib/jobsSummary';
@@ -243,6 +243,10 @@ export default function TrabajosPage() {
   // Falls back to 'recent' paging when the tab combo can't be expressed
   // (multi-tab / delegated) — filters stay correct, order degrades to recent.
   const runSorted = async (params: JobsQueryParams, sortKey: string, sortDesc: boolean | null = null) => {
+    // Tab combos the RPCs can't express (several tabs / Delegated) end in
+    // runQuery anyway — go straight there instead of fetching the tab counts
+    // again on each path that gives up (3 sequential count calls → 1).
+    if (!jobTabFilterParams(params.tabs ?? [], !!params.search?.trim())) { await runQuery(params); return; }
     const seq = ++loadSeqRef.current;
     paramsRef.current = params;
     modeRef.current = 'sorted';
@@ -372,6 +376,10 @@ export default function TrabajosPage() {
   // scroll). Falls back to load-all + client grouping when the index can't be
   // built (multi-tab / delegated).
   const runGroupLazy = async (params: JobsQueryParams, groupBy: string) => {
+    // Tab combos the RPCs can't express (several tabs / Delegated) end in
+    // runQuery anyway — go straight there instead of fetching the tab counts
+    // again on each path that gives up (3 sequential count calls → 1).
+    if (!jobTabFilterParams(params.tabs ?? [], !!params.search?.trim())) { await runQuery(params); return; }
     const seq = ++loadSeqRef.current;
     paramsRef.current = params;
     groupByRef.current = groupBy;
