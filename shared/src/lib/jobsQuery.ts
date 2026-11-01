@@ -48,6 +48,9 @@ export interface JobsQueryParams {
    *  groupBy dimension (column-based dims only — 'client' | 'state'). */
   groupBy?: string;
   groupKey?: string | null;
+  /** Several groups at once (the first screenful of a lazy group-by) —
+   *  one request instead of one per group. Column dims only, like groupKey. */
+  groupKeys?: string[] | null;
   /** Field filters (migration 253): field → selected values. AND across
    *  fields, OR within one. See jobFieldFiltersArg / applyFieldFilters. */
   fieldFilters?: JobFieldFilters | null;
@@ -294,6 +297,15 @@ export async function fetchJobsPage<T extends { id: string; created_at?: string 
   if (params.groupKey !== undefined && params.groupBy) {
     const col = params.groupBy === 'client' ? 'client_id' : params.groupBy === 'state' ? 'job_state' : null;
     if (col) q = params.groupKey === '' ? q.is(col, null) : q.eq(col, params.groupKey);
+  } else if (params.groupKeys?.length && params.groupBy) {
+    const col = params.groupBy === 'client' ? 'client_id' : params.groupBy === 'state' ? 'job_state' : null;
+    if (col) {
+      const keys = params.groupKeys.filter(k => k !== '');
+      q = q.or([
+        ...(keys.length ? [`${col}.in.(${keys.map(pq).join(',')})`] : []),
+        ...(params.groupKeys.includes('') ? [`${col}.is.null`] : []),
+      ].join(','));
+    }
   }
 
   const searchOr = await searchOrClause(supabase, params.businessId, term, searchIds);

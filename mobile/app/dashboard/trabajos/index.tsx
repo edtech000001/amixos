@@ -292,15 +292,30 @@ export default function TrabajosTab() {
   // loaded ones hold enough rows to fill a screen.
   const GROUP_FILL_ROWS = 20;
   const loadGroupsToFill = async () => {
-    for (;;) {
-      const loadedRows = groupIndexRef.current
-        .slice(0, loadedGroupsRef.current)
-        .reduce((sum, g) => sum + (g.count ?? 0), 0);
-      if (loadedRows >= GROUP_FILL_ROWS) return;
-      if (loadedGroupsRef.current >= groupIndexRef.current.length) return;
-      const before = loadedGroupsRef.current;
-      await loadNextGroup();
-      if (loadedGroupsRef.current === before) return; // cancelled or failed
+    // The index already knows each group's size, so pick every group needed to
+    // fill a screen up front and fetch them in ONE request — loading them one
+    // after another (a round trip per group) took ~1s for a typical screen.
+    const index = groupIndexRef.current;
+    const start = loadedGroupsRef.current;
+    let rows = index.slice(0, start).reduce((sum, g) => sum + (g.count ?? 0), 0);
+    let end = start;
+    while (end < index.length && rows < GROUP_FILL_ROWS) { rows += index[end].count ?? 0; end++; }
+    if (end === start || !paramsRef.current) return;
+    if (end - start === 1) { await loadNextGroup(); return; }
+    const seq = loadSeqRef.current;
+    setLoadingMore(true);
+    try {
+      const batch = await fetchAllJobsInGroup<RawJob>(supabase, JOB_LIST_SELECT, {
+        ...paramsRef.current, groupBy: groupByRef.current, groupKeys: index.slice(start, end).map(g => g.key),
+      });
+      if (seq !== loadSeqRef.current) return;
+      setRawJobs(prev => [...prev, ...batch]);
+      loadedGroupsRef.current = end;
+      setHasMore(end < index.length);
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
