@@ -13,6 +13,7 @@ export const dynamic = 'force-dynamic';
 // tile with extra context (1/2 row), lg = full row with expanded content
 // (more list rows, inline mini charts, chart totals).
 
+import { readCachedDashLayout, writeCachedDashLayout } from '@amixos/shared/lib/dashboardLayoutCache';
 import { useEffect, useMemo, useState } from 'react';
 import { SkeletonBlock, SkeletonCard } from '@amixos/shared/ui/Skeleton';
 import { useRouter } from 'next/navigation';
@@ -348,9 +349,20 @@ export default function DashboardPage() {
     if (!user || !business) return;
     let active = true;
     setProfileLayout(undefined);
+    // Device copy first (no default-then-rearrange flash), then the live row.
+    let fresh = false;
+    void readCachedDashLayout<DashboardLayout>(user.id, business.id).then((cached) => {
+      if (active && !fresh && cached !== undefined) setProfileLayout(cached);
+    });
     void supabase.from('user_dashboard_layouts').select('layout')
       .eq('user_id', user.id).eq('business_id', business.id).maybeSingle()
-      .then(({ data }) => { if (active) setProfileLayout((data?.layout as DashboardLayout | null) ?? null); });
+      .then(({ data }: { data: { layout: unknown } | null }) => {
+        if (!active) return;
+        fresh = true;
+        const layout = (data?.layout as DashboardLayout | null) ?? null;
+        setProfileLayout(layout);
+        writeCachedDashLayout(user.id, business.id, layout);
+      });
     return () => { active = false; };
   }, [user?.id, business?.id]);
   const { t: full } = useLang();
@@ -588,6 +600,7 @@ export default function DashboardPage() {
       setSaveError([error.code, error.message].filter(Boolean).join(' · ') || 'Unknown error');
     } else {
       setProfileLayout(layout);
+      writeCachedDashLayout(user.id, business.id, layout);
     }
   };
 

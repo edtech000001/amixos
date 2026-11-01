@@ -23,6 +23,7 @@ import {
 import { useLang } from '@/lib/i18n/LangProvider';
 import type { SplashSlide } from '@amixos/shared';
 import { Logo } from '@amixos/shared/ui/Logo';
+import { useAuthStore } from '@/lib/auth/store';
 
 const ICONS: Record<SplashSlide['key'], LucideIcon> = {
   welcome: Sparkles,
@@ -44,6 +45,12 @@ export default function SplashScreen() {
   const listRef = useRef<FlatList<SplashSlide>>(null);
   const lastInteractionRef = useRef<number>(0);
   const [index, setIndex] = useState(0);
+  // Every launch opens on this route and the auth gate redirects once the
+  // session is known — so the slides (with "Create account / Log in") showed
+  // for a beat to SIGNED-IN users on every cold start. Only show them once
+  // the user is confirmed signed out; until then, the logo (a continuation
+  // of the launch screen).
+  const authStatus = useAuthStore((st) => st.status);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -94,6 +101,14 @@ export default function SplashScreen() {
       </View>
     );
   };
+
+  if (authStatus !== 'logged_out') {
+    return (
+      <SafeAreaView className="flex-1 bg-card items-center justify-center" edges={['top', 'bottom']}>
+        <Logo variant="side" width={172} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-card" edges={['top', 'bottom']}>

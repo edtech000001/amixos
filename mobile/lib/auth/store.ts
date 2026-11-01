@@ -691,6 +691,10 @@ export const useAuthStore = create<AuthStore>()(
         businesses: state.businesses,
         roles: state.roles,
         activeLocationByBiz: state.activeLocationByBiz,
+        // The active business's branches — so the branch picker is on the
+        // first frame instead of popping in (and pushing the dashboard down)
+        // when _loadLocations returns. Refreshed on every launch.
+        locations: state.locations,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {

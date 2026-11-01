@@ -1,3 +1,4 @@
+import { readCachedDashLayout, writeCachedDashLayout } from '@amixos/shared/lib/dashboardLayoutCache';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -76,9 +77,20 @@ function OwnerDashboardHome() {
     if (!user || !business) return;
     let active = true;
     setProfileLayout(undefined);
+    // Device copy first (no default-then-rearrange flash), then the live row.
+    let fresh = false;
+    void readCachedDashLayout<DashboardLayout>(user.id, business.id).then((cached) => {
+      if (active && !fresh && cached !== undefined) setProfileLayout(cached);
+    });
     void supabase.from('user_dashboard_layouts').select('layout')
       .eq('user_id', user.id).eq('business_id', business.id).maybeSingle()
-      .then(({ data }) => { if (active) setProfileLayout((data?.layout as DashboardLayout | null) ?? null); });
+      .then(({ data }: { data: { layout: unknown } | null }) => {
+        if (!active) return;
+        fresh = true;
+        const layout = (data?.layout as DashboardLayout | null) ?? null;
+        setProfileLayout(layout);
+        writeCachedDashLayout(user.id, business.id, layout);
+      });
     return () => { active = false; };
   }, [user?.id, business?.id]);
 
@@ -302,6 +314,7 @@ function OwnerDashboardHome() {
       return [error.code, error.message].filter(Boolean).join(' · ') || 'Unknown error';
     }
     setProfileLayout(layout);
+    writeCachedDashLayout(user.id, business.id, layout);
     return null;
   };
 
