@@ -26,6 +26,7 @@ import {
 import { displayNameFromUser } from '@amixos/shared/lib/userName';
 import { fetchLocations, fetchMyHomeLocation, type Location } from '@amixos/shared/lib/locations';
 import { purgeSwrCache } from '@amixos/shared/lib/swrCache';
+import { BUSINESS_FULL_COLUMNS, BUSINESS_LIGHT_COLUMNS, isFullBusiness, keepUnchanged } from '@amixos/shared/lib/businessColumns';
 import { clearPersistedSearches } from '@amixos/shared/lib/usePersistedSearch';
 
 export interface Business {
@@ -269,6 +270,26 @@ function writeActiveLocCookie(map: Record<string, string>) {
   document.cookie = `${ACTIVE_LOC_COOKIE}=${encodeURIComponent(JSON.stringify(map))}; path=/; max-age=31536000; samesite=lax`;
 }
 
+// Start-up snapshot: the last session's businesses (active one in full, the
+// rest light), roles and active id, per user. Restored right after the
+// session check so screens start loading at once instead of waiting for the
+// businesses round trip; the live fetch then refreshes it. The `amixos_cache_`
+// prefix means purgeSwrCache() (sign-out) wipes it with the other caches.
+type StartupSnapshot = { businesses: Business[]; roles: Record<string, Role>; activeId: string | null };
+const SNAP_PREFIX = 'amixos_cache_appctx_';
+function readStartupSnapshot(userId: string): StartupSnapshot | null {
+  try {
+    const raw = window.localStorage.getItem(SNAP_PREFIX + userId);
+    const snap = raw ? (JSON.parse(raw) as StartupSnapshot) : null;
+    return snap && Array.isArray(snap.businesses) && snap.businesses.length ? snap : null;
+  } catch {
+    return null;
+  }
+}
+function writeStartupSnapshot(userId: string, snap: StartupSnapshot) {
+  try { window.localStorage.setItem(SNAP_PREFIX + userId, JSON.stringify(snap)); } catch { /* quota / private mode */ }
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const supabase = createSupabaseClient();
   // The admin's REAL authenticated identity. `user` exposed below may be the
@@ -405,10 +426,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [activeBusinessId]);
 
   const fetchBusinesses = async (currentUserId: string) => {
-    const [{ data: bizRows }, { data: memberRows }] = await Promise.all([
+    // The active business (saved cookie) loads in FULL alongside the LIGHT
+    // list of every business — the other businesses only ever need id, name,
+    // city, state and subscription fields (businessColumns.ts).
+    const cookieId = readActiveCookie();
+    const [{ data: bizRows }, { data: memberRows }, fullRes] = await Promise.all([
       supabase
         .from('businesses')
-        .select('id, name, logo_url, service_type, city, state, address, postal_code, email, phone, website, tax_id, license_number, invoice_notes_default, invoice_due_days, invoice_start_number, invoice_tax_rate, invoice_qty_field, price_section_order, invoice_email_subject, invoice_email_body, invoice_email_delivery, invoice_field_required, invoice_field_order, invoice_field_hidden, invoice_field_layout, invoice_template, price_sheet_template, client_field_required, client_field_order, client_field_hidden, client_field_layout, employee_field_required, employee_field_order, employee_field_hidden, employee_field_layout, job_field_required, job_field_order, job_pipeline_disabled, job_crew_mode, job_item_types_enabled, crew_finder_enabled, job_private_on_invoice, job_field_hidden, job_field_layout, payroll_frequency, payroll_anchor_date, payroll_custom_days, payroll_config, job_alert_thresholds, assignment_field_required, assignment_field_order, map_pin_config, map_view_settings, weather_config, operating_hours, policy_agents, dashboard_layout, plan, subscription_status, billing_period, trial_ends_at, current_period_end, stripe_customer_id, stripe_subscription_id')
+        .select(BUSINESS_LIGHT_COLUMNS)
         // Deterministic order: the fallback "first business" must be the
         // same on web and mobile, or per-business state (e.g. the Google
         // connection) looks inconsistent across devices.
@@ -417,6 +442,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .from('business_members')
         .select('business_id, role, sort_order')
         .eq('user_id', currentUserId),
+      cookieId
+        ? supabase.from('businesses').select(BUSINESS_FULL_COLUMNS).eq('id', cookieId).maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
     const roleMap: Record<string, Role> = {};
     const orderMap: Record<string, number | null> = {};
@@ -427,14 +455,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // The query orders by created_at; this applies the user's own order on top
     // (migration 217), leaving created_at as the tiebreak.
     const list = orderBusinessesForUser((bizRows as Business[] | null) ?? [], orderMap);
-    setBusinesses(list);
-    setRoles(roleMap);
-
-    const cookieId = readActiveCookie();
     const nextActive =
       cookieId && list.some((b) => b.id === cookieId) ? cookieId : list[0]?.id ?? null;
+    // No (valid) saved business → the full row wasn't prefetched; get it now.
+    let full = (fullRes.data as Business | null)?.id === nextActive ? (fullRes.data as Business) : null;
+    if (nextActive && !full) {
+      const { data } = await supabase.from('businesses').select(BUSINESS_FULL_COLUMNS).eq('id', nextActive).maybeSingle();
+      full = (data as Business | null) ?? null;
+    }
+    const merged = list.map((b) => (full && b.id === full.id ? full : b));
+    // Unchanged rows keep their object (the snapshot already painted them),
+    // so screens keyed on `business` don't reload a second time.
+    setBusinesses((prev) => keepUnchanged(prev, merged));
+    setRoles((prev) => (JSON.stringify(prev) === JSON.stringify(roleMap) ? prev : roleMap));
     setActiveBusinessIdState(nextActive);
     if (nextActive !== cookieId) writeActiveCookie(nextActive);
+    writeStartupSnapshot(currentUserId, { businesses: merged, roles: roleMap, activeId: nextActive });
   };
 
   const refetchBusiness = async () => {
@@ -484,12 +520,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setActiveBusiness = (id: string) => {
-    if (!businesses.some((b) => b.id === id)) return;
+    const target = businesses.find((b) => b.id === id);
+    if (!target) return;
     // Saved search terms belong to the business they were typed in. Keeping
     // them across a switch left search boxes populated over unfiltered lists.
     void clearPersistedSearches();
-    setActiveBusinessIdState(id);
     writeActiveCookie(id);
+    if (isFullBusiness(target)) { setActiveBusinessIdState(id); return; }
+    // The list only holds LIGHT rows for other businesses — load the full
+    // settings before switching so screens never see a half-loaded business.
+    void supabase.from('businesses').select(BUSINESS_FULL_COLUMNS).eq('id', id).maybeSingle()
+      .then(({ data }: { data: Business | null }) => {
+        if (data) setBusinesses((prev) => prev.map((b) => (b.id === id ? data : b)));
+        setActiveBusinessIdState(id);
+      });
   };
 
   useEffect(() => {
@@ -507,6 +551,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (session) {
           const u = { id: session.user.id, email: session.user.email ?? '', name: displayNameFromUser(session.user) };
           setRealUser(u);
+          // Paint the last session's businesses at once so screens start
+          // loading now; fetchBusinesses below refreshes them in place.
+          const snap = readStartupSnapshot(u.id);
+          if (snap) {
+            const cookieId = readActiveCookie();
+            const act = cookieId && snap.businesses.some((b) => b.id === cookieId && isFullBusiness(b))
+              ? cookieId
+              : snap.activeId;
+            setBusinesses(snap.businesses);
+            setRoles(snap.roles ?? {});
+            setActiveBusinessIdState(act);
+            setLoading(false);
+          }
           await fetchBusinesses(u.id);
         } else if (window.location.pathname.startsWith('/dashboard')) {
           window.location.href = '/auth/login';
