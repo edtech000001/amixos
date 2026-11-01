@@ -470,7 +470,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setRoles((prev) => (JSON.stringify(prev) === JSON.stringify(roleMap) ? prev : roleMap));
     setActiveBusinessIdState(nextActive);
     if (nextActive !== cookieId) writeActiveCookie(nextActive);
-    writeStartupSnapshot(currentUserId, { businesses: merged, roles: roleMap, activeId: nextActive });
+    // (The start-up snapshot is saved by the effect below.)
   };
 
   const refetchBusiness = async () => {
@@ -536,6 +536,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
   };
 
+  // Keep the start-up snapshot current — after the live fetch AND after a
+  // business switch (whose full row was just loaded), so the next reload
+  // paints the business the user actually left on. Never while impersonating
+  // (the snapshot is the admin's own view).
+  useEffect(() => {
+    if (!realUser || impersonation || !businesses.length || !activeBusinessId) return;
+    writeStartupSnapshot(realUser.id, { businesses, roles, activeId: activeBusinessId });
+  }, [realUser, impersonation, businesses, roles, activeBusinessId]);
+
   useEffect(() => {
     const init = async () => {
       try {
@@ -555,14 +564,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // loading now; fetchBusinesses below refreshes them in place.
           const snap = readStartupSnapshot(u.id);
           if (snap) {
+            // Only when the snapshot holds the SAVED business in full —
+            // otherwise painting it would flash a different business before
+            // the live fetch corrects it; then just wait for that fetch.
             const cookieId = readActiveCookie();
-            const act = cookieId && snap.businesses.some((b) => b.id === cookieId && isFullBusiness(b))
-              ? cookieId
-              : snap.activeId;
-            setBusinesses(snap.businesses);
-            setRoles(snap.roles ?? {});
-            setActiveBusinessIdState(act);
-            setLoading(false);
+            const act = cookieId ?? snap.activeId;
+            if (act && snap.businesses.some((b) => b.id === act && isFullBusiness(b))) {
+              setBusinesses(snap.businesses);
+              setRoles(snap.roles ?? {});
+              setActiveBusinessIdState(act);
+              setLoading(false);
+            }
           }
           await fetchBusinesses(u.id);
         } else if (window.location.pathname.startsWith('/dashboard')) {
