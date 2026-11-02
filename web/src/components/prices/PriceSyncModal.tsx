@@ -7,6 +7,9 @@ import { useLang } from '@/i18n/LangProvider';
 import {
   syncPriceSheet,
   skippedClientPrices,
+  setPriceAutosync,
+  autosyncBlock,
+  type PriceAutosyncLink,
   type PriceSyncReport,
   type PriceSyncTarget,
 } from '@amixos/shared/lib/priceSheetSync';
@@ -19,6 +22,12 @@ interface Props {
   supabase: Supa;
   sourceBusinessId: string;
   targets: PriceSyncTarget[];
+  /** Auto-sync links (migration 259) the user can see. */
+  links: PriceAutosyncLink[];
+  /** Re-read the links after one is turned on/off. */
+  onLinksChanged: () => void;
+  /** Name for any business id (for "Syncs from …"). */
+  businessName: (id: string) => string;
 }
 
 type Step = 'pick' | 'preview' | 'done';
@@ -32,7 +41,7 @@ const fmtRate = (r: number | null) =>
  * REPLACES the target's whole price sheet, and it's where the user sees which
  * client prices can't carry over. Mobile twin: PriceSyncSheet.
  */
-export function PriceSyncModal({ open, onClose, supabase, sourceBusinessId, targets }: Props) {
+export function PriceSyncModal({ open, onClose, supabase, sourceBusinessId, targets, links, onLinksChanged, businessName }: Props) {
   const { t: full } = useLang();
   const t = full.dashboard.settings.priceSheet.sync;
   const [step, setStep] = useState<Step>('pick');
@@ -41,10 +50,17 @@ export function PriceSyncModal({ open, onClose, supabase, sourceBusinessId, targ
   const [error, setError] = useState('');
   const [reports, setReports] = useState<Record<string, PriceSyncReport>>({});
   const [showMatches, setShowMatches] = useState(false);
+  // Targets with auto-sync wanted ON. Already-on links start on; turning one
+  // on takes effect after the copy below, turning one off is immediate.
+  const [auto, setAuto] = useState<Set<string>>(new Set());
+  const activeAuto = (id: string) => links.some(l => l.sourceId === sourceBusinessId && l.targetId === id);
+  const blockOf = (id: string) => autosyncBlock(links, sourceBusinessId, id);
 
   useEffect(() => {
     if (!open) return;
-    setStep('pick'); setPicked(new Set(targets.map(x => x.id))); setBusy(false); setError(''); setReports({}); setShowMatches(false);
+    const syncable = targets.filter(x => !blockOf(x.id));
+    setStep('pick'); setPicked(new Set(syncable.map(x => x.id))); setBusy(false); setError(''); setReports({}); setShowMatches(false);
+    setAuto(new Set(syncable.filter(x => activeAuto(x.id)).map(x => x.id)));
     // Reset on OPEN only — `targets` is rebuilt by the parent every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -64,8 +80,43 @@ export function PriceSyncModal({ open, onClose, supabase, sourceBusinessId, targ
       }
       next[target.id] = res.report;
     }
+    if (!preview) {
+      // Copy succeeded → switch on auto-sync where it was asked for.
+      let changed = false;
+      for (const target of chosen) {
+        if (!auto.has(target.id) || activeAuto(target.id)) continue;
+        const res = await setPriceAutosync(supabase, sourceBusinessId, target.id, true);
+        if (res.ok === false) {
+          setBusy(false);
+          setError(t.failed.replace('{{error}}', `${target.name}: ${res.error}`));
+          onLinksChanged();
+          return;
+        }
+        changed = true;
+      }
+      if (changed) onLinksChanged();
+    }
     setReports(next); setBusy(false); setStep(preview ? 'preview' : 'done');
   };
+
+  const toggleAuto = async (id: string) => {
+    if (auto.has(id)) {
+      // Turning OFF an active link is immediate (nothing to preview).
+      if (activeAuto(id)) {
+        setBusy(true);
+        const res = await setPriceAutosync(supabase, sourceBusinessId, id, false);
+        setBusy(false);
+        if (res.ok === false) { setError(t.autoOffFailed.replace('{{error}}', res.error)); return; }
+        onLinksChanged();
+      }
+      setAuto(prev => { const n = new Set(prev); n.delete(id); return n; });
+    } else {
+      // Auto-sync implies copying now, so it also ticks the company.
+      setAuto(prev => new Set(prev).add(id));
+      setPicked(prev => new Set(prev).add(id));
+    }
+  };
+  const autoNames = chosen.filter(x => auto.has(x.id)).map(x => x.name).join(', ');
 
   const howLabel = (how: string) =>
     how === 'email' ? t.howEmail : how === 'phone' ? t.howPhone : how === 'name' ? t.howName : t.howCompany;
@@ -84,17 +135,40 @@ export function PriceSyncModal({ open, onClose, supabase, sourceBusinessId, targ
           <p className="text-[11px] font-semibold text-faint uppercase tracking-wide">{t.pickTargets}</p>
           {targets.map(b => {
             const on = picked.has(b.id);
+            const block = blockOf(b.id);
+            const autoOn = auto.has(b.id);
             return (
-              <button key={b.id} type="button"
-                onClick={() => setPicked(prev => { const n = new Set(prev); if (n.has(b.id)) n.delete(b.id); else n.add(b.id); return n; })}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-colors ${on ? 'border-primary bg-primary/10' : 'border-border-soft hover:bg-surface'}`}>
-                <span className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${on ? 'bg-primary border-primary' : 'border-border'}`}>
-                  {on ? <Check size={13} className="text-white" /> : null}
-                </span>
-                <span className="text-sm font-semibold text-ink">{b.name}</span>
-              </button>
+              <div key={b.id}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors ${block ? 'border-border-soft opacity-60' : on ? 'border-primary bg-primary/10' : 'border-border-soft'}`}>
+                <button type="button" disabled={!!block || autoOn}
+                  onClick={() => setPicked(prev => { const n = new Set(prev); if (n.has(b.id)) n.delete(b.id); else n.add(b.id); return n; })}
+                  className="flex-1 min-w-0 flex items-center gap-3 text-left disabled:cursor-default">
+                  <span className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${on && !block ? 'bg-primary border-primary' : 'border-border'}`}>
+                    {on && !block ? <Check size={13} className="text-white" /> : null}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-ink truncate">{b.name}</span>
+                    {block ? (
+                      <span className="block text-[11px] text-faint">
+                        {block.kind === 'follows' ? t.autoSyncsFrom.replace('{{company}}', businessName(block.otherSourceId)) : t.autoIsSource}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+                {!block ? (
+                  <label className="flex items-center gap-2 shrink-0 cursor-pointer" title={t.autoHint}>
+                    <span className="text-xs font-semibold text-muted">{t.autoLabel}</span>
+                    <button type="button" role="switch" aria-checked={autoOn} disabled={busy}
+                      onClick={() => void toggleAuto(b.id)}
+                      className={`relative w-9 h-5 rounded-full transition-colors disabled:opacity-50 ${autoOn ? 'bg-primary' : 'bg-border'}`}>
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${autoOn ? 'left-[18px]' : 'left-0.5'}`} />
+                    </button>
+                  </label>
+                ) : null}
+              </div>
             );
           })}
+          <p className="text-[11px] text-faint">{t.autoHint}.</p>
           {error ? <p className="text-sm text-red-500">{error}</p> : null}
           <button type="button" onClick={() => void run(true)} disabled={busy || chosen.length === 0}
             className="mt-2 py-3 rounded-2xl bg-primary text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50">
@@ -170,6 +244,7 @@ export function PriceSyncModal({ open, onClose, supabase, sourceBusinessId, targ
         <div className="py-6 flex flex-col items-center gap-3 text-center">
           <CheckCircle size={36} className="text-emerald-500" />
           <p className="text-base font-semibold text-ink">{t.done.replace('{{companies}}', names)}</p>
+          {autoNames ? <p className="text-sm text-muted max-w-sm">{t.autoDone.replace('{{companies}}', autoNames)}</p> : null}
           <button type="button" onClick={onClose} className="mt-2 px-4 py-2.5 rounded-xl bg-border-soft text-sm font-semibold text-ink hover:bg-border">
             {full.common.buttons.close}
           </button>

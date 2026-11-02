@@ -11,7 +11,7 @@ import { loadCachedThenFresh, writeCacheAndStamp } from '../../lib/swrCache';
 import { useDataFingerprint } from '../../lib/dataFingerprint';
 import { SkeletonList } from '../../ui/Skeleton';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
-import { Plus, X, Trash2, Pencil, Copy, DollarSign, FileText, Search, ArrowUpDown, GripVertical, ChevronDown, Check, Building2 } from 'lucide-react';
+import { Plus, X, Trash2, Pencil, Copy, DollarSign, FileText, Search, ArrowUpDown, GripVertical, ChevronDown, Check, Building2, History } from 'lucide-react';
 import { SortableList } from '../../ui/SortableList';
 import { useLang } from '../../i18n';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
@@ -28,6 +28,8 @@ import {
   priceUnitSuggestions,
   priceCategorySuggestions,
 } from '../../lib/priceSheet';
+import { fetchPriceItemHistory, lastPriceChange, describePriceEntry, type PriceItemHistory } from '../../lib/priceHistory';
+import { formatDateLong, formatRelativeLong } from '../../lib/format';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseLike = any;
@@ -46,6 +48,10 @@ export interface PriceSheetScreenProps {
   sectionOrder?: string[] | null;
   /** Persist a new section order. Undefined = reordering unavailable. */
   onSectionOrderChange?: (next: string[]) => Promise<void> | void;
+  /** This business mirrors another company's price sheet (auto-sync,
+   *  migration 259): show a banner and make the sheet read-only — edits here
+   *  would be overwritten. `onStop` (admins) disconnects it. */
+  syncedFrom?: { name: string; onStop?: () => void } | null;
 }
 
 // 50 states + DC, USPS order — full names come from usStateName(abbr).
@@ -71,17 +77,27 @@ interface Draft {
 }
 
 
+/** Price-history entries shown before "Show all". */
+const HISTORY_PREVIEW = 5;
+
 const emptyDraft = (): Draft => ({
   id: null, name: '', category: '', pricingMode: 'per_unit', unitLabel: '', rate: '', stateRates: [], clientRates: [], matchTerms: '', isAddon: false, addonInline: false,
 });
 
-export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate, onCopyToOthers, sectionOrder, onSectionOrderChange }: PriceSheetScreenProps) {
+export function PriceSheetScreen({ supabase, businessId, canManage: canManageProp, onGenerate, onCopyToOthers, sectionOrder, onSectionOrderChange, syncedFrom }: PriceSheetScreenProps) {
+  // A mirrored sheet is read-only: the next sync from the source would undo edits.
+  const canManage = canManageProp && !syncedFrom;
   const { t: full, locale } = useLang();
   const t = full.dashboard.settings.priceSheet;
 
   const [items, setItems] = useState<PriceSheetItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<Draft | null>(null);
+  // Item detail (tap a row): full pricing + price history (migration 258).
+  const [viewing, setViewing] = useState<PriceSheetItem | null>(null);
+  const [history, setHistory] = useState<PriceItemHistory | null>(null);
+  // Price history shows the 5 most recent entries until expanded.
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const [saving, setSaving] = useState(false);
   // Client roster for the per-client price picker (names only).
   const [clients, setClients] = useState<Array<{ id: string; name: string }>>([]);
@@ -233,6 +249,18 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate, 
   });
 
   const openNew = () => setDraft(emptyDraft());
+  // Ignore a slow history response once another item has been opened.
+  const viewingIdRef = useRef<string | null>(null);
+  const openDetail = (i: PriceSheetItem) => {
+    viewingIdRef.current = i.id;
+    setViewing(i);
+    setHistory(null);
+    setHistoryExpanded(false);
+    void fetchPriceItemHistory(supabase, i.id)
+      .catch(() => ({ createdAt: null, entries: [] }))
+      .then(h => { if (viewingIdRef.current === i.id) setHistory(h); });
+  };
+  const clientName = (id: string) => clients.find(c => c.id === id)?.name ?? '—';
   const openEdit = (i: PriceSheetItem) => setDraft(draftFromItem(i, i.id));
   // Duplicate → open a NEW draft (id null) prefilled from the item, name "(copy)".
   const duplicate = (i: PriceSheetItem) => setDraft(draftFromItem(i, null));
@@ -305,9 +333,13 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate, 
     total: number,
     handle?: { attributes?: HTMLAttributes<HTMLElement>; listeners?: HTMLAttributes<HTMLElement> },
   ) => (
-    <div key={i.id} className={`px-4 py-4 flex items-center gap-3 bg-card ${idx < total - 1 ? 'border-b border-border-soft' : ''} ${!i.active ? 'opacity-50' : ''}`}>
+    // The whole row opens the item's details (pricing + history); Edit lives
+    // there. Action buttons stop the click so they don't also open it.
+    <div key={i.id} onClick={() => openDetail(i)}
+      className={`px-4 py-4 flex items-center gap-3 bg-card cursor-pointer hover:bg-surface/60 ${idx < total - 1 ? 'border-b border-border-soft' : ''} ${!i.active ? 'opacity-50' : ''}`}>
       {handle ? (
         <span
+          onClick={e => e.stopPropagation()}
           {...(handle.attributes ?? {})}
           {...(handle.listeners ?? {})}
           className="shrink-0 cursor-grab active:cursor-grabbing text-faint hover:text-muted"
@@ -329,11 +361,10 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate, 
         </p>
       </div>
       {canManage ? (
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
           <button type="button" onClick={() => toggleActive(i)} className="px-2 py-1 rounded-lg text-xs font-semibold text-muted hover:bg-border-soft">
             {i.active ? t.deactivate : t.activate}
           </button>
-          <button type="button" onClick={() => openEdit(i)} className="p-1.5 rounded-lg text-faint hover:text-primary hover:bg-primary/5"><Pencil size={14} /></button>
           <button type="button" onClick={() => duplicate(i)} title={t.duplicate} className="p-1.5 rounded-lg text-faint hover:text-primary hover:bg-primary/5"><Copy size={14} /></button>
           <button type="button" onClick={() => remove(i)} className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-500/10"><Trash2 size={14} /></button>
         </div>
@@ -380,6 +411,16 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate, 
         </div>
       </div>
 
+      {syncedFrom ? (
+        <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-primary/10 border border-primary/30">
+          <Building2 size={16} className="text-primary shrink-0 mt-0.5" />
+          <p className="flex-1 text-sm text-ink">{t.sync.syncedBanner.replace('{{company}}', syncedFrom.name)}</p>
+          {syncedFrom.onStop ? (
+            <button type="button" onClick={syncedFrom.onStop} className="shrink-0 text-xs font-semibold text-primary hover:underline">{t.sync.stopSync}</button>
+          ) : null}
+        </div>
+      ) : null}
+
       {/* Search */}
       <div className="relative">
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
@@ -408,6 +449,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate, 
             <div key={key}>
               <p className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">
                 {key === '￿' ? t.uncategorized : key}
+                <span className="ml-2 font-bold text-primary">{list.length}</span>
               </p>
               <div className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
                 {canReorder ? (
@@ -457,6 +499,113 @@ export function PriceSheetScreen({ supabase, businessId, canManage, onGenerate, 
           </div>
         </div>
       ) : null}
+
+      {viewing ? (() => {
+        const td = t.detail;
+        const rel = full.dashboard.clients.detail.commLog.rel;
+        const last = history ? lastPriceChange(history) : null;
+        const baseline = history?.entries.find(e => e.kind === 'baseline') ?? null;
+        const clientRates = Object.entries(viewing.clientRates ?? {});
+        const stateRates = Object.entries(viewing.stateRates ?? {})
+          .sort((a, b) => usStateName(a[0], locale).localeCompare(usStateName(b[0], locale)));
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setViewing(null)} />
+            <div className="relative bg-card rounded-2xl w-full max-w-md p-5 max-h-[85vh] overflow-y-auto shadow-xl">
+              <div className="flex items-start justify-between gap-3 mb-1">
+                <div className="min-w-0">
+                  {viewing.category ? <p className="text-[11px] font-semibold text-faint uppercase tracking-wide">{viewing.category}</p> : null}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-lg font-bold text-ink">{viewing.name}</h2>
+                    {viewing.isAddon ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">{t.addonBadge}</span> : null}
+                    {!viewing.active ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-border-soft text-faint">{t.inactiveBadge}</span> : null}
+                  </div>
+                </div>
+                <button type="button" onClick={() => setViewing(null)} className="p-1.5 -mr-1 rounded-lg hover:bg-border-soft"><X size={18} className="text-faint" /></button>
+              </div>
+
+              <p className="text-2xl font-bold text-primary mt-2">{viewing.isAddon ? '+' : ''}{priceItemLabel(viewing, t.flatWord)}</p>
+              {history ? (
+                <p className="text-xs text-muted mt-1">
+                  {last && last.kind === 'updated'
+                    ? td.lastChanged.replace('{{date}}', formatDateLong(last.changedAt, locale)).replace('{{ago}}', formatRelativeLong(last.changedAt, rel))
+                    : last && last.kind === 'created'
+                      ? td.unchangedSinceAdded.replace('{{ago}}', formatRelativeLong(last.changedAt, rel))
+                      : baseline
+                        ? td.noChangesSinceTracking.replace('{{date}}', formatDateLong(baseline.changedAt, locale))
+                        : null}
+                </p>
+              ) : null}
+              {history?.createdAt ? (
+                <p className="text-xs text-faint mt-0.5">{td.added.replace('{{date}}', formatDateLong(history.createdAt, locale))}</p>
+              ) : null}
+
+              {stateRates.length ? (
+                <div className="mt-4">
+                  <p className="text-xs font-semibold text-ink mb-1">{t.stateRatesLabel}</p>
+                  {stateRates.map(([st, r]) => (
+                    <div key={st} className="flex justify-between text-sm py-1 border-b border-border-soft last:border-0">
+                      <span className="text-muted">{usStateName(st, locale)}</span><span className="text-ink font-medium">${r}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {clientRates.length ? (
+                <div className="mt-4">
+                  <p className="text-xs font-semibold text-ink mb-1">{t.clientRatesLabel}</p>
+                  {clientRates.map(([id, r]) => (
+                    <div key={id} className="flex justify-between gap-3 text-sm py-1 border-b border-border-soft last:border-0">
+                      <span className="text-muted truncate">{clientName(id)}</span><span className="text-ink font-medium shrink-0">${r}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {viewing.matchTerms.length ? (
+                <div className="mt-4">
+                  <p className="text-xs font-semibold text-ink mb-1">{t.matchTermsLabel}</p>
+                  <p className="text-sm text-muted">{viewing.matchTerms.join(', ')}</p>
+                </div>
+              ) : null}
+
+              <div className="mt-5">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-ink mb-2"><History size={13} /> {td.historyTitle}</p>
+                {!history ? (
+                  <p className="text-xs text-faint">{td.historyLoading}</p>
+                ) : (
+                  <div className="flex flex-col">
+                    {(historyExpanded ? history.entries : history.entries.slice(0, HISTORY_PREVIEW)).map(e => {
+                      const lines = describePriceEntry(e, { labels: { flatWord: t.flatWord, none: td.none }, locale, clientName });
+                      return (
+                        <div key={e.id} className="relative pl-4 pb-3 border-l border-border-soft last:pb-0">
+                          <span className={`absolute -left-[4px] top-1.5 w-2 h-2 rounded-full ${e.kind === 'updated' ? 'bg-primary' : 'bg-border'}`} />
+                          <p className="text-[11px] text-faint">
+                            {formatDateLong(e.changedAt, locale)} · {e.kind === 'updated' ? td.historyChanged : e.kind === 'created' ? td.historyAdded : td.historyBaseline}
+                            {e.changedByName ? ` · ${td.by.replace('{{name}}', e.changedByName)}` : ''}
+                          </p>
+                          {lines.map((l, k) => <p key={k} className="text-sm text-ink">{l}</p>)}
+                        </div>
+                      );
+                    })}
+                    {history.entries.length > HISTORY_PREVIEW ? (
+                      <button type="button" onClick={() => setHistoryExpanded(x => !x)}
+                        className="self-start mt-2 text-xs font-semibold text-primary hover:underline">
+                        {historyExpanded ? td.showLess : td.showAll.replace('{{count}}', String(history.entries.length))}
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+
+              {canManage ? (
+                <button type="button" onClick={() => { const it = viewing; setViewing(null); openEdit(it); }}
+                  className="mt-5 w-full flex items-center justify-center gap-1.5 py-3 rounded-2xl bg-primary text-white font-semibold hover:opacity-90">
+                  <Pencil size={15} /> {td.editBtn}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        );
+      })() : null}
 
       {/* Add/edit modal. Backdrop click deliberately does NOT close — a
           mis-click mustn't discard an in-progress price edit. Close via the

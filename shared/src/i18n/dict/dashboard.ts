@@ -421,6 +421,8 @@ export type DashboardDict = {
       clientPaid: string;
       /** Invoice-list badge for the same state. {{company}} */
       collectFrom: string;
+      /** Under a list row whose total is (partly) billed for other companies. */
+      listClientPays: string;
       /** Dashboard card: unpaid invoices whose client already paid a partner. */
       owedTitle: string;
       owedHint: string;
@@ -1785,6 +1787,23 @@ export type DashboardDict = {
       clientTierLabel: string;
       clientTierNone: string;
       generateBtn: string;
+      /** Item detail view + price history (migration 258). */
+      detail: {
+        added: string;
+        lastChanged: string;
+        unchangedSinceAdded: string;
+        noChangesSinceTracking: string;
+        historyTitle: string;
+        historyLoading: string;
+        historyAdded: string;
+        historyBaseline: string;
+        historyChanged: string;
+        by: string;
+        none: string;
+        editBtn: string;
+        showAll: string;
+        showLess: string;
+      };
       /** Copy this price sheet to the user's other businesses (migration 242). */
       sync: {
         btn: string;
@@ -1800,6 +1819,17 @@ export type DashboardDict = {
         skippedNone: string;
         skippedAmbiguous: string;
         skippedHint: string;
+        /** Auto-sync (migration 259). */
+        autoLabel: string;
+        autoHint: string;
+        autoSyncsFrom: string;
+        autoIsSource: string;
+        autoDone: string;
+        autoOffFailed: string;
+        syncedBanner: string;
+        syncedBannerUnknown: string;
+        stopSync: string;
+        stopConfirm: string;
         matchedBy: string;
         howEmail: string;
         howPhone: string;
@@ -3915,6 +3945,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         billedVia: 'Facturado por {{company}} · {{invoice}}',
         clientPaid: 'El cliente ya le pagó a {{company}} el {{date}}. Cóbrale tu parte: {{amount}}',
         collectFrom: 'Cobrar a {{company}}',
+        listClientPays: 'Cliente paga {{total}}',
         owedTitle: 'Te deben tus otras empresas',
         owedHint: 'El cliente ya pagó la factura de la otra empresa. Pídele tu parte.',
         owedLine: '{{invoice}} · pagado a {{company}} el {{date}}',
@@ -5242,6 +5273,22 @@ export const dashboard: Record<Locale, DashboardDict> = {
         clientTierLabel: 'Nivel de precio',
         clientTierNone: 'Estándar (base)',
         generateBtn: 'Generar hoja',
+        detail: {
+          added: 'Agregado {{date}}',
+          lastChanged: 'Precio cambiado por última vez {{date}} · {{ago}}',
+          unchangedSinceAdded: 'Mismo precio desde que se agregó · {{ago}}',
+          noChangesSinceTracking: 'Sin cambios de precio desde que empezó el historial ({{date}})',
+          historyTitle: 'Historial de precios',
+          historyLoading: 'Cargando historial…',
+          historyAdded: 'Agregado',
+          historyBaseline: 'Precio al iniciar el historial',
+          historyChanged: 'Precio cambiado',
+          by: 'por {{name}}',
+          none: 'ninguno',
+          editBtn: 'Editar',
+          showAll: 'Ver todo ({{count}})',
+          showLess: 'Ver menos',
+        },
         sync: {
           btn: 'Copiar a otras empresas',
           title: 'Copiar precios a otras empresas',
@@ -5256,6 +5303,16 @@ export const dashboard: Record<Locale, DashboardDict> = {
           skippedNone: 'el cliente no existe en {{company}}',
           skippedAmbiguous: '{{count}} clientes posibles en {{company}}',
           skippedHint: 'Esos clientes tendrán el precio normal en esa empresa. Agrégalos (o corrige su correo/teléfono) y vuelve a copiar.',
+          autoLabel: 'Auto-sincronizar',
+          autoHint: 'Mantener sus precios idénticos automáticamente',
+          autoSyncsFrom: 'Sincroniza desde {{company}}',
+          autoIsSource: 'Comparte sus precios con otras empresas',
+          autoDone: 'Auto-sincronización activa para {{companies}}. Los cambios aquí se copian solos.',
+          autoOffFailed: 'No se pudo apagar: {{error}}',
+          syncedBanner: 'Estos precios se sincronizan automáticamente desde {{company}}. Edítalos allá; los cambios hechos aquí se reemplazarían.',
+          syncedBannerUnknown: 'otra empresa',
+          stopSync: 'Dejar de sincronizar',
+          stopConfirm: '¿Dejar de sincronizar? Esta empresa conserva sus precios actuales y podrás editarlos de nuevo.',
           matchedBy: 'por {{how}}',
           howEmail: 'correo',
           howPhone: 'teléfono',
@@ -7367,6 +7424,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         billedVia: 'Billed through {{company}} · {{invoice}}',
         clientPaid: 'The client paid {{company}} on {{date}} — collect {{amount}} from them',
         collectFrom: 'Collect from {{company}}',
+        listClientPays: 'Client pays {{total}}',
         owedTitle: 'Owed by your other companies',
         owedHint: 'The client already paid the other company’s invoice. Ask them for your share.',
         owedLine: '{{invoice}} · paid to {{company}} on {{date}}',
@@ -8691,6 +8749,22 @@ export const dashboard: Record<Locale, DashboardDict> = {
         clientTierLabel: 'Price tier',
         clientTierNone: 'Standard (base)',
         generateBtn: 'Generate sheet',
+        detail: {
+          added: 'Added {{date}}',
+          lastChanged: 'Price last changed {{date}} · {{ago}}',
+          unchangedSinceAdded: 'Same price since it was added · {{ago}}',
+          noChangesSinceTracking: 'No price changes since history began ({{date}})',
+          historyTitle: 'Price history',
+          historyLoading: 'Loading history…',
+          historyAdded: 'Added',
+          historyBaseline: 'Price when history began',
+          historyChanged: 'Price changed',
+          by: 'by {{name}}',
+          none: 'none',
+          editBtn: 'Edit',
+          showAll: 'Show all ({{count}})',
+          showLess: 'Show less',
+        },
         sync: {
           btn: 'Copy to other companies',
           title: 'Copy prices to other companies',
@@ -8705,6 +8779,16 @@ export const dashboard: Record<Locale, DashboardDict> = {
           skippedNone: 'client not found in {{company}}',
           skippedAmbiguous: '{{count}} possible clients in {{company}}',
           skippedHint: "Those clients get the normal price in that company. Add them there (or fix their email/phone) and copy again.",
+          autoLabel: 'Auto-sync',
+          autoHint: "Keep this company's prices identical automatically",
+          autoSyncsFrom: 'Syncs from {{company}}',
+          autoIsSource: 'Shares its prices with other companies',
+          autoDone: 'Auto-sync is on for {{companies}}. Changes here copy over automatically.',
+          autoOffFailed: "Couldn't turn it off: {{error}}",
+          syncedBanner: 'These prices sync automatically from {{company}}. Edit them there — changes made here would be overwritten.',
+          syncedBannerUnknown: 'another company',
+          stopSync: 'Stop syncing',
+          stopConfirm: 'Stop syncing? This company keeps its current prices and you can edit them again.',
           matchedBy: 'by {{how}}',
           howEmail: 'email',
           howPhone: 'phone',

@@ -35,7 +35,7 @@ import {
 } from '@amixos/shared/lib/priceSheetTemplate';
 import { buildPriceSheetHtml } from '@amixos/shared/lib/priceSheetHtml';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
-import { priceSyncTargets } from '@amixos/shared/lib/priceSheetSync';
+import { priceSyncTargets, fetchAutosyncLinks, setPriceAutosync, type PriceAutosyncLink } from '@amixos/shared/lib/priceSheetSync';
 import { useAuthStore } from '@/lib/auth/store';
 import { PriceSyncSheet } from '@/components/PriceSyncSheet';
 
@@ -70,6 +70,10 @@ export default function FacturasPreciosPage() {
   const [syncOpen, setSyncOpen] = useState(false);
   const c = useThemeColors();
   const supabase = useMemo(() => createSupabaseClient(), []);
+  // Auto-sync links (migration 259) — which company this one mirrors, and
+  // which mirror it.
+  const [links, setLinks] = useState<PriceAutosyncLink[]>([]);
+  const loadLinks = useCallback(() => { void fetchAutosyncLinks(supabase).then(setLinks); }, [supabase]);
   const t = full.dashboard.settings.priceSheet;
 
   // ── Generate PDF sheet ──────────────────────────────────────────────────────
@@ -420,8 +424,27 @@ export default function FacturasPreciosPage() {
     setEmailPickOpen(true);
   };
 
+  useEffect(() => { loadLinks(); }, [loadLinks, business?.id]);
+
   if (!business) return null;
-  const syncTargets = priceSyncTargets(businesses, rolesByBusiness, business.id);
+  const nameOf = (id: string) => businesses.find(b => b.id === id)?.name ?? t.sync.syncedBannerUnknown;
+  const follows = links.find(l => l.targetId === business.id) ?? null;
+  const isAdminHere = currentRole === 'owner' || currentRole === 'admin';
+  // A mirror can't share its own prices onward (no chains).
+  const syncTargets = follows ? [] : priceSyncTargets(businesses, rolesByBusiness, business.id);
+  const stopSync = () => {
+    if (!follows) return;
+    Alert.alert('', t.sync.stopConfirm, [
+      { text: full.common.buttons.cancel, style: 'cancel' },
+      {
+        text: t.sync.stopSync, style: 'destructive', onPress: async () => {
+          const res = await setPriceAutosync(supabase, follows.sourceId, business.id, false);
+          if (res.ok === false) Alert.alert('', t.sync.autoOffFailed.replace('{{error}}', res.error));
+          loadLinks();
+        },
+      },
+    ]);
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
@@ -444,6 +467,7 @@ export default function FacturasPreciosPage() {
           supabase={supabase}
           businessId={business.id}
           canManage={can.manageBusinessSettings(currentRole)}
+          syncedFrom={follows ? { name: nameOf(follows.sourceId), onStop: isAdminHere ? stopSync : undefined } : null}
           sectionOrder={(business as { price_section_order?: string[] | null }).price_section_order ?? null}
           onSectionOrderChange={async (next) => {
             // Written straight to the business row, then refetched so the
@@ -709,6 +733,9 @@ export default function FacturasPreciosPage() {
         supabase={supabase}
         sourceBusinessId={business.id}
         targets={syncTargets}
+        links={links}
+        onLinksChanged={loadLinks}
+        businessName={nameOf}
       />
     </SafeAreaView>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView, Modal as RNModal } from 'react-native';
+import { View, Text, Pressable, ScrollView, Modal as RNModal, Switch } from 'react-native';
 import { X, ArrowLeft, Check, AlertTriangle, CheckCircle } from 'lucide-react-native';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useThemeColors } from '@/lib/ThemeProvider';
@@ -7,6 +7,9 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import {
   syncPriceSheet,
   skippedClientPrices,
+  setPriceAutosync,
+  autosyncBlock,
+  type PriceAutosyncLink,
   type PriceSyncReport,
   type PriceSyncTarget,
 } from '@amixos/shared/lib/priceSheetSync';
@@ -19,6 +22,12 @@ interface Props {
   supabase: Supa;
   sourceBusinessId: string;
   targets: PriceSyncTarget[];
+  /** Auto-sync links (migration 259) the user can see. */
+  links: PriceAutosyncLink[];
+  /** Re-read the links after one is turned on/off. */
+  onLinksChanged: () => void;
+  /** Name for any business id (for "Syncs from …"). */
+  businessName: (id: string) => string;
 }
 
 type Step = 'pick' | 'preview' | 'done';
@@ -32,7 +41,7 @@ const fmtRate = (r: number | null) =>
  * Canonical sheet structure (absolute backdrop first, card as a sibling);
  * the confirmation is inline — iOS won't present a second modal over this.
  */
-export function PriceSyncSheet({ open, onClose, supabase, sourceBusinessId, targets }: Props) {
+export function PriceSyncSheet({ open, onClose, supabase, sourceBusinessId, targets, links, onLinksChanged, businessName }: Props) {
   const c = useThemeColors();
   const { t: full } = useLang();
   const t = full.dashboard.settings.priceSheet.sync;
@@ -42,10 +51,17 @@ export function PriceSyncSheet({ open, onClose, supabase, sourceBusinessId, targ
   const [error, setError] = useState('');
   const [reports, setReports] = useState<Record<string, PriceSyncReport>>({});
   const [showMatches, setShowMatches] = useState(false);
+  // Targets with auto-sync wanted ON. Already-on links start on; turning one
+  // on takes effect after the copy below, turning one off is immediate.
+  const [auto, setAuto] = useState<Set<string>>(new Set());
+  const activeAuto = (id: string) => links.some(l => l.sourceId === sourceBusinessId && l.targetId === id);
+  const blockOf = (id: string) => autosyncBlock(links, sourceBusinessId, id);
 
   useEffect(() => {
     if (!open) return;
-    setStep('pick'); setPicked(new Set(targets.map(x => x.id))); setBusy(false); setError(''); setReports({}); setShowMatches(false);
+    const syncable = targets.filter(x => !blockOf(x.id));
+    setStep('pick'); setPicked(new Set(syncable.map(x => x.id))); setBusy(false); setError(''); setReports({}); setShowMatches(false);
+    setAuto(new Set(syncable.filter(x => activeAuto(x.id)).map(x => x.id)));
     // Reset on OPEN only — `targets` is rebuilt by the parent every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -65,8 +81,43 @@ export function PriceSyncSheet({ open, onClose, supabase, sourceBusinessId, targ
       }
       next[target.id] = res.report;
     }
+    if (!preview) {
+      // Copy succeeded → switch on auto-sync where it was asked for.
+      let changed = false;
+      for (const target of chosen) {
+        if (!auto.has(target.id) || activeAuto(target.id)) continue;
+        const res = await setPriceAutosync(supabase, sourceBusinessId, target.id, true);
+        if (res.ok === false) {
+          setBusy(false);
+          setError(t.failed.replace('{{error}}', `${target.name}: ${res.error}`));
+          onLinksChanged();
+          return;
+        }
+        changed = true;
+      }
+      if (changed) onLinksChanged();
+    }
     setReports(next); setBusy(false); setStep(preview ? 'preview' : 'done');
   };
+
+  const toggleAuto = async (id: string) => {
+    if (auto.has(id)) {
+      // Turning OFF an active link is immediate (nothing to preview).
+      if (activeAuto(id)) {
+        setBusy(true);
+        const res = await setPriceAutosync(supabase, sourceBusinessId, id, false);
+        setBusy(false);
+        if (res.ok === false) { setError(t.autoOffFailed.replace('{{error}}', res.error)); return; }
+        onLinksChanged();
+      }
+      setAuto(prev => { const n = new Set(prev); n.delete(id); return n; });
+    } else {
+      // Auto-sync implies copying now, so it also ticks the company.
+      setAuto(prev => new Set(prev).add(id));
+      setPicked(prev => new Set(prev).add(id));
+    }
+  };
+  const autoNames = chosen.filter(x => auto.has(x.id)).map(x => x.name).join(', ');
 
   const howLabel = (how: string) =>
     how === 'email' ? t.howEmail : how === 'phone' ? t.howPhone : how === 'name' ? t.howName : t.howCompany;
@@ -95,18 +146,38 @@ export function PriceSyncSheet({ open, onClose, supabase, sourceBusinessId, targ
                 <Text className="text-sm text-muted mb-3">{t.subtitle}</Text>
                 <Text className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">{t.pickTargets}</Text>
                 {targets.map(b => {
-                  const on = picked.has(b.id);
+                  const block = blockOf(b.id);
+                  const on = picked.has(b.id) && !block;
+                  const autoOn = auto.has(b.id);
                   return (
-                    <Pressable key={b.id}
-                      onPress={() => setPicked(prev => { const n = new Set(prev); if (n.has(b.id)) n.delete(b.id); else n.add(b.id); return n; })}
-                      className={`flex-row items-center gap-3 px-3 py-3 rounded-xl border mb-2 active:opacity-70 ${on ? 'border-primary bg-primary/10' : 'border-border-soft'}`}>
-                      <View className={`w-5 h-5 rounded-md border items-center justify-center ${on ? 'bg-primary border-primary' : 'border-border'}`}>
-                        {on ? <Check size={13} color="#fff" /> : null}
-                      </View>
-                      <Text className="text-sm font-semibold text-ink">{b.name}</Text>
-                    </Pressable>
+                    <View key={b.id}
+                      className={`flex-row items-center gap-3 px-3 py-3 rounded-xl border mb-2 ${block ? 'border-border-soft opacity-60' : on ? 'border-primary bg-primary/10' : 'border-border-soft'}`}>
+                      <Pressable disabled={!!block || autoOn}
+                        onPress={() => setPicked(prev => { const n = new Set(prev); if (n.has(b.id)) n.delete(b.id); else n.add(b.id); return n; })}
+                        className="flex-1 flex-row items-center gap-3 active:opacity-70">
+                        <View className={`w-5 h-5 rounded-md border items-center justify-center ${on ? 'bg-primary border-primary' : 'border-border'}`}>
+                          {on ? <Check size={13} color="#fff" /> : null}
+                        </View>
+                        <View className="flex-1">
+                          <Text className="text-sm font-semibold text-ink" numberOfLines={1}>{b.name}</Text>
+                          {block ? (
+                            <Text className="text-[11px] text-faint">
+                              {block.kind === 'follows' ? t.autoSyncsFrom.replace('{{company}}', businessName(block.otherSourceId)) : t.autoIsSource}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </Pressable>
+                      {!block ? (
+                        <View className="items-center">
+                          <Switch value={autoOn} disabled={busy} onValueChange={() => { void toggleAuto(b.id); }}
+                            trackColor={{ true: c.primary, false: c.border }} />
+                          <Text className="text-[10px] font-semibold text-muted mt-0.5">{t.autoLabel}</Text>
+                        </View>
+                      ) : null}
+                    </View>
                   );
                 })}
+                <Text className="text-[11px] text-faint mt-1">{t.autoHint}.</Text>
               </>
             ) : step === 'preview' ? (
               <>
@@ -170,6 +241,7 @@ export function PriceSyncSheet({ open, onClose, supabase, sourceBusinessId, targ
               <View className="py-6 items-center gap-3">
                 <CheckCircle size={36} color={c.success} />
                 <Text className="text-base font-semibold text-ink text-center">{t.done.replace('{{companies}}', names)}</Text>
+                {autoNames ? <Text className="text-sm text-muted text-center px-4">{t.autoDone.replace('{{companies}}', autoNames)}</Text> : null}
               </View>
             )}
           </ScrollView>

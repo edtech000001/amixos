@@ -5,13 +5,13 @@
 // (absolute backdrop BEHIND a plain-View card) so the sheet scrolls — see
 // CLAUDE.md.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadCachedThenFresh, writeCacheAndStamp } from '../../lib/swrCache';
 import { useDataFingerprint } from '../../lib/dataFingerprint';
 import { SkeletonList } from '../../ui/Skeleton';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Modal as RNModal, KeyboardAvoidingView, Keyboard, Platform } from 'react-native';
-import { Plus, X, Trash2, Pencil, Copy, DollarSign, Search, ChevronDown, Check, ArrowUpDown, GripVertical } from 'lucide-react-native';
+import { Plus, X, Trash2, Pencil, Copy, DollarSign, Search, ChevronDown, Check, ArrowUpDown, GripVertical, History } from 'lucide-react-native';
 // Native-only screen (PriceSheetScreen.web.tsx is the web variant), so a
 // React-Native-only package is safe to import here.
 import Sortable from 'react-native-sortables';
@@ -32,6 +32,8 @@ import {
   priceUnitSuggestions,
   priceCategorySuggestions,
 } from '../../lib/priceSheet';
+import { fetchPriceItemHistory, lastPriceChange, describePriceEntry, type PriceItemHistory } from '../../lib/priceHistory';
+import { formatDateLong, formatRelativeLong } from '../../lib/format';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseLike = any;
@@ -50,6 +52,10 @@ export interface PriceSheetScreenProps {
   sectionOrder?: string[] | null;
   /** Persist a new section order. Undefined = reordering unavailable. */
   onSectionOrderChange?: (next: string[]) => Promise<void> | void;
+  /** This business mirrors another company's price sheet (auto-sync,
+   *  migration 259): show a banner and make the sheet read-only — edits here
+   *  would be overwritten. `onStop` (admins) disconnects it. */
+  syncedFrom?: { name: string; onStop?: () => void } | null;
 }
 
 const US_STATES = [
@@ -74,11 +80,16 @@ interface Draft {
 }
 
 
+/** Price-history entries shown before "Show all". */
+const HISTORY_PREVIEW = 5;
+
 const emptyDraft = (): Draft => ({
   id: null, name: '', category: '', pricingMode: 'per_unit', unitLabel: '', rate: '', stateRates: [], clientRates: [], matchTerms: '', isAddon: false, addonInline: false,
 });
 
-export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder, onSectionOrderChange }: PriceSheetScreenProps) {
+export function PriceSheetScreen({ supabase, businessId, canManage: canManageProp, sectionOrder, onSectionOrderChange, syncedFrom }: PriceSheetScreenProps) {
+  // A mirrored sheet is read-only: the next sync from the source would undo edits.
+  const canManage = canManageProp && !syncedFrom;
   const { t: full, locale } = useLang();
   const c = useThemeColors();
   const t = full.dashboard.settings.priceSheet;
@@ -86,6 +97,13 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
   const [items, setItems] = useState<PriceSheetItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<Draft | null>(null);
+  // Item detail (tap a row): full pricing + price history (migration 258).
+  // Shares the edit sheet's RNModal — iOS won't present a second one.
+  const [viewing, setViewing] = useState<PriceSheetItem | null>(null);
+  const [history, setHistory] = useState<PriceItemHistory | null>(null);
+  // Price history shows the 5 most recent entries until expanded.
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const viewingIdRef = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
   // Client roster for the per-client price picker (names only).
   const [clients, setClients] = useState<Array<{ id: string; name: string }>>([]);
@@ -249,6 +267,17 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
   });
 
   const openEdit = (i: PriceSheetItem) => setDraft(draftFromItem(i, i.id));
+  const openDetail = (i: PriceSheetItem) => {
+    viewingIdRef.current = i.id;
+    setViewing(i);
+    setHistory(null);
+    setHistoryExpanded(false);
+    void fetchPriceItemHistory(supabase, i.id)
+      .catch(() => ({ createdAt: null, entries: [] }))
+      .then(h => { if (viewingIdRef.current === i.id) setHistory(h); });
+  };
+  const closeSheet = () => { setDraft(null); setViewing(null); viewingIdRef.current = null; };
+  const clientName = (id: string) => clients.find(cl => cl.id === id)?.name ?? '—';
   const duplicate = (i: PriceSheetItem) => setDraft(draftFromItem(i, null));
 
   const save = async () => {
@@ -329,7 +358,9 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
   /** One price row. Shared by the static list and the sortable one so the two
    *  can never drift apart visually. */
   const renderPriceRow = (i: PriceSheetItem, idx: number, total: number) => (
-    <View key={i.id} className={`px-4 py-4 flex-row items-center gap-3 bg-card ${idx < total - 1 ? 'border-b border-border-soft' : ''} ${!i.active ? 'opacity-50' : ''}`}>
+    // The whole row opens the item's details (pricing + history); Edit lives
+    // there. The action buttons are their own Pressables, so they win the tap.
+    <Pressable key={i.id} onPress={() => openDetail(i)} className={`px-4 py-4 flex-row items-center gap-3 bg-card active:bg-surface ${idx < total - 1 ? 'border-b border-border-soft' : ''} ${!i.active ? 'opacity-50' : ''}`}>
       <View className="flex-1 min-w-0">
         <View className="flex-row items-center gap-2">
           <Text className="text-sm font-semibold text-ink flex-shrink" numberOfLines={1}>{i.name}</Text>
@@ -345,13 +376,122 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
           <Pressable onPress={() => toggleActive(i)} className="px-2 py-1 rounded-lg active:bg-border-soft">
             <Text className="text-xs font-semibold text-muted">{i.active ? t.deactivate : t.activate}</Text>
           </Pressable>
-          <Pressable onPress={() => openEdit(i)} className="p-1.5 rounded-lg active:bg-primary/5"><Pencil size={14} color={c.faint} /></Pressable>
           <Pressable onPress={() => duplicate(i)} className="p-1.5 rounded-lg active:bg-primary/5"><Copy size={14} color={c.faint} /></Pressable>
           <Pressable onPress={() => remove(i)} className="p-1.5 rounded-lg active:bg-red-500/10"><Trash2 size={14} color={c.danger} /></Pressable>
         </View>
       ) : null}
-    </View>
+    </Pressable>
   );
+
+  const renderDetail = (v: PriceSheetItem) => {
+    const td = t.detail;
+    const rel = full.dashboard.clients.detail.commLog.rel;
+    const last = history ? lastPriceChange(history) : null;
+    const baseline = history?.entries.find(e => e.kind === 'baseline') ?? null;
+    const clientRates = Object.entries(v.clientRates ?? {});
+    const stateRates = Object.entries(v.stateRates ?? {})
+      .sort((a, b) => usStateName(a[0], locale).localeCompare(usStateName(b[0], locale)));
+    return (
+      <>
+        <View className="flex-row items-start justify-between gap-3 mb-1">
+          <View className="flex-1 min-w-0">
+            {v.category ? <Text className="text-[11px] font-semibold text-faint uppercase tracking-wide">{v.category}</Text> : null}
+            <View className="flex-row items-center gap-2 flex-wrap">
+              <Text className="text-lg font-bold text-ink">{v.name}</Text>
+              {v.isAddon ? <View className="px-1.5 py-0.5 rounded-full bg-amber-100"><Text className="text-[10px] font-semibold text-amber-700">{t.addonBadge}</Text></View> : null}
+              {!v.active ? <View className="px-1.5 py-0.5 rounded-full bg-border-soft"><Text className="text-[10px] text-faint">{t.inactiveBadge}</Text></View> : null}
+            </View>
+          </View>
+          <Pressable onPress={closeSheet} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft"><X size={20} color={c.faint} /></Pressable>
+        </View>
+        <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
+          <Text className="text-2xl font-bold text-primary mt-2">{v.isAddon ? '+' : ''}{priceItemLabel(v, t.flatWord)}</Text>
+          {history ? (
+            <Text className="text-xs text-muted mt-1">
+              {last && last.kind === 'updated'
+                ? td.lastChanged.replace('{{date}}', formatDateLong(last.changedAt, locale)).replace('{{ago}}', formatRelativeLong(last.changedAt, rel))
+                : last && last.kind === 'created'
+                  ? td.unchangedSinceAdded.replace('{{ago}}', formatRelativeLong(last.changedAt, rel))
+                  : baseline
+                    ? td.noChangesSinceTracking.replace('{{date}}', formatDateLong(baseline.changedAt, locale))
+                    : ''}
+            </Text>
+          ) : null}
+          {history?.createdAt ? (
+            <Text className="text-xs text-faint mt-0.5">{td.added.replace('{{date}}', formatDateLong(history.createdAt, locale))}</Text>
+          ) : null}
+
+          {stateRates.length ? (
+            <View className="mt-4">
+              <Text className="text-xs font-semibold text-ink mb-1">{t.stateRatesLabel}</Text>
+              {stateRates.map(([st, r]) => (
+                <View key={st} className="flex-row justify-between py-1.5 border-b border-border-soft">
+                  <Text className="text-sm text-muted">{usStateName(st, locale)}</Text>
+                  <Text className="text-sm text-ink font-medium">${r}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          {clientRates.length ? (
+            <View className="mt-4">
+              <Text className="text-xs font-semibold text-ink mb-1">{t.clientRatesLabel}</Text>
+              {clientRates.map(([id, r]) => (
+                <View key={id} className="flex-row justify-between gap-3 py-1.5 border-b border-border-soft">
+                  <Text className="text-sm text-muted flex-1" numberOfLines={1}>{clientName(id)}</Text>
+                  <Text className="text-sm text-ink font-medium">${r}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          {v.matchTerms.length ? (
+            <View className="mt-4">
+              <Text className="text-xs font-semibold text-ink mb-1">{t.matchTermsLabel}</Text>
+              <Text className="text-sm text-muted">{v.matchTerms.join(', ')}</Text>
+            </View>
+          ) : null}
+
+          <View className="mt-5">
+            <View className="flex-row items-center gap-1.5 mb-2">
+              <History size={13} color={c.ink} />
+              <Text className="text-xs font-semibold text-ink">{td.historyTitle}</Text>
+            </View>
+            {!history ? (
+              <Text className="text-xs text-faint">{td.historyLoading}</Text>
+            ) : (historyExpanded ? history.entries : history.entries.slice(0, HISTORY_PREVIEW)).map((e, k, shown) => {
+              const lines = describePriceEntry(e, { labels: { flatWord: t.flatWord, none: td.none }, locale, clientName });
+              const isLast = k === shown.length - 1;
+              return (
+                <View key={e.id} className={`pl-4 border-l border-border-soft ${isLast ? '' : 'pb-3'}`}>
+                  <View style={{ position: 'absolute', left: -4, top: 5, width: 8, height: 8, borderRadius: 4, backgroundColor: e.kind === 'updated' ? c.primary : c.border }} />
+                  <Text className="text-[11px] text-faint">
+                    {formatDateLong(e.changedAt, locale)} · {e.kind === 'updated' ? td.historyChanged : e.kind === 'created' ? td.historyAdded : td.historyBaseline}
+                    {e.changedByName ? ` · ${td.by.replace('{{name}}', e.changedByName)}` : ''}
+                  </Text>
+                  {lines.map((l, j) => <Text key={j} className="text-sm text-ink">{l}</Text>)}
+                </View>
+              );
+            })}
+            {history && history.entries.length > HISTORY_PREVIEW ? (
+              <Pressable onPress={() => setHistoryExpanded(x => !x)} hitSlop={8} className="self-start mt-2">
+                <Text className="text-xs font-semibold text-primary">
+                  {historyExpanded ? td.showLess : td.showAll.replace('{{count}}', String(history.entries.length))}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {canManage ? (
+            // Swaps this sheet's content to the edit form — same RNModal.
+            <Pressable onPress={() => { setViewing(null); viewingIdRef.current = null; openEdit(v); }}
+              className="mt-5 flex-row items-center justify-center gap-1.5 py-3.5 rounded-2xl bg-primary active:opacity-90">
+              <Pencil size={15} color="#fff" />
+              <Text className="text-sm font-semibold text-white">{td.editBtn}</Text>
+            </Pressable>
+          ) : null}
+        </ScrollView>
+      </>
+    );
+  };
 
   return (
     <View className="flex-1">
@@ -376,6 +516,19 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
           </Pressable>
         ) : null}
       </View>
+
+      {syncedFrom ? (
+        <View className="flex-row items-start gap-3 p-3.5 mb-4 rounded-2xl bg-primary/10 border border-primary/30">
+          <View className="flex-1">
+            <Text className="text-sm text-ink">{t.sync.syncedBanner.replace('{{company}}', syncedFrom.name)}</Text>
+            {syncedFrom.onStop ? (
+              <Pressable onPress={syncedFrom.onStop} hitSlop={8} className="self-start mt-2">
+                <Text className="text-xs font-semibold text-primary">{t.sync.stopSync}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
 
       {/* Search */}
       <View className="flex-row items-center rounded-2xl border border-border bg-card px-3 mb-4">
@@ -408,6 +561,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
             <View key={key}>
               <Text className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">
                 {key === '￿' ? t.uncategorized : key}
+                <Text className="font-bold text-primary">{`  ${list.length}`}</Text>
               </Text>
               <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
                 {/* Long-press to drag. Only when the full list is showing: while
@@ -467,7 +621,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
       </RNModal>
 
       {/* Add/edit sheet — absolute backdrop BEHIND a plain-View card (scrolls). */}
-      <RNModal visible={!!draft} transparent animationType="fade" onRequestClose={() => setDraft(null)}>
+      <RNModal visible={!!draft || !!viewing} transparent animationType="fade" onRequestClose={closeSheet}>
         {/* KeyboardAvoidingView: this sheet is anchored to the bottom, exactly
             where the keyboard opens, so the lower fields (price, terms) were
             underneath it. Padding behaviour shrinks the container, and the
@@ -477,12 +631,15 @@ export function PriceSheetScreen({ supabase, businessId, canManage, sectionOrder
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           className="flex-1 justify-end"
         >
-          <Pressable onPress={() => setDraft(null)} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
+          <Pressable onPress={closeSheet} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
           <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[90%]">
-            <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-lg font-bold text-ink">{t.title}</Text>
-              <Pressable onPress={() => setDraft(null)} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft"><X size={20} color={c.faint} /></Pressable>
-            </View>
+            {draft ? (
+              <View className="flex-row items-center justify-between mb-4">
+                <Text className="text-lg font-bold text-ink">{t.title}</Text>
+                <Pressable onPress={closeSheet} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft"><X size={20} color={c.faint} /></Pressable>
+              </View>
+            ) : null}
+            {!draft && viewing ? renderDetail(viewing) : null}
             {draft ? (
               <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }}>
                 {/* Tap on blank space = unfocus the field, which closes an open
