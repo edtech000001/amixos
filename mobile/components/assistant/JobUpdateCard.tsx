@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from 'react-native';
+import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import { useRouter } from 'expo-router';
 import { Check, ArrowRight } from 'lucide-react-native';
 import type { JobUpdateDraft } from '@amixos/shared/assistant/types';
@@ -78,13 +79,13 @@ export function JobUpdateCard({ draft, active, createdJobId, confirming, onConfi
       ))}
 
       {active ? (
-        <Pressable
+        <PressableScale scaleTo={0.97}
           onPress={onConfirm}
           disabled={confirming}
           className={`mt-3 py-3 rounded-2xl bg-primary items-center ${confirming ? 'opacity-60' : 'active:opacity-90'}`}
         >
           <Text className="text-sm font-bold text-white">{confirming ? a.confirming : a.confirm}</Text>
-        </Pressable>
+        </PressableScale>
       ) : null}
 
       {createdJobId ? (

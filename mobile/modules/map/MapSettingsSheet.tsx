@@ -23,6 +23,7 @@ import {
   TextInput,
   ActivityIndicator,
 } from 'react-native';
+import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import { Plus, Trash2, ChevronDown, ChevronLeft, Check, Search, X, Eye, EyeOff } from 'lucide-react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '@/lib/AppContext';
@@ -790,14 +791,14 @@ export function MapSettingsSheet({
             {msg ? (
               <Text className={`text-xs ${msg.isError ? 'text-red-500' : 'text-emerald-600'}`}>{msg.text}</Text>
             ) : null}
-            <Pressable
+            <PressableScale scaleTo={0.97}
               onPress={onSave}
               disabled={saving}
               className="flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-primary active:opacity-80"
             >
               {saving ? <ActivityIndicator size="small" color="#FFFFFF" /> : null}
               <Text className="text-white font-semibold text-sm">{t.saveBtn}</Text>
-            </Pressable>
+            </PressableScale>
           </ScrollView>
         </SafeAreaView>
       </SafeAreaProvider>

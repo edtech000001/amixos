@@ -11,6 +11,7 @@ import {
   View, Text, Pressable, TextInput, ScrollView, ActivityIndicator,
   Modal as RNModal, Platform, Keyboard,
 } from 'react-native';
+import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import { X } from 'lucide-react-native';
@@ -114,9 +115,9 @@ export function BugReportSheet({
           {done ? (
             <View className="py-8 items-center">
               <Text className="text-base font-semibold text-ink text-center">{t.sent}</Text>
-              <Pressable onPress={close} className="mt-5 px-6 py-3 rounded-2xl bg-primary active:opacity-90">
+              <PressableScale scaleTo={0.97} onPress={close} className="mt-5 px-6 py-3 rounded-2xl bg-primary active:opacity-90">
                 <Text className="text-sm font-semibold text-white">OK</Text>
-              </Pressable>
+              </PressableScale>
             </View>
           ) : (
             <ScrollView
@@ -141,7 +142,7 @@ export function BugReportSheet({
 
               {error ? <Text className="text-xs text-red-600 mt-2">{error}</Text> : null}
 
-              <Pressable
+              <PressableScale scaleTo={0.97}
                 onPress={send}
                 disabled={busy || !message.trim()}
                 className={`mt-4 py-3.5 rounded-2xl items-center ${message.trim() && !busy ? 'bg-primary active:opacity-90' : 'bg-border-soft'}`}
@@ -151,7 +152,7 @@ export function BugReportSheet({
                     {t.send}
                   </Text>
                 )}
-              </Pressable>
+              </PressableScale>
 
               <Pressable onPress={close} className="mt-2 py-2" hitSlop={8}>
                 <Text className="text-sm text-muted text-center">{t.cancel}</Text>

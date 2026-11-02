@@ -14,6 +14,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -2426,7 +2427,7 @@ export default function NuevoTrabajoRoute() {
 
           {/* Save — last element of the form so it's where the thumb lands
              after filling the final field. */}
-          <Pressable
+          <PressableScale scaleTo={0.97}
             onPress={save}
             disabled={saving}
             className={`mt-4 items-center py-3.5 rounded-2xl ${
@@ -2436,7 +2437,7 @@ export default function NuevoTrabajoRoute() {
             <Text className="text-base font-semibold text-white">
               {saving ? '…' : tc.buttons.save}
             </Text>
-          </Pressable>
+          </PressableScale>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -2644,7 +2645,7 @@ export default function NuevoTrabajoRoute() {
                   <Text className="text-sm text-red-600">{qaError}</Text>
                 </View>
               ) : null}
-              <Pressable
+              <PressableScale scaleTo={0.97}
                 onPress={saveQuickClient}
                 disabled={qaSaving}
                 className={`mt-4 items-center py-3.5 rounded-2xl ${
@@ -2654,7 +2655,7 @@ export default function NuevoTrabajoRoute() {
                 <Text className="text-base font-semibold text-white">
                   {qaSaving ? '…' : tc.buttons.save}
                 </Text>
-              </Pressable>
+              </PressableScale>
             </ScrollView>
           </View>
         </KeyboardAvoidingView>

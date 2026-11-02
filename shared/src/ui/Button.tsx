@@ -1,4 +1,5 @@
-import { Pressable, Text, ActivityIndicator, View, type PressableProps } from 'react-native';
+import { Text, ActivityIndicator, View, type PressableProps } from 'react-native';
+import { PressableScale } from './PressableScale';
 import { clsx } from 'clsx';
 import type { ReactNode } from 'react';
 
@@ -42,7 +43,9 @@ export function Button({
   const isDisabled = disabled || loading;
 
   return (
-    <Pressable
+    // Sinks + springs back on press (no haptic — vibration is kept for
+    // meaningful moments: success, drag pickup, toggles).
+    <PressableScale
       disabled={isDisabled}
       className={clsx(
         'rounded-xl flex-row items-center justify-center',
@@ -62,6 +65,6 @@ export function Button({
             : children}
         </View>
       )}
-    </Pressable>
+    </PressableScale>
   );
 }

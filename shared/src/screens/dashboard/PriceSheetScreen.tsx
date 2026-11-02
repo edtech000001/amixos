@@ -11,6 +11,8 @@ import { useDataFingerprint } from '../../lib/dataFingerprint';
 import { SkeletonList } from '../../ui/Skeleton';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Modal as RNModal, KeyboardAvoidingView, Keyboard, Platform } from 'react-native';
+import { haptics } from '../../lib/haptics';
+import { PressableScale } from '../../ui/PressableScale';
 import { Plus, X, Trash2, Pencil, Copy, DollarSign, Search, ChevronDown, Check, ArrowUpDown, GripVertical, History } from 'lucide-react-native';
 // Native-only screen (PriceSheetScreen.web.tsx is the web variant), so a
 // React-Native-only package is safe to import here.
@@ -576,6 +578,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
                     positions being written. */}
                 {canReorder ? (
                   <Sortable.Grid
+                    onDragStart={() => haptics.medium()}
                     data={list}
                     columns={1}
                     rowGap={0}
@@ -610,6 +613,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
             </View>
             <Text className="text-xs text-faint mb-3">{t.sectionOrderHint}</Text>
             <Sortable.Grid
+              onDragStart={() => haptics.medium()}
               data={sectionNames}
               columns={1}
               rowGap={8}
@@ -787,10 +791,10 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
                   ))}
                 </View>
 
-                <Pressable onPress={save} disabled={saving || !draft.name.trim()}
+                <PressableScale scaleTo={0.97} onPress={save} disabled={saving || !draft.name.trim()}
                   className={`py-3.5 rounded-2xl items-center ${saving || !draft.name.trim() ? 'bg-primary/50' : 'bg-primary active:opacity-90'}`}>
                   <Text className="text-sm font-semibold text-white">{t.saveBtn}</Text>
-                </Pressable>
+                </PressableScale>
                 </Pressable>
               </ScrollView>
             ) : null}

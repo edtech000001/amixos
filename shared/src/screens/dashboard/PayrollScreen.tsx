@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
 import { SkeletonList } from '../../ui/Skeleton';
 import { View, Text, Pressable, ScrollView, TextInput, Modal as RNModal, Alert, Keyboard, useWindowDimensions, KeyboardAvoidingView, Platform } from 'react-native';
+import { PressableScale } from '../../ui/PressableScale';
 import { ChevronLeft, ChevronRight, Check, Banknote, FileText, Landmark, X, Wrench, Truck, Clock, Settings, List, LayoutGrid, History, Trash2, Pencil, Search, ChevronDown } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1226,9 +1227,9 @@ export function PayrollScreen({
                 )}
               </View>
 
-              <Pressable onPress={saveSettings} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90">
+              <PressableScale scaleTo={0.97} onPress={saveSettings} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90">
                 <Text className="text-sm font-semibold text-white">{t.saveBtn}</Text>
-              </Pressable>
+              </PressableScale>
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
@@ -1371,9 +1372,9 @@ export function PayrollScreen({
               </View>
             ) : null}
 
-            <Pressable onPress={confirmPay} disabled={busy || modalTotal <= 0} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
+            <PressableScale scaleTo={0.97} onPress={confirmPay} disabled={busy || modalTotal <= 0} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
               <Text className="text-sm font-semibold text-white">{t.confirmBtn}</Text>
-            </Pressable>
+            </PressableScale>
             </Pressable>
             </ScrollView>
           </View>

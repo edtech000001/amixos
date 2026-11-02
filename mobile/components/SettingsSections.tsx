@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { View, Text, Pressable, Alert, TextInput, Image, Modal as RNModal, Linking, Platform } from 'react-native';
+import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import { WEB_APP_URL } from '@/lib/webUrl';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -4521,13 +4522,13 @@ function GoogleSyncSection() {
           using the current template. */}
       {status.connected && status.enabled !== false ? (
         <>
-          <Pressable
+          <PressableScale scaleTo={0.97}
             onPress={onReapplyTemplate}
             disabled={busy}
             className="py-3 rounded-2xl bg-primary items-center active:opacity-80"
           >
             <Text className="text-sm font-semibold text-white">{t.forceSyncBtn}</Text>
-          </Pressable>
+          </PressableScale>
           <Pressable
             onPress={onDisconnect}
             disabled={busy}

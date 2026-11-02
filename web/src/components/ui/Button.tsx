@@ -15,7 +15,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || loading}
         className={clsx(
-          'inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2',
+          'press inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2',
           {
             'bg-primary text-white hover:bg-primary-dark focus:ring-primary': variant === 'primary',
             'bg-border-soft text-ink hover:bg-border focus:ring-border': variant === 'secondary',

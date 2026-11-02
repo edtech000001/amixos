@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, Pressable, ScrollView, TextInput, FlatList } from 'react-native';
+import { PressableScale } from '../../ui/PressableScale';
 import {
   Clock,
   ClipboardList,
@@ -576,13 +577,13 @@ export function EmployeesScreen({
         ) : null}
       </View>
       {onLogHours ? (
-        <Pressable
+        <PressableScale scaleTo={0.97}
           onPress={onLogHours}
           className="flex-row items-center gap-1.5 bg-primary px-4 py-3 rounded-2xl active:opacity-90"
         >
           <Plus size={15} color="#fff" />
           <Text className="text-sm font-semibold text-white">{t.addHours}</Text>
-        </Pressable>
+        </PressableScale>
       ) : null}
     </View>
   );

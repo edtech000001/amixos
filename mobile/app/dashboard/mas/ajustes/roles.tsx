@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, Alert, ActivityIndicator, Modal as RNModal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronLeft, Check, RotateCcw, Lock, Plus, Pencil, Trash2 } from 'lucide-react-native';
@@ -325,7 +326,7 @@ export default function RolesScreen() {
 
         {editable ? (
           <View className="flex-row gap-2 mt-4">
-            <Pressable
+            <PressableScale scaleTo={0.97}
               onPress={save}
               disabled={!dirty || busy}
               className={`flex-1 flex-row items-center justify-center gap-1.5 py-3.5 rounded-2xl bg-primary ${(!dirty || busy) ? 'opacity-40' : 'active:opacity-90'}`}
@@ -336,7 +337,7 @@ export default function RolesScreen() {
                   <Text className="text-base font-semibold text-white">{tc.buttons.save}</Text>
                 </>
               )}
-            </Pressable>
+            </PressableScale>
             {custom ? (
               <Pressable onPress={confirmDelete} disabled={busy} className="flex-row items-center gap-1.5 px-4 py-3.5 rounded-2xl bg-red-500/10 active:bg-red-500/20">
                 <Trash2 size={15} color="#dc2626" />
@@ -390,7 +391,7 @@ export default function RolesScreen() {
             {sheetError ? (
               <Text className="text-sm text-red-600 mt-3">{t.createError}</Text>
             ) : null}
-            <Pressable
+            <PressableScale scaleTo={0.97}
               onPress={sheetSubmit}
               disabled={sheetBusy || !sheetName.trim()}
               className={`mt-5 flex-row items-center justify-center gap-1.5 py-3.5 rounded-2xl bg-primary ${(sheetBusy || !sheetName.trim()) ? 'opacity-40' : 'active:opacity-90'}`}
@@ -400,7 +401,7 @@ export default function RolesScreen() {
                   {sheetMode === 'rename' ? tc.buttons.save : t.createBtn}
                 </Text>
               )}
-            </Pressable>
+            </PressableScale>
           </View>
         </KeyboardAvoidingView>
       </RNModal>

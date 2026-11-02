@@ -7,6 +7,7 @@ import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { Alert } from 'react-native';
+import { haptics } from '@amixos/shared/lib/haptics';
 import {
   PayrollScreen,
   type PayrollScreenRow,
@@ -373,6 +374,7 @@ export default function NominaRoute() {
       created_by: user?.id ?? null,
     });
     const emp = employees.find(e => e.id === employeeId);
+    haptics.success();
     void logAudit(supabase, business.id, 'payroll.paid', 'payroll', employeeId, {
       name: emp ? `${emp.first_name} ${emp.last_name}` : undefined,
       amount: Math.round((amount + (bonus || 0)) * 100) / 100,

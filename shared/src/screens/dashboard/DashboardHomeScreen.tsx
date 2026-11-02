@@ -3,6 +3,8 @@ import { SkeletonBlock, SkeletonStats, SkeletonChart, SkeletonCard } from '../..
 import { useBarScrub } from '../../ui/useBarScrub';
 import { niceCeil, axisTick } from '../../lib/chartAxis';
 import { View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native';
+import { PressableScale } from '../../ui/PressableScale';
+import { haptics } from '../../lib/haptics';
 import Animated, { useAnimatedRef } from 'react-native-reanimated';
 import Sortable from 'react-native-sortables';
 import type { SortableFlexDragEndParams } from 'react-native-sortables';
@@ -817,9 +819,9 @@ export function DashboardHomeScreen({
     if (id === 'jobsActive' && size !== 'sm') {
       const rows = upcomingJobs.slice(0, size === 'lg' ? 6 : 3);
       return (
-        <Pressable
+        <PressableScale scaleTo={0.98}
           onPress={onViewAllJobsPress}
-          className="bg-card rounded-2xl border border-border-soft p-5 flex-1 active:opacity-80"
+          className="bg-card rounded-2xl border border-border-soft p-5 flex-1"
         >
           <View className="flex-row" style={{ columnGap: 16 }}>
             <View className="flex-1">
@@ -870,7 +872,7 @@ export function DashboardHomeScreen({
               )}
             </View>
           </View>
-        </Pressable>
+        </PressableScale>
       );
     }
 
@@ -890,10 +892,10 @@ export function DashboardHomeScreen({
       // it sits next to the quarters rather than replacing them.
       const projected = monthsElapsed > 0 ? (yearTotal / monthsElapsed) * 12 : 0;
       return (
-        <Pressable
+        <PressableScale scaleTo={0.98}
           onPress={onReportsPress ? () => onReportsPress('year') : undefined}
           disabled={!onReportsPress}
-          className="bg-card rounded-2xl border border-border-soft p-5 flex-1 active:opacity-80"
+          className="bg-card rounded-2xl border border-border-soft p-5 flex-1"
         >
           <View className="flex-row" style={{ columnGap: 16 }}>
             <View className="flex-1">
@@ -950,7 +952,7 @@ export function DashboardHomeScreen({
               )}
             </View>
           </View>
-        </Pressable>
+        </PressableScale>
       );
     }
 
@@ -961,9 +963,9 @@ export function DashboardHomeScreen({
       const top = (topClients ?? []).slice(0, size === 'lg' ? 5 : 3);
       const fresh = (recentClients ?? []).slice(0, 3);
       return (
-        <Pressable
+        <PressableScale scaleTo={0.98}
           onPress={onClientsPress}
-          className="bg-card rounded-2xl border border-border-soft p-5 flex-1 active:opacity-80"
+          className="bg-card rounded-2xl border border-border-soft p-5 flex-1"
         >
           <View className="flex-row" style={{ columnGap: 16 }}>
             <View className="flex-1">
@@ -1025,7 +1027,7 @@ export function DashboardHomeScreen({
               )}
             </View>
           </View>
-        </Pressable>
+        </PressableScale>
       );
     }
 
@@ -1052,9 +1054,9 @@ export function DashboardHomeScreen({
       // The list is ordered oldest-first, so the head is the worst one.
       const oldest = rows.length ? daysPastDue(rows[0].dueDate) : null;
       return (
-        <Pressable
+        <PressableScale scaleTo={0.98}
           onPress={onOverdueInvoicesPress}
-          className="bg-card rounded-2xl border border-border-soft p-5 flex-1 active:opacity-80"
+          className="bg-card rounded-2xl border border-border-soft p-5 flex-1"
         >
           <View className="flex-row" style={{ columnGap: 16 }}>
             <View className="flex-1">
@@ -1115,7 +1117,7 @@ export function DashboardHomeScreen({
               )}
             </View>
           </View>
-        </Pressable>
+        </PressableScale>
       );
     }
 
@@ -1125,9 +1127,9 @@ export function DashboardHomeScreen({
     if (id === 'invoicesPending' && size !== 'sm') {
       const rows = (pendingInvoices ?? []).slice(0, size === 'lg' ? 8 : 3);
       return (
-        <Pressable
+        <PressableScale scaleTo={0.98}
           onPress={onPendingInvoicesPress}
-          className="bg-card rounded-2xl border border-border-soft p-5 flex-1 active:opacity-80"
+          className="bg-card rounded-2xl border border-border-soft p-5 flex-1"
         >
           <View className="flex-row" style={{ columnGap: 16 }}>
             <View className="flex-1">
@@ -1186,7 +1188,7 @@ export function DashboardHomeScreen({
               )}
             </View>
           </View>
-        </Pressable>
+        </PressableScale>
       );
     }
 
@@ -1199,9 +1201,9 @@ export function DashboardHomeScreen({
       const deltaPct = prev != null && prev > 0 ? ((payroll.total - prev) / prev) * 100 : null;
       const workerRows = (payroll.top ?? []).slice(0, size === 'lg' ? 8 : 3);
       return (
-        <Pressable
+        <PressableScale scaleTo={0.98}
           onPress={onPayrollPress}
-          className="bg-card rounded-2xl border border-border-soft p-5 flex-1 active:opacity-80"
+          className="bg-card rounded-2xl border border-border-soft p-5 flex-1"
         >
           <View className="flex-row" style={{ columnGap: 16 }}>
             <View className="flex-1">
@@ -1260,7 +1262,7 @@ export function DashboardHomeScreen({
               )}
             </View>
           </View>
-        </Pressable>
+        </PressableScale>
       );
     }
 
@@ -1357,15 +1359,15 @@ export function DashboardHomeScreen({
                 {rows.map((row, ri) => (
                   <View key={ri} style={{ flexDirection: 'row', columnGap: 10 }}>
                     {row.map(({ label, icon: Icon, onPress, bg, color }) => (
-                      <Pressable
+                      <PressableScale scaleTo={0.95}
                         key={label}
                         onPress={onPress}
                         accessibilityLabel={label}
                         style={{ flex: 1 }}
-                        className={`items-center justify-center py-5 rounded-xl active:opacity-80 ${bg}`}
+                        className={`items-center justify-center py-5 rounded-xl ${bg}`}
                       >
                         <Icon size={22} color={color} />
-                      </Pressable>
+                      </PressableScale>
                     ))}
                   </View>
                 ))}
@@ -1379,16 +1381,16 @@ export function DashboardHomeScreen({
             <View className="bg-card rounded-2xl border border-border-soft p-4 flex-1 justify-center">
               <View className="flex-row gap-2">
                 {actions.map(({ label, icon: Icon, onPress, bg, color }) => (
-                  <Pressable
+                  <PressableScale scaleTo={0.95}
                     key={label}
                     onPress={onPress}
-                    className={`items-center justify-center gap-1.5 px-2 py-3 rounded-xl flex-1 active:opacity-80 ${bg}`}
+                    className={`items-center justify-center gap-1.5 px-2 py-3 rounded-xl flex-1 ${bg}`}
                   >
                     <Icon size={17} color={color} />
                     <Text className="text-[11px] font-semibold text-center" style={{ color }} numberOfLines={1}>
                       {label}
                     </Text>
-                  </Pressable>
+                  </PressableScale>
                 ))}
               </View>
             </View>
@@ -1399,14 +1401,14 @@ export function DashboardHomeScreen({
           <View className="bg-card rounded-2xl border border-border-soft p-4 flex-1 justify-center">
             <View className="flex-row flex-wrap gap-3">
               {actions.map(({ label, icon: Icon, onPress, bg, color }) => (
-                <Pressable
+                <PressableScale scaleTo={0.95}
                   key={label}
                   onPress={onPress}
-                  className={`flex-row items-center justify-center gap-2 px-3 py-3 rounded-xl flex-1 min-w-[45%] active:opacity-80 ${bg}`}
+                  className={`flex-row items-center justify-center gap-2 px-3 py-3 rounded-xl flex-1 min-w-[45%] ${bg}`}
                 >
                   <Icon size={16} color={color} />
                   <Text className="text-sm font-semibold" style={{ color }}>{label}</Text>
-                </Pressable>
+                </PressableScale>
               ))}
             </View>
           </View>
@@ -1507,10 +1509,10 @@ export function DashboardHomeScreen({
         return (
           // The whole card opens the jobs list — a separate "View all" link sat
           // on top of the title at sm.
-          <Pressable
+          <PressableScale scaleTo={0.98}
             onPress={onViewAllJobsPress}
             style={size === 'lg' ? { height: LG_CARD_H } : undefined}
-            className={`bg-card rounded-2xl border border-border-soft p-5 flex-1 active:opacity-80 ${
+            className={`bg-card rounded-2xl border border-border-soft p-5 flex-1 ${
               size === 'lg' ? 'overflow-hidden' : ''
             }`}
           >
@@ -1556,7 +1558,7 @@ export function DashboardHomeScreen({
                 })}
               </View>
             )}
-          </Pressable>
+          </PressableScale>
         );
       }
 
@@ -1602,9 +1604,9 @@ export function DashboardHomeScreen({
           // The whole card opens the list — a separate "View all" link sat on
           // top of the title at sm, and a card that is already one tap does not
           // need a second target inside it.
-          <Pressable
+          <PressableScale scaleTo={0.98}
             onPress={onViewAllInvoicesPress}
-            className="bg-card rounded-2xl border border-border-soft p-5 flex-1 active:opacity-80"
+            className="bg-card rounded-2xl border border-border-soft p-5 flex-1"
           >
             <Text className="text-sm font-semibold text-ink mb-2">{t.home.recent.title}</Text>
             {rows.length === 0 ? (
@@ -1625,7 +1627,7 @@ export function DashboardHomeScreen({
                 ))}
               </View>
             )}
-          </Pressable>
+          </PressableScale>
         );
       }
 
@@ -1641,21 +1643,21 @@ export function DashboardHomeScreen({
           <Text className="text-2xl font-bold text-ink">{t.home.welcome}</Text>
         </View>
         {editing ? (
-          <Pressable
+          <PressableScale scaleTo={0.96}
             onPress={finishEditing}
-            className="flex-row items-center gap-2 bg-primary px-4 py-2.5 rounded-xl active:opacity-80"
+            className="flex-row items-center gap-2 bg-primary px-4 py-2.5 rounded-xl"
           >
             <Check size={16} color="#FFFFFF" />
             <Text className="text-white text-sm font-semibold">{t.home.customize.doneBtn}</Text>
-          </Pressable>
+          </PressableScale>
         ) : (
-          <Pressable
+          <PressableScale scaleTo={0.96}
             onPress={() => setEditing(true)}
-            className="flex-row items-center gap-2 bg-card border border-border px-4 py-2.5 rounded-xl active:opacity-80"
+            className="flex-row items-center gap-2 bg-card border border-border px-4 py-2.5 rounded-xl"
           >
             <SlidersHorizontal size={16} color={c.ink} />
             <Text className="text-ink text-sm font-semibold">{t.home.customize.editBtn}</Text>
-          </Pressable>
+          </PressableScale>
         )}
       </View>
       {/* Business name / switcher gets its own row — sharing the title row
@@ -1691,6 +1693,7 @@ export function DashboardHomeScreen({
       {/* In-place drag-and-drop: the real widgets reorder right in the grid
           (same as web). sortEnabled toggles dragging without remounting. */}
       <Sortable.Flex
+        onDragStart={() => haptics.medium()}
         // Rebuilt whenever the card set or any card's SIZE changes (switching
         // business swaps in that business's saved layout). The library caches
         // each item's measured size by key, so the same card going lg → sm

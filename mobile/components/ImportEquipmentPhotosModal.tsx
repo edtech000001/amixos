@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, Pressable, Modal as RNModal, ScrollView } from 'react-native';
+import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import * as ImagePicker from 'expo-image-picker';
 import { ImagePlus, CheckCircle2, AlertTriangle } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -245,9 +246,9 @@ export function ImportEquipmentPhotosModal({ open, businessId, onClose }: Props)
                         <Text className="text-sm font-semibold text-muted">{tr('Reintentar', 'Retry')}</Text>
                       </Pressable>
                     ) : null}
-                    <Pressable onPress={onClose} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90">
+                    <PressableScale scaleTo={0.97} onPress={onClose} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90">
                       <Text className="text-sm font-semibold text-white">{tr('Cerrar', 'Close')}</Text>
-                    </Pressable>
+                    </PressableScale>
                   </View>
                 ) : null}
               </View>

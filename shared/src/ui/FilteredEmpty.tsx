@@ -8,6 +8,7 @@
 
 import type { ReactNode } from 'react';
 import { View, Text, Pressable } from 'react-native';
+import { PressableScale } from './PressableScale';
 import { XCircle } from 'lucide-react-native';
 import { useLang } from '../i18n';
 
@@ -29,13 +30,13 @@ export function FilteredEmpty({ onClear, icon, title, compact }: FilteredEmptyPr
       {icon}
       <Text className={`text-sm text-faint ${icon ? 'mt-3' : ''}`}>{title ?? f.title}</Text>
       <Text className="text-xs text-muted mt-1 text-center">{f.hint}</Text>
-      <Pressable
+      <PressableScale scaleTo={0.97}
         onPress={onClear}
         className="mt-4 flex-row items-center gap-2 px-5 py-3 rounded-xl bg-primary active:opacity-80"
       >
         <XCircle size={16} color="#FFFFFF" />
         <Text className="text-white text-sm font-semibold">{f.clear}</Text>
-      </Pressable>
+      </PressableScale>
     </View>
   );
 }

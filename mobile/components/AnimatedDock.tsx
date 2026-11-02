@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import { View, Pressable, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -390,15 +391,16 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
             );
           };
           return (
-            <Pressable
+            <PressableScale
               key={route.key}
               onPress={onPress}
+              scaleTo={0.82}
               style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
             >
               {!isActive && Icon
                 ? Icon({ color: ICON_INACTIVE, size: 22, focused: false })
                 : null}
-            </Pressable>
+            </PressableScale>
           );
         })}
       </View>
@@ -420,7 +422,9 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
       >
         {/* The raised bubble is the ACTIVE section's icon. Tapping it takes you
            to that section's list (same as re-tapping its tab slot below). */}
-        <Pressable
+        <PressableScale
+          scaleTo={0.9}
+         
           onPress={() => {
             const r = visibleRoutes[activeIndex];
             if (r) resetSection(r);
@@ -442,7 +446,7 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
           {activeIcon
             ? activeIcon({ color: ICON_ACTIVE, size: 24, focused: true })
             : null}
-        </Pressable>
+        </PressableScale>
       </Animated.View>
     </View>
   );

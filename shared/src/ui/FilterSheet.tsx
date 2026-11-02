@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, BackHandler, TextInput, ActivityIndicator } from 'react-native';
+import { haptics } from '../lib/haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check, SlidersHorizontal, ChevronDown, Search } from 'lucide-react-native';
 import { DatePicker } from './DatePicker';
@@ -126,7 +127,7 @@ export function Segmented<K extends string>({
         return (
           <Pressable
             key={o.key}
-            onPress={() => onChange(o.key)}
+            onPress={() => { if (!on) haptics.select(); onChange(o.key); }}
             className={`flex-1 h-10 flex-row gap-1.5 rounded-xl items-center justify-center ${on ? 'bg-card' : ''}`}
             style={on ? LIFT : undefined}
           >

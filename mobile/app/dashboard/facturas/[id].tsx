@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { Alert, Share, View, Text, Pressable, ScrollView, Modal as RNModal, Linking, TextInput, KeyboardAvoidingView, Keyboard, Platform, Image, useWindowDimensions } from 'react-native';
+import { haptics } from '@amixos/shared/lib/haptics';
+import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import { X, Camera, ImagePlus, ClipboardPaste, RotateCw } from 'lucide-react-native';
 import { hasClipboardImage, readClipboardImageToFile } from '@/lib/clipboardPhoto';
 import * as Print from 'expo-print';
@@ -798,6 +800,7 @@ export default function FacturaDetailRoute() {
     void logAudit(supabase, business.id, 'invoice.payment', 'invoice', id, {
       invoice_number: invoice.invoiceNumber, amount, method, paid_in_full: fullyPaid,
     });
+    haptics.success();
     await loadPayments();
     setPayOpen(false);
     setPayBusy(false);
@@ -986,6 +989,7 @@ export default function FacturaDetailRoute() {
     if (status === 'sent') update.sent_at = new Date().toISOString();
     if (status === 'draft') update.sent_at = null; // undo "mark as sent"
     await supabase.from('invoices').update(update).eq('id', id);
+    if (status === 'paid') haptics.success();
     if (business) {
       void logAudit(supabase, business.id, status === 'paid' ? 'invoice.paid' : status === 'sent' ? 'invoice.sent' : 'invoice.unsent', 'invoice', id, {
         invoice_number: invoice?.invoiceNumber,
@@ -1490,9 +1494,9 @@ export default function FacturaDetailRoute() {
             </Pressable>
             </ScrollView>
             {/* Outside the scroller so it stays reachable with a long list. */}
-            <Pressable onPress={doAdd} disabled={jobBusy} className="mt-4 py-3.5 rounded-2xl bg-primary items-center active:opacity-90">
+            <PressableScale scaleTo={0.97} onPress={doAdd} disabled={jobBusy} className="mt-4 py-3.5 rounded-2xl bg-primary items-center active:opacity-90">
               <Text className="text-sm font-semibold text-white">{linkIndex !== null ? jobsT.linkBtn : jobsT.addConfirm}</Text>
-            </Pressable>
+            </PressableScale>
           </View>
         </View>
         </KeyboardAvoidingView>
@@ -1551,9 +1555,9 @@ export default function FacturaDetailRoute() {
                 <DatePicker label={jobsT.serviceDateLabel} value={editDate} onChange={setEditDate} />
               </View>
             ) : null}
-            <Pressable onPress={doEditSave} disabled={jobBusy || !editDesc.trim()} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
+            <PressableScale scaleTo={0.97} onPress={doEditSave} disabled={jobBusy || !editDesc.trim()} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
               <Text className="text-sm font-semibold text-white">{tc.buttons.save}</Text>
-            </Pressable>
+            </PressableScale>
           </Pressable>
         </View>
         </KeyboardAvoidingView>

@@ -1,3 +1,4 @@
+import { haptics } from '@amixos/shared/lib/haptics';
 import { type ReactElement, type ReactNode } from 'react';
 import Sortable from 'react-native-sortables';
 import { useSettingsScrollRef } from '@/components/SettingsPageWrapper';
@@ -35,6 +36,7 @@ export function SortableList<T extends { id: string }>({
   const scrollRef = useSettingsScrollRef();
   return (
     <Sortable.Grid
+      onDragStart={() => haptics.medium()}
       data={items}
       columns={1}
       rowGap={0}

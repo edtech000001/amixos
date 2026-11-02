@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SkeletonRow } from '@amixos/shared/ui/Skeleton';
 import { View, Text, Pressable, Alert, ActivityIndicator, Modal as RNModal, Linking, TextInput, ScrollView, Keyboard } from 'react-native';
+import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import MapView, { Marker, type Region } from 'react-native-maps';
 import ClusteredMapView from 'react-native-map-clustering';
 import { useRouter } from 'expo-router';
@@ -1448,13 +1449,13 @@ function SelectedPinCard({
           ) : null}
 
           {/* Open record */}
-          <Pressable
+          <PressableScale scaleTo={0.97}
             onPress={onOpenRecord}
             className="flex-row items-center justify-center gap-2 rounded-xl bg-primary py-3 active:opacity-80"
           >
             <Text className="text-sm font-semibold text-white">{openRecordLabel}</Text>
             <ArrowRight size={14} color="#FFFFFF" />
-          </Pressable>
+          </PressableScale>
         </View>
       </View>
     </RNModal>
@@ -1906,14 +1907,14 @@ function UnresolvedClientsModal({
 
           {groups.pending.length > 0 ? (
             <View className="p-5 pt-3 border-t border-border-soft">
-              <Pressable
+              <PressableScale scaleTo={0.97}
                 onPress={onRetry}
                 disabled={retrying}
                 className="flex-row items-center justify-center gap-2 rounded-xl bg-primary py-3 active:opacity-80"
               >
                 {retrying ? <ActivityIndicator size="small" color="#FFFFFF" /> : null}
                 <Text className="text-sm font-semibold text-white">{t.geocodeListRetryBtn}</Text>
-              </Pressable>
+              </PressableScale>
             </View>
           ) : null}
         </View>

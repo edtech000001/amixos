@@ -18,6 +18,7 @@ import {
   View, Text, ScrollView, Pressable, ActivityIndicator,
   type NativeSyntheticEvent, type NativeScrollEvent,
 } from 'react-native';
+import { PressableScale } from '../../ui/PressableScale';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { termsOfService } from '../../legal/terms';
@@ -121,7 +122,7 @@ export function PolicyConsentScreen({ isUpdate, onAccept, onSignOut }: PolicyCon
           <Text className="text-xs text-faint mb-2 text-center">{t.scrollHint}</Text>
         ) : null}
 
-        <Pressable
+        <PressableScale scaleTo={0.97}
           onPress={accept}
           disabled={!atEnd || busy}
           className={`w-full py-4 rounded-2xl items-center ${atEnd && !busy ? 'bg-primary active:opacity-90' : 'bg-border'}`}
@@ -133,7 +134,7 @@ export function PolicyConsentScreen({ isUpdate, onAccept, onSignOut }: PolicyCon
               {t.accept}
             </Text>
           )}
-        </Pressable>
+        </PressableScale>
 
         <Pressable onPress={onSignOut} className="mt-3 py-2" hitSlop={8}>
           <Text className="text-sm font-medium text-muted text-center">{t.signOut}</Text>

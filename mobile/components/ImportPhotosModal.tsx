@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { logImportRun } from '@amixos/shared/lib/importRunners';
 import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
 import { View, Text, Pressable, Modal as RNModal, ScrollView } from 'react-native';
+import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import * as ImagePicker from 'expo-image-picker';
 import { ImagePlus, CheckCircle2, AlertTriangle } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -372,9 +373,9 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
                         <Text className="text-sm font-semibold text-muted">{t.retryBtn}</Text>
                       </Pressable>
                     ) : null}
-                    <Pressable onPress={onClose} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90">
+                    <PressableScale scaleTo={0.97} onPress={onClose} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90">
                       <Text className="text-sm font-semibold text-white">{full.common.buttons.close}</Text>
-                    </Pressable>
+                    </PressableScale>
                   </View>
                 ) : null}
               </View>

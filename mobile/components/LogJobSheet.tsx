@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import { Check, X, Search, MapPin } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
@@ -229,7 +230,7 @@ export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmi
           </ScrollView>
 
           <View className="gap-2.5 mt-1">
-            <Pressable
+            <PressableScale scaleTo={0.97}
               onPress={submit}
               disabled={busy}
               className={`py-3.5 rounded-2xl items-center bg-primary active:opacity-90 ${busy ? 'opacity-50' : ''}`}
@@ -237,7 +238,7 @@ export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmi
               {busy ? <ActivityIndicator size="small" color="#FFFFFF" /> : (
                 <Text className="text-base font-semibold text-white">{tc.buttons.save}</Text>
               )}
-            </Pressable>
+            </PressableScale>
             <Pressable onPress={close} className="py-3.5 rounded-2xl bg-border-soft items-center active:bg-border">
               <Text className="text-base font-semibold text-ink">{tc.buttons.cancel}</Text>
             </Pressable>

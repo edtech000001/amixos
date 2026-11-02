@@ -8,6 +8,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, Modal as RNModal, ActivityIndicator, Platform, KeyboardAvoidingView, TextInput, Alert } from 'react-native';
+import { haptics } from '@amixos/shared/lib/haptics';
+import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronDown, ChevronLeft, ChevronUp, Printer, Sliders, X, GripVertical, Eye, EyeOff, Mail, Search, Building2 } from 'lucide-react-native';
@@ -563,6 +565,7 @@ export default function FacturasPreciosPage() {
                       <Text className="text-xs text-faint mb-2">{t.sectionOrderHint}</Text>
                       <View className="rounded-xl border border-border-soft overflow-hidden">
                         <Sortable.Grid
+                          onDragStart={() => haptics.medium()}
                           data={draftOrder}
                           columns={1}
                           rowGap={0}
@@ -628,12 +631,12 @@ export default function FacturasPreciosPage() {
                       </View>
                     </View>
                   ) : null}
-                  <Pressable onPress={saveCustomize} disabled={savingTpl || !templateDirty}
+                  <PressableScale scaleTo={0.97} onPress={saveCustomize} disabled={savingTpl || !templateDirty}
                     className={`py-3 rounded-2xl items-center ${templateDirty ? 'bg-primary active:opacity-80' : 'bg-border-soft'} disabled:opacity-50`}>
                     {savingTpl ? <ActivityIndicator color={c.white} /> : (
                       <Text className={`text-sm font-semibold ${templateDirty ? 'text-white' : 'text-faint'}`}>{t.saveBtn}</Text>
                     )}
-                  </Pressable>
+                  </PressableScale>
                 </View>
               ) : null}
 
@@ -656,7 +659,7 @@ export default function FacturasPreciosPage() {
                 </View>
               </Pressable>
 
-              <Pressable onPress={generate} disabled={busy}
+              <PressableScale scaleTo={0.97} onPress={generate} disabled={busy}
                 className="mt-2 py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
                 {busy ? <ActivityIndicator color="#fff" /> : (
                   <View className="flex-row items-center gap-2">
@@ -664,7 +667,7 @@ export default function FacturasPreciosPage() {
                     <Text className="text-sm font-semibold text-white">{t.printBtn}</Text>
                   </View>
                 )}
-              </Pressable>
+              </PressableScale>
               </ScrollView>
 
               {/* Who gets this sheet. An absolute overlay INSIDE this modal,

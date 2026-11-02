@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, Modal as RNModal } from 'react-native';
+import { haptics } from '@amixos/shared/lib/haptics';
 import Sortable from 'react-native-sortables';
 import { ChevronDown, Check, Building2, CloudOff, Plus } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
@@ -170,6 +171,7 @@ export function BusinessSwitcher() {
             <View className="bg-surface rounded-2xl overflow-hidden">
               {isOnline && businesses.length > 1 ? (
                 <Sortable.Grid
+                  onDragStart={() => haptics.medium()}
                   data={businesses}
                   columns={1}
                   rowGap={0}

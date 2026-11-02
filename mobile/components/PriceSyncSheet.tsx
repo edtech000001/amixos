@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, Pressable, ScrollView, Modal as RNModal } from 'react-native';
+import { haptics } from '@amixos/shared/lib/haptics';
 import { X, ArrowLeft, Check, AlertTriangle, CheckCircle } from 'lucide-react-native';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useThemeColors } from '@/lib/ThemeProvider';
@@ -182,7 +183,7 @@ export function PriceSyncSheet({ open, onClose, supabase, sourceBusinessId, targ
                               didn't receive taps inside this modal sheet's ScrollView
                               on iOS (the rows' Pressables did). */}
                           <Pressable accessibilityRole="switch" accessibilityState={{ checked: autoOn, disabled: busy }}
-                            disabled={busy} hitSlop={8} onPress={() => { void toggleAuto(b.id); }}
+                            disabled={busy} hitSlop={8} onPress={() => { haptics.select(); void toggleAuto(b.id); }}
                             style={{ width: 46, height: 28, borderRadius: 14, padding: 3, justifyContent: 'center',
                                      backgroundColor: autoOn ? c.primary : 'rgba(120,120,128,0.36)', opacity: busy ? 0.5 : 1 }}>
                             <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff',

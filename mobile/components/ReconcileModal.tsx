@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal as RNModal, View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import { Toggle } from '@amixos/shared/ui';
@@ -232,9 +233,9 @@ export function ReconcileModal({ open, businessId, onClose }: Props) {
                 </View>
                 <Toggle value={autoExact} onValueChange={setAutoExact} />
               </View>
-              <Pressable onPress={start} disabled={busy || exactCount + fuzzyCount === 0} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
+              <PressableScale scaleTo={0.97} onPress={start} disabled={busy || exactCount + fuzzyCount === 0} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
                 <Text className="text-white font-semibold">{t('Empezar', 'Start')}</Text>
-              </Pressable>
+              </PressableScale>
             </View>
           )}
 
@@ -287,9 +288,9 @@ export function ReconcileModal({ open, businessId, onClose }: Props) {
                 <Pressable onPress={onSkip} disabled={busy} className="flex-1 py-3.5 rounded-2xl border border-border items-center active:opacity-80 disabled:opacity-50">
                   <Text className="text-sm font-semibold text-ink">{t('Saltar', 'Skip')}</Text>
                 </Pressable>
-                <Pressable onPress={onContinue} disabled={busy} className="flex-1 py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
+                <PressableScale scaleTo={0.97} onPress={onContinue} disabled={busy} className="flex-1 py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
                   <Text className="text-sm font-semibold text-white">{t('Continuar', 'Continue')}</Text>
-                </Pressable>
+                </PressableScale>
               </View>
             </View>
           )}
@@ -302,9 +303,9 @@ export function ReconcileModal({ open, businessId, onClose }: Props) {
                 {skippedCount ? ` ${t(`${skippedCount} saltados.`, `${skippedCount} skipped.`)}` : ''}
                 {noMatchCount ? ` ${t(`${noMatchCount} sin match.`, `${noMatchCount} no match.`)}` : ''}
               </Text>
-              <Pressable onPress={onClose} className="py-3.5 px-8 rounded-2xl bg-primary items-center active:opacity-90">
+              <PressableScale scaleTo={0.97} onPress={onClose} className="py-3.5 px-8 rounded-2xl bg-primary items-center active:opacity-90">
                 <Text className="text-white font-semibold">{t('Listo', 'Done')}</Text>
-              </Pressable>
+              </PressableScale>
             </View>
           )}
         </ScrollView>

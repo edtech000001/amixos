@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -771,7 +772,7 @@ export default function NuevoClienteRoute() {
 
           {/* Save — last element of the form so it's where the thumb lands
              after filling the final field. */}
-          <Pressable
+          <PressableScale scaleTo={0.97}
             onPress={save}
             disabled={saving}
             className={`mt-2 items-center py-3.5 rounded-2xl ${
@@ -781,7 +782,7 @@ export default function NuevoClienteRoute() {
             <Text className="text-base font-semibold text-white">
               {saving ? '…' : tc.buttons.save}
             </Text>
-          </Pressable>
+          </PressableScale>
         </ScrollView>
       </KeyboardAvoidingView>
       {unsavedSheet}

@@ -1,4 +1,5 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { PressableScale } from './PressableScale';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DatePicker } from './DatePicker';
 import type { DateRangePreset } from '../lib/dateRangePresets';
@@ -100,12 +101,12 @@ export function DateRangeSheet({
         </View>
 
         {/* Primary action — applying is just closing (filtering is live). */}
-        <Pressable
+        <PressableScale scaleTo={0.97}
           onPress={onClose}
           className="mt-4 py-3.5 rounded-2xl bg-primary items-center active:opacity-90"
         >
           <Text className="text-sm font-semibold text-white">{applyLabel}</Text>
-        </Pressable>
+        </PressableScale>
       </View>
     </View>
   );

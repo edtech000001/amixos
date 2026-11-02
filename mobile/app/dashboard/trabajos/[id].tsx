@@ -15,6 +15,7 @@ import {
   Image,
   KeyboardAvoidingView,
 } from 'react-native';
+import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import { SvgXml } from 'react-native-svg';
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { StackActions, useRoute } from '@react-navigation/native';
@@ -1210,12 +1211,12 @@ export default function JobDetailRoute() {
                   <X size={22} color={c.faint} />
                 </Pressable>
               </View>
-              <Pressable
+              <PressableScale scaleTo={0.97}
                 onPress={goBack}
                 className="mt-5 py-3.5 rounded-2xl items-center bg-primary active:opacity-80"
               >
                 <Text className="text-base font-semibold text-white">OK</Text>
-              </Pressable>
+              </PressableScale>
             </View>
           </View>
         </RNModal>
@@ -1771,14 +1772,14 @@ export default function JobDetailRoute() {
           {/* Resume — the primary action while held, so the way out is the
              first thing you see. */}
           {isPaused && canChangeStatus ? (
-            <Pressable
+            <PressableScale scaleTo={0.97}
               onPress={resumeJob}
               disabled={updatingStatus}
               className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-primary active:opacity-80"
             >
               <Play size={16} color="#FFFFFF" />
               <Text className="text-sm font-semibold text-white">{tp.resumeAction}</Text>
-            </Pressable>
+            </PressableScale>
           ) : null}
 
           {/* Put on hold — sits with the other reversible status actions. */}

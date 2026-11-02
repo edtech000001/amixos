@@ -14,6 +14,7 @@ import {
   Alert, useWindowDimensions, FlatList, Image, KeyboardAvoidingView, Linking, Modal as RNModal,
   Platform, Pressable, ScrollView, Share, Text, TextInput, View, ActivityIndicator,
 } from 'react-native';
+import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -3001,10 +3002,10 @@ export default function RentalsScreen() {
             </View>
           </View>
         ) : null}
-        <Pressable onPress={saveProp} disabled={savingProp || !propForm.name.trim()}
+        <PressableScale scaleTo={0.97} onPress={saveProp} disabled={savingProp || !propForm.name.trim()}
           className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
           {savingProp ? <ActivityIndicator color="#fff" /> : <Text className="text-sm font-semibold text-white">{tc.buttons.save}</Text>}
-        </Pressable>
+        </PressableScale>
       </View>
     ), chooserOverlay(propPhotoChooserOpen, () => setPropPhotoChooserOpen(false), pickPropFormPhoto));
   }
@@ -3059,10 +3060,10 @@ export default function RentalsScreen() {
             multiline numberOfLines={2} textAlignVertical="top"
             placeholderTextColor={c.faint} className={`${fieldCls} min-h-[56px]`} />
         </View>
-        <Pressable onPress={saveTenant} disabled={savingTenant || !tenantForm.first_name.trim()}
+        <PressableScale scaleTo={0.97} onPress={saveTenant} disabled={savingTenant || !tenantForm.first_name.trim()}
           className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
           {savingTenant ? <ActivityIndicator color="#fff" /> : <Text className="text-sm font-semibold text-white">{tc.buttons.save}</Text>}
-        </Pressable>
+        </PressableScale>
       </View>
     ));
   }
@@ -3141,11 +3142,11 @@ export default function RentalsScreen() {
             multiline numberOfLines={2} textAlignVertical="top"
             placeholderTextColor={c.faint} className={`${fieldCls} min-h-[56px]`} />
         </View>
-        <Pressable onPress={saveLease}
+        <PressableScale scaleTo={0.97} onPress={saveLease}
           disabled={savingLease || !leaseForm.tenant_id || !leaseForm.start_date || !Number(leaseForm.monthly_rent)}
           className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
           {savingLease ? <ActivityIndicator color="#fff" /> : <Text className="text-sm font-semibold text-white">{tc.buttons.save}</Text>}
-        </Pressable>
+        </PressableScale>
       </View>
     ));
   }
@@ -3226,10 +3227,10 @@ export default function RentalsScreen() {
           <Text className={labelCls}>{t.ledger.chargeAmountLabel}</Text>
           {moneyInput(chargeAmount, setChargeAmount)}
         </View>
-        <Pressable onPress={saveCharge} disabled={chargeBusy || !Number(chargeAmount)}
+        <PressableScale scaleTo={0.97} onPress={saveCharge} disabled={chargeBusy || !Number(chargeAmount)}
           className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
           {chargeBusy ? <ActivityIndicator color="#fff" /> : <Text className="text-sm font-semibold text-white">{tc.buttons.save}</Text>}
-        </Pressable>
+        </PressableScale>
       </View>
     ));
   }
@@ -3243,10 +3244,10 @@ export default function RentalsScreen() {
           <TextInput value={signName} onChangeText={setSignName}
             placeholderTextColor={c.faint} className={fieldCls} />
         </View>
-        <Pressable onPress={saveInPersonSignature} disabled={signBusy || !signData || !signName.trim()}
+        <PressableScale scaleTo={0.97} onPress={saveInPersonSignature} disabled={signBusy || !signData || !signName.trim()}
           className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
           {signBusy ? <ActivityIndicator color="#fff" /> : <Text className="text-sm font-semibold text-white">{t.leases.signSubmitBtn}</Text>}
-        </Pressable>
+        </PressableScale>
       </View>
     ));
   }
@@ -3282,10 +3283,10 @@ export default function RentalsScreen() {
           <TextInput value={depositNote} onChangeText={setDepositNote}
             placeholder={t.leases.depositNotePlaceholder} placeholderTextColor={c.faint} className={fieldCls} />
         </View>
-        <Pressable onPress={saveDepositReturn} disabled={depositBusy || !depositDate}
+        <PressableScale scaleTo={0.97} onPress={saveDepositReturn} disabled={depositBusy || !depositDate}
           className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
           {depositBusy ? <ActivityIndicator color="#fff" /> : <Text className="text-sm font-semibold text-white">{tc.buttons.save}</Text>}
-        </Pressable>
+        </PressableScale>
       </View>
     ));
   }
@@ -3316,10 +3317,10 @@ export default function RentalsScreen() {
           <TextInput value={newChargeNote} onChangeText={setNewChargeNote}
             placeholder={t.ledger.chargeNotePlaceholder} placeholderTextColor={c.faint} className={fieldCls} />
         </View>
-        <Pressable onPress={saveNewCharge} disabled={addChargeBusy || !Number(newChargeAmount) || !newChargeDue}
+        <PressableScale scaleTo={0.97} onPress={saveNewCharge} disabled={addChargeBusy || !Number(newChargeAmount) || !newChargeDue}
           className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
           {addChargeBusy ? <ActivityIndicator color="#fff" /> : <Text className="text-sm font-semibold text-white">{tc.buttons.save}</Text>}
-        </Pressable>
+        </PressableScale>
       </View>
     ));
   }
@@ -3380,10 +3381,10 @@ export default function RentalsScreen() {
               </Pressable>
             )}
           </View>
-          <Pressable onPress={saveExpense} disabled={savingExpense || !Number(expenseForm.amount)}
+          <PressableScale scaleTo={0.97} onPress={saveExpense} disabled={savingExpense || !Number(expenseForm.amount)}
             className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
             {savingExpense ? <ActivityIndicator color="#fff" /> : <Text className="text-sm font-semibold text-white">{tc.buttons.save}</Text>}
-          </Pressable>
+          </PressableScale>
         </View>
       ),
       chooserOverlay(receiptChooserOpen, () => setReceiptChooserOpen(false), pickReceipt),
@@ -3442,10 +3443,10 @@ export default function RentalsScreen() {
               style={{ transform: [{ translateX: maintForm.createExpense ? 24 : 4 }] }} />
           </View>
         </Pressable>
-        <Pressable onPress={saveMaint} disabled={savingMaint || !maintForm.title.trim()}
+        <PressableScale scaleTo={0.97} onPress={saveMaint} disabled={savingMaint || !maintForm.title.trim()}
           className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
           {savingMaint ? <ActivityIndicator color="#fff" /> : <Text className="text-sm font-semibold text-white">{tc.buttons.save}</Text>}
-        </Pressable>
+        </PressableScale>
       </View>
     ));
   }

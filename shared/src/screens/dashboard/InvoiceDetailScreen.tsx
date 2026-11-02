@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { lineBasisText, type PriceBasis } from '../../lib/priceSheet';
 import { SkeletonCard, SkeletonDetail } from '../../ui/Skeleton';
 import { View, Text, Pressable, ScrollView, Image, Modal as RNModal } from 'react-native';
+import { PressableScale } from '../../ui/PressableScale';
 import {
   ArrowLeft,
   MoreHorizontal,
@@ -794,10 +795,10 @@ export function InvoiceDetailScreen({
       {invoice.status === 'draft' && canEdit ? (
         <View className="gap-2.5 mb-4">
           {onSendInvoice ? (
-            <Pressable onPress={onSendInvoice} disabled={updating} className="flex-row items-center justify-center gap-2 bg-primary py-3.5 rounded-2xl active:opacity-90">
+            <PressableScale scaleTo={0.97} onPress={onSendInvoice} disabled={updating} className="flex-row items-center justify-center gap-2 bg-primary py-3.5 rounded-2xl active:opacity-90">
               <Send size={16} color="#FFFFFF" />
               <Text className="text-white font-semibold">{tInv.sendInvoice}</Text>
-            </Pressable>
+            </PressableScale>
           ) : null}
           <Pressable onPress={() => onUpdateStatus('sent')} disabled={updating} className="flex-row items-center justify-center gap-2 border border-border bg-card py-3.5 rounded-2xl active:bg-surface">
             <CheckCircle size={16} color={c.ink} />

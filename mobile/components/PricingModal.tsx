@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   useWindowDimensions,
 } from 'react-native';
+import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check, Sparkles, X, ChevronLeft, Globe, ExternalLink } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -414,14 +415,14 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                       ? "Thanks! We'll be in touch soon."
                       : '¡Gracias! Te contactaremos pronto.'}
                   </Text>
-                  <Pressable
+                  <PressableScale scaleTo={0.97}
                     onPress={onClose}
                     className="mt-6 py-3 px-8 rounded-2xl items-center bg-primary active:opacity-90"
                   >
                     <Text className="text-base font-semibold text-white">
                       {en ? 'Close' : 'Cerrar'}
                     </Text>
-                  </Pressable>
+                  </PressableScale>
                 </View>
               ) : (
                 <>
@@ -481,7 +482,7 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                     <Text className="text-sm text-red-600 mt-3">{error}</Text>
                   ) : null}
 
-                  <Pressable
+                  <PressableScale scaleTo={0.97}
                     onPress={handleSubmit}
                     disabled={!canSubmit || submitting}
                     className={`mt-5 py-3 rounded-2xl items-center flex-row justify-center gap-2 ${
@@ -492,7 +493,7 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
                     <Text className="text-base font-semibold text-white">
                       {en ? 'Send' : 'Enviar'}
                     </Text>
-                  </Pressable>
+                  </PressableScale>
 
                   <Text className="text-xs text-faint text-center mt-3">
                     {en
