@@ -169,7 +169,7 @@ export function PriceSyncModal({ open, onClose, supabase, sourceBusinessId, targ
                     <span className="text-xs font-semibold text-muted">{t.autoLabel}</span>
                     <button type="button" role="switch" aria-checked={autoOn} disabled={busy}
                       onClick={() => void toggleAuto(b.id)}
-                      className={`relative w-9 h-5 rounded-full transition-colors disabled:opacity-50 ${autoOn ? 'bg-primary' : 'bg-border'}`}>
+                      className={`relative w-9 h-5 rounded-full transition-colors disabled:opacity-50 ${autoOn ? 'bg-primary' : 'bg-[rgba(120,120,128,0.36)]'}`}>
                       <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${autoOn ? 'left-[18px]' : 'left-0.5'}`} />
                     </button>
                   </label>
