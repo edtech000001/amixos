@@ -664,3 +664,13 @@ export async function businessUsesBillThrough(supabase: Supa, businessId: string
 export function businessUsesBillThroughCached(businessId: string | null | undefined): boolean {
   return !!businessId && usedCache.get(businessId) === true;
 }
+
+/** List-row amounts for an invoice: `totalAmount` is this business's share
+ *  (total − passthrough, as reports count it); `clientPays` is the full total,
+ *  set only when some of it is billed for other companies. */
+export function ownAndClientPays(total: number | null | undefined, passthrough: number | null | undefined): { totalAmount: number; clientPays: number | null } {
+  const t = Number(total) || 0;
+  const p = Number(passthrough) || 0;
+  if (p <= 0) return { totalAmount: t, clientPays: null };
+  return { totalAmount: Math.round(Number(((t - p) * 100).toFixed(3))) / 100, clientPays: t };
+}

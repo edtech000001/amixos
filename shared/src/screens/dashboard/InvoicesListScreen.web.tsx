@@ -23,7 +23,12 @@ export interface InvoiceListItem {
   id: string;
   invoiceNumber: string;
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled' | string;
+  /** This business's share — total minus lines billed for other companies
+   *  (passthrough, migration 240), matching what reports count. */
   totalAmount: number;
+  /** What the client actually pays, set only when part of the invoice is
+   *  billed for another company (so it differs from totalAmount). */
+  clientPays?: number | null;
   dueDate: string | null;
   /** The other company the client has already paid for this invoice's work
    *  (bill-through, migration 250) — shows a "Collect from …" pill. */
@@ -350,7 +355,7 @@ export function InvoicesListScreen({
       const cn = (inv.clientNames ?? '').toLowerCase();
       // Amount search: digits (with optional $ , .) match against the total.
       const qAmount = q.replace(/[$,\s]/g, '');
-      const amountHit = qAmount !== '' && /^[\d.]+$/.test(qAmount) && inv.totalAmount.toFixed(2).includes(qAmount);
+      const amountHit = qAmount !== '' && /^[\d.]+$/.test(qAmount) && (inv.totalAmount.toFixed(2).includes(qAmount) || (inv.clientPays ?? -1).toFixed(2).includes(qAmount));
       return amountHit || `${inv.invoiceNumber} ${cn} ${inv.searchExtra ?? ''}`.toLowerCase().includes(q);
     })
       // Newest first, by issue date (fallback: keep the fetch order).
@@ -395,6 +400,11 @@ export function InvoicesListScreen({
   // Raw sum, rounded ONCE to the cent (decimal-aware: float .665 stores as
   // .66499…, the toFixed pass restores the intended half-up → .67).
   const total = Math.round(Number((filtered.reduce((s, i) => s + i.totalAmount, 0) * 100).toFixed(3))) / 100;
+  // Lines billed for other companies are left out of `total` (like reports);
+  // when any are in view, say what the clients pay in all next to it.
+  const clientPaysTotal = filtered.some(i => i.clientPays != null)
+    ? Math.round(Number((filtered.reduce((s, i) => s + (i.clientPays ?? i.totalAmount), 0) * 100).toFixed(3))) / 100
+    : null;
   // In server mode the loaded rows are only part of the match set, so the sum is
   // only meaningful once everything for the current filter is loaded.
   const showTotal = filtered.length > 0 && (!serverMode || !hasMore);
@@ -616,6 +626,7 @@ export function InvoicesListScreen({
       {showTotal ? (
         <p className="text-xs text-muted mb-3">
           {t.summaryTotal}: <span className="text-ink font-bold">{fmt(total)}</span>
+          {clientPaysTotal != null ? ` · ${t.billThrough.listClientPays.replace('{{total}}', fmt(clientPaysTotal))}` : null}
         </p>
       ) : null}
 
@@ -740,7 +751,14 @@ export function InvoicesListScreen({
                         {sentAgo ? `${due ? ' · ' : ''}${sentAgo}` : ''}
                         {overdueAgo ? `${due ? ' · ' : ''}${overdueAgo}` : ''}
                       </span>
-                      <span className="text-sm font-bold text-ink shrink-0 w-28 text-right">{fmt(inv.totalAmount)}</span>
+                      <span className="shrink-0 w-28 text-right">
+                        <span className="block text-sm font-bold text-ink">{fmt(inv.totalAmount)}</span>
+                        {inv.clientPays != null ? (
+                          <span className="block text-[11px] text-faint whitespace-nowrap">
+                            {t.billThrough.listClientPays.replace('{{total}}', fmt(inv.clientPays))}
+                          </span>
+                        ) : null}
+                      </span>
                     </button>
                   );
                 })}

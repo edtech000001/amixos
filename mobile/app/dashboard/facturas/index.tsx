@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ownAndClientPays } from '@amixos/shared/lib/invoiceBillThrough';
 import { Alert, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,6 +38,8 @@ interface RawInvoice {
   invoice_number: string;
   status: string;
   total_amount: number;
+  /** Part billed for other companies (migration 240). */
+  passthrough_amount?: number | null;
   due_date: string | null;
   issue_date: string | null;
   created_at: string;
@@ -50,7 +53,7 @@ interface RawInvoice {
 
 // Only the columns the list renders/searches. created_at drives the keyset cursor.
 const INVOICE_LIST_SELECT =
-  `id, invoice_number, status, total_amount, due_date, issue_date, created_at, sent_at, line_items, clients(first_name, last_name, company, state), invoice_clients(clients(first_name, last_name, company, state)), jobs(external_ref, title), billed_through, ${INVOICE_REMINDER_COLUMNS}`;
+  `id, invoice_number, status, total_amount, passthrough_amount, due_date, issue_date, created_at, sent_at, line_items, clients(first_name, last_name, company, state), invoice_clients(clients(first_name, last_name, company, state)), jobs(external_ref, title), billed_through, ${INVOICE_REMINDER_COLUMNS}`;
 
 // Primary client for company/state — the single `clients` relation if present,
 // else the first of the multi-client list.
@@ -360,7 +363,9 @@ export default function FacturasTab() {
       id: inv.id,
       invoiceNumber: inv.invoice_number,
       status: inv.status,
-      totalAmount: inv.total_amount,
+      // Own share, like reports; the full amount the client pays rides along
+      // only when part of it is billed for another company.
+      ...ownAndClientPays(inv.total_amount, inv.passthrough_amount),
       dueDate: inv.due_date,
       sentAt: inv.sent_at,
       reminderCount: inv.reminder_count ?? 0,
