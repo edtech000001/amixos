@@ -180,3 +180,15 @@ body.light-page {
   background: #ffffff;
   overscroll-behavior-y: none;
 }
+
+/* Modals and drawers: when a scrollable panel inside a fixed overlay hits its
+   top or bottom, the browser hands the rest of the wheel / trackpad scroll to
+   the page behind it ("scroll chaining") — the list under the modal scrolled
+   away while you scrolled the form. Contain it to the panel, for every
+   overlay at once rather than one modal at a time. */
+.fixed .overflow-y-auto,
+.fixed.overflow-y-auto,
+.fixed .overflow-auto,
+.fixed.overflow-auto {
+  overscroll-behavior: contain;
+}
