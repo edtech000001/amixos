@@ -66,7 +66,12 @@ export type AuditAction =
   | 'rental_lease.updated'
   | 'rental_lease.deleted'
   | 'rental_payment.recorded'
-  | 'rental_payment.deleted';
+  | 'rental_payment.deleted'
+  // Price sheet copy / auto-sync (written by the database, migrations 242/260)
+  | 'price_sheet.synced'
+  | 'price_sheet.autosync_on'
+  | 'price_sheet.autosync_off'
+  | 'price_sheet.autosync_auto_off';
 
 export type EntityType =
   | 'import'
@@ -169,4 +174,51 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, { es: string; en: string }>
   'rental_lease.deleted':    { es: 'Contrato de renta eliminado',    en: 'Lease deleted' },
   'rental_payment.recorded': { es: 'Pago de renta registrado',       en: 'Rent payment recorded' },
   'rental_payment.deleted':  { es: 'Pagos de renta eliminados',      en: 'Rent payments removed' },
+  'price_sheet.synced':            { es: 'Precios copiados',                         en: 'Prices copied' },
+  'price_sheet.autosync_on':       { es: 'Auto-sincronización de precios activada',  en: 'Price auto-sync turned on' },
+  'price_sheet.autosync_off':      { es: 'Auto-sincronización de precios desactivada', en: 'Price auto-sync turned off' },
+  'price_sheet.autosync_auto_off': { es: 'Auto-sincronización de precios apagada automáticamente', en: 'Price auto-sync switched off automatically' },
 };
+
+/**
+ * Full sentence for a price-sheet copy / auto-sync entry, or null for any
+ * other action. These rows are written by the database (migrations 242 + 260)
+ * with details { direction: 'out' (this company shares its prices) | 'in'
+ * (this company receives them), other company, … }, so the sentence reads
+ * right from either company's Activity log.
+ */
+export function describePriceSheetAudit(action: string, details: Record<string, unknown> | null | undefined, lang: 'es' | 'en'): string | null {
+  if (!action.startsWith('price_sheet.')) return null;
+  const d = details ?? {};
+  const es = lang === 'es';
+  const out = d.direction !== 'in';
+  const other = String(
+    d.other_business_name ?? (out ? d.target_business_name : d.source_business_name) ?? (es ? 'otra empresa' : 'another company'),
+  );
+  switch (action) {
+    case 'price_sheet.synced': {
+      const counts = es
+        ? `${Number(d.updated) || 0} actualizados, ${Number(d.added) || 0} agregados, ${Number(d.removed) || 0} eliminados`
+        : `${Number(d.updated) || 0} updated, ${Number(d.added) || 0} added, ${Number(d.removed) || 0} removed`;
+      return es
+        ? (out ? `Precios copiados a ${other} — ${counts}` : `Precios copiados desde ${other} — ${counts}`)
+        : (out ? `Prices copied to ${other} — ${counts}` : `Prices copied from ${other} — ${counts}`);
+    }
+    case 'price_sheet.autosync_on':
+      return es
+        ? (out ? `Auto-sincronización activada: ${other} ahora sigue estos precios` : `Auto-sincronización activada: estos precios ahora siguen a ${other}`)
+        : (out ? `Price auto-sync turned on: ${other} now follows these prices` : `Price auto-sync turned on: these prices now follow ${other}`);
+    case 'price_sheet.autosync_off':
+      return es
+        ? `Auto-sincronización de precios con ${other} desactivada`
+        : `Price auto-sync with ${other} turned off`;
+    case 'price_sheet.autosync_auto_off': {
+      const who = d.lost_access_name ? String(d.lost_access_name) : (es ? 'quien la activó' : 'the person who turned it on');
+      return es
+        ? `Auto-sincronización de precios con ${other} apagada automáticamente — ${who} ya no es dueño/admin de ambas empresas`
+        : `Price auto-sync with ${other} switched off automatically — ${who} is no longer an owner/admin of both companies`;
+    }
+    default:
+      return null;
+  }
+}

@@ -8,7 +8,7 @@ import { Activity, ChevronLeft, Search } from 'lucide-react-native';
 import { useApp } from '@/lib/AppContext';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/lib/i18n/LangProvider';
-import { AUDIT_ACTION_LABEL, type AuditAction } from '@amixos/shared/lib/audit';
+import { AUDIT_ACTION_LABEL, describePriceSheetAudit, type AuditAction } from '@amixos/shared/lib/audit';
 import { getModuleById } from '@amixos/shared/modules/registry';
 import { formatDateTimeLong } from '@amixos/shared/lib/format';
 import { useThemeColors } from '@/lib/ThemeProvider';
@@ -79,6 +79,9 @@ export default function ActividadPage() {
   };
 
   const describe = (row: AuditRow): string => {
+    // Price copy / auto-sync rows carry their own full sentence.
+    const priceSync = describePriceSheetAudit(row.action, row.details, lang);
+    if (priceSync) return priceSync;
     const label = AUDIT_ACTION_LABEL[row.action as AuditAction]?.[lang] ?? row.action;
     const d = row.details ?? {};
     const bits: string[] = [];
