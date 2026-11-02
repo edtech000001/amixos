@@ -53,13 +53,16 @@ export function PriceSyncModal({ open, onClose, supabase, sourceBusinessId, targ
   // Targets with auto-sync wanted ON. Already-on links start on; turning one
   // on takes effect after the copy below, turning one off is immediate.
   const [auto, setAuto] = useState<Set<string>>(new Set());
+  const [notice, setNotice] = useState('');
   const activeAuto = (id: string) => links.some(l => l.sourceId === sourceBusinessId && l.targetId === id);
   const blockOf = (id: string) => autosyncBlock(links, sourceBusinessId, id);
 
   useEffect(() => {
     if (!open) return;
     const syncable = targets.filter(x => !blockOf(x.id));
-    setStep('pick'); setPicked(new Set(syncable.map(x => x.id))); setBusy(false); setError(''); setReports({}); setShowMatches(false);
+    setNotice('');
+    // Already auto-synced companies are identical — not ticked for a copy.
+    setStep('pick'); setPicked(new Set(syncable.filter(x => !activeAuto(x.id)).map(x => x.id))); setBusy(false); setError(''); setReports({}); setShowMatches(false);
     setAuto(new Set(syncable.filter(x => activeAuto(x.id)).map(x => x.id)));
     // Reset on OPEN only — `targets` is rebuilt by the parent every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -108,6 +111,7 @@ export function PriceSyncModal({ open, onClose, supabase, sourceBusinessId, targ
         setBusy(false);
         if (res.ok === false) { setError(t.autoOffFailed.replace('{{error}}', res.error)); return; }
         onLinksChanged();
+        setNotice(t.autoTurnedOff.replace('{{company}}', targets.find(x => x.id === id)?.name ?? ''));
       }
       setAuto(prev => { const n = new Set(prev); n.delete(id); return n; });
     } else {
@@ -117,6 +121,8 @@ export function PriceSyncModal({ open, onClose, supabase, sourceBusinessId, targ
     }
   };
   const autoNames = chosen.filter(x => auto.has(x.id)).map(x => x.name).join(', ');
+  // Switched on in this dialog, not yet saved — it saves with the copy.
+  const pendingAuto = chosen.some(x => auto.has(x.id) && !activeAuto(x.id));
 
   const howLabel = (how: string) =>
     how === 'email' ? t.howEmail : how === 'phone' ? t.howPhone : how === 'name' ? t.howName : t.howCompany;
@@ -137,14 +143,15 @@ export function PriceSyncModal({ open, onClose, supabase, sourceBusinessId, targ
             const on = picked.has(b.id);
             const block = blockOf(b.id);
             const autoOn = auto.has(b.id);
+            const inSync = autoOn && activeAuto(b.id);
             return (
               <div key={b.id}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors ${block ? 'border-border-soft opacity-60' : on ? 'border-primary bg-primary/10' : 'border-border-soft'}`}>
                 <button type="button" disabled={!!block || autoOn}
                   onClick={() => setPicked(prev => { const n = new Set(prev); if (n.has(b.id)) n.delete(b.id); else n.add(b.id); return n; })}
                   className="flex-1 min-w-0 flex items-center gap-3 text-left disabled:cursor-default">
-                  <span className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${on && !block ? 'bg-primary border-primary' : 'border-border'}`}>
-                    {on && !block ? <Check size={13} className="text-white" /> : null}
+                  <span className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${(on || inSync) && !block ? 'bg-primary border-primary' : 'border-border'}`}>
+                    {(on || inSync) && !block ? <Check size={13} className="text-white" /> : null}
                   </span>
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold text-ink truncate">{b.name}</span>
@@ -152,6 +159,8 @@ export function PriceSyncModal({ open, onClose, supabase, sourceBusinessId, targ
                       <span className="block text-[11px] text-faint">
                         {block.kind === 'follows' ? t.autoSyncsFrom.replace('{{company}}', businessName(block.otherSourceId)) : t.autoIsSource}
                       </span>
+                    ) : inSync ? (
+                      <span className="block text-[11px] text-emerald-600">{t.autoInSync}</span>
                     ) : null}
                   </span>
                 </button>
@@ -168,11 +177,12 @@ export function PriceSyncModal({ open, onClose, supabase, sourceBusinessId, targ
               </div>
             );
           })}
-          <p className="text-[11px] text-faint">{t.autoHint}.</p>
+          <p className="text-[11px] text-faint">{pendingAuto ? t.autoPendingHint : `${t.autoHint}.`}</p>
+          {notice ? <p className="text-sm text-emerald-600">{notice}</p> : null}
           {error ? <p className="text-sm text-red-500">{error}</p> : null}
           <button type="button" onClick={() => void run(true)} disabled={busy || chosen.length === 0}
             className="mt-2 py-3 rounded-2xl bg-primary text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50">
-            {busy ? t.previewing : t.previewBtn}
+            {busy ? t.previewing : pendingAuto ? t.previewAutoBtn : t.previewBtn}
           </button>
         </div>
       ) : step === 'preview' ? (
@@ -237,7 +247,7 @@ export function PriceSyncModal({ open, onClose, supabase, sourceBusinessId, targ
           {error ? <p className="text-sm text-red-500">{error}</p> : null}
           <button type="button" onClick={() => void run(false)} disabled={busy}
             className="py-3 rounded-2xl bg-red-500 text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50">
-            {busy ? t.running : t.confirmBtn.replace('{{companies}}', names)}
+            {busy ? t.running : pendingAuto ? t.confirmAutoBtn : t.confirmBtn.replace('{{companies}}', names)}
           </button>
         </div>
       ) : (

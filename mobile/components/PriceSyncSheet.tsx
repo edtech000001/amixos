@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView, Modal as RNModal, Switch } from 'react-native';
+import { View, Text, Pressable, ScrollView, Modal as RNModal } from 'react-native';
 import { X, ArrowLeft, Check, AlertTriangle, CheckCircle } from 'lucide-react-native';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useThemeColors } from '@/lib/ThemeProvider';
@@ -54,13 +54,16 @@ export function PriceSyncSheet({ open, onClose, supabase, sourceBusinessId, targ
   // Targets with auto-sync wanted ON. Already-on links start on; turning one
   // on takes effect after the copy below, turning one off is immediate.
   const [auto, setAuto] = useState<Set<string>>(new Set());
+  const [notice, setNotice] = useState('');
   const activeAuto = (id: string) => links.some(l => l.sourceId === sourceBusinessId && l.targetId === id);
   const blockOf = (id: string) => autosyncBlock(links, sourceBusinessId, id);
 
   useEffect(() => {
     if (!open) return;
     const syncable = targets.filter(x => !blockOf(x.id));
-    setStep('pick'); setPicked(new Set(syncable.map(x => x.id))); setBusy(false); setError(''); setReports({}); setShowMatches(false);
+    setNotice('');
+    // Already auto-synced companies are identical — not ticked for a copy.
+    setStep('pick'); setPicked(new Set(syncable.filter(x => !activeAuto(x.id)).map(x => x.id))); setBusy(false); setError(''); setReports({}); setShowMatches(false);
     setAuto(new Set(syncable.filter(x => activeAuto(x.id)).map(x => x.id)));
     // Reset on OPEN only — `targets` is rebuilt by the parent every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -109,6 +112,7 @@ export function PriceSyncSheet({ open, onClose, supabase, sourceBusinessId, targ
         setBusy(false);
         if (res.ok === false) { setError(t.autoOffFailed.replace('{{error}}', res.error)); return; }
         onLinksChanged();
+        setNotice(t.autoTurnedOff.replace('{{company}}', targets.find(x => x.id === id)?.name ?? ''));
       }
       setAuto(prev => { const n = new Set(prev); n.delete(id); return n; });
     } else {
@@ -118,6 +122,8 @@ export function PriceSyncSheet({ open, onClose, supabase, sourceBusinessId, targ
     }
   };
   const autoNames = chosen.filter(x => auto.has(x.id)).map(x => x.name).join(', ');
+  // Switched on in this sheet, not yet saved — it saves with the copy.
+  const pendingAuto = chosen.some(x => auto.has(x.id) && !activeAuto(x.id));
 
   const howLabel = (how: string) =>
     how === 'email' ? t.howEmail : how === 'phone' ? t.howPhone : how === 'name' ? t.howName : t.howCompany;
@@ -149,14 +155,15 @@ export function PriceSyncSheet({ open, onClose, supabase, sourceBusinessId, targ
                   const block = blockOf(b.id);
                   const on = picked.has(b.id) && !block;
                   const autoOn = auto.has(b.id);
+                  const inSync = autoOn && activeAuto(b.id);
                   return (
                     <View key={b.id}
                       className={`flex-row items-center gap-3 px-3 py-3 rounded-xl border mb-2 ${block ? 'border-border-soft opacity-60' : on ? 'border-primary bg-primary/10' : 'border-border-soft'}`}>
                       <Pressable disabled={!!block || autoOn}
                         onPress={() => setPicked(prev => { const n = new Set(prev); if (n.has(b.id)) n.delete(b.id); else n.add(b.id); return n; })}
                         className="flex-1 flex-row items-center gap-3 active:opacity-70">
-                        <View className={`w-5 h-5 rounded-md border items-center justify-center ${on ? 'bg-primary border-primary' : 'border-border'}`}>
-                          {on ? <Check size={13} color="#fff" /> : null}
+                        <View className={`w-5 h-5 rounded-md border items-center justify-center ${on || inSync ? 'bg-primary border-primary' : 'border-border'}`}>
+                          {on || inSync ? <Check size={13} color="#fff" /> : null}
                         </View>
                         <View className="flex-1">
                           <Text className="text-sm font-semibold text-ink" numberOfLines={1}>{b.name}</Text>
@@ -164,20 +171,31 @@ export function PriceSyncSheet({ open, onClose, supabase, sourceBusinessId, targ
                             <Text className="text-[11px] text-faint">
                               {block.kind === 'follows' ? t.autoSyncsFrom.replace('{{company}}', businessName(block.otherSourceId)) : t.autoIsSource}
                             </Text>
+                          ) : inSync ? (
+                            <Text className="text-[11px] text-emerald-600">{t.autoInSync}</Text>
                           ) : null}
                         </View>
                       </Pressable>
                       {!block ? (
                         <View className="items-center">
-                          <Switch value={autoOn} disabled={busy} onValueChange={() => { void toggleAuto(b.id); }}
-                            trackColor={{ true: c.primary, false: c.border }} />
+                          {/* Pressable toggle, not RN <Switch>: the native UISwitch
+                              didn't receive taps inside this modal sheet's ScrollView
+                              on iOS (the rows' Pressables did). */}
+                          <Pressable accessibilityRole="switch" accessibilityState={{ checked: autoOn, disabled: busy }}
+                            disabled={busy} hitSlop={8} onPress={() => { void toggleAuto(b.id); }}
+                            style={{ width: 46, height: 28, borderRadius: 14, padding: 3, justifyContent: 'center',
+                                     backgroundColor: autoOn ? c.primary : 'rgba(120,120,128,0.36)', opacity: busy ? 0.5 : 1 }}>
+                            <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff',
+                                           alignSelf: autoOn ? 'flex-end' : 'flex-start' }} />
+                          </Pressable>
                           <Text className="text-[10px] font-semibold text-muted mt-0.5">{t.autoLabel}</Text>
                         </View>
                       ) : null}
                     </View>
                   );
                 })}
-                <Text className="text-[11px] text-faint mt-1">{t.autoHint}.</Text>
+                <Text className="text-[11px] text-faint mt-1">{pendingAuto ? t.autoPendingHint : `${t.autoHint}.`}</Text>
+                {notice ? <Text className="text-sm text-emerald-600 mt-2">{notice}</Text> : null}
               </>
             ) : step === 'preview' ? (
               <>
@@ -251,12 +269,12 @@ export function PriceSyncSheet({ open, onClose, supabase, sourceBusinessId, targ
           {step === 'pick' ? (
             <Pressable onPress={() => void run(true)} disabled={busy || chosen.length === 0}
               className={`mt-3 py-3.5 rounded-2xl items-center ${busy || chosen.length === 0 ? 'bg-primary/50' : 'bg-primary active:opacity-90'}`}>
-              <Text className="text-sm font-semibold text-white">{busy ? t.previewing : t.previewBtn}</Text>
+              <Text className="text-sm font-semibold text-white">{busy ? t.previewing : pendingAuto ? t.previewAutoBtn : t.previewBtn}</Text>
             </Pressable>
           ) : step === 'preview' ? (
             <Pressable onPress={() => void run(false)} disabled={busy}
               className={`mt-3 py-3.5 rounded-2xl items-center ${busy ? 'bg-red-500/50' : 'bg-red-500 active:opacity-90'}`}>
-              <Text className="text-sm font-semibold text-white">{busy ? t.running : t.confirmBtn.replace('{{companies}}', names)}</Text>
+              <Text className="text-sm font-semibold text-white">{busy ? t.running : pendingAuto ? t.confirmAutoBtn : t.confirmBtn.replace('{{companies}}', names)}</Text>
             </Pressable>
           ) : (
             <Pressable onPress={onClose} className="mt-3 py-3.5 rounded-2xl bg-border-soft items-center active:opacity-80">

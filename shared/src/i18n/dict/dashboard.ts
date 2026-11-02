@@ -1826,6 +1826,11 @@ export type DashboardDict = {
         autoIsSource: string;
         autoDone: string;
         autoOffFailed: string;
+        autoPendingHint: string;
+        previewAutoBtn: string;
+        confirmAutoBtn: string;
+        autoInSync: string;
+        autoTurnedOff: string;
         syncedBanner: string;
         syncedBannerUnknown: string;
         stopSync: string;
@@ -5309,6 +5314,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
           autoIsSource: 'Comparte sus precios con otras empresas',
           autoDone: 'Auto-sincronización activa para {{companies}}. Los cambios aquí se copian solos.',
           autoOffFailed: 'No se pudo apagar: {{error}}',
+          autoPendingHint: 'Se activa después de revisar los cambios y confirmar.',
+          previewAutoBtn: 'Revisar y activar auto-sincronización',
+          confirmAutoBtn: 'Reemplazar precios y activar auto-sincronización',
+          autoInSync: 'Sincronizada: los cambios se copian solos',
+          autoTurnedOff: 'Auto-sincronización apagada para {{company}}. Conserva sus precios actuales.',
           syncedBanner: 'Estos precios se sincronizan automáticamente desde {{company}}. Edítalos allá; los cambios hechos aquí se reemplazarían.',
           syncedBannerUnknown: 'otra empresa',
           stopSync: 'Dejar de sincronizar',
@@ -8785,6 +8795,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
           autoIsSource: 'Shares its prices with other companies',
           autoDone: 'Auto-sync is on for {{companies}}. Changes here copy over automatically.',
           autoOffFailed: "Couldn't turn it off: {{error}}",
+          autoPendingHint: 'Turns on after you review the changes and confirm.',
+          previewAutoBtn: 'Review & turn on auto-sync',
+          confirmAutoBtn: 'Replace prices & turn on auto-sync',
+          autoInSync: 'In sync — changes copy over automatically',
+          autoTurnedOff: 'Auto-sync turned off for {{company}}. It keeps its current prices.',
           syncedBanner: 'These prices sync automatically from {{company}}. Edit them there — changes made here would be overwritten.',
           syncedBannerUnknown: 'another company',
           stopSync: 'Stop syncing',
