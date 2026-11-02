@@ -16,7 +16,7 @@ import {
   useJsApiLoader,
 } from '@react-google-maps/api';
 import { MarkerClusterer } from '@googlemaps/markerclusterer';
-import { Users, Briefcase, UserCircle2, X, Settings as SettingsIcon, Search as SearchIcon, CloudLightning, ExternalLink, MapPin as MapPinIcon, Calendar, Crosshair, Phone, Mail, ArrowRight, LocateFixed, EyeOff, CircleCheckBig, History } from 'lucide-react';
+import { Users, Briefcase, UserCircle2, X, Settings as SettingsIcon, Search as SearchIcon, CloudLightning, ExternalLink, MapPin as MapPinIcon, Calendar, Crosshair, Phone, Mail, ArrowRight, LocateFixed, EyeOff, CircleCheckBig, History, AlertTriangle } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
@@ -256,10 +256,20 @@ export default function MapModule() {
   const tdate = full.dashboard.jobs.dateFilter; // reuse the jobs date-filter labels
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
-  const { isLoaded } = useJsApiLoader({
+  const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: apiKey,
     id: 'amixos-map',
   });
+  // Google calls window.gm_authFailure when it rejects the key (wrong site,
+  // API not enabled, billing…) and then draws only a gray box / "Oops" —
+  // show what happened instead.
+  const [authFailed, setAuthFailed] = useState(false);
+  useEffect(() => {
+    const w = window as unknown as { gm_authFailure?: () => void };
+    const prev = w.gm_authFailure;
+    w.gm_authFailure = () => { setAuthFailed(true); prev?.(); };
+    return () => { w.gm_authFailure = prev; };
+  }, []);
 
   const [pins, setPins] = useState<PinsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1033,6 +1043,21 @@ export default function MapModule() {
             didInitialFitRef (already true) blocked any refit. So logging a
             call, which refetches to update "último contacto", left you
             zoomed out over the whole country. */}
+        {authFailed || loadError ? (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-surface p-6">
+            <div className="max-w-md text-center">
+              <div className="mx-auto mb-3 w-11 h-11 rounded-2xl bg-red-500/10 flex items-center justify-center">
+                <AlertTriangle size={20} className="text-red-500" />
+              </div>
+              <p className="text-sm font-semibold text-ink mb-1">{t.loadError.title}</p>
+              <p className="text-xs text-muted">
+                {authFailed
+                  ? t.loadError.keyRejected.replace('{{origin}}', typeof window !== 'undefined' ? window.location.origin : '')
+                  : t.loadError.scriptFailed}
+              </p>
+            </div>
+          </div>
+        ) : null}
         {!isLoaded || (loading && !pins) ? (
           <div className="absolute inset-0 flex items-center justify-center bg-surface">
             <div className="flex gap-1">

@@ -2522,6 +2522,12 @@ export type DashboardDict = {
     // progress. Lives under `modules` because it's owned by the map
     // module, not core settings.
     map: {
+      /** Shown in place of the map when Google Maps can't load (web). */
+      loadError: {
+        title: string;
+        keyRejected: string;
+        scriptFailed: string;
+      };
       layers: {
         clients: string;
         jobs: string;
@@ -5990,6 +5996,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         },
       },
       map: {
+        loadError: {
+          title: 'El mapa no pudo cargar',
+          keyRejected: 'Google Maps rechazó la clave de API para este sitio ({{origin}}). Normalmente es porque la clave no incluye esta dirección en sus sitios permitidos (Google Cloud → Credenciales). La consola del navegador muestra el error exacto de Google.',
+          scriptFailed: 'No se pudo conectar con Google Maps. Revisa tu conexión y vuelve a cargar la página.',
+        },
         layers: {
           clients: 'Clientes',
           jobs: 'Trabajos',
@@ -9471,6 +9482,11 @@ export const dashboard: Record<Locale, DashboardDict> = {
         },
       },
       map: {
+        loadError: {
+          title: "The map couldn't load",
+          keyRejected: "Google Maps rejected the API key for this site ({{origin}}). Usually the key's allowed websites don't include this address (Google Cloud → Credentials). The browser console shows Google's exact error.",
+          scriptFailed: "Couldn't reach Google Maps. Check your connection and reload the page.",
+        },
         layers: {
           clients: 'Clients',
           jobs: 'Jobs',
