@@ -140,6 +140,38 @@ export interface AutopricedLine {
    *  `splitFlatAddons` is on, so the caller can emit each as its own line
    *  (keeps the base rate clean instead of smearing $600 into $/ft). */
   flatAddons: { name: string; rate: number }[];
+  /** Set when a flat add-on was bundled into a per-unit line (billed 1 ×
+   *  total): the measured quantity × per-unit rate BEFORE the flat fee, so the
+   *  UI can show "1,275 × $3.25 = $4,143.75" above "+Loading Fee $600".
+   *  Null otherwise (the line's own qty × rate already says it). */
+  basis: PriceBasis | null;
+}
+
+/** Pre-fee quantity × rate of a bundled line (see AutopricedLine.basis). */
+export interface PriceBasis { qty: number; rate: number }
+
+/** The line under an invoice line that explains its pre-fee amount:
+ *  "1,275 × $3.25 = $4,143.75" from the stored basis; for lines priced before
+ *  the basis was stored, "$4,143.75 + fees" is derived from the total minus
+ *  the flat add-ons in the note (only when every add-on there is flat). */
+export function lineBasisText(li: { qty: number; rate: number; priceBasis?: PriceBasis | null; addonNote?: string | null }): string | null {
+  if (li.priceBasis) return priceBasisLabel(li.priceBasis);
+  if (!li.addonNote || Number(li.qty) !== 1) return null;
+  let flat = 0;
+  for (const part of li.addonNote.split(' · ')) {
+    const m = part.match(/\$([\d,]+(?:\.\d+)?)(\/\S+)?\s*$/);
+    if (!m || m[2]) return null; // per-unit add-on (or unparseable) → can't derive
+    flat += Number(m[1].replace(/,/g, ''));
+  }
+  const base = round2(Number(li.rate) - flat);
+  if (!(base > 0)) return null;
+  return `$${base.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** "1,275 × $3.25 = $4,143.75" */
+export function priceBasisLabel(b: PriceBasis): string {
+  const money = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${b.qty.toLocaleString('en-US', { maximumFractionDigits: 2 })} × ${money(b.rate)} = ${money(round2(b.qty * b.rate))}`;
 }
 
 /** "$0.50 / ft" style summary for one applied add-on. */
@@ -214,6 +246,7 @@ export function autopriceLine(
       amount,
       addonNote,
       flatAddons: splitFlat,
+      basis: null,
     };
   }
 
@@ -225,10 +258,10 @@ export function autopriceLine(
     // total. Blending it into the per-unit rate both looks odd ($4.21/ft) and
     // rounds the total off (1295 × $4.21 = $5,451.95, losing $4.30 vs the true
     // $5,456.25). Keep the measurement in originalQuantity for reference.
-    return { quantity: 1, unitPrice: amount, originalQuantity: qty !== 1 ? qty : null, amount, addonNote, flatAddons: splitFlat };
+    return { quantity: 1, unitPrice: amount, originalQuantity: qty !== 1 ? qty : null, amount, addonNote, flatAddons: splitFlat, basis: { qty, rate: round2(effRate) } };
   }
   // No flat add-on → clean per-unit rate ($3.75), quantity × rate is exact.
-  return { quantity: qty, unitPrice: round2(effRate), originalQuantity: null, amount, addonNote, flatAddons: splitFlat };
+  return { quantity: qty, unitPrice: round2(effRate), originalQuantity: null, amount, addonNote, flatAddons: splitFlat, basis: null };
 }
 
 /** All ACTIVE add-on items whose name or a match term appears in `text` — the

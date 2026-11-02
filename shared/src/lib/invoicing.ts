@@ -65,6 +65,9 @@ export interface InvoiceLineItem {
   /** Summary of per-unit add-ons folded into this line's rate, shown as a small
    *  indicator under the line (e.g. "+Polly/Aluminum $0.50/ft"). */
   addonNote?: string | null;
+  /** Quantity × rate before a bundled flat add-on (line billed 1 × total),
+   *  shown above the add-on note: "1,275 × $3.25 = $4,143.75". */
+  priceBasis?: { qty: number; rate: number } | null;
   /** Billed on behalf of ANOTHER business (migration 240): a real,
    *  client-facing line that counts in this invoice's total, but the money
    *  belongs to the source business — revenue reports leave it out
@@ -667,7 +670,7 @@ export async function updateLineItemAt(
     i === opts.index
       // A hand-set rate no longer matches the auto-priced add-on breakdown, so
       // drop the stale "+add-on" note.
-      ? { ...li, description: opts.description, qty: opts.qty, rate: opts.rate, addonNote: null, ...(opts.serviceDate !== undefined ? { service_date: opts.serviceDate } : {}), ...(li.job_id ? { edited: true } : {}) }
+      ? { ...li, description: opts.description, qty: opts.qty, rate: opts.rate, addonNote: null, priceBasis: null, ...(opts.serviceDate !== undefined ? { service_date: opts.serviceDate } : {}), ...(li.job_id ? { edited: true } : {}) }
       : li,
   );
   const { subtotal, tax, total } = computeTotals(next, inv.tax_rate ?? 0, inv.discount ?? 0);
@@ -1022,6 +1025,7 @@ export async function autopriceInvoice(
       qty: priced.quantity,
       rate: priced.unitPrice,
       addonNote: priced.addonNote ?? null,
+      priceBasis: priced.basis,
       ...(li.job_id ? { edited: true } : {}),
     };
     // Flat add-ons → their own line(s), tagged with the base line's job_id so

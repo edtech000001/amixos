@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { lineBasisText, type PriceBasis } from '../../lib/priceSheet';
 import { SkeletonCard, SkeletonDetail } from '../../ui/Skeleton';
 import { View, Text, Pressable, ScrollView, Image, Modal as RNModal } from 'react-native';
 import {
@@ -67,6 +68,8 @@ export interface InvoiceDetailLineItem {
   addon?: boolean;
   /** Per-unit add-ons folded into this line's rate, as a small indicator. */
   addonNote?: string | null;
+  /** Pre-fee quantity × rate of a bundled line (priceSheet.PriceBasis). */
+  priceBasis?: PriceBasis | null;
   /** Temporarily excluded from totals + the printed document (dimmed row). */
   excluded?: boolean;
   /** Date the work was performed (manual lines). */
@@ -670,6 +673,7 @@ export function InvoiceDetailScreen({
                         return d ? ` · ${formatDate(d)}` : '';
                       })()}
                     </Text>
+                    {lineBasisText(li) ? <Text className="text-[11px] text-faint mt-0.5">{lineBasisText(li)}</Text> : null}
                     {li.addonNote ? <Text className="text-[11px] text-faint mt-0.5">{li.addonNote}</Text> : null}
                     {li.passthrough ? (
                       <View className="flex-row items-center gap-1 mt-1">

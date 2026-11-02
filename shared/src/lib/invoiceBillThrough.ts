@@ -294,6 +294,7 @@ export async function billInvoiceThrough(supabase: Supa, opts: BillThroughOpts):
       rate: Number(li.rate) || 0,
       ...(date ? { service_date: date } : {}),
       ...(li.addonNote ? { addonNote: li.addonNote } : {}),
+      ...(li.priceBasis ? { priceBasis: li.priceBasis } : {}),
       passthrough: tag,
     };
   });

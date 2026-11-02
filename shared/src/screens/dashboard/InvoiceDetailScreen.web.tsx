@@ -4,6 +4,7 @@
 // InvoiceDetailScreen.tsx so the web page wrapper is untouched and the bundler
 // resolves this .web.tsx variant automatically.
 
+import { lineBasisText, type PriceBasis } from '../../lib/priceSheet';
 import { useState, type ReactNode } from 'react';
 import { SkeletonCard, SkeletonDetail } from '../../ui/Skeleton';
 import {
@@ -70,6 +71,8 @@ export interface InvoiceDetailLineItem {
   addon?: boolean;
   /** Per-unit add-ons folded into this line's rate, as a small indicator. */
   addonNote?: string | null;
+  /** Pre-fee quantity × rate of a bundled line (priceSheet.PriceBasis). */
+  priceBasis?: PriceBasis | null;
   /** Temporarily excluded from totals + the printed document (dimmed row). */
   excluded?: boolean;
   /** Date the work was performed (manual lines). */
@@ -759,6 +762,7 @@ export function InvoiceDetailScreen({
                         return d ? ` · ${formatDate(d)}` : '';
                       })()}
                     </p>
+                    {lineBasisText(li) ? <p className="text-[11px] text-faint mt-0.5">{lineBasisText(li)}</p> : null}
                     {li.addonNote ? <p className="text-[11px] text-faint mt-0.5">{li.addonNote}</p> : null}
                     {li.passthrough ? (
                       <p className="flex items-center gap-1 text-[11px] font-medium text-faint mt-1">
