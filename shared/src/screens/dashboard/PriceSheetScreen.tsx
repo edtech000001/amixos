@@ -226,9 +226,16 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
         .sort((a, b) => a.sortOrder - b.sortOrder);
     });
     setSavingOrder(true);
-    for (const u of changed) {
-      await supabase.from('price_sheet_items').update({ sort_order: u.sort_order }).eq('id', u.id);
-    }
+    // ONE statement for the whole reorder: an upsert of just the moved rows
+    // (id + the not-null columns it requires, unchanged). Row-by-row updates
+    // were slow, and each one re-ran price auto-sync (migration 259) for every
+    // mirrored company. On failure, reload so the screen shows the real order.
+    const byId = new Map(flat.map(it => [it.id, it]));
+    const { error } = await supabase.from('price_sheet_items').upsert(
+      changed.map(u => ({ id: u.id, business_id: businessId, name: byId.get(u.id)!.name, sort_order: u.sort_order })),
+      { onConflict: 'id' },
+    );
+    if (error) await load(true);
     setSavingOrder(false);
   };
 

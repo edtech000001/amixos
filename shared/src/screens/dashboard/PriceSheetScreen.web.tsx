@@ -190,6 +190,8 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
   // the rows, on-screen positions are not the positions being written.
   const canReorder = canManage && !search.trim();
   const [sectionSheetOpen, setSectionSheetOpen] = useState(false);
+  // Brief "Saving order…" while a drag-reorder is written (mobile parity).
+  const [savingOrder, setSavingOrder] = useState(false);
 
   /**
    * Renumber sort_order across every item so the stored order matches the
@@ -212,9 +214,18 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
         .map(it => (rank.has(it.id) ? { ...it, sortOrder: rank.get(it.id)! } : it))
         .sort((a, b) => a.sortOrder - b.sortOrder);
     });
-    for (const u of changed) {
-      await supabase.from('price_sheet_items').update({ sort_order: u.sort_order }).eq('id', u.id);
-    }
+    setSavingOrder(true);
+    // ONE statement for the whole reorder: an upsert of just the moved rows
+    // (id + the not-null columns it requires, unchanged). Row-by-row updates
+    // were slow, and each one re-ran price auto-sync (migration 259) for every
+    // mirrored company. On failure, reload so the screen shows the real order.
+    const byId = new Map(flat.map(it => [it.id, it]));
+    const { error } = await supabase.from('price_sheet_items').upsert(
+      changed.map(u => ({ id: u.id, business_id: businessId, name: byId.get(u.id)!.name, sort_order: u.sort_order })),
+      { onConflict: 'id' },
+    );
+    if (error) await load(true);
+    setSavingOrder(false);
   };
 
   const reorderWithin = (key: string, nextList: PriceSheetItem[]) =>
@@ -432,6 +443,10 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
             className="absolute right-3 top-1/2 -translate-y-1/2 text-faint hover:text-muted"><X size={16} /></button>
         ) : null}
       </div>
+
+      {savingOrder ? (
+        <p className="-mt-2 text-xs text-faint">{t.savingOrder}</p>
+      ) : null}
 
       {loading ? (
         <SkeletonList rows={6} />
