@@ -347,22 +347,24 @@ function OwnerDashboardHome() {
         layout={profileLayout ?? null}
         onSaveLayout={saveLayout}
         onEditingDone={() => {}}
-        onNewInvoicePress={() => router.push('/dashboard/facturas/nueva')}
+        // Quick actions open screens in other sections; ?from=home (+ the
+        // visitor mark) makes back return here, not to that section's list.
+        onNewInvoicePress={() => { markSectionVisitor('facturas'); router.push('/dashboard/facturas/nueva?from=home' as never); }}
         onInvoicePress={(id) => router.push(`/dashboard/facturas/${id}`)}
         onViewAllInvoicesPress={() => router.push('/dashboard/facturas?status=all' as never)}
-        onCreateFirstInvoicePress={() => router.push('/dashboard/facturas/nueva')}
+        onCreateFirstInvoicePress={() => { markSectionVisitor('facturas'); router.push('/dashboard/facturas/nueva?from=home' as never); }}
         onJobPress={(id) => {
           markSectionVisitor('trabajos');
           router.push(`/dashboard/trabajos/${id}?from=home` as never);
         }}
         onViewAllJobsPress={() => router.push('/dashboard/trabajos')}
-        onNewClientPress={() => router.push('/dashboard/clientes/nuevo')}
+        onNewClientPress={() => { markSectionVisitor('clientes'); router.push('/dashboard/clientes/nuevo?from=home' as never); }}
         onClientPress={(id) => {
           markSectionVisitor('clientes');
           router.push(`/dashboard/clientes/${id}` as never);
         }}
-        onNewJobPress={() => router.push('/dashboard/trabajos/nuevo')}
-        onCalendarPress={() => router.push(appHref('calendario') as never)}
+        onNewJobPress={() => { markSectionVisitor('trabajos'); router.push('/dashboard/trabajos/nuevo?from=home' as never); }}
+        onCalendarPress={() => router.push(`${appHref('calendario')}?from=home` as never)}
         onPayrollPress={() => { markSectionVisitor('mas'); router.push('/dashboard/mas/nomina' as never); }}
         onPendingInvoicesPress={() => router.push('/dashboard/facturas?status=sent' as never)}
         pendingInvoices={dash.data?.pending ?? []}

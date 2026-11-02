@@ -107,6 +107,8 @@ function NuevaFacturaContent() {
   const [invoiceNumber, setInvoiceNumber] = useState('');
   // Once the user types their own number, stop auto-deriving it.
   const numberEditedRef = useRef(false);
+  // The user picked a language themselves (vs. the business default).
+  const langEditedRef = useRef(false);
   // Existing-invoice count (null = not loaded). Drives the sequential
   // auto-number: business.invoice_start_number + count.
   const invoiceCountRef = useRef<number | null>(null);
@@ -539,7 +541,11 @@ function NuevaFacturaContent() {
   // loading early-return to keep hook order stable.
   const dirty = useDirty(
     {
-      invoiceNumber, clientIds, issueDate, notes, taxRate, language, customFields,
+      // Auto invoice number + default language fill in AFTER mount — counted
+      // only once the user edits them (untouched forms warned "Leave site?").
+      invoiceNumber: numberEditedRef.current ? invoiceNumber : null,
+      language: langEditedRef.current ? language : null,
+      clientIds, issueDate, notes, taxRate, customFields,
       lines: lines.filter(l => l.description.trim()),
     },
     !loadingEdit,
@@ -561,9 +567,10 @@ function NuevaFacturaContent() {
     <div className="p-6 max-w-4xl">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
+        {/* Opened from the dashboard's "New invoice" (?from=home) → back there. */}
         <Link
-          href={editId ? `/dashboard/facturas/${editId}` : '/dashboard/facturas'}
-          onClick={e => { e.preventDefault(); confirmDiscard(() => { window.location.href = editId ? `/dashboard/facturas/${editId}` : '/dashboard/facturas'; }); }}
+          href={editId ? `/dashboard/facturas/${editId}` : searchParams.get('from') === 'home' ? '/dashboard' : '/dashboard/facturas'}
+          onClick={e => { e.preventDefault(); confirmDiscard(() => { window.location.href = editId ? `/dashboard/facturas/${editId}` : searchParams.get('from') === 'home' ? '/dashboard' : '/dashboard/facturas'; }); }}
           className="p-2 rounded-xl hover:bg-border-soft transition-colors"
         >
           <ArrowLeft size={18} className="text-muted" />
@@ -596,7 +603,7 @@ function NuevaFacturaContent() {
               <label className="text-sm font-medium text-ink">{t.languageLabel}</label>
               <select
                 value={language}
-                onChange={e => setLanguage(e.target.value as InvoiceLang)}
+                onChange={e => { langEditedRef.current = true; setLanguage(e.target.value as InvoiceLang); }}
                 className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition appearance-none"
               >
                 <option value="es">Español</option>

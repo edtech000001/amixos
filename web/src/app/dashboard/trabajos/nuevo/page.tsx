@@ -233,6 +233,10 @@ function NuevoTrabajoContent() {
   // may only RECORD completed work — status is locked to "completed".
   const canSchedule = can.scheduleJobs(currentRole);
   const [myEmployeeId, setMyEmployeeId] = useState<string | null>(null);
+  // Async lookups the new-job defaults wait on (lead/crew = you). The unsaved-
+  // changes snapshot waits for them too — see defaultsSettled below.
+  const [myEmployeeLoaded, setMyEmployeeLoaded] = useState(false);
+  const [employeesLoaded, setEmployeesLoaded] = useState(false);
 
   // Default a NEW job's branch to the active branch, else the user's own home
   // branch (so data auto-files to where they work even when viewing "All").
@@ -249,7 +253,8 @@ function NuevoTrabajoContent() {
     // broke the lead default for custom roles that got that capability).
     if (!business || !user) { setMyEmployeeId(null); return; }
     supabase.from('employees').select('id').eq('business_id', business.id).eq('user_id', user.id).limit(1).maybeSingle()
-      .then(({ data }: { data: { id: string } | null }) => setMyEmployeeId(data?.id ?? null));
+      .then(({ data }: { data: { id: string } | null }) => { setMyEmployeeId(data?.id ?? null); setMyEmployeeLoaded(true); },
+            () => setMyEmployeeLoaded(true));
   }, [business?.id, user?.id]);
 
   const [clients, setClients] = useState<Client[]>([]);
@@ -346,6 +351,18 @@ function NuevoTrabajoContent() {
     setLeadEmployeeId(myEmployeeId);
     setAssignedEmployees(prev => (prev.includes(myEmployeeId) ? prev : [...prev, myEmployeeId]));
   }, [sourceId, creatorStaff, canAssign, restrictedCreator, myEmployeeId, employees, leadEmployeeId, assignedEmployees, business?.job_crew_mode]);
+
+  // New jobs fill some fields in AFTER mount — status "completed" for some
+  // roles, you as lead + crew once your employee row and the roster load. The
+  // unsaved-changes snapshot used to be taken at mount, so those defaults read
+  // as edits and an untouched form warned "Leave site?". Flip this only after
+  // the defaults ran (declared after them → runs later in the same commit);
+  // the snapshot is taken on the next render. Mobile twin: trabajos/nuevo.tsx.
+  const [defaultsSettled, setDefaultsSettled] = useState(!!sourceId);
+  useEffect(() => {
+    if (defaultsSettled) return;
+    if (myEmployeeLoaded && employeesLoaded) setDefaultsSettled(true);
+  }, [defaultsSettled, myEmployeeLoaded, employeesLoaded]);
   // Optional drivers — any employees paid extra driverHours (each) on top of
   // the job's total hours. Multi-select, like crew.
   const [driverEmployeeIds, setDriverEmployeeIds] = useState<string[]>([]);
@@ -861,6 +878,7 @@ function NuevoTrabajoContent() {
             .filter(e => (e as { show_in_roster?: boolean | null }).show_in_roster !== false)
             .sort((a, b) => `${a.first_name} ${a.last_name}`.trim().localeCompare(`${b.first_name} ${b.last_name}`.trim(), undefined, { sensitivity: 'base' })),
         );
+        setEmployeesLoaded(true);
       })();
 
       // Custom job fields config (bounded per-business table — no pagination).
@@ -1785,7 +1803,7 @@ function NuevoTrabajoContent() {
       leadEmployeeId, driverEmployeeIds, driverHours, mapLink, clientNotes, issueDate, expiryDate, taxRate, discount,
       items: items.filter(i => i.description.trim()),
     },
-    !loadingEdit,
+    !loadingEdit && defaultsSettled,
   );
   const confirmDiscard = useUnsavedChanges(dirty);
 
@@ -1810,9 +1828,10 @@ function NuevoTrabajoContent() {
     <div className="p-6 max-w-4xl">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
+        {/* Opened from the dashboard's "New job" (?from=home) → back there. */}
         <Link
-          href={sourceId ? `/dashboard/trabajos/${sourceId}${backCtx}` : '/dashboard/trabajos'}
-          onClick={e => { e.preventDefault(); confirmDiscard(() => router.push(sourceId ? `/dashboard/trabajos/${sourceId}${backCtx}` : '/dashboard/trabajos')); }}
+          href={sourceId ? `/dashboard/trabajos/${sourceId}${backCtx}` : searchParams.get('from') === 'home' ? '/dashboard' : '/dashboard/trabajos'}
+          onClick={e => { e.preventDefault(); confirmDiscard(() => router.push(sourceId ? `/dashboard/trabajos/${sourceId}${backCtx}` : searchParams.get('from') === 'home' ? '/dashboard' : '/dashboard/trabajos')); }}
           className="p-2 rounded-xl hover:bg-border-soft transition-colors"
         >
           <ArrowLeft size={18} className="text-muted"/>

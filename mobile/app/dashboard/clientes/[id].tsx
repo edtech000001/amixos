@@ -183,6 +183,9 @@ export default function ClienteDetailRoute() {
       router.replace(`/dashboard/trabajos/${jobId}` as never);
     } else if (from === 'invoice' && invoice) {
       router.replace(`/dashboard/facturas/${invoice}` as never);
+    } else if (from === 'home') {
+      // Created from the dashboard's "New client" quick action.
+      router.replace('/dashboard' as never);
     } else if (router.canGoBack()) {
       // Pop back to the existing list screen (each section is its own Stack)
       // so the list keeps its scroll position and loaded data — replace()

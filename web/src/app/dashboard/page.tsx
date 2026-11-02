@@ -724,9 +724,9 @@ export default function DashboardPage() {
   // would just hit a silent RLS rejection (the quickActions widget itself is
   // dropped for roles that can do none, via resolveDashboardLayout).
   const quickActions = [
-    { label: t.home.quickActions.newInvoice, icon: FileText, onClick: () => router.push('/dashboard/facturas/nueva'), classes: 'bg-primary/10 text-primary hover:bg-primary/15', show: can.createInvoice(currentRole) },
-    { label: t.home.quickActions.newClient, icon: UserPlus, onClick: () => router.push('/dashboard/clientes?new=1'), classes: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-500/20', show: can.createClient(currentRole) },
-    { label: t.home.quickActions.newJob, icon: Briefcase, onClick: () => router.push('/dashboard/trabajos/nuevo'), classes: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20', show: can.createJob(currentRole) },
+    { label: t.home.quickActions.newInvoice, icon: FileText, onClick: () => router.push('/dashboard/facturas/nueva?from=home'), classes: 'bg-primary/10 text-primary hover:bg-primary/15', show: can.createInvoice(currentRole) },
+    { label: t.home.quickActions.newClient, icon: UserPlus, onClick: () => router.push('/dashboard/clientes?new=1&from=home'), classes: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-500/20', show: can.createClient(currentRole) },
+    { label: t.home.quickActions.newJob, icon: Briefcase, onClick: () => router.push('/dashboard/trabajos/nuevo?from=home'), classes: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20', show: can.createJob(currentRole) },
     { label: t.home.quickActions.calendar, icon: CalendarDays, onClick: () => router.push('/dashboard/calendario'), classes: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20', show: can.editCalendar(currentRole) },
   ].filter(a => a.show);
 

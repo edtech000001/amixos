@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useHomeOriginBack } from '@/lib/useHomeOriginBack';
 import { markSectionVisitor } from '@/lib/sectionEntry';
 import { createSupabaseClient } from '@/lib/supabase';
 import { loadCached } from '@/lib/offline/cache';
@@ -95,6 +96,11 @@ export default function CalendarioRoute() {
   const moreBack = useMoreBack('calendario');
   const supabase = createSupabaseClient();
   const router = useRouter();
+  // Opened from the dashboard's Calendar quick action → back returns there
+  // (not to the Más menu, whose stack the calendar lives in when unpinned).
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const homeBack = () => router.replace('/dashboard' as never);
+  useHomeOriginBack(from, homeBack);
   const { business, user, activeLocationId, currentRole } = useApp();
   // Read-only roles keep view access; create/edit/delete affordances are gated
   // off (RLS blocks the writes server-side either way).
@@ -275,7 +281,7 @@ export default function CalendarioRoute() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <LocationSwitcher />
       <CalendarScreen
-        onBack={moreBack}
+        onBack={from === 'home' ? homeBack : moreBack}
         items={items}
         loading={loading}
         clients={clients}

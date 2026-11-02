@@ -13,6 +13,7 @@ import {
 import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
+import { useHomeOriginBack } from '@/lib/useHomeOriginBack';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, Building2, Phone, Mail, MapPin, Check } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -81,7 +82,7 @@ export default function NuevoClienteRoute() {
   // Section links stay in whichever stack this screen is in (its tab, or
   // the Más stack when opened from the Más menu) — lib/sectionNav.
   const sectionBase = useSectionBase('clientes');
-  const { edit } = useLocalSearchParams<{ edit?: string }>();
+  const { edit, from } = useLocalSearchParams<{ edit?: string; from?: string }>();
   const supabase = createSupabaseClient();
   const { business, locations, currentRole } = useApp();
   const multiLocation = (locations?.length ?? 0) > 1;
@@ -542,6 +543,7 @@ export default function NuevoClienteRoute() {
 
   const goBack = () => {
     if (editId) router.replace(`${sectionBase}/${editId}` as never);
+    else if (from === 'home') router.replace('/dashboard' as never);
     else router.replace(`${sectionBase}` as never);
   };
 
@@ -559,6 +561,7 @@ export default function NuevoClienteRoute() {
     !loadingEdit,
   );
   const { confirmLeave: confirmBack, unsavedSheet } = useUnsavedGuard({ dirty, onLeave: goBack });
+  useHomeOriginBack(from, confirmBack);
 
   const save = async () => {
     if (!business) return;
@@ -691,7 +694,7 @@ export default function NuevoClienteRoute() {
           triggerGoogleSyncOrThrow('create', newId, { apiBaseUrl, jwt })
             .catch((e) => syncBanner.reportError(googleSyncErrorMessage(e, 'No se pudo agregar el contacto a Google Contacts.')));
         })();
-        router.replace(`${sectionBase}/${newId}` as never);
+        router.replace(`${sectionBase}/${newId}${from === 'home' ? '?from=home' : ''}` as never);
       }
     }
   };

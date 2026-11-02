@@ -135,6 +135,9 @@ export default function FacturaDetailRoute() {
       router.replace(`/dashboard/trabajos/${params.jobId}` as never);
     } else if (params.from === 'client' && params.clientId) {
       router.replace(`/dashboard/clientes/${params.clientId}` as never);
+    } else if (params.from === 'home') {
+      // Created from the dashboard's "New invoice" quick action.
+      router.replace('/dashboard' as never);
     } else if (router.canGoBack()) {
       // Pop back to the existing list screen (each section is its own Stack)
       // so the list keeps its scroll position and loaded data — replace()

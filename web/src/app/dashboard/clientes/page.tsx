@@ -529,12 +529,16 @@ export default function ClientesPage() {
     router.replace(`/dashboard/clientes${qs ? `?${qs}` : ''}`);
   }, [searchParams, router, currentRole]);
 
-  // Dashboard "Nuevo cliente" quick action navigates here with ?new=1.
+  // Dashboard "Nuevo cliente" quick action navigates here with ?new=1
+  // (&from=home → closing the form without saving returns to the dashboard).
+  const newFromHomeRef = useRef(false);
   useEffect(() => {
     if (searchParams.get('new') !== '1' || !currentRole) return;
     openAdd();
+    newFromHomeRef.current = searchParams.get('from') === 'home';
     const params = new URLSearchParams(searchParams.toString());
     params.delete('new');
+    params.delete('from');
     const qs = params.toString();
     router.replace(`/dashboard/clientes${qs ? `?${qs}` : ''}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -585,8 +589,11 @@ export default function ClientesPage() {
         branchOptions={multiLocation ? locations.map(l => ({ id: l.id, name: l.name })) : undefined}
         branchIds={branchIds}
         onToggleBranch={(id) => setBranchIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
-        onClose={() => setFormMode(null)}
-        onSubmit={save}
+        onClose={() => {
+          setFormMode(null);
+          if (newFromHomeRef.current) { newFromHomeRef.current = false; router.push('/dashboard'); }
+        }}
+        onSubmit={(...args: Parameters<typeof save>) => { newFromHomeRef.current = false; return save(...args); }}
       />
 
       {business && (

@@ -18,6 +18,7 @@ import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
+import { useHomeOriginBack } from '@/lib/useHomeOriginBack';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ChevronLeft,
@@ -149,7 +150,7 @@ export default function NuevoTrabajoRoute() {
   // the Más stack when opened from the Más menu) — lib/sectionNav.
   const sectionBase = useSectionBase('trabajos');
   const insets = useSafeAreaInsets();
-  const { edit, duplicate, modo, client: clientParam, copy } = useLocalSearchParams<{ edit?: string; duplicate?: string; modo?: string; client?: string; copy?: string }>();
+  const { edit, duplicate, modo, client: clientParam, copy, from } = useLocalSearchParams<{ edit?: string; duplicate?: string; modo?: string; client?: string; copy?: string; from?: string }>();
   const supabase = createSupabaseClient();
   const c = useThemeColors();
   const { business, user, currentRole, activeLocationId, myHomeLocationId, locations } = useApp();
@@ -246,6 +247,10 @@ export default function NuevoTrabajoRoute() {
   // may only RECORD completed work — status is locked to "completed".
   const canSchedule = can.scheduleJobs(currentRole);
   const [myEmployeeId, setMyEmployeeId] = useState<string | null>(null);
+  // Async lookups the new-job defaults wait on (lead/crew = you). The unsaved-
+  // changes snapshot waits for them too — see defaultsSettled below.
+  const [myEmployeeLoaded, setMyEmployeeLoaded] = useState(false);
+  const [employeesLoaded, setEmployeesLoaded] = useState(false);
   useEffect(() => {
     // Resolve the creator's own employee row: field crew for the save-time
     // self-assign, worker-style creators for the lead default. Cheap single
@@ -253,7 +258,8 @@ export default function NuevoTrabajoRoute() {
     // broke the lead default for custom roles that got that capability).
     if (!business || !user) { setMyEmployeeId(null); return; }
     supabase.from('employees').select('id').eq('business_id', business.id).eq('user_id', user.id).limit(1).maybeSingle()
-      .then(({ data }: { data: { id: string } | null }) => setMyEmployeeId(data?.id ?? null));
+      .then(({ data }: { data: { id: string } | null }) => { setMyEmployeeId(data?.id ?? null); setMyEmployeeLoaded(true); },
+            () => setMyEmployeeLoaded(true));
   }, [business?.id, user?.id]);
   const [status, setStatus] = useState<'posible' | 'scheduled' | 'in_progress' | 'completed'>('scheduled');
   // New jobs default to "completed" only for roles with the role-editor toggle
@@ -375,6 +381,18 @@ export default function NuevoTrabajoRoute() {
     setAssignedEmployees(prev => (prev.includes(myEmployeeId) ? prev : [...prev, myEmployeeId]));
   }, [sourceId, creatorStaff, canAssign, restrictedCreator, myEmployeeId, employees, leadEmployeeId, assignedEmployees, business?.job_crew_mode]);
 
+  // New jobs fill some fields in AFTER mount — status "completed" for some
+  // roles, you as lead + crew once your employee row and the roster load. The
+  // unsaved-changes snapshot used to be taken at mount, so those defaults read
+  // as edits and an untouched form asked "discard changes?". Flip this only
+  // after the defaults ran (this effect is declared after them, so it runs
+  // later in the same commit); the snapshot is taken on the next render.
+  const [defaultsSettled, setDefaultsSettled] = useState(!!sourceId);
+  useEffect(() => {
+    if (defaultsSettled) return;
+    if (myEmployeeLoaded && employeesLoaded) setDefaultsSettled(true);
+  }, [defaultsSettled, myEmployeeLoaded, employeesLoaded]);
+
   // Load clients + employees + (optionally) the job being edited.
   useEffect(() => {
     if (!business) return;
@@ -421,7 +439,8 @@ export default function NuevoTrabajoRoute() {
             .filter((e) => (e as { show_in_roster?: boolean | null }).show_in_roster !== false)
             .sort((a, b) => `${a.first_name} ${a.last_name}`.trim().localeCompare(`${b.first_name} ${b.last_name}`.trim(), undefined, { sensitivity: 'base' })),
         );
-      });
+        setEmployeesLoaded(true);
+      }, () => { if (!cancelled) setEmployeesLoaded(true); });
 
       const tplPromise = loadCached<FieldTemplate[]>(`jobform_templates_${business.id}`, async () => {
         const { data, error } = await supabase
@@ -2064,7 +2083,7 @@ export default function NuevoTrabajoRoute() {
         // button returned to the detail again rather than the list.
         router.back();
       } else {
-        router.replace(`${sectionBase}/${jobId}` as never);
+        router.replace(`${sectionBase}/${jobId}${from === 'home' ? '?from=home' : ''}` as never);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : t.errorSaveGeneric);
@@ -2083,6 +2102,8 @@ export default function NuevoTrabajoRoute() {
       router.back();
     } else if (sourceId) {
       router.replace(`${sectionBase}/${sourceId}` as never);
+    } else if (from === 'home') {
+      router.replace('/dashboard' as never);
     } else {
       router.replace(`${sectionBase}` as never);
     }
@@ -2101,9 +2122,10 @@ export default function NuevoTrabajoRoute() {
       manualWorkers: manualWorkers.filter((w) => w.trim()),
       leadEmployeeId, driverEmployeeIds, driverHours, clientNotes, issueDate, expiryDate, jobLat, jobLng,
     },
-    !loadingEdit,
+    !loadingEdit && defaultsSettled,
   );
   const { confirmLeave: confirmBack, unsavedSheet } = useUnsavedGuard({ dirty, onLeave: goBack });
+  useHomeOriginBack(from, confirmBack);
 
   if (loadingEdit) {
     return (

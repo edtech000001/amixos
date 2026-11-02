@@ -14,6 +14,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useHomeOriginBack } from '@/lib/useHomeOriginBack';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ChevronLeft,
@@ -110,7 +111,7 @@ export default function NuevaFacturaRoute() {
   const sectionBase = useSectionBase('facturas');
   // `client` comes from the client detail page's New invoice action, which
   // has always passed it — nothing here read it, so the picker opened empty.
-  const { edit, client: clientParam } = useLocalSearchParams<{ edit?: string; client?: string }>();
+  const { edit, client: clientParam, from } = useLocalSearchParams<{ edit?: string; client?: string; from?: string }>();
   const supabase = createSupabaseClient();
   const insets = useSafeAreaInsets();
   const { business, currentRole, activeLocationId, myHomeLocationId } = useApp();
@@ -199,6 +200,8 @@ export default function NuevaFacturaRoute() {
   // Edit mode loads the invoice's own language below; the ref guard means a
   // manual change to the dropdown is never overwritten.
   const langDefaultedRef = useRef(false);
+  // The user picked a language themselves (vs. the business default above).
+  const langEditedRef = useRef(false);
   useEffect(() => {
     if (editId || langDefaultedRef.current || !business) return;
     setLanguage(invoiceDefaultLanguage(business.invoice_template, locale));
@@ -563,6 +566,7 @@ export default function NuevaFacturaRoute() {
 
   const goBack = () => {
     if (editId) router.replace(`${sectionBase}/${editId}` as never);
+    else if (from === 'home') router.replace('/dashboard' as never);
     else router.replace(`${sectionBase}` as never);
   };
 
@@ -574,13 +578,19 @@ export default function NuevaFacturaRoute() {
   // an effect after mount, which would otherwise read as an instant edit.
   const dirty = useDirty(
     {
-      invoiceNumber, clientIds, issueDate, notes, taxRate, language,
+      // The auto invoice number and the default language are filled in AFTER
+      // mount (async number lookup, language effect) — counted only once the
+      // user edits them, or an untouched form asked "discard changes?".
+      invoiceNumber: numberEditedRef.current ? invoiceNumber : null,
+      language: langEditedRef.current ? language : null,
+      clientIds, issueDate, notes, taxRate,
       customFields,
       lines: lines.filter((l) => l.description.trim()),
     },
     !loadingEdit,
   );
   const { confirmLeave: confirmBack, unsavedSheet } = useUnsavedGuard({ dirty, onLeave: goBack });
+  useHomeOriginBack(from, confirmBack);
 
   const save = async (status: 'draft' | 'sent') => {
     if (!business) return;
@@ -677,7 +687,7 @@ export default function NuevaFacturaRoute() {
       );
     }
 
-    router.replace(`${sectionBase}/${invoiceId}` as never);
+    router.replace(`${sectionBase}/${invoiceId}${from === 'home' ? '?from=home' : ''}` as never);
   };
 
   if (loadingEdit) {
@@ -738,7 +748,7 @@ export default function NuevaFacturaRoute() {
               <Select
                 label={t.languageLabel}
                 value={language}
-                onValueChange={(v) => setLanguage(v as InvoiceLang)}
+                onValueChange={(v) => { langEditedRef.current = true; setLanguage(v as InvoiceLang); }}
                 options={[
                   { value: 'es', label: 'Español' },
                   { value: 'en', label: 'English' },
