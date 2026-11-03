@@ -551,6 +551,9 @@ export interface JobsSummaryEmployee {
   driven_hours: number | string;
   jobs_driven: number | string;
   jcf_raw: Record<string, unknown[]> | null;
+  /** Distinct work / driving dates (migration 268) — daily pay. */
+  worked_dates?: string[] | null;
+  driven_dates?: string[] | null;
 }
 
 export interface JobsSummary {
@@ -680,5 +683,7 @@ export function jobsSummaryAggregates(summary: JobsSummary): PayrollAggregate[] 
     driven: Number(r.driven_hours) || 0,
     jobsDriven: Number(r.jobs_driven) || 0,
     jcfRaw: r.jcf_raw,
+    workedDates: r.worked_dates ?? null,
+    drivenDates: r.driven_dates ?? null,
   }));
 }

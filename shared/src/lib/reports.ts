@@ -499,7 +499,7 @@ export async function fetchReportsMetricsServer(opts: {
     employee_id: string; first_name: string; last_name: string; pay_rate: number | string;
     pay_type: string; overtime_eligible: boolean | null; overtime_threshold: number | string | null;
     overtime_multiplier: number | string | null; custom_fields: Record<string, unknown> | null;
-    worked_hours: number | string; driven_hours: number | string; jobs_driven: number | string;
+    worked_hours: number | string; driven_hours: number | string; jobs_driven: number | string; worked_dates?: string[] | null; driven_dates?: string[] | null;
     jcf_raw: Record<string, unknown[]> | null;
   }[]).map(r => ({
     employee: {
@@ -512,7 +512,7 @@ export async function fetchReportsMetricsServer(opts: {
     },
     worked: Number(r.worked_hours) || 0,
     driven: Number(r.driven_hours) || 0,
-    jobsDriven: Number(r.jobs_driven) || 0,
+    jobsDriven: Number(r.jobs_driven) || 0, workedDates: r.worked_dates ?? null, drivenDates: r.driven_dates ?? null,
     jcfRaw: r.jcf_raw,
   }));
   const payrollRows = computePayrollRowsFromAggregates({

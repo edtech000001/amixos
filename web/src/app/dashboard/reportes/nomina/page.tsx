@@ -157,7 +157,7 @@ export default function NominaPage() {
         pay_rate: number | string; pay_type: string; active: boolean | null;
         overtime_eligible: boolean | null; overtime_threshold: number | string | null;
         overtime_multiplier: number | string | null; custom_fields: Record<string, unknown> | null;
-        worked_hours: number | string; driven_hours: number | string; jobs_driven: number | string;
+        worked_hours: number | string; driven_hours: number | string; jobs_driven: number | string; worked_dates?: string[] | null; driven_dates?: string[] | null;
         jcf_raw: Record<string, unknown[]> | null; breakdown: PayrollBreakdown;
       };
       setInputs(((inputsRes.data ?? []) as Raw[]).map(r => ({
@@ -175,7 +175,7 @@ export default function NominaPage() {
         active: r.active !== false,
         worked: Number(r.worked_hours) || 0,
         driven: Number(r.driven_hours) || 0,
-        jobsDriven: Number(r.jobs_driven) || 0,
+        jobsDriven: Number(r.jobs_driven) || 0, workedDates: r.worked_dates ?? null, drivenDates: r.driven_dates ?? null,
         jcfRaw: r.jcf_raw,
         breakdown: r.breakdown,
       })));

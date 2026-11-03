@@ -240,12 +240,29 @@ export interface PayrollRow {
   formulaJobFields?: Record<string, number>;
 }
 
-/** Gross pay for a worker's hours, matching the reports estimate: hourly →
- *  hours×rate, daily → ceil(hours/8)×rate, salary → the flat rate. */
-export function payForHours(hours: number, payRate: number, payType: string): number {
+/** Gross pay for a worker's hours: hourly → hours×rate, daily → DAYS WORKED
+ *  ×rate (distinct dates with hours — see daysWorked), salary → the flat rate.
+ *  `days` missing = an old payroll RPC without dates (pre-268): falls back to
+ *  the former ceil(hours/8). */
+export function payForHours(hours: number, payRate: number, payType: string, days?: number): number {
   if (payType === 'hourly') return hours * payRate;
-  if (payType === 'daily') return Math.ceil(hours / 8) * payRate;
+  if (payType === 'daily') return (days ?? Math.ceil(hours / 8)) * payRate;
   return payRate; // salary — fixed per period
+}
+
+/** Distinct days worked — the daily-pay count. Driving days only count when
+ *  the driver mode folds driven hours into base hours ('same'), mirroring how
+ *  hours are credited. Null when the caller has no dates (old RPC). */
+export function daysWorked(
+  workedDates: readonly (string | null | undefined)[] | null | undefined,
+  drivenDates: readonly (string | null | undefined)[] | null | undefined,
+  driverMode: string,
+): number | undefined {
+  if (!workedDates) return undefined;
+  const days = new Set<string>();
+  for (const d of workedDates) if (d) days.add(d.slice(0, 10));
+  if (driverMode === 'same') for (const d of drivenDates ?? []) if (d) days.add(d.slice(0, 10));
+  return days.size;
 }
 
 function inRange(dateStr: string | null, startStr: string, endStr: string): boolean {
@@ -308,13 +325,22 @@ export function computePayrollRows(opts: {
   const workedById: Record<string, number> = {};
   const drivenById: Record<string, number> = {};
   const jobsDrivenById: Record<string, number> = {};
+  // Dates behind those hours — daily pay counts distinct days.
+  const workedDatesById: Record<string, string[]> = {};
+  const drivenDatesById: Record<string, string[]> = {};
   const add = (map: Record<string, number>, id: string | null | undefined, h: number) => {
     if (!id || !h) return;
     map[id] = (map[id] ?? 0) + h;
   };
+  const addDate = (map: Record<string, string[]>, id: string | null | undefined, d: string | null) => {
+    if (id && d) (map[id] ??= []).push(d);
+  };
 
   for (const ts of timesheets) {
-    if (inRange(ts.work_date, period.startStr, period.endStr)) add(workedById, ts.employee_id, ts.hours_worked ?? 0);
+    if (inRange(ts.work_date, period.startStr, period.endStr)) {
+      add(workedById, ts.employee_id, ts.hours_worked ?? 0);
+      if (ts.hours_worked) addDate(workedDatesById, ts.employee_id, ts.work_date);
+    }
   }
   // Job custom fields a formula reads: summed (or, for option-match reads,
   // counted) per worker over the jobs they were crewed on OR drove within
@@ -329,12 +355,13 @@ export function computePayrollRows(opts: {
     // job_assignments row from an import) must be credited the hours ONCE —
     // matching employeeBreakdownInRange, which uses .includes(). Without the
     // Set, the payroll card double-counts hours and OVERPAYS vs. the breakdown.
-    if (total) new Set(job.assignmentEmployeeIds).forEach(id => add(workedById, id, total));
+    if (total) new Set(job.assignmentEmployeeIds).forEach(id => { add(workedById, id, total); addDate(workedDatesById, id, job.scheduled_date); });
     const dh = job.driver_hours ?? 0;
     if (dh) {
       new Set(job.driver_employee_ids ?? []).forEach(id => {
         add(drivenById, id, dh);
         add(jobsDrivenById, id, 1);
+        addDate(drivenDatesById, id, job.scheduled_date);
       });
     }
     if (jcfRefs.length) {
@@ -354,7 +381,8 @@ export function computePayrollRows(opts: {
 
   const weeks = weeksInPeriod(period);
   const rows: PayrollRow[] = employees.map(e =>
-    payRowFor(e, workedById[e.id] ?? 0, drivenById[e.id] ?? 0, jobsDrivenById[e.id] ?? 0, jcfById[e.id] ?? {}, cfg, jcfRefs, weeks),
+    payRowFor(e, workedById[e.id] ?? 0, drivenById[e.id] ?? 0, jobsDrivenById[e.id] ?? 0, jcfById[e.id] ?? {}, cfg, jcfRefs, weeks,
+      daysWorked(workedDatesById[e.id] ?? [], drivenDatesById[e.id] ?? [], cfg.driver.mode)),
   );
 
   const filtered = includeZero
@@ -385,6 +413,7 @@ function payRowFor(
   cfg: PayrollConfig,
   jcfRefs: ReturnType<typeof formulaJobFieldRefs>,
   weeks: number,
+  days?: number,
 ): PayrollRow {
   // Driver component: 'same' folds driven hours into base hours (legacy);
   // the other modes pay them separately and keep them out of base/overtime.
@@ -407,7 +436,7 @@ function payRowFor(
     basePay = otThreshold * e.pay_rate;
     overtimePay = overtimeHours * e.pay_rate * otMultiplier;
   } else {
-    basePay = payForHours(baseHours, e.pay_rate, e.pay_type);
+    basePay = payForHours(baseHours, e.pay_rate, e.pay_type, days);
   }
 
   // Custom formula (hourly only): replaces the gross calc. The standard
@@ -475,6 +504,9 @@ export interface PayrollAggregate {
   jobsDriven: number;
   /** field_key → raw values, one per contributing job (crew ∪ drivers). */
   jcfRaw?: Record<string, unknown[]> | null;
+  /** Distinct work / driving dates (migration 268) — daily pay counts days. */
+  workedDates?: string[] | null;
+  drivenDates?: string[] | null;
 }
 
 export function computePayrollRowsFromAggregates(opts: {
@@ -500,7 +532,8 @@ export function computePayrollRowsFromAggregates(opts: {
         if (vals.length) jcf[fieldRefId(ref)] = sum;
       }
     }
-    return payRowFor(a.employee, a.worked, a.driven, a.jobsDriven, jcf, cfg, jcfRefs, weeks);
+    return payRowFor(a.employee, a.worked, a.driven, a.jobsDriven, jcf, cfg, jcfRefs, weeks,
+      daysWorked(a.workedDates, a.drivenDates, cfg.driver.mode));
   });
   const filtered = includeZero
     ? rows
@@ -673,7 +706,8 @@ export function estimateJobLaborCost(opts: {
       if (baseHours > 0) salariedCount += 1;
       cost = driverExtra;
     } else {
-      const basePay = payForHours(baseHours, e.pay_rate, e.pay_type);
+      // One job = one day for a daily worker who put hours on it.
+      const basePay = payForHours(baseHours, e.pay_rate, e.pay_type, baseHours > 0 ? 1 : 0);
       cost = basePay + driverExtra;
       // Custom pay formula (hourly only, like payRowFor) — evaluated with this
       // job's numbers; overtime vars are 0 (period-level, not per-job).
