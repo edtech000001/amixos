@@ -42,7 +42,9 @@ const BUBBLE_SIZE = 44;
 const BUBBLE_LIFT = 4;
 // Notch radius needs to be ≥ bubble radius so bubble fits cleanly in the
 // scoop. Slight margin (1–2px) gives a tiny visual breathing room.
-const NOTCH_RADIUS = 24;
+// 29 (vs the 22 bubble radius) leaves a visible ring of background around
+// the bead — the socket has to show for the meniscus motion to read.
+const NOTCH_RADIUS = 29;
 // Smaller flank = tighter, more circular notch. Larger = wider easing.
 const NOTCH_FLANK = 4;
 const CORNER_RADIUS = 12;
@@ -140,6 +142,21 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
   }
   const activeIndex = matched >= 0 ? matched : 0;
 
+  // Optimistic selection: the slot the user just tapped, shown (bubble, icon)
+  // BEFORE the navigation lands. Switching to a heavy screen (Jobs, Invoices)
+  // keeps JS busy building it, and the bubble used to wait for that — the
+  // dock lagged behind fast taps. Cleared once the navigator catches up, or
+  // reverted if the navigation never happens (e.g. "Keep editing").
+  const [optimisticIndex, setOptimisticIndex] = useState<number | null>(null);
+  const displayIndex = optimisticIndex ?? activeIndex;
+  const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (optimisticIndex !== null && activeIndex === optimisticIndex) {
+      setOptimisticIndex(null);
+      if (revertTimerRef.current) { clearTimeout(revertTimerRef.current); revertTimerRef.current = null; }
+    }
+  }, [activeIndex, optimisticIndex]);
+
   // Re-tapping the section you're already in takes you to its list (root) —
   // e.g. from an invoice detail or a half-filled "Nueva factura" form straight
   // to the invoice list. Pop the nested stack when it has history; otherwise
@@ -175,6 +192,12 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
   // transition window, and resolve "am I already here?" + the nested stack
   // from the navigator's LIVE state at press time, never the render snapshot.
   const lastPressRef = useRef(0);
+  const queuedPressRef = useRef<(() => void) | null>(null);
+  const queueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (queueTimerRef.current) clearTimeout(queueTimerRef.current);
+    if (revertTimerRef.current) clearTimeout(revertTimerRef.current);
+  }, []);
 
   // The dock is full-bleed (left:0/right:0), so the bar's width IS the window
   // width. Seeding from useWindowDimensions (instead of waiting for onLayout)
@@ -187,14 +210,20 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
   const numTabs = Math.max(1, visibleRoutes.length);
   const tabWidth = barWidth / numTabs;
   // Natural icon center (flex-1 distribution across full bar width)
-  const iconCenter = activeIndex * tabWidth + tabWidth / 2;
+  const iconCenter = displayIndex * tabWidth + tabWidth / 2;
   // Clamp bubble + notch into the bar's straight section. For middle tabs
   // this is a no-op; only first/last get a few px of inset.
   const minX = SAFE_EDGE;
   const maxX = Math.max(minX, barWidth - SAFE_EDGE);
   const targetX = Math.max(minX, Math.min(maxX, iconCenter));
 
-  const notchX = useSharedValue(targetX);
+  // "Meniscus" highlight: the bead (bubble) stays round and rides a FAST
+  // spring (posX), so it tracks your tap snappily. A SLOWER spring (lagX)
+  // trails it; their gap is the bead's velocity, and it leans the notch like
+  // liquid — the trailing shoulder draws out behind the bead, the leading one
+  // tightens — then relaxes as the two settle together.
+  const posX = useSharedValue(targetX);
+  const lagX = useSharedValue(targetX);
 
   // Tab changes glide; a width change (rotation) snaps — springing across a
   // resized bar reads as the bubble sliding in from the wrong place.
@@ -206,24 +235,50 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
   // and the icons overlap". One slot still glides: that's the motion the dock
   // is for, and it never crosses a third icon.
   const lastWidthRef = useRef(barWidth);
-  const lastIndexRef = useRef(activeIndex);
+  const lastIndexRef = useRef(displayIndex);
   const lastTabsRef = useRef(numTabs);
+  const lastTargetRef = useRef(targetX);
+  // The bead settles in ~0.2s; the surface lags a little behind it (only the
+  // notch SHAPE uses lagX, so the lag never slows the bead itself).
+  const LEAD = { damping: 20, stiffness: 520, mass: 0.5 };
+  // Underdamped a touch: the surface overshoots slightly and wobbles back.
+  const TRAIL = { damping: 13, stiffness: 110, mass: 0.6 };
+  const snapTo = (x: number) => { posX.value = x; lagX.value = x; };
+  const glideTo = (x: number) => {
+    posX.value = withSpring(x, LEAD);
+    lagX.value = withSpring(x, TRAIL);
+  };
+  /** Move the bubble to slot `i` — glide one slot, snap further (see above).
+   *  Called straight from the tap, so the UI-thread animation starts before
+   *  any navigation work. */
+  const moveBubbleTo = (i: number) => {
+    const x = Math.max(minX, Math.min(maxX, i * tabWidth + tabWidth / 2));
+    const jumped = Math.abs(i - lastIndexRef.current) > 1;
+    lastIndexRef.current = i;
+    lastTargetRef.current = x;
+    if (jumped) snapTo(x); else glideTo(x);
+  };
   useEffect(() => {
     if (!barWidth) return;
     const widthChanged = lastWidthRef.current !== barWidth;
     // Adding/removing a dock app re-slices the bar: every slot centre moves,
     // so an in-flight spring would land on the OLD geometry.
     const tabsChanged = lastTabsRef.current !== numTabs;
-    const jumped = Math.abs(activeIndex - lastIndexRef.current) > 1;
+    // Already heading there (moveBubbleTo ran on the tap) — re-issuing the
+    // spring would restart it from rest and visibly hitch.
+    if (!widthChanged && !tabsChanged && targetX === lastTargetRef.current) return;
+    const jumped = Math.abs(displayIndex - lastIndexRef.current) > 1;
     lastWidthRef.current = barWidth;
     lastTabsRef.current = numTabs;
-    lastIndexRef.current = activeIndex;
+    lastIndexRef.current = displayIndex;
+    lastTargetRef.current = targetX;
     if (widthChanged || tabsChanged || jumped) {
-      notchX.value = targetX;
+      snapTo(targetX);
       return;
     }
-    notchX.value = withSpring(targetX, { damping: 18, stiffness: 200, mass: 0.7 });
-  }, [targetX, barWidth, numTabs, activeIndex, notchX]);
+    glideTo(targetX);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetX, barWidth, numTabs, displayIndex]);
 
   const animatedPathProps = useAnimatedProps(() => {
     'worklet';
@@ -236,17 +291,28 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
     // Clamp the notch so it never crosses the rounded corners.
     const minX = cornerR + notchR + flank;
     const maxX = Math.max(minX, w - cornerR - notchR - flank);
-    const x = Math.max(minX, Math.min(maxX, notchX.value));
+    const x = Math.max(minX, Math.min(maxX, posX.value));
+    // Lean: how far (and which way) the bead is ahead of the surface, -1..1.
+    // Positive = moving right, so the LEFT shoulder is the trailing one.
+    const q = Math.max(-1, Math.min(1, (posX.value - lagX.value) / 36));
+    const mag = Math.abs(q);
+    // Shoulder = the run from the bar's top edge into the notch. At rest it's
+    // `flank` wide on both sides; in motion the trailing side draws out (up to
+    // ~5x) and the leading side tightens.
+    const S = flank * 1.5;
+    // …but never into the bar's rounded corners at either end.
+    const sL = Math.min(x - notchR - cornerR, Math.max(2, S * (1 + 0.8 * mag + 3.4 * q)));
+    const sR = Math.min(w - cornerR - x - notchR, Math.max(2, S * (1 + 0.8 * mag - 3.4 * q)));
 
     // Top-rounded corners (visible boundary with content above), notched top
     // edge for the bubble, and SQUARE bottom corners — the bottom merges
     // seamlessly with the solid-color safe-area filler below.
     const d =
       `M ${cornerR},0` +
-      ` L ${x - notchR - flank},0` +
+      ` L ${x - notchR - sL},0` +
       ` Q ${x - notchR},0 ${x - notchR + 2},${flank}` +
       ` A ${notchR},${notchR} 0 0 0 ${x + notchR - 2},${flank}` +
-      ` Q ${x + notchR},0 ${x + notchR + flank},0` +
+      ` Q ${x + notchR},0 ${x + notchR + sR},0` +
       ` L ${w - cornerR},0` +
       ` Q ${w},0 ${w},${cornerR}` +
       ` L ${w},${h}` +
@@ -259,7 +325,7 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
   });
 
   const bubbleStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: notchX.value - BUBBLE_SIZE / 2 }],
+    transform: [{ translateX: posX.value - BUBBLE_SIZE / 2 }],
   }));
 
   const handleLayout = (e: LayoutChangeEvent) => {
@@ -268,12 +334,12 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
       setBarWidth(w);
       // Snap to current position on first layout so bubble doesn't fly in.
       const tw = w / numTabs;
-      const c = activeIndex * tw + tw / 2;
-      notchX.value = Math.max(SAFE_EDGE, Math.min(w - SAFE_EDGE, c));
+      const c = displayIndex * tw + tw / 2;
+      snapTo(Math.max(SAFE_EDGE, Math.min(w - SAFE_EDGE, c)));
     }
   };
 
-  const activeVisibleRoute = visibleRoutes[activeIndex];
+  const activeVisibleRoute = visibleRoutes[displayIndex];
   const activeIcon = activeVisibleRoute
     ? descriptors[activeVisibleRoute.key].options.tabBarIcon
     : undefined;
@@ -334,13 +400,8 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
       >
         {visibleRoutes.map((route, i) => {
           const Icon = descriptors[route.key].options.tabBarIcon;
-          const isActive = i === activeIndex;
-          const onPress = () => {
-            // Debounce: a tap mid-transition would act on a half-applied
-            // navigation state (the "spam the dock" bug).
-            const now = Date.now();
-            if (now - lastPressRef.current < 350) return;
-            lastPressRef.current = now;
+          const isActive = i === displayIndex;
+          const performPress = () => {
             // Resolve focus + nested history from the LIVE navigator state —
             // the render-time `route`/`activeIndex` lag during transitions.
             const live = navigation.getState();
@@ -390,6 +451,41 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
               route.params,
             );
           };
+          const onPress = () => {
+            // Instant feedback: bubble + icon move NOW (UI thread), the
+            // navigation follows a frame later.
+            if (i !== displayIndex) {
+              setOptimisticIndex(i);
+              moveBubbleTo(i);
+              if (revertTimerRef.current) clearTimeout(revertTimerRef.current);
+              revertTimerRef.current = setTimeout(() => {
+                // Navigation never landed (unsaved-changes prompt → "Keep
+                // editing", or a refused tap): put the bubble back.
+                revertTimerRef.current = null;
+                setOptimisticIndex(null);
+              }, 2500);
+            }
+            // Taps inside the transition window act on a half-applied
+            // navigation state (the "spam the dock" bug) — so they're QUEUED,
+            // not dropped: the latest one runs once the window ends, and you
+            // always land on the last tab you tapped.
+            const wait = 350 - (Date.now() - lastPressRef.current);
+            if (wait > 0) {
+              queuedPressRef.current = performPress;
+              if (!queueTimerRef.current) {
+                queueTimerRef.current = setTimeout(() => {
+                  queueTimerRef.current = null;
+                  const run = queuedPressRef.current;
+                  queuedPressRef.current = null;
+                  if (run) { lastPressRef.current = Date.now(); run(); }
+                }, wait);
+              }
+              return;
+            }
+            lastPressRef.current = Date.now();
+            queuedPressRef.current = null;
+            requestAnimationFrame(performPress);
+          };
           return (
             <PressableScale
               key={route.key}
@@ -424,7 +520,6 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
            to that section's list (same as re-tapping its tab slot below). */}
         <PressableScale
           scaleTo={0.9}
-         
           onPress={() => {
             const r = visibleRoutes[activeIndex];
             if (r) resetSection(r);
