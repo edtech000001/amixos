@@ -238,11 +238,14 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
   const lastIndexRef = useRef(displayIndex);
   const lastTabsRef = useRef(numTabs);
   const lastTargetRef = useRef(targetX);
-  // The bead settles in ~0.2s; the surface lags a little behind it (only the
-  // notch SHAPE uses lagX, so the lag never slows the bead itself).
-  const LEAD = { damping: 20, stiffness: 520, mass: 0.5 };
-  // Underdamped a touch: the surface overshoots slightly and wobbles back.
-  const TRAIL = { damping: 13, stiffness: 110, mass: 0.6 };
+  // The bead glides over ~0.4s (at ~0.2s the motion was too quick to read);
+  // the surface lags further behind it and relaxes over ~0.6s — only the
+  // notch SHAPE uses lagX, so that lag never slows the bead itself.
+  // The FRONT of the drop darts to the new tab; the BACK follows clearly
+  // later and overshoots a little, so the drop stretches into a capsule,
+  // thins (keeps its "volume"), then catches up with a jiggle.
+  const LEAD = { damping: 17, stiffness: 260, mass: 0.6 };
+  const TRAIL = { damping: 11, stiffness: 85, mass: 0.7 };
   const snapTo = (x: number) => { posX.value = x; lagX.value = x; };
   const glideTo = (x: number) => {
     posX.value = withSpring(x, LEAD);
@@ -291,28 +294,36 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
     // Clamp the notch so it never crosses the rounded corners.
     const minX = cornerR + notchR + flank;
     const maxX = Math.max(minX, w - cornerR - notchR - flank);
-    const x = Math.max(minX, Math.min(maxX, posX.value));
-    // Lean: how far (and which way) the bead is ahead of the surface, -1..1.
-    // Positive = moving right, so the LEFT shoulder is the trailing one.
-    const q = Math.max(-1, Math.min(1, (posX.value - lagX.value) / 36));
+    // The drop spans between its front (posX) and back (lagX): two circle
+    // centres, `l` on the left and `r` on the right. At rest they coincide
+    // and this is the plain round notch.
+    const l = Math.max(minX, Math.min(maxX, Math.min(posX.value, lagX.value)));
+    const r = Math.max(l, Math.min(maxX, Math.max(posX.value, lagX.value)));
+    // Lean: which way it's moving and how hard, -1..1 (positive = right, so
+    // the LEFT shoulder trails and draws out).
+    const q = Math.max(-1, Math.min(1, (posX.value - lagX.value) / 40));
     const mag = Math.abs(q);
-    // Shoulder = the run from the bar's top edge into the notch. At rest it's
-    // `flank` wide on both sides; in motion the trailing side draws out (up to
-    // ~5x) and the leading side tightens.
     const S = flank * 1.5;
-    // …but never into the bar's rounded corners at either end.
-    const sL = Math.min(x - notchR - cornerR, Math.max(2, S * (1 + 0.8 * mag + 3.4 * q)));
-    const sR = Math.min(w - cornerR - x - notchR, Math.max(2, S * (1 + 0.8 * mag - 3.4 * q)));
+    // Shoulders never run into the bar's rounded corners.
+    const sL = Math.min(l - notchR - cornerR, Math.max(2, S * (1 + 0.8 * mag + 3 * q)));
+    const sR = Math.min(w - cornerR - r - notchR, Math.max(2, S * (1 + 0.8 * mag - 3 * q)));
+    // Lowest point of the notch circle (its arcs meet the edge 2px inside the
+    // radius at y=flank); a stretched notch runs flat between its two
+    // half-arcs at this depth.
+    const k = Math.sqrt(notchR * notchR - (notchR - 2) * (notchR - 2));
+    const by = flank - k + notchR;
 
     // Top-rounded corners (visible boundary with content above), notched top
-    // edge for the bubble, and SQUARE bottom corners — the bottom merges
+    // edge for the drop, and SQUARE bottom corners — the bottom merges
     // seamlessly with the solid-color safe-area filler below.
     const d =
       `M ${cornerR},0` +
-      ` L ${x - notchR - sL},0` +
-      ` Q ${x - notchR},0 ${x - notchR + 2},${flank}` +
-      ` A ${notchR},${notchR} 0 0 0 ${x + notchR - 2},${flank}` +
-      ` Q ${x + notchR},0 ${x + notchR + sR},0` +
+      ` L ${l - notchR - sL},0` +
+      ` Q ${l - notchR},0 ${l - notchR + 2},${flank}` +
+      ` A ${notchR},${notchR} 0 0 0 ${l},${by}` +
+      ` L ${r},${by}` +
+      ` A ${notchR},${notchR} 0 0 0 ${r + notchR - 2},${flank}` +
+      ` Q ${r + notchR},0 ${r + notchR + sR},0` +
       ` L ${w - cornerR},0` +
       ` Q ${w},0 ${w},${cornerR}` +
       ` L ${w},${h}` +
@@ -324,9 +335,22 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
     return { d };
   });
 
-  const bubbleStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: posX.value - BUBBLE_SIZE / 2 }],
-  }));
+  // The drop: a capsule from back to front. As it stretches it thins (up to
+  // ~20%, centred vertically) like liquid keeping its volume, then plumps
+  // back to a circle as the back catches up.
+  const bubbleStyle = useAnimatedStyle(() => {
+    const l = Math.min(posX.value, lagX.value);
+    const span = Math.abs(posX.value - lagX.value);
+    const thin = Math.min(0.2, span / (BUBBLE_SIZE * 3));
+    const hgt = BUBBLE_SIZE * (1 - thin);
+    return {
+      width: span + BUBBLE_SIZE,
+      height: hgt,
+      borderRadius: hgt / 2,
+      top: (BUBBLE_SIZE - hgt) / 2,
+      transform: [{ translateX: l - BUBBLE_SIZE / 2 }],
+    };
+  });
 
   const handleLayout = (e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
@@ -525,8 +549,9 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
             if (r) resetSection(r);
           }}
           style={{
-            width: BUBBLE_SIZE,
-            height: BUBBLE_SIZE,
+            // Fills the drop (bubbleStyle stretches/thins the container).
+            width: '100%',
+            height: '100%',
             borderRadius: BUBBLE_SIZE / 2,
             backgroundColor: BUBBLE_FILL,
             alignItems: 'center',
