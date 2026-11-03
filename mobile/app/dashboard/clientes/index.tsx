@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, InteractionManager, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -134,17 +134,30 @@ export default function ClientesTab() {
   // requests and the exposure to a stalled one.
   const excludeKey = excludeIds.join(',');
 
+  // Field templates + branch links. Runs on focus, so: at most once a minute
+  // per business/language, and an unchanged result keeps the SAME array —
+  // a fresh-but-equal one re-rendered the whole client list (~100ms in dev)
+  // on every dock switch.
+  const metaLoadedRef = useRef<{ key: string; at: number } | null>(null);
   const loadMeta = async () => {
     if (!business) return;
+    const metaKey = `${business.id}:${locale}`;
+    const last = metaLoadedRef.current;
+    if (last && last.key === metaKey && Date.now() - last.at < 60_000) return;
+    metaLoadedRef.current = { key: metaKey, at: Date.now() };
+    const same = <T,>(prev: T, next: T): T => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next);
     try {
       const tplRes = await supabase
         .from('client_field_templates')
         .select('field_key, field_label, field_label_es, field_label_en')
         .eq('business_id', business.id)
         .order('sort_order');
-      setTemplates(localizeTemplates((tplRes.data as { field_key: string; field_label: string }[] | null) ?? [], locale));
-    } catch { setLoadError(true); }
-    void fetchClientLocations(supabase, business.id).then(setClientLocations).catch(() => {});
+      const next = localizeTemplates((tplRes.data as { field_key: string; field_label: string }[] | null) ?? [], locale);
+      setTemplates(prev => same(prev, next));
+    } catch { setLoadError(true); metaLoadedRef.current = null; }
+    void fetchClientLocations(supabase, business.id)
+      .then(next => setClientLocations(prev => same(prev, next)))
+      .catch(() => {});
   };
 
   // The in-flight query's canceller. A new query (another keystroke, a regroup)
@@ -265,8 +278,10 @@ export default function ClientesTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, loadingMore, hasMore, serverTotal]);
 
+  const lastFilteredLoadRef = useRef<{ at: number; loc: string | null } | null>(null);
   const reRun = () => {
     if (defaultActive) { swr.refresh({ force: true }); return; }
+    lastFilteredLoadRef.current = { at: Date.now(), loc: activeLocationId ?? null };
     if (paramsRef.current) void runQuery(paramsRef.current, loadAllRef.current);
   };
   // Re-run when the branch scope changes (locations load, or branch switch).
@@ -295,11 +310,21 @@ export default function ClientesTab() {
 
   // Refresh templates/locations + the current query on focus so edits / new
   // clients / deletes from sub-pages show up. Keyed on business + locale.
+  // Revalidate on focus — AFTER the tab has painted (InteractionManager), so a
+  // dock switch never waits on it. The default view is SWR-throttled (15s);
+  // a filtered view used to re-run its full query (skeleton flash) on EVERY
+  // switch — now it's skipped when this view loaded <15s ago for the same
+  // branch. Changing a filter / pull-to-refresh still load immediately.
   useFocusEffect(
     useCallback(() => {
-      void loadMeta();
-      if (defaultActive) swr.refresh(); // throttled, never blanks
-      else reRun();
+      const task = InteractionManager.runAfterInteractions(() => {
+        void loadMeta();
+        if (defaultActive) { swr.refresh(); return; } // throttled, never blanks
+        const last = lastFilteredLoadRef.current;
+        if (last && last.loc === (activeLocationId ?? null) && Date.now() - last.at < 15_000) return;
+        reRun();
+      });
+      return () => task.cancel();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [business, locale, activeLocationId, defaultActive]),
   );

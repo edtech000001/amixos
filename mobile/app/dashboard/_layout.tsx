@@ -195,6 +195,9 @@ function DashboardTabs() {
           backBehavior="history"
           screenOptions={{
             headerShown: false,
+            // NOT freezeOnBlur: with rapid dock switching it left a frozen
+            // screen on display under a different selected tab (bubble on
+            // Home, Invoices still showing).
           }}
         >
           <Tabs.Screen

@@ -231,10 +231,28 @@ export function useSwr<T>(
   const throttleMs = opts?.focusThrottleMs ?? 15_000;
 
   const [data, setData] = useState<T | null>(null);
-  const [fetching, setFetching] = useState(false);
+  // `fetching` drives `loading` (no data yet) and `refreshing` (background
+  // revalidation). Flipping it re-rendered the whole host screen twice on
+  // EVERY focus refresh — for screens that never show `refreshing`, that was
+  // two full list renders per dock switch for nothing. So, like SWR's
+  // dependency tracking: the state only updates while there's no data (the
+  // skeleton needs it) or once the caller has actually read `refreshing`.
+  const [fetchingState, setFetchingState] = useState<boolean>(false);
+  const fetchingRef = useRef<boolean>(false);
+  const readsRefreshingRef = useRef(false);
+  const setFetching = (v: boolean) => {
+    fetchingRef.current = v;
+    if (dataRef.current === null || readsRefreshingRef.current) setFetchingState(v);
+  };
+  void fetchingState;
   const [stale, setStale] = useState(false);
   const [verified, setVerified] = useState(false);
-  const [cachedAt, setCachedAt] = useState<number | null>(null);
+  const [cachedAtState, setCachedAtState] = useState<number | null>(null);
+  // Read through a ref so an unchanged revalidation can refresh it silently.
+  const cachedAtRef = useRef<number | null>(null);
+  const setCachedAt = (v: number | null) => { cachedAtRef.current = v; setCachedAtState(v); };
+  const setCachedAtSilently = (v: number) => { cachedAtRef.current = v; };
+  void cachedAtState;
   const [error, setError] = useState<unknown>(null);
 
   // Latest values for async callbacks (avoids stale closures without re-running
@@ -260,11 +278,21 @@ export function useSwr<T>(
 
   const applyFresh = useCallback((key: string, fresh: T, stampBeforeFetch: Promise<string | null> | null) => {
     if (fetchKeyRef.current !== key) return; // params moved on — drop
-    setData(fresh);
-    dataRef.current = fresh;
-    dataKeyRef.current = key;
+    // A revalidation that returns exactly what's on screen keeps the SAME
+    // object: a new-but-equal one re-rendered the whole list (every row) on
+    // each focus refresh — the bulk of a dock switch's cost. cachedAt is then
+    // bumped without a render (only shown while stale; read on next render).
+    const unchanged = dataKeyRef.current === key && dataRef.current !== null
+      && JSON.stringify(dataRef.current) === JSON.stringify(fresh);
+    if (!unchanged) {
+      setData(fresh);
+      dataRef.current = fresh;
+      dataKeyRef.current = key;
+      setCachedAt(Date.now());
+    } else {
+      setCachedAtSilently(Date.now());
+    }
     setStale(false);
-    setCachedAt(Date.now());
     setError(null);
     const ck = cacheKeyRef.current;
     if (ck) {
@@ -398,10 +426,13 @@ export function useSwr<T>(
   return {
     data,
     verified,
-    loading: fetching && data === null,
-    refreshing: fetching && data !== null,
+    loading: fetchingRef.current && data === null,
+    get refreshing() {
+      readsRefreshingRef.current = true;
+      return fetchingRef.current && data !== null;
+    },
     stale,
-    cachedAt,
+    cachedAt: cachedAtRef.current,
     error,
     refresh,
     mutate,

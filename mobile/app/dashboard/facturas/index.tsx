@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ownAndClientPays } from '@amixos/shared/lib/invoiceBillThrough';
-import { Alert, View } from 'react-native';
+import { Alert, InteractionManager, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -308,9 +308,11 @@ export default function FacturasTab() {
     finally { if (seq === loadSeqRef.current) setLoading(false); }
   };
 
+  const lastFilteredLoadRef = useRef<{ at: number; loc: string | null } | null>(null);
   const reRun = (locationId: string | null) => {
     if (defaultActive) { swr.refresh({ force: true }); return; }
     if (!paramsRef.current) return;
+    lastFilteredLoadRef.current = { at: Date.now(), loc: locationId };
     const p = { ...paramsRef.current, locationId };
     if (modeRef.current === 'group') void runGroupLazy(p);
     else void runQuery(p, loadAllRef.current);
@@ -320,10 +322,19 @@ export default function FacturasTab() {
     if (!defaultActive) reRun(activeLocationId ?? null); // SWR key covers the default view
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLocationId]);
-  // Revalidate on focus — throttled, never blanks.
+  // Revalidate on focus — AFTER the tab has painted (InteractionManager), so a
+  // dock switch never waits on it. The default view is SWR-throttled (15s);
+  // a filtered view used to re-run its full query (skeleton flash) on EVERY
+  // switch — now it's skipped when this view loaded <15s ago for the same
+  // branch. Changing a filter / pull-to-refresh still load immediately.
   useFocusEffect(useCallback(() => {
-    if (defaultActive) swr.refresh();
-    else reload();
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (defaultActive) { swr.refresh(); return; }
+      const last = lastFilteredLoadRef.current;
+      if (last && last.loc === (activeLocationId ?? null) && Date.now() - last.at < 15_000) return;
+      reload();
+    });
+    return () => task.cancel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLocationId, defaultActive]));
 
