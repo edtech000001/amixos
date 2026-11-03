@@ -3,6 +3,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { todayLocalISO } from './format';
 export type EmployeeEventType =
   | 'hired'
   | 'pay_change'
@@ -45,7 +46,7 @@ export async function logEmployeeMilestone(
     employee_id: employeeId,
     event_type: eventType,
     details,
-    effective_date: effectiveDate ?? new Date().toISOString().split('T')[0],
+    effective_date: effectiveDate ?? todayLocalISO(),
     created_by: createdBy ?? null,
   });
 }

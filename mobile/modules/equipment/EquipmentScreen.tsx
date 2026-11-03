@@ -62,8 +62,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { LocationSwitcher } from '@/components/LocationSwitcher';
 import { createSupabaseClient } from '@/lib/supabase';
-import { writeCached } from '@/lib/offline/cache';
-import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
+import { swrPatch, swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
 import { queuedInsert, queuedUpdate, queuedDelete, queuedUpload } from '@/lib/offline/mutate';
 import { newUuid } from '@/lib/offline/ids';
 import { isOnlineNow } from '@/lib/offline/network';
@@ -112,6 +111,9 @@ import {
 } from '@amixos/shared/lib/equipmentGroups';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMoreBack } from '@/lib/useMoreBack';
+
+/** Default-view list snapshot (cache-first load). */
+type EquipmentCache = { items: Equipment[]; nextCursor: EquipmentCursor | null; total: number };
 
 interface EmployeeOption {
   id: string;
@@ -328,6 +330,7 @@ export default function EquipmentScreen() {
   const { width: screenW, height: screenH } = useWindowDimensions();
   const supabase = createSupabaseClient();
   const { business, user, locations, activeLocationId, myHomeLocationId, currentRole } = useApp();
+  const equipmentCacheKey = () => `equipment_v2_${business?.id ?? ''}_${activeLocationId ?? 'all'}`;
   // Equipment maps to the inventory permission per the role matrix. Read-only
   // roles keep view access; add/edit/delete + photo management are gated off
   // (RLS blocks the writes server-side either way).
@@ -537,9 +540,9 @@ export default function EquipmentScreen() {
     try {
       if (isDefault) {
         // Cache-first: paint the last snapshot instantly, then fetch fresh.
-        const cacheKey = `equipment_v2_${business.id}_${activeLocationId ?? 'all'}`;
+        const cacheKey = equipmentCacheKey();
         if (!hydratedRef.current) {
-          const cached = await swrRead<{ items: Equipment[]; nextCursor: EquipmentCursor | null; total: number }>(cacheKey);
+          const cached = await swrRead<EquipmentCache>(cacheKey);
           if (cached?.data && seq === loadSeqRef.current && !hydratedRef.current) {
             hydratedRef.current = true;
             setEquipment(cached.data.items);
@@ -792,13 +795,13 @@ export default function EquipmentScreen() {
       setPendingPhotos([]);
     }
     // Optimistic local + cache so the change shows offline.
-    setEquipment(prev => {
-      const next = isAdd
-        ? [{ ...payload, id, created_by: user?.id ?? null } as Equipment, ...prev]
-        : prev.map(e => (e.id === id ? ({ ...e, ...payload } as Equipment) : e));
-      void writeCached(`equipment_${business.id}`, next);
-      return next;
-    });
+    const row = { ...payload, id, created_by: user?.id ?? null } as Equipment;
+    const apply = (list: Equipment[]) => isAdd
+      ? [row, ...list]
+      : list.map(e => (e.id === id ? ({ ...e, ...payload } as Equipment) : e));
+    setEquipment(apply);
+    // Same key the list hydrates from (see load) — so it survives leaving the screen.
+    void swrPatch<EquipmentCache>(equipmentCacheKey(), d => ({ ...d, items: apply(d.items), total: d.total + (isAdd ? 1 : 0) }));
     setSaving(false);
     setModal(null);
     setSelected(null);
@@ -818,11 +821,8 @@ export default function EquipmentScreen() {
       await queuedDelete({ table: 'equipment', match: { id: delId }, businessId: business?.id ?? null, label: 'Eliminar equipo' });
     } catch { setDeleting(false); return; }
     if (business) {
-      setEquipment(prev => {
-        const next = prev.filter(e => e.id !== delId);
-        void writeCached(`equipment_${business.id}`, next);
-        return next;
-      });
+      setEquipment(prev => prev.filter(e => e.id !== delId));
+      void swrPatch<EquipmentCache>(equipmentCacheKey(), d => ({ ...d, items: d.items.filter(e => e.id !== delId), total: Math.max(0, d.total - 1) }));
     }
     setDeleting(false);
     setConfirmingDelete(false);

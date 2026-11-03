@@ -1,3 +1,4 @@
+import './lib/asyncErrors'; // first: patches Express before routers register handlers
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';

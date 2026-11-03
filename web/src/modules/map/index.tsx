@@ -20,7 +20,7 @@ import { Users, Briefcase, UserCircle2, X, Settings as SettingsIcon, Search as S
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
-import { formatRelativeLong, type RelativeTimeLabels } from '@amixos/shared/lib/format';
+import { formatRelativeLong, type RelativeTimeLabels, todayLocalISO } from '@amixos/shared/lib/format';
 import { useContactOutcomePrompt, type FireContactArgs } from '@/modules/communications/useContactOutcomePrompt';
 import type { MapPinIcon as MapPinIconKey } from '@amixos/shared/lib/mapPinPresets';
 import { resolvePinStyle } from '@amixos/shared/lib/mapPinResolve';
@@ -357,7 +357,7 @@ export default function MapModule() {
     setLoading(true);
     try {
       const jwt = await getJwt();
-      const r = await fetch(`${apiBaseUrl}/api/v1/map/pins?business_id=${business.id}`, {
+      const r = await fetch(`${apiBaseUrl}/api/v1/map/pins?business_id=${business.id}&date=${todayLocalISO()}`, {
         headers: { Authorization: `Bearer ${jwt}` },
       });
       if (r.ok) {

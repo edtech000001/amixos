@@ -21,6 +21,7 @@ import {
 } from './invoicing';
 import { invoiceDefaultLanguage, nextInvoiceNumber, resolveLineDescriptions } from './invoiceTemplate';
 
+import { todayLocalISO } from './format';
 type Supa = { from: (table: string) => any };
 
 export interface BillThroughTarget {
@@ -228,8 +229,8 @@ export interface BillThroughOpts {
   allowDuplicate?: boolean;
 }
 
-const today = () => new Date().toISOString().split('T')[0];
-const plusDays = (n: number) => new Date(Date.now() + n * 86400000).toISOString().split('T')[0];
+const today = () => todayLocalISO();
+const plusDays = (n: number) => todayLocalISO(n);
 
 /** Lines of `inv` already billed through from `sourceInvoiceId`. */
 function hasLinesFrom(items: InvoiceLineItem[], sourceInvoiceId: string): boolean {

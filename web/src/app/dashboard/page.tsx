@@ -55,6 +55,7 @@ import { can, isFieldOnly } from '@amixos/shared/lib/permissions';
 import { FieldHome } from '@/components/dashboard/FieldHome';
 import { OwedByPartnersCard } from '@/components/dashboard/OwedByPartnersCard';
 
+import { todayLocalISO } from '@amixos/shared/lib/format';
 const formatCurrency = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
@@ -391,7 +392,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!business) return;
     const flagKey = `overdue_checked_${business.id}`;
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayLocalISO();
     void kvGet(flagKey).then(async (last) => {
       if (last === today) return;
       await supabase.from('invoices')
@@ -435,7 +436,7 @@ export default function DashboardPage() {
       const now = new Date();
       const startMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       const startYear = new Date(now.getFullYear(), 0, 1).toISOString();
-      const today = now.toISOString().split('T')[0];
+      const today = todayLocalISO();
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
       // Branch scope for the bounded list queries. Rows with a NULL
       // location belong to no branch, so a branch view excludes them —

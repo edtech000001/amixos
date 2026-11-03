@@ -34,6 +34,7 @@ import { confirm } from '@amixos/shared/ui/confirmBus';
 import { useScrollRestore, saveScrollAnchor } from '@/lib/useScrollRestore';
 import { collectFromPartner, businessUsesBillThrough, businessUsesBillThroughCached, type BillThroughLink } from '@amixos/shared/lib/invoiceBillThrough';
 
+import { todayLocalISO } from '@amixos/shared/lib/format';
 interface InvoiceClient { first_name: string; last_name: string; company: string | null; state: string | null }
 interface RawInvoice {
   id: string;
@@ -150,7 +151,7 @@ export default function FacturasPage() {
   const maybeSweep = async (businessId: string) => {
     if (sweptRef.current === businessId) return;
     sweptRef.current = businessId;
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayLocalISO();
     await supabase.from('invoices').update({ status: 'overdue' })
       .eq('business_id', businessId).eq('status', 'sent').lt('due_date', today);
     // …and the reverse: an invoice whose due date was pushed back into the

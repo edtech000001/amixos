@@ -143,6 +143,7 @@ import { SortableList } from '@/components/SortableList';
 import { useRouter } from 'expo-router';
 import { ChevronUp, ChevronDown, ChevronRight, Palette, Sparkles, GripVertical, FolderInput, CreditCard, ExternalLink, Send } from 'lucide-react-native';
 
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 type FieldType = 'text' | 'note' | 'number' | 'date' | 'boolean' | 'select';
 
 interface FieldTemplate {
@@ -4225,18 +4226,15 @@ function GoogleSyncSection() {
     // notes template now renders on both surfaces (the parent client's
     // rendered template gets appended to each contact's bio), so the
     // reapply flow has to cover both to keep them in sync.
-    const [clientsRes, contactsRes] = await Promise.all([
-      supabase
-        .from('clients')
-        .select('id')
-        .eq('business_id', businessId)
-        .not('google_resource_name', 'is', null),
-      supabase
-        .from('client_contacts')
-        .select('id')
-        .eq('business_id', businessId)
-        .not('google_resource_name', 'is', null),
-    ]);
+    // Paged: a plain select stops at 1000 synced rows (PostgREST cap).
+    const syncedIds = (table: 'clients' | 'client_contacts') =>
+      fetchAllById<{ id: string }>((afterId, pageSize) => {
+        let q = supabase.from(table).select('id').eq('business_id', businessId)
+          .not('google_resource_name', 'is', null).order('id', { ascending: true }).limit(pageSize);
+        if (afterId) q = q.gt('id', afterId);
+        return q;
+      }).then(data => ({ data }));
+    const [clientsRes, contactsRes] = await Promise.all([syncedIds('clients'), syncedIds('client_contacts')]);
     const clientIds = ((clientsRes.data as { id: string }[] | null) ?? []).map(r => r.id);
     const contactIds = ((contactsRes.data as { id: string }[] | null) ?? []).map(r => r.id);
     const total = clientIds.length + contactIds.length;

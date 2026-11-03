@@ -14,6 +14,7 @@
 // @supabase versions and we don't want this module coupled to either.
 
 import { fetchAll } from './supabaseFetch';
+import { todayLocalISO } from './format';
 import {
   getPayrollPeriod,
   normalizeFrequency,
@@ -437,7 +438,7 @@ export async function updateFieldJobStatus(
 ): Promise<boolean> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const update: Record<string, any> = { status };
-  if (status === 'completed') update.completed_date = new Date().toISOString().split('T')[0];
+  if (status === 'completed') update.completed_date = todayLocalISO();
   const { error } = await supabase.from('jobs').update(update).eq('id', jobId);
   return !error;
 }

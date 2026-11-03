@@ -413,9 +413,9 @@ function NuevoTrabajoContent() {
 
   // Proposal-only fields
   const [clientNotes, setClientNotes] = useState('');
-  const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
+  const [issueDate, setIssueDate] = useState(todayLocalISO());
   const [expiryDate, setExpiryDate] = useState(
-    new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
+    todayLocalISO(30)
   );
   const [taxRate, setTaxRate] = useState(0);
   const [discount, setDiscount] = useState(0);
@@ -981,7 +981,7 @@ function NuevoTrabajoContent() {
             // A duplicated proposal is a new proposal: keep today's issue
             // date + default expiry instead of copying the source's.
             if (editId) {
-              setIssueDate(job.issue_date || new Date().toISOString().split('T')[0]);
+              setIssueDate(job.issue_date || todayLocalISO());
               setExpiryDate(job.expiry_date || '');
             }
             setTaxRate(job.tax_rate || 0);

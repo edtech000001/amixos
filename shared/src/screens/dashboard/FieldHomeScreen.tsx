@@ -6,6 +6,7 @@ import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { formatHours, type FieldHomeJob, type FieldHomeStats, type OpenTimesheet } from '../../lib/fieldHome';
 
+import { todayLocalISO } from '../../lib/format';
 type HoursView = 'active' | 'week' | 'month';
 
 // Purpose-built home for the "field" role (crew). Presentational — the mobile
@@ -97,7 +98,7 @@ export function FieldHomeScreen({
     return new Intl.DateTimeFormat(t.dateLocale, { day: 'numeric', month: 'short' }).format(date);
   };
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = todayLocalISO();
   const todayJobs = jobs.filter(j => j.scheduledDate === todayStr);
   const upcomingJobs = jobs.filter(j => !j.scheduledDate || j.scheduledDate > todayStr);
 

@@ -342,15 +342,15 @@ export default function NominaRoute() {
 
   // Each confirm ADDS a payment record (ledger) — partial checks stack up
   // within the period. Requires migration 126 (drops the one-per-period key).
-  const onMarkPaid = async (employeeId: string, method: 'cash' | 'check', checkNumber: string, bonus: number, amount: number, hoursCovered: number, components: Record<string, number> | null, periodStart?: string) => {
-    if (!business) return;
+  const onMarkPaid = async (employeeId: string, method: 'cash' | 'check', checkNumber: string, bonus: number, amount: number, hoursCovered: number, components: Record<string, number> | null, periodStart?: string): Promise<boolean> => {
+    if (!business) return false;
     const row = rows.find(r => r.employeeId === employeeId);
     setBusy(true);
     // Manual payments may target a PAST period — resolve its exact bounds.
     const target = periodStart && periodStart !== period.startStr
       ? getPayrollPeriod(frequency, new Date(`${periodStart}T00:00:00`), 0, parsePayrollAnchor(anchorDate), customDays)
       : period;
-    await supabase.from('payroll_payments').insert({
+    const { error } = await supabase.from('payroll_payments').insert({
       business_id: business.id,
       employee_id: employeeId,
       period_start: target.startStr,
@@ -373,6 +373,8 @@ export default function NominaRoute() {
           })).data ?? null,
       created_by: user?.id ?? null,
     });
+    // A failed insert must not look paid (or trigger the loan deduction).
+    if (error) { setBusy(false); Alert.alert('Error', error.message); return false; }
     const emp = employees.find(e => e.id === employeeId);
     haptics.success();
     void logAudit(supabase, business.id, 'payroll.paid', 'payroll', employeeId, {
@@ -383,6 +385,7 @@ export default function NominaRoute() {
     });
     await load();
     setBusy(false);
+    return true;
   };
 
   const onDeletePayment = async (paymentId: string) => {

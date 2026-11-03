@@ -686,7 +686,7 @@ export default function FacturaDetailRoute() {
     setPayAmount(remaining > 0 ? String(Math.round(remaining * 100) / 100) : '');
     setPayMethodKey(DEFAULT_PAY_METHOD);
     setPayMethodOther('');
-    setPayDate(new Date().toISOString().slice(0, 10));
+    setPayDate(todayLocalISO());
     setPayPhotoUri(null);
     setPayPhotoPath(null);
     setPayPhotoExistingUrl(null);
@@ -762,7 +762,7 @@ export default function FacturaDetailRoute() {
       // Previous photo from the ROW (the remove handler nulls payPhotoPath).
       const prevPath = payments.find((pp) => pp.id === payEditId)?.photoPath ?? null;
       const { error } = await supabase.from('invoice_payments')
-        .update({ amount, method, paid_on: payDate || new Date().toISOString().slice(0, 10), ...(writePhoto ? { photo_path: photoPath } : {}) })
+        .update({ amount, method, paid_on: payDate || todayLocalISO(), ...(writePhoto ? { photo_path: photoPath } : {}) })
         .eq('id', payEditId);
       if (error) {
         // Row write failed after a successful upload → don't strand the file.
@@ -785,7 +785,7 @@ export default function FacturaDetailRoute() {
       invoice_id: id,
       amount,
       method,
-      paid_on: payDate || new Date().toISOString().slice(0, 10),
+      paid_on: payDate || todayLocalISO(),
       ...(writePhoto ? { photo_path: photoPath } : {}),
     });
     if (error) { setPayBusy(false); return; }

@@ -25,6 +25,7 @@ import { TrialBanner } from '@/components/TrialBanner';
 import { useAppHref } from '@/lib/sectionNav';
 import { OwedByPartnersCard } from '@/components/OwedByPartnersCard';
 
+import { todayLocalISO } from '@amixos/shared/lib/format';
 // Field crew get a purpose-built home (assigned jobs + clock in/out) instead
 // of the owner's widget grid. Branch once the role is known.
 export default function DashboardHome() {
@@ -98,7 +99,7 @@ function OwnerDashboardHome() {
   useEffect(() => {
     if (!business) return;
     const flagKey = `overdue_checked_${business.id}`;
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayLocalISO();
     void kvGet(flagKey).then(async (last) => {
       if (last === today) return;
       await supabase.from('invoices')
@@ -132,7 +133,7 @@ function OwnerDashboardHome() {
       const now = new Date();
       const startMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       const startYear = new Date(now.getFullYear(), 0, 1).toISOString();
-      const today = now.toISOString().split('T')[0];
+      const today = todayLocalISO();
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
       // Branch scope for the bounded list queries. Rows with a NULL
       // location belong to no branch, so a branch view excludes them —

@@ -115,6 +115,7 @@ import { PasteHint } from '@/components/ui/PasteHint';
 import { BillThroughSettingCard } from '@/components/settings/BillThroughSettingCard';
 import { AiConsentCard } from '@/components/settings/AiConsentCard';
 import { Tooltip } from '@amixos/shared/ui/Tooltip';
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import {
   activePlanKey,
   isTrialExpired,
@@ -4823,18 +4824,15 @@ function GoogleSyncCard() {
     if (!businessId) return;
     // Synced clients AND synced client_contacts — see mobile equivalent
     // for why both are needed (template renders on contact bios too).
-    const [clientsRes, contactsRes] = await Promise.all([
-      supabase
-        .from('clients')
-        .select('id')
-        .eq('business_id', businessId)
-        .not('google_resource_name', 'is', null),
-      supabase
-        .from('client_contacts')
-        .select('id')
-        .eq('business_id', businessId)
-        .not('google_resource_name', 'is', null),
-    ]);
+    // Paged: a plain select stops at 1000 synced rows (PostgREST cap).
+    const syncedIds = (table: 'clients' | 'client_contacts') =>
+      fetchAllById<{ id: string }>((afterId, pageSize) => {
+        let q = supabase.from(table).select('id').eq('business_id', businessId)
+          .not('google_resource_name', 'is', null).order('id', { ascending: true }).limit(pageSize);
+        if (afterId) q = q.gt('id', afterId);
+        return q;
+      }).then(data => ({ data }));
+    const [clientsRes, contactsRes] = await Promise.all([syncedIds('clients'), syncedIds('client_contacts')]);
     const clientIds = ((clientsRes.data as { id: string }[] | null) ?? []).map(r => r.id);
     const contactIds = ((contactsRes.data as { id: string }[] | null) ?? []).map(r => r.id);
     const total = clientIds.length + contactIds.length;

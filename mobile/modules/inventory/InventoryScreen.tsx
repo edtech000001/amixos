@@ -4,8 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TrendingUp, TrendingDown, ScanLine, Sparkles, X } from 'lucide-react-native';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { createSupabaseClient } from '@/lib/supabase';
-import { writeCached } from '@/lib/offline/cache';
-import { useSwr } from '@amixos/shared/lib/swrCache';
+import { useSwr, swrPatch } from '@amixos/shared/lib/swrCache';
 import { queuedInsert, queuedUpdate, queuedDelete } from '@/lib/offline/mutate';
 import { newUuid } from '@/lib/offline/ids';
 import { useApp } from '@/lib/AppContext';
@@ -112,7 +111,9 @@ export default function InventoryModuleScreen() {
   const [invFilters, setInvFilters] = useState<{ search: string; lowStockOnly: boolean } | null>(null);
   const defaultActive = !!business && !!invFilters && !invFilters.search && !invFilters.lowStockOnly;
   type InvPayload = { items: RawItem[]; nextCursor: InventoryCursor | null; stats: InventoryStats };
-  const swrKey = defaultActive ? `inventory_v2_${business.id}_${activeLocationId ?? 'all'}` : null;
+  // The list snapshot key; optimistic writes patch it even while a filter is on.
+  const invCacheKey = `inventory_v2_${business?.id ?? ''}_${activeLocationId ?? 'all'}`;
+  const swrKey = defaultActive ? invCacheKey : null;
   const swr = useSwr<InvPayload>(
     swrKey,
     async () => {
@@ -260,13 +261,12 @@ export default function InventoryModuleScreen() {
       }
     } catch { setError(t.modal.errorSave); setSaving(false); return; }
     // Optimistic local + cache so the change shows offline.
-    setItems(prev => {
-      const next = isEdit
-        ? prev.map(i => (i.id === id ? ({ ...i, ...payload } as RawItem) : i))
-        : [{ ...payload, id, business_id: business.id } as RawItem, ...prev];
-      void writeCached(`inventory_${business.id}`, next);
-      return next;
-    });
+    const row = { ...payload, id, business_id: business.id } as RawItem;
+    const apply = (list: RawItem[]) => isEdit
+      ? list.map(i => (i.id === id ? ({ ...i, ...payload } as RawItem) : i))
+      : [row, ...list];
+    setItems(apply);
+    void swrPatch<InvPayload>(invCacheKey, d => ({ ...d, items: apply(d.items) }));
     setSaving(false);
     setModal(null);
   };
@@ -280,11 +280,9 @@ export default function InventoryModuleScreen() {
     try {
       await queuedUpdate({ table: 'inventory_items', match: { id: selected.id }, payload: { quantity: newQty }, businessId: business?.id ?? null, label: `Inventario: ${selected.name}` });
     } catch { setSaving(false); return; }
-    setItems(prev => {
-      const next = prev.map(i => (i.id === selected.id ? { ...i, quantity: newQty } : i));
-      if (business) void writeCached(`inventory_${business.id}`, next);
-      return next;
-    });
+    const adjustOne = (list: RawItem[]) => list.map(i => (i.id === selected.id ? { ...i, quantity: newQty } : i));
+    setItems(adjustOne);
+    void swrPatch<InvPayload>(invCacheKey, d => ({ ...d, items: adjustOne(d.items) }));
     setSaving(false);
     setModal(null);
   };
@@ -299,11 +297,8 @@ export default function InventoryModuleScreen() {
           try {
             await queuedDelete({ table: 'inventory_items', match: { id }, businessId: business?.id ?? null, label: 'Eliminar inventario' });
           } catch { return; }
-          setItems(prev => {
-            const next = prev.filter(i => i.id !== id);
-            if (business) void writeCached(`inventory_${business.id}`, next);
-            return next;
-          });
+          setItems(prev => prev.filter(i => i.id !== id));
+          void swrPatch<InvPayload>(invCacheKey, d => ({ ...d, items: d.items.filter(i => i.id !== id) }));
         },
       },
     ]);

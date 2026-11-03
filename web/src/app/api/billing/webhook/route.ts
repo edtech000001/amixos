@@ -109,12 +109,16 @@ export async function POST(req: Request) {
         const sub = event.data.object as Stripe.Subscription;
         const businessId = sub.metadata?.business_id;
         if (businessId) {
-          const { error } = await admin
+          // Only when it's the business's CURRENT subscription — deleting an
+          // old/replaced one must not cancel the plan they're paying for now.
+          const { data: updated, error } = await admin
             .from('businesses')
             .update({ subscription_status: 'canceled' })
-            .eq('id', businessId);
+            .eq('id', businessId)
+            .or(`stripe_subscription_id.eq.${sub.id},stripe_subscription_id.is.null`)
+            .select('id');
           if (error) throw error;
-          await trackLapse(businessId, 'canceled');
+          if (updated?.length) await trackLapse(businessId, 'canceled');
         }
         break;
       }

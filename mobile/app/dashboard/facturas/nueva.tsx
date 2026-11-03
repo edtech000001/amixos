@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PassthroughTag } from '@amixos/shared/lib/invoicing';
 import { SkeletonBlock, SkeletonCard } from '@amixos/shared/ui/Skeleton';
-import { formatMoneyInput, formatNumberGrouped } from '@amixos/shared/lib/format';
+import { formatMoneyInput, formatNumberGrouped, todayLocalISO } from '@amixos/shared/lib/format';
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ import {
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { computeTotals, insertInvoiceUnique, previewInvoiceNumber, type InvoiceLineItem } from '@amixos/shared/lib/invoicing';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
@@ -95,7 +96,7 @@ const newLine = (): LineItem => ({ id: newId(), description: '', qty: 1, rate: 0
 const fmtMoney = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 
-const todayISO = () => new Date().toISOString().split('T')[0];
+const todayISO = () => todayLocalISO();
 // Add `days` to a "YYYY-MM-DD" date (parsed as local to avoid UTC drift).
 function addDaysISO(iso: string, days: number): string {
   const [y, m, d] = iso.split('-').map(Number);
@@ -240,11 +241,13 @@ export default function NuevaFacturaRoute() {
     let cancelled = false;
     (async () => {
       const [{ data: cl }, { data: tpls }, contactRes] = await Promise.all([
-        supabase
-          .from('clients')
-          .select('id, first_name, last_name, company')
-          .eq('business_id', business.id)
-          .order('first_name'),
+        // Paged: a plain select stops at 1000 clients (PostgREST cap).
+        fetchAllById<Client>((afterId, pageSize) => {
+          let q = supabase.from('clients').select('id, first_name, last_name, company')
+            .eq('business_id', business.id).order('id', { ascending: true }).limit(pageSize);
+          if (afterId) q = q.gt('id', afterId);
+          return q;
+        }).then(rows => ({ data: rows.sort((a, b) => (a.first_name ?? '').localeCompare(b.first_name ?? '')) })),
         supabase
           .from('invoice_field_templates')
           .select('*')
@@ -252,12 +255,12 @@ export default function NuevaFacturaRoute() {
           .order('sort_order'),
         // Client contacts — so the picker can find an account by a contact's
         // name (primary contact first), same as the job form.
-        supabase
-          .from('client_contacts')
-          .select('client_id, name, role')
-          .eq('business_id', business.id)
-          .order('is_primary', { ascending: false })
-          .then((r) => r, () => ({ data: [] as { client_id: string; name: string; role: string | null }[] })),
+        fetchAllById<{ id: string; client_id: string; name: string; role: string | null; is_primary: boolean | null }>((afterId, pageSize) => {
+          let q = supabase.from('client_contacts').select('id, client_id, name, role, is_primary')
+            .eq('business_id', business.id).order('id', { ascending: true }).limit(pageSize);
+          if (afterId) q = q.gt('id', afterId);
+          return q;
+        }).then(rows => ({ data: rows.sort((a, b) => Number(!!b.is_primary) - Number(!!a.is_primary)) }), () => ({ data: [] as { client_id: string; name: string; role: string | null }[] })),
       ]);
       if (cancelled) return;
       const contactsByClient = new Map<string, { name: string; role: string | null }[]>();

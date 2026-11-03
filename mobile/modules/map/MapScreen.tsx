@@ -38,7 +38,7 @@ import { expandStateQuery, haystackMatchesWithStates } from '@amixos/shared/lib/
 import { buildDateRangePresets } from '@amixos/shared/lib/dateRangePresets';
 import { PinBadge } from '@/lib/mapPinIcons';
 import { createSupabaseClient } from '@/lib/supabase';
-import { formatRelativeLong, type RelativeTimeLabels } from '@amixos/shared/lib/format';
+import { formatRelativeLong, type RelativeTimeLabels, todayLocalISO } from '@amixos/shared/lib/format';
 import { useContactOutcomePrompt, type FireContactArgs } from '@/lib/useContactOutcomePrompt';
 import {
   MapSettingsSheet,
@@ -385,7 +385,7 @@ export default function MapScreen() {
     setLoading(true);
     try {
       const jwt = await getJwt();
-      const r = await fetch(`${apiBaseUrl}/api/v1/map/pins?business_id=${business.id}`, {
+      const r = await fetch(`${apiBaseUrl}/api/v1/map/pins?business_id=${business.id}&date=${todayLocalISO()}`, {
         headers: { Authorization: `Bearer ${jwt}` },
       });
       if (r.ok) {

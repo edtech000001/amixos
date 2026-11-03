@@ -516,8 +516,8 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
       language: invoiceLang,
       // Inherit the job's branch so the invoice files under the same location.
       location_id: (job as { location_id?: string | null }).location_id ?? null,
-      issue_date: new Date().toISOString().split('T')[0],
-      due_date: new Date(Date.now() + (business.invoice_due_days ?? 30) * 86400000).toISOString().split('T')[0],
+      issue_date: todayLocalISO(),
+      due_date: todayLocalISO((business.invoice_due_days ?? 30)),
       line_items: lineItems,
       subtotal_amount: invoiceSubtotal,
       tax_rate: invoiceTaxRate,

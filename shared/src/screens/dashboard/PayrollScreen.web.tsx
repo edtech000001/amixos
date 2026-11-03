@@ -93,7 +93,7 @@ export interface PayrollScreenProps {
   config: PayrollConfig;
   onConfigChange: (c: PayrollConfig) => void;
   /** Per-worker overtime (settings modal list). Changes save instantly. */
-  onMarkPaid: (employeeId: string, method: PayMethod, checkNumber: string, bonus: number, amount: number, hoursCovered: number, components: Record<string, number> | null, periodStart?: string) => void;
+  onMarkPaid: (employeeId: string, method: PayMethod, checkNumber: string, bonus: number, amount: number, hoursCovered: number, components: Record<string, number> | null, periodStart?: string) => Promise<boolean> | void;
   onDeletePayment: (paymentId: string) => void;
   /** Opens a job from the hours-breakdown list. */
   onJobPress?: (jobId: string, employeeId: string) => void;
@@ -312,11 +312,12 @@ export function PayrollScreen({
   const confirmManual = () => {
     const amt = parseFloat(manualAmount) || 0;
     if (!manualWorker || amt <= 0) return;
-    onMarkPaid(manualWorker, manualMethod, manualMethod === 'check' ? manualCheck.trim() : '', 0, amt, parseFloat(manualHours) || 0, null, manualPeriod || undefined);
-    const deduct = parseFloat(manualLoanDeduct) || 0;
-    if (deduct > 0 && onLoanRepayment) {
-      onLoanRepayment(manualWorker, deduct, loanNoteFor(manualMethod, manualCheck));
-    }
+    // Never deduct more than the worker owes; only after the payment saved.
+    const deduct = Math.min(parseFloat(manualLoanDeduct) || 0, Math.max(manualLoanOwed, 0));
+    const worker = manualWorker;
+    const note = loanNoteFor(manualMethod, manualCheck);
+    void Promise.resolve(onMarkPaid(worker, manualMethod, manualMethod === 'check' ? manualCheck.trim() : '', 0, amt, parseFloat(manualHours) || 0, null, manualPeriod || undefined))
+      .then(ok => { if (ok !== false && deduct > 0 && onLoanRepayment) onLoanRepayment(worker, deduct, note); });
     setManualOpen(false);
   };
 
@@ -448,19 +449,19 @@ export function PayrollScreen({
   };
   const confirmPay = () => {
     if (!payRow) return;
-    onMarkPaid(
-      payRow.employeeId,
+    // Never deduct more than the worker owes; only after the payment saved.
+    const deduct = Math.min(parseFloat(loanDeduct) || 0, Math.max(loanBalances?.[payRow.employeeId] ?? 0, 0));
+    const empId = payRow.employeeId;
+    const note = loanNoteFor(method, checkNumber);
+    void Promise.resolve(onMarkPaid(
+      empId,
       method,
       method === 'check' ? checkNumber.trim() : '',
       parseFloat(bonus) || 0,
       checkBaseOf(payRow),
       checkHoursOf(payRow),
       checkComponentsOf(payRow),
-    );
-    const deduct = parseFloat(loanDeduct) || 0;
-    if (deduct > 0 && onLoanRepayment) {
-      onLoanRepayment(payRow.employeeId, deduct, loanNoteFor(method, checkNumber));
-    }
+    )).then(ok => { if (ok !== false && deduct > 0 && onLoanRepayment) onLoanRepayment(empId, deduct, note); });
     setPayRow(null);
   };
   const resetLoanForms = () => { setShowAddLoan(false); setShowAddPayment(false); setEditingEntry(null); setLoanAmount(''); setLoanNote(''); setLoanDate(todayStr()); };

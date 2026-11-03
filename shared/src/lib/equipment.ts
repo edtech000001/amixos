@@ -81,9 +81,12 @@ export function equipmentPhotoPath(
  */
 export function plateExpirationDays(plate_expiration: string | null): number | null {
   if (!plate_expiration) return null;
-  const exp = new Date(plate_expiration).getTime();
+  // Date-only → LOCAL midnight (new Date('YYYY-MM-DD') is UTC midnight, the
+  // evening before in the US), compared against local midnight today, so the
+  // expiration day itself is 0, not -1.
+  const exp = new Date(plate_expiration.slice(0, 10) + 'T00:00:00').getTime();
   if (Number.isNaN(exp)) return null;
-  const now = Date.now();
-  const oneDay = 86_400_000;
-  return Math.floor((exp - now) / oneDay);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return Math.round((exp - today) / 86_400_000);
 }

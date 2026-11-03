@@ -89,6 +89,13 @@ export async function swrWriteFingerprint(key: string, fp: string | null): Promi
   else await kvSet(PREFIX + key + FP_SUFFIX, fp);
 }
 
+/** Apply an optimistic change to a cached payload so an offline write is still
+ *  visible on the next visit (the list hydrates from this key). Miss = no-op. */
+export async function swrPatch<T>(key: string, update: (prev: T) => T): Promise<void> {
+  const hit = await swrRead<T>(key);
+  if (hit) await swrWrite(key, update(hit.data));
+}
+
 export async function swrWrite(key: string, data: unknown): Promise<void> {
   const json = serializeWithinCap(data);
   if (json == null) {

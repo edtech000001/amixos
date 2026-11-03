@@ -191,7 +191,10 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
     .maybeSingle();
   if (!membership) return res.status(403).json({ success: false, message: 'forbidden' });
 
-  const today = new Date().toISOString().split('T')[0];
+  // The caller's LOCAL date — Cloud Run runs in UTC, which is already
+  // tomorrow during US evenings. Falls back to UTC for older app builds.
+  const qDate = String(req.query.date ?? '');
+  const today = /^\d{4}-\d{2}-\d{2}$/.test(qDate) ? qDate : new Date().toISOString().split('T')[0];
   // Clients and jobs are read AS the caller so role permissions and branch
   // locks apply (a field worker without Clients access gets no client pins).
   const db = rlsClient(req.token!);

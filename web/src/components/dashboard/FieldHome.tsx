@@ -28,6 +28,7 @@ import { useSwr } from '@amixos/shared/lib/swrCache';
 import { can } from '@amixos/shared/lib/permissions';
 import { firstName } from '@amixos/shared/lib/userName';
 
+import { todayLocalISO } from '@amixos/shared/lib/format';
 const JOB_STATUS_PILL: Record<string, string> = {
   scheduled: 'bg-blue-100 text-blue-600',
   in_progress: 'bg-orange-100 text-orange-600',
@@ -138,7 +139,7 @@ export function FieldHome() {
     );
   }
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = todayLocalISO();
   const todayJobs = jobs.filter(j => j.scheduledDate === todayStr);
   const upcomingJobs = jobs.filter(j => !j.scheduledDate || j.scheduledDate > todayStr);
 

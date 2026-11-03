@@ -35,6 +35,7 @@ import {
 } from '@amixos/shared/lib/priceSheetTemplate';
 import { mailtoHref, resolveClientRecipients } from '@amixos/shared/lib/clientRecipients';
 
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 interface ClientLite {
   id: string;
   first_name: string | null;
@@ -124,12 +125,19 @@ export default function GenerarPreciosPage() {
         supabase.from('price_sheet_items')
           .select('id, name, category, pricing_mode, unit_label, rate, state_rates, client_rates, match_terms, is_addon, sort_order, active')
           .eq('business_id', bid).eq('active', true).order('sort_order').order('name'),
-        supabase.from('clients')
-          .select('id, first_name, last_name, company, state, email, email_office')
-          .eq('business_id', bid).order('company', { ascending: true }).order('last_name', { ascending: true }),
+        // Paged: a plain select stops at 1000 clients (PostgREST cap).
+        fetchAllById<ClientLite>((afterId, pageSize) => {
+          let q = supabase.from('clients')
+            .select('id, first_name, last_name, company, state, email, email_office')
+            .eq('business_id', bid).order('id', { ascending: true }).limit(pageSize);
+          if (afterId) q = q.gt('id', afterId);
+          return q;
+        }).catch(() => [] as ClientLite[]),
       ]);
       setItems(((itemRes.data ?? []) as PriceSheetRow[]).map(rowToPriceSheetItem));
-      const list = (clientRes.data ?? []) as ClientLite[];
+      // Same order as before (company, then last name; no company last).
+      const byName = (c: ClientLite) => `${c.company ?? '\uffff'}\u0000${c.last_name ?? '\uffff'}`;
+      const list = clientRes.sort((x, y) => byName(x).localeCompare(byName(y)));
       setClients(list);
       if (preselectClientId && list.some(c => c.id === preselectClientId)) {
         setMode('client');

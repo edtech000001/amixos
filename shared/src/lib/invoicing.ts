@@ -16,6 +16,7 @@ import type { InvoiceLang } from '../i18n/invoice';
 import { type PriceSheetItem, suggestPriceItemDetailed, extractQuantity, autopriceLine, matchingAddons, diagnosePriceMatches } from './priceSheet';
 import { US_STATE_NAME_TO_ABBR } from './usStates';
 
+import { todayLocalISO } from './format';
 /** Normalize a state to its 2-letter code ("Kansas" → "KS", "ks" → "KS") so it
  *  matches how per-state price overrides are keyed. Null/blank → null. */
 function normStateCode(s: string | null | undefined): string | null {
@@ -144,8 +145,8 @@ export function computeTotals(
   return { subtotal, tax, total };
 }
 
-const today = () => new Date().toISOString().split('T')[0];
-const plusDays = (n: number) => new Date(Date.now() + n * 86400000).toISOString().split('T')[0];
+const today = () => todayLocalISO();
+const plusDays = (n: number) => todayLocalISO(n);
 
 export type CreateInvoiceResult =
   | { ok: true; invoice: any }

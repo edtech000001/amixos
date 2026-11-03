@@ -220,8 +220,9 @@ function applyBaseFilters(q: any, params: InvoicesQueryParams): any {
   if (params.locationId) q = q.eq('location_id', params.locationId);
   // paid_at is a timestamp — widen the day bounds; the others are dates.
   if (params.dateField === 'paid') {
-    if (params.dateFrom) q = q.gte('paid_at', `${params.dateFrom}T00:00:00`);
-    if (params.dateTo) q = q.lte('paid_at', `${params.dateTo}T23:59:59.999`);
+    // Local-day bounds: a bare "T00:00:00" is read as UTC by the server.
+    if (params.dateFrom) q = q.gte('paid_at', new Date(`${params.dateFrom}T00:00:00`).toISOString());
+    if (params.dateTo) q = q.lte('paid_at', new Date(`${params.dateTo}T23:59:59.999`).toISOString());
   } else {
     const col = params.dateField === 'due' ? 'due_date' : 'issue_date';
     if (params.dateFrom) q = q.gte(col, params.dateFrom);
@@ -345,6 +346,7 @@ export async function fetchInvoiceStatusCounts(
     ...base,
     p_date_field: params.dateField ?? 'issue',
     p_quick: params.quick?.length ? params.quick : null,
+    p_tz: Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC',
   });
   // PGRST202 = migration 251 not run yet: the old signature (issue date, no
   // quick filters) still gives badges rather than none.

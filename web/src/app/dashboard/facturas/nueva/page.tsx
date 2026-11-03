@@ -5,12 +5,13 @@ export const dynamic = 'force-dynamic';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PassthroughTag } from '@amixos/shared/lib/invoicing';
 import { SkeletonBlock, SkeletonCard } from '@amixos/shared/ui/Skeleton';
-import { formatMoneyInput, formatNumberGrouped } from '@amixos/shared/lib/format';
+import { formatMoneyInput, formatNumberGrouped, todayLocalISO } from '@amixos/shared/lib/format';
 import { Trash2, ArrowLeft, X, Search, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { computeTotals, insertInvoiceUnique, previewInvoiceNumber, type InvoiceLineItem } from '@amixos/shared/lib/invoicing';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -112,7 +113,7 @@ function NuevaFacturaContent() {
   // Existing-invoice count (null = not loaded). Drives the sequential
   // auto-number: business.invoice_start_number + count.
   const invoiceCountRef = useRef<number | null>(null);
-  const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
+  const [issueDate, setIssueDate] = useState(todayLocalISO());
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
   // Internal notes: private to the business, never rendered on the invoice.
@@ -202,12 +203,21 @@ function NuevaFacturaContent() {
     if (!business) return;
     (async () => {
       const [{ data: cl }, contactRes] = await Promise.all([
-        supabase.from('clients').select('id, first_name, last_name, company').eq('business_id', business.id)
-          .order('first_name'),
+        // Paged: a plain select stops at 1000 clients (PostgREST cap).
+        fetchAllById<Client>((afterId, pageSize) => {
+          let q = supabase.from('clients').select('id, first_name, last_name, company')
+            .eq('business_id', business.id).order('id', { ascending: true }).limit(pageSize);
+          if (afterId) q = q.gt('id', afterId);
+          return q;
+        }).then(rows => ({ data: rows.sort((a, b) => (a.first_name ?? '').localeCompare(b.first_name ?? '')) })),
         // Client contacts — so the picker can find an account by a contact's
         // name (primary contact first), same as the job form.
-        supabase.from('client_contacts').select('client_id, name, role').eq('business_id', business.id)
-          .order('is_primary', { ascending: false }).then(r => r, () => ({ data: [] as { client_id: string; name: string; role: string | null }[] })),
+        fetchAllById<{ id: string; client_id: string; name: string; role: string | null; is_primary: boolean | null }>((afterId, pageSize) => {
+          let q = supabase.from('client_contacts').select('id, client_id, name, role, is_primary')
+            .eq('business_id', business.id).order('id', { ascending: true }).limit(pageSize);
+          if (afterId) q = q.gt('id', afterId);
+          return q;
+        }).then(rows => ({ data: rows.sort((a, b) => Number(!!b.is_primary) - Number(!!a.is_primary)) }), () => ({ data: [] as { client_id: string; name: string; role: string | null }[] })),
       ]);
       const contactsByClient = new Map<string, { name: string; role: string | null }[]>();
       for (const ct of (contactRes.data ?? []) as { client_id: string; name: string; role: string | null }[]) {
@@ -281,7 +291,7 @@ function NuevaFacturaContent() {
       if (cancelled) return;
       if (inv) {
         setInvoiceNumber(inv.invoice_number ?? '');
-        setIssueDate(inv.issue_date ?? new Date().toISOString().split('T')[0]);
+        setIssueDate(inv.issue_date ?? todayLocalISO());
         setDueDate(inv.due_date ?? '');
         setNotes(inv.notes ?? '');
         setInternalNotes((inv as { internal_notes?: string | null }).internal_notes ?? '');
@@ -493,7 +503,7 @@ function NuevaFacturaContent() {
     // If a sent/overdue invoice's due date moved, re-derive which of the two
     // it is now (a future/empty due date is no longer overdue). Draft/paid/
     // total_loss are left untouched.
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayLocalISO();
     const nextStatus =
       editStatus === 'sent' || editStatus === 'overdue'
         ? dueDate && dueDate < today

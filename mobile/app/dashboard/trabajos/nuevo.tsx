@@ -109,9 +109,9 @@ const US_STATES = [
   'OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
 ];
 
-const todayISO = () => new Date().toISOString().split('T')[0];
+const todayISO = () => todayLocalISO();
 const plusDaysISO = (days: number) =>
-  new Date(Date.now() + days * 86400000).toISOString().split('T')[0];
+  todayLocalISO(days);
 
 /**
  * Accept "lat, lng" or "lat lng" with optional surrounding whitespace.

@@ -25,7 +25,7 @@ import {
   type InvoiceLabelKey,
 } from '../i18n/invoice';
 export type { InvoiceLang } from '../i18n/invoice';
-import { formatDateLong } from './format';
+import { formatDateLong, todayLocalISO } from './format';
 import { INVOICE_ICON_NODES } from './invoiceIconNodes';
 
 export const INVOICE_TEMPLATE_VERSION = 1;
@@ -2104,8 +2104,8 @@ export function removeElement(c: InvoiceTemplateConfig, id: string): InvoiceTemp
 export const SAMPLE_INVOICE: InvoiceDocData = {
   invoiceNumber: 'FAC-0001',
   status: 'sent',
-  issueDate: new Date().toISOString().slice(0, 10),
-  dueDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+  issueDate: todayLocalISO(),
+  dueDate: todayLocalISO(30),
   lineItems: [
     { description: 'Mano de obra', qty: 8, rate: 45 },
     { description: 'Materiales', qty: 1, rate: 220 },

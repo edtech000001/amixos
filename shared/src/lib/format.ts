@@ -148,8 +148,9 @@ export function daysSince(input: string | Date | null | undefined): number {
  *  `new Date().toISOString().split('T')[0]` for date-input defaults: ISO uses
  *  UTC, which rolls over to tomorrow during US evenings — so "log hours today"
  *  would default to a future date. */
-export function todayLocalISO(): string {
-  const d = new Date();
+export function todayLocalISO(addDays = 0): string {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + addDays);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
