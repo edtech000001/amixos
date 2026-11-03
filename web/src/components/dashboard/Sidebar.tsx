@@ -60,23 +60,28 @@ const NAV_ITEMS: {
  */
 function SlidingHighlight({ activeKey, mini }: { activeKey: string; mini: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
-  const last = useRef<{ top: number; bottom: number } | null>(null);
-  // Not placed yet (the nav items render after the role loads, and that
-  // doesn't change the nav's box size) → place it after any render, unanimated.
+  const last = useRef<{ top: number; height: number } | null>(null);
+
+  // Positioned by top + HEIGHT (from the item alone). A `bottom` offset
+  // depended on the nav's height — which shrinks after the switchers above it
+  // load, and is measured differently once the nav scrolls — and collapsed
+  // the pill to 0px on businesses with many modules.
+  const place = (el: HTMLDivElement, top: number, height: number) => {
+    el.style.top = `${top}px`;
+    el.style.height = `${height}px`;
+    el.style.opacity = '1';
+    last.current = { top, height };
+  };
+
+  // Not placed yet (nav items render after the role loads) → place it after
+  // any render, without animating.
   useLayoutEffect(() => {
     if (last.current) return;
     const el = ref.current;
-    const nav = el?.parentElement;
-    const item = nav?.querySelector<HTMLElement>('[data-active="true"]');
-    if (!el || !nav || !item) return;
-    const top = item.offsetTop;
-    const bottom = nav.scrollHeight - (item.offsetTop + item.offsetHeight);
-    el.style.transition = 'opacity 150ms';
-    el.style.top = `${top}px`;
-    el.style.bottom = `${bottom}px`;
-    el.style.opacity = '1';
-    last.current = { top, bottom };
+    const item = el?.parentElement?.querySelector<HTMLElement>('[data-active="true"]');
+    if (el && item) place(el, item.offsetTop, item.offsetHeight);
   });
+
   useLayoutEffect(() => {
     const el = ref.current;
     const nav = el?.parentElement;
@@ -84,27 +89,27 @@ function SlidingHighlight({ activeKey, mini }: { activeKey: string; mini: boolea
     const moveTo = (item: HTMLElement | null, animate: boolean) => {
       if (!item) { el.style.opacity = '0'; last.current = null; return; }
       const top = item.offsetTop;
-      const bottom = nav.scrollHeight - (item.offsetTop + item.offsetHeight);
+      const height = item.offsetHeight;
       const prev = last.current;
-      if (prev && prev.top === top && prev.bottom === bottom) return; // already there
-      if (!prev || !animate) {
-        // First placement / layout change: no slide from nowhere.
-        el.style.transition = 'opacity 150ms';
-      } else {
+      if (prev && prev.top === top && prev.height === height) return; // already there
+      if (prev && animate && typeof el.animate === 'function') {
+        // Liquid: the LEADING edge reaches the new item first (the pill
+        // stretches across the gap), then the trailing edge catches up with
+        // a slight overshoot and the pill settles to the item's size.
         const down = top > prev.top;
-        // Leading edge snaps toward the new item, trailing edge follows a
-        // beat later with a little overshoot — it stretches like a drop of
-        // liquid, then settles.
-        const lead = '220ms cubic-bezier(0.25, 1.3, 0.5, 1)';
-        const trail = '420ms cubic-bezier(0.3, 1.2, 0.4, 1) 40ms';
-        el.style.transition = down
-          ? `bottom ${lead}, top ${trail}, opacity 150ms`
-          : `top ${lead}, bottom ${trail}, opacity 150ms`;
+        const mid = down
+          ? { top: prev.top + (top - prev.top) * 0.2, bottom: top + height }
+          : { top, bottom: prev.top + prev.height - (prev.top - top) * 0.2 };
+        el.animate(
+          [
+            { top: `${prev.top}px`, height: `${prev.height}px` },
+            { top: `${mid.top}px`, height: `${mid.bottom - mid.top}px`, offset: 0.4 },
+            { top: `${top}px`, height: `${height}px` },
+          ],
+          { duration: 460, easing: 'cubic-bezier(0.3, 1.15, 0.4, 1)' },
+        );
       }
-      el.style.top = `${top}px`;
-      el.style.bottom = `${bottom}px`;
-      el.style.opacity = '1';
-      last.current = { top, bottom };
+      place(el, top, height);
     };
     // The route has caught up: drop the click-time color overrides below.
     nav.querySelectorAll<HTMLElement>('a[data-active]').forEach(a => { a.style.color = ''; });
@@ -126,15 +131,13 @@ function SlidingHighlight({ activeKey, mini }: { activeKey: string; mini: boolea
     };
     nav.addEventListener('click', onClick);
 
-    // Re-align (without sliding) only when the nav's size really changes —
-    // ResizeObserver also fires once right after observe(), and treating that
-    // as a resize reset the animation on every navigation.
+    // Items can shift (modules load above, labels translate): re-align
+    // without animating when the nav's layout really changes.
     let size = `${nav.clientWidth}x${nav.scrollHeight}`;
     const ro = new ResizeObserver(() => {
       const next = `${nav.clientWidth}x${nav.scrollHeight}`;
       if (next === size) return;
       size = next;
-      last.current = null;
       moveTo(nav.querySelector<HTMLElement>('[data-active="true"]'), false);
     });
     ro.observe(nav);
