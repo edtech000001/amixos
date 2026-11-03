@@ -8,7 +8,7 @@ import {
   Settings, ChevronLeft, Menu, X, ClipboardList, BarChart3,
   Store as StoreIcon, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useSidebarCollapsed } from './useSidebarCollapsed';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -50,6 +50,106 @@ const NAV_ITEMS: {
   { href: '/dashboard/reportes', key: 'reportes', icon: BarChart3, show: can.seeReports },
 ];
 
+/**
+ * The active item's blue pill, as ONE element that slides between items
+ * (mobile dock parity). It measures the item marked data-active inside its
+ * parent <nav> and moves there; the edge on the side it's heading to travels
+ * fast and the trailing edge follows a beat later, so it stretches toward the
+ * new item and settles — the "liquid" feel. Hidden when no item in this nav
+ * is active (e.g. a bottom-section page).
+ */
+function SlidingHighlight({ activeKey, mini }: { activeKey: string; mini: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const last = useRef<{ top: number; bottom: number } | null>(null);
+  // Not placed yet (the nav items render after the role loads, and that
+  // doesn't change the nav's box size) → place it after any render, unanimated.
+  useLayoutEffect(() => {
+    if (last.current) return;
+    const el = ref.current;
+    const nav = el?.parentElement;
+    const item = nav?.querySelector<HTMLElement>('[data-active="true"]');
+    if (!el || !nav || !item) return;
+    const top = item.offsetTop;
+    const bottom = nav.scrollHeight - (item.offsetTop + item.offsetHeight);
+    el.style.transition = 'opacity 150ms';
+    el.style.top = `${top}px`;
+    el.style.bottom = `${bottom}px`;
+    el.style.opacity = '1';
+    last.current = { top, bottom };
+  });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const nav = el?.parentElement;
+    if (!el || !nav) return;
+    const moveTo = (item: HTMLElement | null, animate: boolean) => {
+      if (!item) { el.style.opacity = '0'; last.current = null; return; }
+      const top = item.offsetTop;
+      const bottom = nav.scrollHeight - (item.offsetTop + item.offsetHeight);
+      const prev = last.current;
+      if (prev && prev.top === top && prev.bottom === bottom) return; // already there
+      if (!prev || !animate) {
+        // First placement / layout change: no slide from nowhere.
+        el.style.transition = 'opacity 150ms';
+      } else {
+        const down = top > prev.top;
+        // Leading edge snaps toward the new item, trailing edge follows a
+        // beat later with a little overshoot — it stretches like a drop of
+        // liquid, then settles.
+        const lead = '220ms cubic-bezier(0.25, 1.3, 0.5, 1)';
+        const trail = '420ms cubic-bezier(0.3, 1.2, 0.4, 1) 40ms';
+        el.style.transition = down
+          ? `bottom ${lead}, top ${trail}, opacity 150ms`
+          : `top ${lead}, bottom ${trail}, opacity 150ms`;
+      }
+      el.style.top = `${top}px`;
+      el.style.bottom = `${bottom}px`;
+      el.style.opacity = '1';
+      last.current = { top, bottom };
+    };
+    // The route has caught up: drop the click-time color overrides below.
+    nav.querySelectorAll<HTMLElement>('a[data-active]').forEach(a => { a.style.color = ''; });
+    moveTo(nav.querySelector<HTMLElement>('[data-active="true"]'), true);
+
+    // Move on the CLICK, not when the route finishes loading (that lag made
+    // the slide feel dead). The route change then lands on the same spot.
+    const onClick = (e: MouseEvent) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // new tab etc.
+      const a = (e.target as HTMLElement).closest<HTMLElement>('a[data-active]');
+      if (!a || !nav.contains(a)) return;
+      moveTo(a, true);
+      // Swap the text colors with the pill (the classes follow once the route
+      // updates): white on the new item, the idle gray on the old one.
+      const idle = nav.querySelector<HTMLElement>('a[data-active="false"]');
+      const idleColor = idle ? getComputedStyle(idle).color : '';
+      nav.querySelectorAll<HTMLElement>('a[data-active="true"]').forEach(o => { if (o !== a) o.style.color = idleColor; });
+      a.style.color = '#fff';
+    };
+    nav.addEventListener('click', onClick);
+
+    // Re-align (without sliding) only when the nav's size really changes —
+    // ResizeObserver also fires once right after observe(), and treating that
+    // as a resize reset the animation on every navigation.
+    let size = `${nav.clientWidth}x${nav.scrollHeight}`;
+    const ro = new ResizeObserver(() => {
+      const next = `${nav.clientWidth}x${nav.scrollHeight}`;
+      if (next === size) return;
+      size = next;
+      last.current = null;
+      moveTo(nav.querySelector<HTMLElement>('[data-active="true"]'), false);
+    });
+    ro.observe(nav);
+    return () => { nav.removeEventListener('click', onClick); ro.disconnect(); };
+  }, [activeKey, mini]);
+  return (
+    <div
+      ref={ref}
+      aria-hidden
+      className="pointer-events-none absolute left-3 right-3 rounded-xl bg-primary shadow-sm"
+      style={{ opacity: 0 }}
+    />
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   // Across the whole Settings section (/dashboard/ajustes — hub + Actividad)
@@ -89,6 +189,10 @@ export function Sidebar() {
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname.startsWith(href);
 
+  // Called as a plain function, NOT rendered as <NavContent/>: defined inside
+  // Sidebar it's a new component type every render, so React unmounted and
+  // rebuilt the whole sidebar (switchers included) on every navigation — and
+  // the sliding highlight could never animate.
   const NavContent = ({ mini = false }: { mini?: boolean }) => (
     <div className="flex flex-col h-full">
       {/* Business switcher (replaces the read-only logo + name block). In
@@ -109,7 +213,8 @@ export function Sidebar() {
       {/* Nav items. Core list first, then any enabled+available modules.
           Coming-soon modules don't appear here even if pre-enabled in DB —
           gated by useEnabledModules + filter on status. */}
-      <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5 overflow-y-auto">
+      <nav className="relative flex-1 px-3 py-4 flex flex-col gap-0.5 overflow-y-auto">
+        <SlidingHighlight activeKey={pathname} mini={mini} />
         {NAV_ITEMS.filter(item => item.show(currentRole)).map(({ href, key, icon: Icon, exact }) => {
           const active = isActive(href, exact);
           return (
@@ -118,11 +223,13 @@ export function Sidebar() {
               href={href}
               onClick={() => setOpen(false)}
               title={mini ? t[key] : undefined}
+              data-active={active}
               className={clsx(
-                'flex items-center gap-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                'relative flex items-center gap-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
                 mini ? 'justify-center px-0' : 'px-3',
+                // The blue pill is SlidingHighlight; the item just sits on it.
                 active
-                  ? 'bg-primary text-white shadow-sm'
+                  ? 'text-white'
                   : 'text-muted hover:bg-border-soft hover:text-ink'
               )}
             >
@@ -143,11 +250,12 @@ export function Sidebar() {
               href={href}
               onClick={() => setOpen(false)}
               title={mini ? name : undefined}
+              data-active={active}
               className={clsx(
-                'flex items-center gap-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                'relative flex items-center gap-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
                 mini ? 'justify-center px-0' : 'px-3',
                 active
-                  ? 'bg-primary text-white shadow-sm'
+                  ? 'text-white'
                   : 'text-muted hover:bg-border-soft hover:text-ink',
               )}
             >
@@ -180,11 +288,12 @@ export function Sidebar() {
                   href={href}
                   onClick={() => setOpen(false)}
                   title={mini ? name : undefined}
+                  data-active={active}
                   className={clsx(
-                    'flex items-center gap-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                    'relative flex items-center gap-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
                     mini ? 'justify-center px-0' : 'px-3',
                     active
-                      ? 'bg-primary text-white shadow-sm'
+                      ? 'text-white'
                       : 'text-muted hover:bg-border-soft hover:text-ink',
                   )}
                 >
@@ -283,7 +392,7 @@ export function Sidebar() {
           'hidden md:flex shrink-0 border-r border-border-soft bg-card h-screen sticky top-0 flex-col transition-[width] duration-200',
           collapsed ? 'w-[68px]' : 'w-60',
         )}>
-          <NavContent mini={collapsed} />
+          {NavContent({ mini: collapsed })}
         </aside>
       )}
 
@@ -305,7 +414,7 @@ export function Sidebar() {
                 <X size={18} className="text-muted" />
               </button>
             </div>
-            <NavContent />
+            {NavContent({})}
           </aside>
         </div>
       )}
