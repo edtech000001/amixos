@@ -61,10 +61,15 @@ export async function POST(req: Request) {
 
     const { data: biz } = await admin
       .from('businesses')
-      .select('id, name, stripe_customer_id, subscription_status, trial_ends_at')
+      .select('id, name, stripe_customer_id, stripe_subscription_id, subscription_status, trial_ends_at')
       .eq('id', businessId)
       .single();
     if (!biz) return NextResponse.json({ error: 'Business not found' }, { status: 404 });
+    // A second checkout would start a second subscription that also bills —
+    // plan changes go through the Billing Portal instead.
+    if (biz.stripe_subscription_id && ['active', 'trialing', 'past_due'].includes(biz.subscription_status ?? '')) {
+      return NextResponse.json({ error: 'already_subscribed' }, { status: 409 });
+    }
 
     // Reuse or create the Stripe customer for this business.
     const locale = stripeLocaleFor(user);

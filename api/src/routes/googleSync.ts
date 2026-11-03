@@ -22,6 +22,7 @@ import {
   type OAuthCreds,
 } from '../lib/googleSync';
 import { fetchAll } from '../lib/supabaseFetch';
+import { rlsClient } from '../lib/supabaseRls';
 
 // Default contact group name Amixos creates / uses on the user's Google
 // account if they haven't picked one explicitly. Keeps synced contacts
@@ -430,8 +431,11 @@ googleSyncRouter.post('/backfill', async (req: AuthRequest, res) => {
   // Load every client in THIS business without a google_resource_name.
   // Paginated because a backfill must include every unsynced row — the
   // 1000-row PostgREST cap would leave the tail unsynced forever.
+  // Client/contact READS run as the caller, so a member whose role hides
+  // Clients (or is branch-locked) can't copy the whole list into Google.
+  const db = rlsClient(req.token!);
   const clients = await fetchAll<ClientRow>((from, to) =>
-    supabase
+    db
       .from('clients')
       .select('id, business_id, first_name, last_name, company, phone_cell, phone_office, email_office, email_home, address, address_line2, city, state, zip_code, notes, custom_fields, google_resource_name, google_etag')
       .is('google_resource_name', null)
@@ -510,7 +514,7 @@ googleSyncRouter.post('/backfill', async (req: AuthRequest, res) => {
     clients: ClientRow | null;
   };
   const contacts = await fetchAll<ContactWithClient>((from, to) =>
-    supabase
+    db
       .from('client_contacts')
       .select(`
         id, business_id, client_id, name, role, phone, email, notes, google_resource_name,
@@ -774,7 +778,8 @@ googleSyncRouter.post('/contact', async (req: AuthRequest, res) => {
   // Fetch the client first — its business_id tells us which credential row
   // to load. The row must still exist at this point (callers run /contact
   // BEFORE the local delete for the delete action).
-  const { data: client } = await supabase
+  // Read as the caller (RLS) — only clients they may see can be pushed.
+  const { data: client } = await rlsClient(req.token!)
     .from('clients')
     .select('id, business_id, first_name, last_name, company, phone_cell, phone_office, email_office, email_home, address, address_line2, city, state, zip_code, notes, custom_fields, google_resource_name, google_etag')
     .eq('id', clientId)
@@ -894,7 +899,7 @@ googleSyncRouter.post('/client-contact', async (req: AuthRequest, res) => {
 
   // Pull the contact row + its parent client. business_id on the row tells
   // us which credential set to load for this sync.
-  const { data: contactRow } = await supabase
+  const { data: contactRow } = await rlsClient(req.token!)
     .from('client_contacts')
     .select(`
       id, business_id, client_id, name, role, phone, email, notes, google_resource_name,

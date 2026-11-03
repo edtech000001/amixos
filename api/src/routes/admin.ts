@@ -75,6 +75,18 @@ adminRouter.post('/impersonate', impersonateLimiter, async (req: AuthRequest, re
     return res.status(403).json({ success: false, code: 'role_not_allowed' });
   }
 
+  // The token is a full sign-in as the target, valid in EVERY business they
+  // belong to — so refuse anyone who is also a member somewhere else.
+  const { count: otherBusinesses, error: otherErr } = await supabase
+    .from('business_members')
+    .select('business_id', { count: 'exact', head: true })
+    .eq('user_id', target_user_id)
+    .neq('business_id', business_id);
+  if (otherErr) return res.status(500).json({ success: false, message: otherErr.message });
+  if (otherBusinesses) {
+    return res.status(409).json({ success: false, code: 'member_of_other_business' });
+  }
+
   // Resolve the target's display name/email for the banner.
   const { data: targetUser } = await supabase.auth.admin.getUserById(target_user_id);
   const email = targetUser?.user?.email ?? null;

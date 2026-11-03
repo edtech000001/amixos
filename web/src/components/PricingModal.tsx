@@ -145,7 +145,9 @@ export function PricingModal({ open, onClose, onSelectPlan }: Props) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.url) {
         throw new Error(
-          data?.error || (es ? 'No se pudo iniciar el pago.' : 'Could not start checkout.'),
+          data?.error === 'already_subscribed'
+            ? (es ? 'Ya tienes un plan activo. Cámbialo desde «Administrar suscripción».' : 'You already have an active plan. Change it from “Manage subscription”.')
+            : data?.error || (es ? 'No se pudo iniciar el pago.' : 'Could not start checkout.'),
         );
       }
       window.location.href = data.url;

@@ -223,7 +223,7 @@ export function autopriceLine(
       // add-on isn't marked inline. Inline flat add-ons — and every flat add-on
       // in the job form (no splitting) — fold into the rate instead.
       if (opts?.splitFlatAddons && !a.addonInline) {
-        splitFlat.push({ name: a.name, rate: round2(r) });
+        splitFlat.push({ name: a.name, rate: exact(r) });
       } else {
         flatAddon += r;
         foldedNotes.push(addonLabel(a, r)); // bundled → explain the blended rate
@@ -258,10 +258,12 @@ export function autopriceLine(
     // total. Blending it into the per-unit rate both looks odd ($4.21/ft) and
     // rounds the total off (1295 × $4.21 = $5,451.95, losing $4.30 vs the true
     // $5,456.25). Keep the measurement in originalQuantity for reference.
-    return { quantity: 1, unitPrice: amount, originalQuantity: qty !== 1 ? qty : null, amount, addonNote, flatAddons: splitFlat, basis: { qty, rate: round2(effRate) } };
+    return { quantity: 1, unitPrice: amount, originalQuantity: qty !== 1 ? qty : null, amount, addonNote, flatAddons: splitFlat, basis: { qty, rate: exact(effRate) } };
   }
-  // No flat add-on → clean per-unit rate ($3.75), quantity × rate is exact.
-  return { quantity: qty, unitPrice: round2(effRate), originalQuantity: null, amount, addonNote, flatAddons: splitFlat, basis: null };
+  // No flat add-on → per-unit rate stored EXACTLY ($0.335/ft stays $0.335):
+  // rounding it here overbilled long lines (10,000 ft × $0.34 = +$50).
+  // Cents rounding happens once, at display.
+  return { quantity: qty, unitPrice: exact(effRate), originalQuantity: null, amount, addonNote, flatAddons: splitFlat, basis: null };
 }
 
 /** All ACTIVE add-on items whose name or a match term appears in `text` — the
@@ -285,6 +287,11 @@ export function priceItemLabel(item: PriceSheetItem, flatWord: string): string {
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/** Strips float noise (0.1 + 0.2) without changing the decimal value — same as computeTotals. */
+function exact(n: number): number {
+  return Number(n.toFixed(6));
 }
 
 // ── Text auto-match ─────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { supabase } from '../config/supabase';
+import { rlsClient } from '../lib/supabaseRls';
 import { geocodeMissingClients, geocodeMissingEmployees, geocodeMissingJobs, geocodePlace } from '../lib/geocoding';
 import { fetchAll, type SupabasePageResult } from '../lib/supabaseFetch';
 
@@ -191,6 +192,9 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
   if (!membership) return res.status(403).json({ success: false, message: 'forbidden' });
 
   const today = new Date().toISOString().split('T')[0];
+  // Clients and jobs are read AS the caller so role permissions and branch
+  // locks apply (a field worker without Clients access gets no client pins).
+  const db = rlsClient(req.token!);
 
   // ALL THREE PAGINATE. PostgREST caps .select() at 1000 rows silently, and
   // this endpoint draws the whole map — a truncated read does not error, it
@@ -203,7 +207,7 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
   // to one query out of four.
   const [clientRows, jobRows, assignmentRows, lastContactByClient, counts] = await Promise.all([
     fetchAll<ClientRow>((from, to) =>
-      asPage<ClientRow>(supabase
+      asPage<ClientRow>(db
         .from('clients')
         .select('id, first_name, last_name, company, phone_cell, phone_office, email_office, email_home, address, city, state, zip_code, lat, lng, custom_fields')
         .eq('business_id', businessId)
@@ -211,7 +215,7 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
         .not('lng', 'is', null)
         .range(from, to))),
     fetchAll<JobRow>((from, to) =>
-      asPage<JobRow>(supabase
+      asPage<JobRow>(db
         .from('jobs')
         .select('id, title, description, status, priority, scheduled_date, job_address, job_city, job_state, job_lat, job_lng, custom_fields, clients(first_name, last_name)')
         .eq('business_id', businessId)
@@ -302,10 +306,11 @@ mapRouter.get('/pins', async (req: AuthRequest, res) => {
   // join didn't yield a valid job/employee.
   const seen = new Set<string>();
   const employees: EmployeePin[] = [];
+  const visibleJobIds = new Set(jobRows.map(j => j.id));
   for (const row of assignmentRows) {
     const e = row.employees;
     const j = row.jobs;
-    if (!e || !j || j.business_id !== businessId) continue;
+    if (!e || !j || j.business_id !== businessId || !visibleJobIds.has(j.id)) continue;
     if (j.job_lat == null || j.job_lng == null) continue;
     if (seen.has(e.id)) continue;
     seen.add(e.id);

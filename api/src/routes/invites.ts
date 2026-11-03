@@ -186,13 +186,20 @@ invitesRouter.post('/', inviteLimiter, async (req: AuthRequest, res) => {
   }
 
   // If they're already a member, reject early.
-  const { data: existingMember } = await supabase
+  // business_members.user_id points at auth.users, which PostgREST can't
+  // embed — emails come from the auth admin API (a team is a handful of rows).
+  const { data: existingMember, error: membersErr } = await supabase
     .from('business_members')
-    .select('id, user_id, role, users:user_id(email)')
+    .select('user_id')
     .eq('business_id', business_id);
-  const alreadyMember = (existingMember ?? []).some(
-    (m: any) => (m.users?.email ?? '').toLowerCase() === normalizedEmail,
+  if (membersErr) return res.status(500).json({ success: false, message: membersErr.message });
+  const memberEmails = await Promise.all(
+    (existingMember ?? []).map(async (m) => {
+      const { data } = await supabase.auth.admin.getUserById(m.user_id);
+      return (data?.user?.email ?? '').toLowerCase();
+    }),
   );
+  const alreadyMember = memberEmails.includes(normalizedEmail);
   if (alreadyMember) {
     return res.status(409).json({ success: false, code: 'already_member' });
   }

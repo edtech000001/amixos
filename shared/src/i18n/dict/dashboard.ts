@@ -517,6 +517,7 @@ export type DashboardDict = {
       addItem: string;
       subtotal: string;
       taxPercent: string;
+      discount: string;
       total: string;
       notesLabel: string;
       notesPlaceholder: string;
@@ -2386,6 +2387,7 @@ export type DashboardDict = {
       verComoBtn: string;
       verComoNotAllowed: string;
       verComoNotMember: string;
+      verComoOtherBusiness: string;
       verComoFailed: string;
       changeRoleBtn: string;
       youSuffix: string;
@@ -4047,6 +4049,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         addItem: 'Agregar concepto',
         subtotal: 'Subtotal',
         taxPercent: 'Impuesto (%)',
+        discount: 'Descuento',
         total: 'Total',
         notesLabel: 'Notas (opcional)',
         notesPlaceholder: 'Términos de pago, instrucciones de transferencia, etc.',
@@ -5873,6 +5876,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         verComoBtn: 'Ver como',
         verComoNotAllowed: 'No puedes ver la cuenta de este usuario.',
         verComoNotMember: 'Este usuario ya no es miembro.',
+        verComoOtherBusiness: 'No puedes usar «Ver como» con alguien que también pertenece a otro negocio.',
         verComoFailed: 'No se pudo iniciar “Ver como”. Inténtalo de nuevo.',
         changeRoleBtn: 'Cambiar rol',
         youSuffix: '(tú)',
@@ -7536,6 +7540,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         addItem: 'Add item',
         subtotal: 'Subtotal',
         taxPercent: 'Tax (%)',
+        discount: 'Discount',
         total: 'Total',
         notesLabel: 'Notes (optional)',
         notesPlaceholder: 'Payment terms, transfer instructions, etc.',
@@ -9359,6 +9364,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         verComoBtn: 'View as',
         verComoNotAllowed: "You can't view this user's account.",
         verComoNotMember: 'This user is no longer a member.',
+        verComoOtherBusiness: "You can't use “View as” for someone who also belongs to another business.",
         verComoFailed: 'Could not start “View as”. Please try again.',
         changeRoleBtn: 'Change role',
         youSuffix: '(you)',

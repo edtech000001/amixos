@@ -53,7 +53,9 @@ export async function POST(req: Request) {
       items?: { data?: Array<{ current_period_end?: number }> };
     };
     const periodEndUnix = subAny.current_period_end ?? subAny.items?.data?.[0]?.current_period_end;
-    await admin
+    // Errors must throw → 500 → Stripe retries. A swallowed error here means
+    // a paid customer stays locked out with no redelivery.
+    const { error: syncErr } = await admin
       .from('businesses')
       .update({
         stripe_subscription_id: sub.id,
@@ -64,6 +66,7 @@ export async function POST(req: Request) {
         current_period_end: periodEndUnix ? new Date(periodEndUnix * 1000).toISOString() : null,
       })
       .eq('id', businessId);
+    if (syncErr) throw syncErr;
     await trackLapse(businessId, sub.status);
 
     // When a canceled-but-still-active plan ends (migration 244), for the
@@ -98,16 +101,19 @@ export async function POST(req: Request) {
     switch (event.type) {
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
-        await syncSubscription(event.data.object as Stripe.Subscription);
+        // Re-read the live subscription: Stripe doesn't guarantee event order,
+        // and a late retry of an old 'active' event must not undo a cancel.
+        await syncSubscription(await stripe.subscriptions.retrieve((event.data.object as Stripe.Subscription).id));
         break;
       case 'customer.subscription.deleted': {
         const sub = event.data.object as Stripe.Subscription;
         const businessId = sub.metadata?.business_id;
         if (businessId) {
-          await admin
+          const { error } = await admin
             .from('businesses')
             .update({ subscription_status: 'canceled' })
             .eq('id', businessId);
+          if (error) throw error;
           await trackLapse(businessId, 'canceled');
         }
         break;

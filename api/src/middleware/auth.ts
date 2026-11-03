@@ -48,6 +48,24 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
 };
 
 /**
+ * "Ver como" tokens (lib/impersonationToken.ts) are a full sign-in AS the
+ * target, so they must never reach the target's own identity actions: account
+ * deletion, Google connections, invites, admin. Reads the claim without
+ * verifying — forging it only locks the forger out.
+ */
+export const rejectImpersonated = (req: Request, res: Response, next: NextFunction) => {
+  const payload = req.headers.authorization?.split(' ')[1]?.split('.')[1];
+  try {
+    if (payload && JSON.parse(Buffer.from(payload, 'base64url').toString()).amixos_impersonated) {
+      return res.status(403).json({ success: false, code: 'impersonation_not_allowed' });
+    }
+  } catch {
+    /* malformed token — authenticate() rejects it */
+  }
+  next();
+};
+
+/**
  * The caller's REAL role in a business, read from business_members (the source
  * of truth) using the service-role client. Never trust user_metadata for this.
  */

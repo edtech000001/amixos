@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
-import { insertInvoiceUnique, previewInvoiceNumber } from '@amixos/shared/lib/invoicing';
+import { computeTotals, insertInvoiceUnique, previewInvoiceNumber, type InvoiceLineItem } from '@amixos/shared/lib/invoicing';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { InvoiceLang } from '@amixos/shared';
@@ -129,6 +129,8 @@ function NuevaFacturaContent() {
   // editing an existing invoice overwrites this with its stored rate.
   const [taxRate, setTaxRate] = useState(() => business?.invoice_tax_rate ?? 0);
   const [taxRateText, setTaxRateText] = useState<string | null>(null);
+  // Edit mode: the invoice's stored discount (e.g. from an estimate) — kept in the total.
+  const [discount, setDiscount] = useState(0);
   const [language, setLanguage] = useState<InvoiceLang>('es');
   const [lines, setLines] = useState<LineItem[]>([{ ...EMPTY_LINE }]);
   const [customTemplates, setCustomTemplates] = useState<FieldTemplate[]>([]);
@@ -289,6 +291,7 @@ function NuevaFacturaContent() {
         const def = (business?.invoice_notes_default ?? '').trim();
         setNotesMode(def && (inv.notes ?? '').trim() === def ? 'default' : 'custom');
         setTaxRate(inv.tax_rate ?? 0);
+        setDiscount(Number((inv as { discount?: number | null }).discount) || 0);
         setLanguage((inv.language as InvoiceLang) ?? 'es');
         setCustomFields((inv.custom_fields as Record<string, string> | null) ?? {});
         const lineItems = (inv.line_items as LineItem[] | null) ?? [];
@@ -318,10 +321,8 @@ function NuevaFacturaContent() {
   };
   const removeLine = (i: number) => setLines(prev => prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== i));
 
-  // toFixed(6) strips float noise, preserving exact decimals (see computeTotals).
-  const subtotal = Number(lines.reduce((s, l) => s + Number((l.qty * l.rate).toFixed(6)), 0).toFixed(6));
-  const taxAmount = Number((subtotal * (taxRate / 100)).toFixed(6));
-  const total = Number((subtotal + taxAmount).toFixed(6));
+  // Same math as every other invoice path: excluded lines don't count, discount comes off.
+  const { subtotal, tax: taxAmount, total } = computeTotals(lines as InvoiceLineItem[], taxRate, discount);
 
   // Per-field show/hide (always-shown fields can never be hidden).
   const invHidden = parseHiddenFields(business?.invoice_field_hidden);
@@ -476,7 +477,9 @@ function NuevaFacturaContent() {
       due_date: dueDate || null,
       // passthrough (240) must survive the round-trip, or editing the invoice
       // would silently turn another company's lines into this one's revenue.
-      line_items: validLines.map(l => ({ description: l.description, qty: l.qty, rate: l.rate, ...(l.job_id ? { job_id: l.job_id, ...(l.edited ? { edited: true } : {}) } : {}), ...(l.passthrough ? { passthrough: l.passthrough } : {}) })),
+      // Keep every stored field (excluded, service_date, addon, priceBasis,
+      // passthrough…) — only the form's text buffers are dropped.
+      line_items: validLines.map(({ qtyText: _q, rateText: _r, ...l }) => l),
       subtotal_amount: subtotal,
       tax_rate: taxRate,
       tax_amount: taxAmount,
@@ -683,6 +686,12 @@ function NuevaFacturaContent() {
               />
               <span className="font-medium text-ink w-24 text-right">{fmt(taxAmount)}</span>
             </div>
+            {discount > 0 && (
+              <div className="flex items-center gap-8 text-sm">
+                <span className="text-muted">{t.discount}</span>
+                <span className="font-medium text-ink w-24 text-right">-{fmt(discount)}</span>
+              </div>
+            )}
             <div className="flex items-center gap-8 text-base font-bold border-t border-border-soft pt-2 mt-1">
               <span className="text-ink">{t.total}</span>
               <span className="text-primary w-24 text-right">{fmt(total)}</span>

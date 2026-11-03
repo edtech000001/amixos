@@ -203,7 +203,7 @@ export async function requestImpersonation(
 
 // Server codes that reflect a real business rule — retrying can't change the
 // outcome, so they surface to the caller immediately.
-const NON_RETRYABLE_CODES = new Set(['role_not_allowed', 'not_a_member', 'impersonate_self']);
+const NON_RETRYABLE_CODES = new Set(['role_not_allowed', 'not_a_member', 'impersonate_self', 'member_of_other_business']);
 
 /**
  * requestImpersonation with a one-shot recovery for transient auth failures.

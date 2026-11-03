@@ -24,6 +24,7 @@ import { accountRouter } from './routes/account';
 import { bugReportsRouter } from './routes/bugReports';
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
+import { rejectImpersonated } from './middleware/auth';
 
 dotenv.config();
 
@@ -95,7 +96,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'amixos-api'
 
 // Routes
 app.use('/api/v1/auth', authRouter);
-app.use('/api/v1/account', accountRouter);
+app.use('/api/v1/account', rejectImpersonated, accountRouter);
 app.use('/api/v1/bug-reports', bugReportsRouter);
 app.use('/api/v1/business', businessRouter);
 app.use('/api/v1/employees', employeeRouter);
@@ -103,9 +104,9 @@ app.use('/api/v1/invoices', invoiceRouter);
 app.use('/api/v1/clients', clientRouter);
 app.use('/api/v1/timesheet', timesheetRouter);
 app.use('/api/v1/dashboard', dashboardRouter);
-app.use('/api/v1/google-sync', googleSyncRouter);
-app.use('/api/v1/invites', invitesRouter);
-app.use('/api/v1/admin', adminRouter);
+app.use('/api/v1/google-sync', rejectImpersonated, googleSyncRouter);
+app.use('/api/v1/invites', rejectImpersonated, invitesRouter);
+app.use('/api/v1/admin', rejectImpersonated, adminRouter);
 app.use('/api/v1/map', mapRouter);
 app.use('/api/v1/weather', weatherRouter);
 app.use('/api/v1/sms', smsRouter);

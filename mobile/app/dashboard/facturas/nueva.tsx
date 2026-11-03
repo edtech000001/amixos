@@ -28,7 +28,7 @@ import {
 } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
-import { insertInvoiceUnique, previewInvoiceNumber } from '@amixos/shared/lib/invoicing';
+import { computeTotals, insertInvoiceUnique, previewInvoiceNumber, type InvoiceLineItem } from '@amixos/shared/lib/invoicing';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
@@ -158,6 +158,8 @@ export default function NuevaFacturaRoute() {
   // editing an existing invoice overwrites this with its stored rate.
   const [taxRate, setTaxRate] = useState(() => business?.invoice_tax_rate ?? 0);
   const [taxRateText, setTaxRateText] = useState<string | null>(null);
+  // Edit mode: the invoice's stored discount (e.g. from an estimate) — kept in the total.
+  const [discount, setDiscount] = useState(0);
   const [language, setLanguage] = useState<InvoiceLang>('es');
   const [lines, setLines] = useState<LineItem[]>([newLine()]);
   const [templates, setTemplates] = useState<FieldTemplate[]>([]);
@@ -300,12 +302,14 @@ export default function NuevaFacturaRoute() {
             setNotesMode(def && (inv.notes ?? '').trim() === def ? 'default' : 'custom');
           }
           setTaxRate(inv.tax_rate ?? 0);
+          setDiscount(Number((inv as { discount?: number | null }).discount) || 0);
           setLanguage((inv.language as InvoiceLang) ?? 'es');
           setCustomFields((inv.custom_fields as Record<string, string> | null) ?? {});
-          const items = (inv.line_items as { description: string; qty: number; rate: number; job_id?: string | null; edited?: boolean; passthrough?: PassthroughTag | null }[] | null) ?? [];
+          const items = (inv.line_items as InvoiceLineItem[] | null) ?? [];
           setLines(
             items.length > 0
-              ? items.map((i) => ({ id: newId(), description: i.description, qty: i.qty, rate: i.rate, job_id: i.job_id ?? null, edited: i.edited, passthrough: i.passthrough ?? null }))
+              // Keep every stored field (excluded, service_date, addon, priceBasis…).
+              ? items.map((i) => ({ ...i, id: newId() }))
               : [newLine()],
           );
           const idsFromLinks = (links ?? []).map((r: { client_id: string }) => r.client_id);
@@ -551,10 +555,8 @@ export default function NuevaFacturaRoute() {
   const generalKeys = invoiceFieldsInSection(invoiceLayout, 'general')
     .filter(k => (k.startsWith('custom:') ? true : !fHidden(k)));
 
-  // toFixed(6) strips float noise, preserving exact decimals (see computeTotals).
-  const subtotal = Number(lines.reduce((s, l) => s + Number((l.qty * l.rate).toFixed(6)), 0).toFixed(6));
-  const taxAmount = Number((subtotal * (taxRate / 100)).toFixed(6));
-  const total = Number((subtotal + taxAmount).toFixed(6));
+  // Same math as every other invoice path: excluded lines don't count, discount comes off.
+  const { subtotal, tax: taxAmount, total } = computeTotals(lines as InvoiceLineItem[], taxRate, discount);
 
   const updateLine = <K extends keyof LineItem>(id: string, field: K, value: LineItem[K]) =>
     setLines((prev) => prev.map((l) => (l.id === id
@@ -627,7 +629,8 @@ export default function NuevaFacturaRoute() {
       due_date: dueDate || null,
       // passthrough (240) must survive the round-trip, or editing the invoice
       // would silently turn another company's lines into this one's revenue.
-      line_items: validLines.map((l) => ({ description: l.description, qty: l.qty, rate: l.rate, ...(l.job_id ? { job_id: l.job_id, ...(l.edited ? { edited: true } : {}) } : {}), ...(l.passthrough ? { passthrough: l.passthrough } : {}) })),
+      // Keep every stored field — only the local row id and text buffers are dropped.
+      line_items: validLines.map(({ id: _id, qtyText: _q, rateText: _r, ...l }) => l),
       subtotal_amount: subtotal,
       tax_rate: taxRate,
       tax_amount: taxAmount,
@@ -849,6 +852,12 @@ export default function NuevaFacturaRoute() {
                     placeholderTextColor={c.faint}
                     className="w-24 rounded-xl border border-border bg-card px-3 py-1.5 text-ink text-right" style={{ fontSize: 14 }} />
                 </View>
+                {discount > 0 && (
+                  <View className="flex-row justify-between items-center">
+                    <Text className="text-sm text-muted">{t.discount}</Text>
+                    <Text className="text-sm font-medium text-ink">-{fmtMoney(discount)}</Text>
+                  </View>
+                )}
                 <View className="flex-row justify-between items-center pt-2 border-t border-border-soft">
                   <Text className="text-base font-bold text-ink">{t.total}</Text>
                   <Text className="text-lg font-bold text-primary">{fmtMoney(total)}</Text>

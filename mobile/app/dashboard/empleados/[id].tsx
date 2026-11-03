@@ -637,6 +637,7 @@ export default function EmpleadoDetailRoute() {
       setAccessError(
         code === 'role_not_allowed' ? teamT.verComoNotAllowed
           : code === 'not_a_member' ? teamT.verComoNotMember
+          : code === 'member_of_other_business' ? teamT.verComoOtherBusiness
           : teamT.verComoFailed,
       );
       setAccessBusy(false);
