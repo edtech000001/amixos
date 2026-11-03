@@ -6,13 +6,6 @@ import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 
-import { authRouter } from './routes/auth';
-import { businessRouter } from './routes/business';
-import { employeeRouter } from './routes/employee';
-import { invoiceRouter } from './routes/invoice';
-import { clientRouter } from './routes/client';
-import { timesheetRouter } from './routes/timesheet';
-import { dashboardRouter } from './routes/dashboard';
 import { googleSyncRouter } from './routes/googleSync';
 import { invitesRouter } from './routes/invites';
 import { adminRouter } from './routes/admin';
@@ -96,15 +89,8 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'amixos-api' }));
 
 // Routes
-app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/account', rejectImpersonated, accountRouter);
 app.use('/api/v1/bug-reports', bugReportsRouter);
-app.use('/api/v1/business', businessRouter);
-app.use('/api/v1/employees', employeeRouter);
-app.use('/api/v1/invoices', invoiceRouter);
-app.use('/api/v1/clients', clientRouter);
-app.use('/api/v1/timesheet', timesheetRouter);
-app.use('/api/v1/dashboard', dashboardRouter);
 app.use('/api/v1/google-sync', rejectImpersonated, googleSyncRouter);
 app.use('/api/v1/invites', rejectImpersonated, invitesRouter);
 app.use('/api/v1/admin', rejectImpersonated, adminRouter);

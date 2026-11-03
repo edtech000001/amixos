@@ -78,27 +78,3 @@ export async function getBusinessRole(userId: string, businessId: string): Promi
     .maybeSingle();
   return (data?.role as string | undefined) ?? null;
 }
-
-/**
- * Authorize a request by the caller's membership role in the target business.
- * `business_id` must be supplied in the body or query. With no roles listed,
- * any member passes (membership check only); otherwise the member's role must
- * be in the allowed set. Authorization is derived from the DB, not the JWT.
- */
-export const requireBusinessRole = (...roles: string[]) => {
-  return async (req: AuthRequest, res: Response, next: NextFunction) => {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ success: false, message: 'Unauthenticated' });
-    }
-    const businessId = String(req.body?.business_id ?? req.query?.business_id ?? '');
-    if (!businessId) {
-      return res.status(400).json({ success: false, message: 'business_id required' });
-    }
-    const role = await getBusinessRole(userId, businessId);
-    if (!role || (roles.length > 0 && !roles.includes(role))) {
-      return res.status(403).json({ success: false, message: 'forbidden' });
-    }
-    next();
-  };
-};
