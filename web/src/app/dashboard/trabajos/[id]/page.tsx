@@ -30,7 +30,7 @@ import { parseJobLayout, fieldsInSection, type JobLayoutSection } from '@amixos/
 import { invoiceDefaultLanguage, nextInvoiceNumber } from '@amixos/shared/lib/invoiceTemplate';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { memberNameMap } from '@amixos/shared/lib/memberNames';
-import { insertInvoiceUnique, removeJobFromInvoice, placeholderQtyFor, fetchClientDraftInvoices, addJobsToInvoice, type ClientDraftInvoice } from '@amixos/shared/lib/invoicing';
+import { insertInvoiceUnique, removeJobFromInvoice, placeholderQtyFor, fetchClientDraftInvoices, addJobsToInvoice, type ClientDraftInvoice, computeTotals } from '@amixos/shared/lib/invoicing';
 import { can } from '@amixos/shared/lib/permissions';
 import { canPauseStatus, fetchPauseLog, fetchPauseReasons, fetchPauseSummary, formatDuration, formatPauseSummary, logPauseEnd, logPauseStart, pausePatch, resumePatch, type PauseEpisode, type PauseReason, type PauseSummary } from '@amixos/shared/lib/jobPause';
 import { estimateJobLaborCost, type JobLaborEstimate } from '@amixos/shared/lib/payroll';
@@ -468,14 +468,11 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     if (draft) { await addToDraftInvoice(draft); return; }
     setInvoicing(true);
 
-    const itemSubtotal = items.reduce((s, i) => s + i.total, 0);
-    // Use stored financial fields if available (from proposal), otherwise compute from items
+    // From an estimate: keep its tax rate + discount. Amounts always come from
+    // the lines below (computeTotals), so the total matches what's printed.
     const useStoredFinancials = job.estimate_number && job.subtotal_amount > 0;
-    const invoiceSubtotal = useStoredFinancials ? job.subtotal_amount : itemSubtotal;
     const invoiceTaxRate = useStoredFinancials ? job.tax_rate : taxRate;
-    const invoiceTaxAmt = useStoredFinancials ? job.tax_amount : invoiceSubtotal * (taxRate / 100);
-    const invoiceDiscount = useStoredFinancials ? job.discount : 0;
-    const invoiceTotal = invoiceSubtotal + invoiceTaxAmt - invoiceDiscount;
+    const invoiceDiscount = useStoredFinancials ? (job.discount ?? 0) : 0;
 
     const invoiceLang = invoiceDefaultLanguage(business.invoice_template, locale);
     const { count } = await supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('business_id', business.id);
@@ -505,6 +502,8 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
         job_id: id,
       });
     }
+
+    const { subtotal: invoiceSubtotal, tax: invoiceTaxAmt, total: invoiceTotal } = computeTotals(lineItems, invoiceTaxRate, invoiceDiscount);
 
     // insertInvoiceUnique: count-based numbers collide after a delete — walk
     // forward to the next free number instead of failing silently.

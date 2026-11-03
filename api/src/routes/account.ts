@@ -265,30 +265,48 @@ accountRouter.post('/purge-due', async (req, res) => {
     ((owned ?? []) as { id: string }[]).forEach(b => bizIds.add(b.id));
   }
 
-  let filesRemoved = 0;
-  for (const id of bizIds) {
-    // Everything the app writes for a business lives under <businessId>/.
-    const { data: listed } = await supabase.storage.from(STORAGE_BUCKET).list(id, { limit: 1000 });
-    const paths: string[] = [];
-    for (const entry of (listed ?? []) as { name: string; id?: string | null }[]) {
-      if (entry.id) {
-        paths.push(`${id}/${entry.name}`);
-        continue;
+  // Every file under <prefix>/, any depth. Storage list() returns at most
+  // `limit` entries per call, so page with offset until a short page.
+  const listAll = async (prefix: string): Promise<string[]> => {
+    const out: string[] = [];
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await supabase.storage.from(STORAGE_BUCKET).list(prefix, { limit: 1000, offset });
+      if (error) throw error;
+      const entries = (data ?? []) as { name: string; id?: string | null }[];
+      for (const e of entries) {
+        if (e.id) out.push(`${prefix}/${e.name}`);
+        else out.push(...(await listAll(`${prefix}/${e.name}`))); // folder
       }
-      // A folder: one level down covers the layout the app uses today.
-      const { data: inner } = await supabase.storage.from(STORAGE_BUCKET).list(`${id}/${entry.name}`, { limit: 1000 });
-      for (const f of (inner ?? []) as { name: string }[]) paths.push(`${id}/${entry.name}/${f.name}`);
+      if (entries.length < 1000) return out;
     }
-    if (paths.length) {
-      const { error } = await supabase.storage.from(STORAGE_BUCKET).remove(paths);
-      if (!error) filesRemoved += paths.length;
+  };
+
+  let filesRemoved = 0;
+  try {
+    for (const id of bizIds) {
+      // Everything the app writes for a business lives under <businessId>/.
+      const paths = await listAll(id);
+      for (let i = 0; i < paths.length; i += 1000) {
+        const { error } = await supabase.storage.from(STORAGE_BUCKET).remove(paths.slice(i, i + 1000));
+        if (error) throw error;
+        filesRemoved += Math.min(1000, paths.length - i);
+      }
     }
+  } catch (e) {
+    // Stop BEFORE purging rows: the deletion rows stay, so the next cron run
+    // retries these files instead of leaving them orphaned forever.
+    console.error('[account/purge] storage cleanup failed', e);
+    return res.status(500).json({ success: false, message: 'storage_cleanup_failed', filesRemoved });
   }
 
-  const [{ data: purgedBiz }, { data: purgedUsers }] = await Promise.all([
+  const [{ data: purgedBiz, error: bizErr }, { data: purgedUsers, error: userErr }] = await Promise.all([
     supabase.rpc('purge_due_businesses'),
     supabase.rpc('purge_due_accounts'),
   ]);
+  if (bizErr || userErr) {
+    console.error('[account/purge] purge rpc failed', bizErr ?? userErr);
+    return res.status(500).json({ success: false, message: (bizErr ?? userErr)!.message, filesRemoved });
+  }
 
   res.json({
     success: true,

@@ -61,6 +61,7 @@ import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useAppHref, useSectionBase } from '@/lib/sectionNav';
 import { ccContactEmails, mailtoHref } from '@amixos/shared/lib/clientRecipients';
 
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 interface FieldTemplate {
   id: string;
   field_key: string;
@@ -339,12 +340,18 @@ export default function ClienteDetailRoute() {
     // Background fetch of all roles across the business. Cheap query
     // (single column, indexed) and the result feeds the AutocompleteInput
     // in the contact modal. Deduped + sorted client-side.
-    const { data: roleRows } = await supabase
-      .from('client_contacts')
-      .select('role')
-      .eq('business_id', business.id)
-      .not('role', 'is', null)
-      .neq('role', '');
+    // Paged: roles that only appear past row 1000 were missing.
+    const roleRows = await fetchAllById<{ id: string; role: string | null }>((afterId, pageSize) => {
+      let q = supabase
+        .from('client_contacts')
+        .select('id, role')
+        .eq('business_id', business.id)
+        .not('role', 'is', null)
+        .neq('role', '')
+        .order('id', { ascending: true }).limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
+    }).catch(() => [] as { id: string; role: string | null }[]);
     const unique = Array.from(
       new Set(
         ((roleRows as { role: string }[] | null) ?? [])

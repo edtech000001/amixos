@@ -463,6 +463,63 @@ export function detectLineSortDirection(
  *  Manual (non job-tagged) line items are preserved; job lines are rebuilt.
  *  The stored ORDER is preserved (see preserveLineOrder). No-ops for sent/paid
  *  invoices (frozen) and writes only when something actually changed. */
+/**
+ * Read-modify-write of an invoice's line_items with an optimistic check on
+ * updated_at (bumped by the update_invoices_updated_at trigger on every save).
+ * If someone else saved between our read and our write, the write matches no
+ * row — re-read and re-apply `change` to THEIR version instead of silently
+ * overwriting it (two people editing lines used to drop each other's changes).
+ * `change` returns null to skip the write. Totals are recomputed unless
+ * `keepTotals` (a pure reorder).
+ */
+async function saveInvoiceLines(
+  supabase: Supa,
+  invoiceId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  change: (items: InvoiceLineItem[], inv: any) => InvoiceLineItem[] | null,
+  opts?: { keepTotals?: boolean },
+): Promise<{ saved: boolean; before: InvoiceLineItem[]; after: InvoiceLineItem[] } | null> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { data: inv, error } = await supabase
+      .from('invoices')
+      .select('id, status, line_items, tax_rate, discount, client_id, updated_at')
+      .eq('id', invoiceId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!inv) return null;
+    const before = (inv.line_items ?? []) as InvoiceLineItem[];
+    const after = change(before, inv);
+    if (!after) return { saved: false, before, after: before };
+    const patch: Record<string, unknown> = { line_items: after };
+    if (!opts?.keepTotals) {
+      const { subtotal, tax, total } = computeTotals(after, inv.tax_rate ?? 0, inv.discount ?? 0);
+      Object.assign(patch, { subtotal_amount: subtotal, tax_amount: tax, total_amount: total });
+    }
+    const { data: hit, error: upErr } = await supabase
+      .from('invoices').update(patch).eq('id', invoiceId).eq('updated_at', inv.updated_at).select('id');
+    if (upErr) throw upErr;
+    if (hit?.length) return { saved: true, before, after };
+    // 0 rows: either a newer save (retry on it) or RLS refused the update.
+    const { data: now } = await supabase.from('invoices').select('updated_at').eq('id', invoiceId).maybeSingle();
+    if (now?.updated_at === inv.updated_at) throw new Error('invoice_update_not_allowed');
+  }
+  throw new Error('invoice_changed_concurrently');
+}
+
+/** For index-based edits: pin the line seen on the FIRST read, so a retry on a
+ *  newer version edits that same line even if others were added/removed. */
+function pinLine(index: number): (items: InvoiceLineItem[]) => number {
+  let key: string | null = null;
+  return (items) => {
+    if (key === null) {
+      if (index < 0 || index >= items.length) return -1;
+      key = JSON.stringify(items[index]);
+      return index;
+    }
+    return items.findIndex(li => JSON.stringify(li) === key);
+  };
+}
+
 export async function rebuildInvoiceLineItems(
   supabase: Supa,
   // `force` re-derives EVERY job line fresh (ignoring hand-edits/auto-prices) —
@@ -492,7 +549,6 @@ export async function rebuildInvoiceLineItems(
   // hand-entered lines (no job_id, e.g. a travel charge) are PRESERVED, except
   // any stale untagged line that exactly duplicates a rebuilt job line (those
   // are leftovers from before line items were tagged).
-  const existing = (inv.line_items ?? []) as InvoiceLineItem[];
   const jobLines: InvoiceLineItem[] = [];
   for (const j of (jobs ?? []) as any[]) {
     jobLines.push(...lineItemsForJob(j.id, j.title ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels, { hideTypes: opts.hideItemTypes, placeholderQty: placeholderQtyFor(j, opts.qtyField) }));
@@ -504,6 +560,8 @@ export async function rebuildInvoiceLineItems(
   // (sent → draft) used to wipe every unit price on the next rebuild.
   // force → treat NO job as overridden, so every job line is re-derived fresh
   // at $0 (clears auto-prices, edits, and add-on lines).
+  const res = await saveInvoiceLines(supabase, opts.invoiceId, (existing, cur) => {
+  if (cur.status !== 'draft') return null;
   const overriddenJobs = new Set(
     opts.force ? [] : existing.filter(li => li.job_id && (li.edited || Number(li.rate) > 0)).map(li => li.job_id as string),
   );
@@ -554,14 +612,9 @@ export async function rebuildInvoiceLineItems(
   // "sort by date" is silently undone on the next page load, and a manual
   // travel charge added at the bottom jumps to the top.
   const next = preserveLineOrder([...manual, ...finalJobLines], existing);
-  if (JSON.stringify(next) === JSON.stringify(existing)) return { changed: false };
-
-  const { subtotal, tax, total } = computeTotals(next, inv.tax_rate ?? 0, inv.discount ?? 0);
-  await supabase
-    .from('invoices')
-    .update({ line_items: next, subtotal_amount: subtotal, tax_amount: tax, total_amount: total })
-    .eq('id', opts.invoiceId);
-  return { changed: true };
+  return JSON.stringify(next) === JSON.stringify(existing) ? null : next;
+  });
+  return { changed: !!res?.saved };
 }
 
 /** Append a hand-entered (non-job) line item to an invoice — e.g. a travel
@@ -571,22 +624,11 @@ export async function addManualLineItem(
   supabase: Supa,
   opts: { invoiceId: string; description: string; qty: number; rate: number; serviceDate?: string | null },
 ): Promise<{ ok: boolean }> {
-  const { data: inv } = await supabase
-    .from('invoices')
-    .select('id, line_items, tax_rate, discount')
-    .eq('id', opts.invoiceId)
-    .single();
-  if (!inv) return { ok: false };
-  const next: InvoiceLineItem[] = [
-    ...((inv.line_items ?? []) as InvoiceLineItem[]),
+  const res = await saveInvoiceLines(supabase, opts.invoiceId, items => [
+    ...items,
     { description: opts.description, qty: opts.qty, rate: opts.rate, ...(opts.serviceDate ? { service_date: opts.serviceDate } : {}) },
-  ];
-  const { subtotal, tax, total } = computeTotals(next, inv.tax_rate ?? 0, inv.discount ?? 0);
-  await supabase
-    .from('invoices')
-    .update({ line_items: next, subtotal_amount: subtotal, tax_amount: tax, total_amount: total })
-    .eq('id', opts.invoiceId);
-  return { ok: true };
+  ]);
+  return { ok: !!res?.saved };
 }
 
 /** Reorder the STORED line items chronologically: job-backed groups (main
@@ -604,10 +646,10 @@ export async function sortInvoiceLinesByDate(
     .eq('id', opts.invoiceId)
     .single();
   if (!inv) return;
-  const items = (inv.line_items ?? []) as InvoiceLineItem[];
-  if (items.length < 2) return;
+  const first = (inv.line_items ?? []) as InvoiceLineItem[];
+  if (first.length < 2) return;
 
-  const jobIds = Array.from(new Set(items.map(i => i.job_id).filter((x): x is string => !!x)));
+  const jobIds = Array.from(new Set(first.map(i => i.job_id).filter((x): x is string => !!x)));
   const dates = new Map<string, string>();
   if (jobIds.length) {
     const { data: jobs } = await supabase
@@ -620,13 +662,11 @@ export async function sortInvoiceLinesByDate(
   }
 
   // Group: a job's main line + its add-on lines move as one unit.
-  const groups = groupLinesByDate(items, dates);
   const dir = opts.direction === 'asc' ? 1 : -1; // default: newest first
-  const sorted = groups
+  await saveInvoiceLines(supabase, opts.invoiceId, items => groupLinesByDate(items, dates)
     .map((g, i) => ({ g, i }))
     .sort((a, b) => dir * a.g.date.localeCompare(b.g.date) || a.i - b.i)
-    .flatMap(({ g }) => g.items);
-  await supabase.from('invoices').update({ line_items: sorted }).eq('id', opts.invoiceId);
+    .flatMap(({ g }) => g.items), { keepTotals: true });
 }
 
 /** Toggle a line's temporary exclusion and recompute totals. The line stays
@@ -636,20 +676,11 @@ export async function setLineItemExcluded(
   supabase: Supa,
   opts: { invoiceId: string; index: number; excluded: boolean },
 ): Promise<void> {
-  const { data: inv } = await supabase
-    .from('invoices')
-    .select('id, line_items, tax_rate, discount')
-    .eq('id', opts.invoiceId)
-    .single();
-  if (!inv) return;
-  const items = (inv.line_items ?? []) as InvoiceLineItem[];
-  if (opts.index < 0 || opts.index >= items.length) return;
-  const next = items.map((li, i) => (i === opts.index ? { ...li, excluded: opts.excluded } : li));
-  const { subtotal, tax, total } = computeTotals(next, inv.tax_rate ?? 0, inv.discount ?? 0);
-  await supabase
-    .from('invoices')
-    .update({ line_items: next, subtotal_amount: subtotal, tax_amount: tax, total_amount: total })
-    .eq('id', opts.invoiceId);
+  const at = pinLine(opts.index);
+  await saveInvoiceLines(supabase, opts.invoiceId, items => {
+    const idx = at(items);
+    return idx < 0 ? null : items.map((li, i) => (i === idx ? { ...li, excluded: opts.excluded } : li));
+  });
 }
 
 /** Update a single hand-entered (manual) line item by index and recompute
@@ -659,32 +690,28 @@ export async function updateLineItemAt(
   supabase: Supa,
   opts: { invoiceId: string; index: number; description: string; qty: number; rate: number; serviceDate?: string | null },
 ): Promise<void> {
-  const { data: inv } = await supabase
-    .from('invoices')
-    .select('id, line_items, tax_rate, discount')
-    .eq('id', opts.invoiceId)
-    .single();
-  if (!inv) return;
-  const items = (inv.line_items ?? []) as InvoiceLineItem[];
-  if (opts.index < 0 || opts.index >= items.length) return;
-  const next = items.map((li, i) =>
-    i === opts.index
+  const at = pinLine(opts.index);
+  let target: InvoiceLineItem | undefined;
+  let items: InvoiceLineItem[] = [];
+  const res = await saveInvoiceLines(supabase, opts.invoiceId, cur => {
+    const idx = at(cur);
+    if (idx < 0) return null;
+    items = cur;
+    target = cur[idx];
+    return cur.map((li, i) =>
+    i === idx
       // A hand-set rate no longer matches the auto-priced add-on breakdown, so
       // drop the stale "+add-on" note.
       ? { ...li, description: opts.description, qty: opts.qty, rate: opts.rate, addonNote: null, priceBasis: null, ...(opts.serviceDate !== undefined ? { service_date: opts.serviceDate } : {}), ...(li.job_id ? { edited: true } : {}) }
       : li,
-  );
-  const { subtotal, tax, total } = computeTotals(next, inv.tax_rate ?? 0, inv.discount ?? 0);
-  await supabase
-    .from('invoices')
-    .update({ line_items: next, subtotal_amount: subtotal, tax_amount: tax, total_amount: total })
-    .eq('id', opts.invoiceId);
+    );
+  });
+  if (!res?.saved) return;
 
   // When a job bills as a SINGLE line, that line's name IS the job's name — keep
   // them in sync by renaming the job too, so the change shows everywhere
   // (dashboard, print, send). Skip add-on lines (their own label) and multi-line
   // / itemized jobs (one item shouldn't rename the whole job).
-  const target = items[opts.index];
   const jobLineCount = target?.job_id
     ? items.filter(li => li.job_id === target.job_id && !li.addon).length
     : 0;
@@ -702,18 +729,11 @@ export async function removeLineItemAt(
   supabase: Supa,
   opts: { invoiceId: string; index: number },
 ): Promise<void> {
-  const { data: inv } = await supabase
-    .from('invoices')
-    .select('id, line_items, tax_rate, discount')
-    .eq('id', opts.invoiceId)
-    .single();
-  if (!inv) return;
-  const next = ((inv.line_items ?? []) as InvoiceLineItem[]).filter((_, i) => i !== opts.index);
-  const { subtotal, tax, total } = computeTotals(next, inv.tax_rate ?? 0, inv.discount ?? 0);
-  await supabase
-    .from('invoices')
-    .update({ line_items: next, subtotal_amount: subtotal, tax_amount: tax, total_amount: total })
-    .eq('id', opts.invoiceId);
+  const at = pinLine(opts.index);
+  await saveInvoiceLines(supabase, opts.invoiceId, items => {
+    const idx = at(items);
+    return idx < 0 ? null : items.filter((_, i) => i !== idx);
+  });
 }
 
 /** Detach a job from its invoice: revert the job to `completed`, strip its
@@ -728,27 +748,20 @@ export async function removeJobFromInvoice(
     invoice: { id: string; line_items: InvoiceLineItem[] | null; tax_rate?: number; discount?: number };
   },
 ): Promise<{ remaining: number }> {
-  const all = (opts.invoice.line_items ?? []) as InvoiceLineItem[];
-  const remaining = all.filter(li => li.job_id !== opts.jobId);
   // Only rewrite line items + totals when this job actually had tagged lines.
   // Legacy invoices (line items with no job_id) are left untouched so we never
-  // corrupt totals computed under a different line-item shape.
-  if (remaining.length !== all.length) {
-    const { subtotal, tax, total } = computeTotals(
-      remaining,
-      opts.invoice.tax_rate ?? 0,
-      opts.invoice.discount ?? 0,
-    );
-    await supabase
-      .from('invoices')
-      .update({ line_items: remaining, subtotal_amount: subtotal, tax_amount: tax, total_amount: total })
-      .eq('id', opts.invoice.id);
-  }
-  await supabase
+  // corrupt totals computed under a different line-item shape. Reads the
+  // invoice fresh (the caller's copy may be stale).
+  const res = await saveInvoiceLines(supabase, opts.invoice.id, all => {
+    const remaining = all.filter(li => li.job_id !== opts.jobId);
+    return remaining.length !== all.length ? remaining : null;
+  });
+  const { error } = await supabase
     .from('jobs')
     .update({ status: 'completed', invoice_id: null, invoiced_at: null })
     .eq('id', opts.jobId);
-  return { remaining: remaining.length };
+  if (error) throw error;
+  return { remaining: res?.after.length ?? 0 };
 }
 
 /** Move a job (and its tagged line items) from one invoice to another invoice of
@@ -761,33 +774,25 @@ export async function moveJobToInvoice(
     to: { id: string; line_items: InvoiceLineItem[] | null; tax_rate?: number; discount?: number };
   },
 ): Promise<{ fromRemaining: number }> {
-  const fromAll = (opts.from.line_items ?? []) as InvoiceLineItem[];
-  const moved = fromAll.filter(li => li.job_id === opts.jobId);
-  const fromRemaining = fromAll.filter(li => li.job_id !== opts.jobId);
-
-  // Only shuffle line items when this job has tagged lines on the source invoice.
-  // Otherwise just repoint the job (legacy invoices keep their line items intact).
+  // Fresh reads of both invoices (the caller's copies may be stale). Only
+  // shuffle line items when this job has tagged lines on the source invoice;
+  // otherwise just repoint the job (legacy invoices keep their lines intact).
+  // Destination first: a failure part-way leaves the lines on both (visible,
+  // fixable) instead of on neither (lost).
+  const { data: src, error: srcErr } = await supabase.from('invoices').select('line_items').eq('id', opts.from.id).maybeSingle();
+  if (srcErr) throw srcErr;
+  const moved = ((src?.line_items ?? []) as InvoiceLineItem[]).filter(li => li.job_id === opts.jobId);
+  let fromRemaining = ((src?.line_items ?? []) as InvoiceLineItem[]).length;
   if (moved.length > 0) {
-    const toAll = [...((opts.to.line_items ?? []) as InvoiceLineItem[]), ...moved];
-    const fromTotals = computeTotals(fromRemaining, opts.from.tax_rate ?? 0, opts.from.discount ?? 0);
-    const toTotals = computeTotals(toAll, opts.to.tax_rate ?? 0, opts.to.discount ?? 0);
-    await supabase.from('invoices').update({
-      line_items: fromRemaining,
-      subtotal_amount: fromTotals.subtotal,
-      tax_amount: fromTotals.tax,
-      total_amount: fromTotals.total,
-    }).eq('id', opts.from.id);
-    await supabase.from('invoices').update({
-      line_items: toAll,
-      subtotal_amount: toTotals.subtotal,
-      tax_amount: toTotals.tax,
-      total_amount: toTotals.total,
-    }).eq('id', opts.to.id);
+    await saveInvoiceLines(supabase, opts.to.id, items => [...items.filter(li => li.job_id !== opts.jobId), ...moved]);
+    const res = await saveInvoiceLines(supabase, opts.from.id, items => items.filter(li => li.job_id !== opts.jobId));
+    fromRemaining = res?.after.length ?? 0;
   }
 
-  await supabase.from('jobs').update({ invoice_id: opts.to.id }).eq('id', opts.jobId);
+  const { error } = await supabase.from('jobs').update({ invoice_id: opts.to.id }).eq('id', opts.jobId);
+  if (error) throw error;
 
-  return { fromRemaining: fromRemaining.length };
+  return { fromRemaining };
 }
 
 /** A client's open draft invoice — what "Generate invoice" on a job offers to
@@ -870,21 +875,22 @@ export async function addJobsToInvoice(
   for (const jid of opts.jobIds) {
     added.push(...lineItemsForJob(jid, titleById.get(jid) ?? '', (jobItems ?? []) as JobItemRow[], opts.itemTypeLabels, { hideTypes: opts.hideItemTypes, placeholderQty: placeholderQtyFor(jobById.get(jid) ?? {}, opts.qtyField) }));
   }
-  const next = [...((opts.invoice.line_items ?? []) as InvoiceLineItem[]), ...added];
-  const { subtotal, tax, total } = computeTotals(next, opts.invoice.tax_rate ?? 0, opts.invoice.discount ?? 0);
-
-  await supabase.from('invoices').update({
-    line_items: next,
-    subtotal_amount: subtotal,
-    tax_amount: tax,
-    total_amount: total,
-  }).eq('id', opts.invoice.id);
+  // Appended to the invoice's CURRENT lines (fresh read, retried on a
+  // concurrent save) — skipping jobs already on it so a double add can't bill twice.
+  const adding = new Set(opts.jobIds);
+  const res = await saveInvoiceLines(supabase, opts.invoice.id, items => {
+    const already = new Set(items.map(li => li.job_id).filter(id => id && adding.has(id)));
+    const fresh = added.filter(li => !already.has(li.job_id));
+    return fresh.length ? [...items, ...fresh] : null;
+  });
+  if (!res) return { ok: false };
 
   const nowIso = new Date().toISOString();
-  await supabase
+  const { error } = await supabase
     .from('jobs')
     .update({ status: 'invoiced', invoice_id: opts.invoice.id, invoiced_at: nowIso })
     .in('id', opts.jobIds);
+  if (error) throw error;
 
   return { ok: true };
 }
@@ -900,12 +906,12 @@ export async function linkLineToJob(
   supabase: Supa,
   opts: { invoiceId: string; index: number; jobId: string },
 ): Promise<{ ok: boolean }> {
-  const { data: inv } = await supabase.from('invoices').select('id, line_items').eq('id', opts.invoiceId).single();
-  if (!inv) return { ok: false };
-  const items = (inv.line_items ?? []) as InvoiceLineItem[];
-  if (opts.index < 0 || opts.index >= items.length) return { ok: false };
-  const next = items.map((li, i) => (i === opts.index ? { ...li, job_id: opts.jobId, edited: true } : li));
-  await supabase.from('invoices').update({ line_items: next }).eq('id', opts.invoiceId);
+  const at = pinLine(opts.index);
+  const res = await saveInvoiceLines(supabase, opts.invoiceId, items => {
+    const idx = at(items);
+    return idx < 0 ? null : items.map((li, i) => (i === idx ? { ...li, job_id: opts.jobId, edited: true } : li));
+  }, { keepTotals: true });
+  if (!res?.saved) return { ok: false };
   await supabase
     .from('jobs')
     .update({ status: 'invoiced', invoice_id: opts.invoiceId, invoiced_at: new Date().toISOString() })
@@ -945,11 +951,13 @@ export async function autopriceInvoice(
      *  AUTOPRICE_SKIP leaves that line unpriced WITHOUT blocking the rest. */
     picks?: Record<number, string>;
   },
+  /** Internal: set on the single retry after a concurrent save. */
+  _retried = false,
 ): Promise<{ matched: number; alreadyPriced: number; skipped: number; unmatched: string[]; ambiguous: AutopriceAmbiguous[] }> {
   if (!opts.items.length) return { matched: 0, alreadyPriced: 0, skipped: 0, unmatched: [], ambiguous: [] };
   const { data: inv } = await supabase
     .from('invoices')
-    .select('id, line_items, tax_rate, discount, client_id')
+    .select('id, line_items, tax_rate, discount, client_id, updated_at')
     .eq('id', opts.invoiceId)
     .single();
   if (!inv) return { matched: 0, alreadyPriced: 0, skipped: 0, unmatched: [], ambiguous: [] };
@@ -1088,10 +1096,18 @@ export async function autopriceInvoice(
   if (!matched) return { matched: 0, alreadyPriced, skipped, unmatched, ambiguous: [] };
 
   const { subtotal, tax, total } = computeTotals(next, inv.tax_rate ?? 0, inv.discount ?? 0);
-  await supabase
+  // Only if nobody saved since our read (see saveInvoiceLines); else re-run once on theirs.
+  const { data: hit, error: upErr } = await supabase
     .from('invoices')
     .update({ line_items: next, subtotal_amount: subtotal, tax_amount: tax, total_amount: total })
-    .eq('id', opts.invoiceId);
+    .eq('id', opts.invoiceId)
+    .eq('updated_at', inv.updated_at)
+    .select('id');
+  if (upErr) throw upErr;
+  if (!hit?.length) {
+    if (_retried) throw new Error('invoice_changed_concurrently');
+    return autopriceInvoice(supabase, opts, true);
+  }
   return { matched, alreadyPriced, skipped, unmatched, ambiguous: [] };
 }
 

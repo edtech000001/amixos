@@ -31,6 +31,7 @@ import {
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { Tooltip } from '@amixos/shared/ui/Tooltip';
 
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 export type MapType = 'roadmap' | 'satellite' | 'hybrid' | 'terrain';
 export type PinSize = 'small' | 'medium' | 'large';
 
@@ -737,14 +738,20 @@ function IgnoredClientsSection({
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const { data } = await supabase
-        .from('clients')
-        .select('id, first_name, last_name, company')
-        .eq('business_id', business.id)
-        .eq('geocoding_ignored', true)
-        .order('first_name', { ascending: true });
+      // Paged: a plain select stops at 1000 rows (PostgREST cap) — e.g. right
+      // after importing thousands of not-yet-geocoded clients.
+      const data = await fetchAllById<Row>((afterId, pageSize) => {
+        let q = supabase
+          .from('clients')
+          .select('id, first_name, last_name, company')
+          .eq('business_id', business.id)
+          .eq('geocoding_ignored', true)
+          .order('id', { ascending: true }).limit(pageSize);
+        if (afterId) q = q.gt('id', afterId);
+        return q;
+      }).then(rows => rows.sort((a, b) => (a.first_name ?? '').localeCompare(b.first_name ?? '')), () => [] as Row[]);
       if (!cancelled) {
-        setRows((data ?? []) as Row[]);
+        setRows(data);
         setLoading(false);
       }
     })();

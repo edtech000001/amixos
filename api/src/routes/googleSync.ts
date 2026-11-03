@@ -537,7 +537,7 @@ googleSyncRouter.post('/backfill', async (req: AuthRequest, res) => {
     if (existing) {
       await supabase
         .from('client_contacts')
-        .update({ google_resource_name: existing })
+        .update({ google_resource_name: existing.resourceName })
         .eq('id', c.id);
       linked++;
       continue;

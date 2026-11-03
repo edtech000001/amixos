@@ -1032,7 +1032,8 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         lastName: c?.lastName ?? '',
         company: c?.company ?? '',
         business: business?.name ?? '',
-        total: `$${invoice.totalAmount.toFixed(2)}`,
+        // Same formatter as the PDF — toFixed rounds 2.675 to 2.67, Intl to 2.68.
+        total: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(invoice.totalAmount),
         dueDate: invoice.dueDate ?? '',
       },
     });
@@ -1412,7 +1413,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                     <label className="text-sm font-semibold text-ink">{tInv.payments.amountLabel}</label>
                     {invoice ? (
                       <span className="text-sm text-muted">
-                        {tInv.payments.remaining}: <span className="font-semibold text-ink">${formatNumberGrouped((Math.round(remaining * 100) / 100).toFixed(2))}</span>
+                        {tInv.payments.remaining}: <span className="font-semibold text-ink">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(remaining)}</span>
                       </span>
                     ) : null}
                   </div>

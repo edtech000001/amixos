@@ -65,7 +65,7 @@ export default function SmsModule() {
           .from('clients')
           .select('id, first_name, last_name, phone_cell, phone')
           .eq('business_id', businessId)
-          .order('first_name')
+          .order('first_name').order('id')
           .range(from, to),
     ).then(rows =>
       setClients(

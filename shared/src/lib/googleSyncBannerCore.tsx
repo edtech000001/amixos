@@ -66,6 +66,8 @@ interface PendingQueue {
   total: number;
   failed: number;
   startedAt: number;
+  /** Who started it — a queue is only resumed for the same signed-in user. */
+  userKey?: string | null;
 }
 
 export interface SyncQueueStorage {
@@ -156,6 +158,8 @@ export function GoogleSyncBannerProvider({
   onCancelImport,
   businessKey,
 }: ProviderProps) {
+  const userKeyRef = useRef(userKey ?? null);
+  userKeyRef.current = userKey ?? null;
   const [status, setStatus] = useState<SyncStatus>({ kind: 'idle' });
   const queueRef = useRef<PendingQueue | null>(null);
   const runningRef = useRef(false);
@@ -226,7 +230,7 @@ export function GoogleSyncBannerProvider({
         // sync the user just tried to abort.
         if (storage && !cancelRequestedRef.current) {
           try {
-            await storage.save(q);
+            await storage.save({ ...q, userKey: userKeyRef.current });
           } catch {
             // Non-fatal — we just lose resume on restart.
           }
@@ -294,7 +298,7 @@ export function GoogleSyncBannerProvider({
       const done = queueRef.current.total - queueRef.current.remaining.length;
       const displayMode: SyncMode = kindToMode(queueRef.current.remaining[0]?.kind, mode);
       setStatus({ kind: 'syncing', done, total: queueRef.current.total, mode: displayMode });
-      if (storage) void storage.save(queueRef.current).catch(() => {});
+      if (storage) void storage.save({ ...queueRef.current, userKey: userKeyRef.current }).catch(() => {});
       return;
     }
     clearDismiss();
@@ -308,7 +312,7 @@ export function GoogleSyncBannerProvider({
       startedAt: Date.now(),
     };
     setStatus({ kind: 'syncing', done: 0, total: items.length, mode });
-    if (storage) void storage.save(queueRef.current).catch(() => {});
+    if (storage) void storage.save({ ...queueRef.current, userKey: userKeyRef.current }).catch(() => {});
     void runLoop();
   }, [clearDismiss, runLoop, storage]);
 
@@ -387,7 +391,7 @@ export function GoogleSyncBannerProvider({
       cancelRequestedRef.current = false;
       if (storage && queueRef.current) {
         try {
-          await storage.save(queueRef.current);
+          await storage.save({ ...queueRef.current, userKey: userKeyRef.current });
         } catch {
           // ignore — loop will re-save on its next tick anyway
         }
@@ -415,6 +419,9 @@ export function GoogleSyncBannerProvider({
     (async () => {
       const pending = await storage.load().catch(() => null);
       if (cancelled || !pending) return;
+      // Started by someone else on this device (or an untagged legacy queue):
+      // never replay their client ids / deletes under this user's session.
+      if (pending.userKey !== userKey) { await storage.clear().catch(() => {}); return; }
       // Legacy migration: queues written before mode/items existed.
       const remaining = pending.remaining as unknown as Array<QueueItem | string>;
       const allItems = pending.allItems as unknown as Array<QueueItem | string> | undefined;
@@ -429,6 +436,7 @@ export function GoogleSyncBannerProvider({
         total: pending.total,
         failed: pending.failed ?? 0,
         startedAt: pending.startedAt ?? Date.now(),
+        userKey,
       };
       if (upgraded.remaining.length === 0) return;
       queueRef.current = upgraded;

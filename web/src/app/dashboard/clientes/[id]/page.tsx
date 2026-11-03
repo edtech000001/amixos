@@ -31,6 +31,7 @@ import { CommunicationLog } from '@amixos/shared/screens/dashboard/Communication
 import { useContactOutcomePrompt } from '@/modules/communications/useContactOutcomePrompt';
 import { Tooltip } from '@amixos/shared/ui/Tooltip';
 
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 interface FieldTemplate {
   id: string; field_key: string; field_label: string;
   field_type: string; field_options: string[] | null; required: boolean; sort_order: number;
@@ -374,12 +375,18 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
     setLoading(false);
 
     // Background fetch of distinct role values across the business.
-    const { data: roleRows } = await supabase
-      .from('client_contacts')
-      .select('role')
-      .eq('business_id', business.id)
-      .not('role', 'is', null)
-      .neq('role', '');
+    // Paged: roles that only appear past row 1000 were missing.
+    const roleRows = await fetchAllById<{ id: string; role: string | null }>((afterId, pageSize) => {
+      let q = supabase
+        .from('client_contacts')
+        .select('id, role')
+        .eq('business_id', business.id)
+        .not('role', 'is', null)
+        .neq('role', '')
+        .order('id', { ascending: true }).limit(pageSize);
+      if (afterId) q = q.gt('id', afterId);
+      return q;
+    }).catch(() => [] as { id: string; role: string | null }[]);
     const unique = Array.from(
       new Set(
         ((roleRows as { role: string }[] | null) ?? [])

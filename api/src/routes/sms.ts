@@ -133,6 +133,12 @@ smsRouter.post('/connect', async (req: AuthRequest, res) => {
     { onConflict: 'business_id,kind,provider' },
   );
   if (error) return res.status(500).json({ success: false, message: error.message });
+  // One SMS provider per business: loadIntegration reads a single row, so a
+  // leftover row from the previous provider made every send "not configured".
+  // Removed only after the new one saved, so a failed connect keeps the old.
+  const { error: cleanupErr } = await supabase.from('business_integrations')
+    .delete().eq('business_id', business_id).eq('kind', 'sms').neq('provider', provider);
+  if (cleanupErr) return res.status(500).json({ success: false, message: cleanupErr.message });
 
   return res.json({
     success: true,

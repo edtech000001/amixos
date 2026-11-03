@@ -329,8 +329,11 @@ export async function confirmJobUpdate(
   }
 
   if (Object.keys(update).length) {
-    const { error: upErr } = await ctx.db.from('jobs').update(update).eq('id', jobId);
+    // RLS returns no error when the policy filters every row — check the count,
+    // or a member who can't edit jobs gets "done" while nothing changed.
+    const { data: upRows, error: upErr } = await ctx.db.from('jobs').update(update).eq('id', jobId).select('id');
     if (upErr) throw new Error(upErr.message);
+    if (!upRows?.length) throw new DraftValidationError('sin permiso para editar este trabajo');
   }
 
   // Crew: replace assignments (validate referenced ids in-business first).
@@ -361,17 +364,36 @@ export async function confirmJobUpdate(
     for (const c of crew) {
       if (c.is_lead) { if (leadSeen || !c.employee_id) c.is_lead = false; else leadSeen = true; }
     }
-    await ctx.db.from('job_assignments').delete().eq('job_id', jobId);
-    if (crew.length) {
-      const rows = crew.map(c => ({
-        id: randomUUID(),
-        job_id: jobId,
-        ...(c.employee_id ? { employee_id: c.employee_id } : {}),
-        worker_name: c.worker_name,
-        is_lead: !!c.is_lead,
-      }));
+    // Insert the new crew BEFORE removing the old one, so a failure part-way
+    // never leaves the job with nobody assigned. The lead flag goes on last:
+    // idx_job_assignments_one_lead_per_job (033) allows one lead row at a time.
+    const { data: oldRows, error: oldErr } = await ctx.db.from('job_assignments').select('id').eq('job_id', jobId);
+    if (oldErr) throw new Error(oldErr.message);
+    const oldIds = (oldRows ?? []).map((r: { id: string }) => r.id);
+    const rows = crew.map(c => ({
+      id: randomUUID(),
+      job_id: jobId,
+      ...(c.employee_id ? { employee_id: c.employee_id } : {}),
+      worker_name: c.worker_name,
+      is_lead: false,
+    }));
+    const leadRowId = rows[crew.findIndex(c => c.is_lead)]?.id ?? null;
+    if (rows.length) {
       const { error: asgErr } = await ctx.db.from('job_assignments').insert(rows);
       if (asgErr) throw new Error(asgErr.message);
+    }
+    if (oldIds.length) {
+      const { data: gone, error: delErr } = await ctx.db.from('job_assignments').delete().in('id', oldIds).select('id');
+      if (delErr || (gone ?? []).length < oldIds.length) {
+        // Couldn't clear the old crew (error or RLS) — undo the new rows so the
+        // job isn't left with both.
+        if (rows.length) await ctx.db.from('job_assignments').delete().in('id', rows.map(r => r.id));
+        throw new Error(delErr?.message ?? 'sin permiso para cambiar el equipo');
+      }
+    }
+    if (leadRowId) {
+      const { error: leadErr } = await ctx.db.from('job_assignments').update({ is_lead: true }).eq('id', leadRowId);
+      if (leadErr) throw new Error(leadErr.message);
     }
   }
 

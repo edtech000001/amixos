@@ -1179,7 +1179,8 @@ export default function FacturaDetailRoute() {
         lastName: cl?.lastName ?? '',
         company: cl?.company ?? '',
         business: business?.name ?? '',
-        total: `$${invoice.totalAmount.toFixed(2)}`,
+        // Same formatter as the PDF — toFixed rounds 2.675 to 2.67, Intl to 2.68.
+        total: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(invoice.totalAmount),
         dueDate: invoice.dueDate ?? '',
       },
     });
@@ -1597,7 +1598,7 @@ export default function FacturaDetailRoute() {
                     <Text className="text-base font-semibold text-ink">{tInv.payments.amountLabel}</Text>
                     {invoice ? (
                       <Text className="text-sm text-muted">
-                        {tInv.payments.remaining}: <Text className="font-semibold text-ink">${formatNumberGrouped((Math.round(remaining * 100) / 100).toFixed(2))}</Text>
+                        {tInv.payments.remaining}: <Text className="font-semibold text-ink">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(remaining)}</Text>
                       </Text>
                     ) : null}
                   </View>

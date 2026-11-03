@@ -122,7 +122,7 @@ export default function CalendarioRoute() {
         .from('clients')
         .select('id, first_name, last_name')
         .eq('business_id', businessId)
-        .order('first_name')
+        .order('first_name').order('id')
         .range(from, to),
     ).then(rows =>
       setClients(rows.map(c => ({ id: c.id, name: `${c.first_name} ${c.last_name}`.trim() }))),
@@ -135,7 +135,7 @@ export default function CalendarioRoute() {
         .select('id, first_name, last_name')
         .eq('business_id', businessId)
         .eq('active', true)
-        .order('first_name')
+        .order('first_name').order('id')
         .range(from, to),
     ).then(rows =>
       setLeads(rows.map(e => ({ id: e.id, name: `${e.first_name} ${e.last_name}`.trim() }))),

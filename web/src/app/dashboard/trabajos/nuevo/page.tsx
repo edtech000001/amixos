@@ -1555,11 +1555,11 @@ function NuevoTrabajoContent() {
           job_lng: jobLng,
           issue_date: issueDate,
           expiry_date: expiryDate || null,
-          subtotal_amount: +subtotal.toFixed(2),
+          subtotal_amount: +subtotal.toFixed(6),
           tax_rate: taxRate,
-          tax_amount: +taxAmt.toFixed(2),
-          discount: +discount.toFixed(2),
-          total_amount: +total.toFixed(2),
+          tax_amount: +taxAmt.toFixed(6),
+          discount: +discount.toFixed(6),
+          total_amount: +total.toFixed(6),
           scheduled_date: scheduledDate || null,
           end_date: fHidden('end_date') ? null : (endDate || null),
           published_to_crew: restrictedCreator ? true : publishedToCrew,
@@ -1633,9 +1633,9 @@ function NuevoTrabajoContent() {
         // in the job form, and writing the bare item subtotal as the total
         // would silently change the price the client accepted.
         if (editIsEstimateRecord) {
-          jobData.subtotal_amount = +subtotal.toFixed(2);
-          jobData.tax_amount = +taxAmt.toFixed(2);
-          jobData.total_amount = +total.toFixed(2);
+          jobData.subtotal_amount = +subtotal.toFixed(6);
+          jobData.tax_amount = +taxAmt.toFixed(6);
+          jobData.total_amount = +total.toFixed(6);
         }
 
         let finalJobId: string;

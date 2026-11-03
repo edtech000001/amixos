@@ -95,15 +95,19 @@ export async function fetchCrewFinderData(
   const jobIds = jobs.map(j => j.id);
 
   // Assignments for the window's jobs → group by job.
-  const assignments = jobIds.length
-    ? await fetchAll<RawAssignment>((from, to) =>
-        supabase
-          .from('job_assignments')
-          .select('job_id, employee_id, is_lead, employees(first_name, last_name)')
-          .in('job_id', jobIds)
-          .range(from, to),
-      )
-    : [];
+  // Chunked: .in() puts every id in the GET URL, and ~220+ ids pass the
+  // ~8 KB URL limit (same reason googleSync chunks at 200).
+  const assignments: RawAssignment[] = [];
+  for (let i = 0; i < jobIds.length; i += 200) {
+    const chunk = jobIds.slice(i, i + 200);
+    assignments.push(...(await fetchAll<RawAssignment>((from, to) =>
+      supabase
+        .from('job_assignments')
+        .select('job_id, employee_id, is_lead, employees(first_name, last_name)')
+        .in('job_id', chunk)
+        .range(from, to),
+    )));
+  }
 
   const assigneesByJob = new Map<string, { id: string; name: string }[]>();
   const leadByJob = new Map<string, string>();

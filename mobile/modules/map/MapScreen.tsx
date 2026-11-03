@@ -46,6 +46,7 @@ import {
 } from './MapSettingsSheet';
 import { useMoreBack } from '@/lib/useMoreBack';
 
+import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 const DEFAULT_DEVICE_SETTINGS: DeviceMapSettings = {
   mapType: 'standard',
   clustering: true,
@@ -1750,16 +1751,22 @@ function UnresolvedClientsModal({
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const { data } = await supabase
-        .from('clients')
-        .select('id, first_name, last_name, company, address, city, state, zip_code, lat_lookup_attempted_at, lat_lookup_failed_reason')
-        .eq('business_id', business.id)
-        // Hide rows the user has already silenced from the list (migration 047).
-        .eq('geocoding_ignored', false)
-        .is('lat', null)
-        .order('first_name', { ascending: true });
+      // Paged: a plain select stops at 1000 rows (PostgREST cap) — e.g. right
+      // after importing thousands of not-yet-geocoded clients.
+      const data = await fetchAllById<Row>((afterId, pageSize) => {
+        let q = supabase
+          .from('clients')
+          .select('id, first_name, last_name, company, address, city, state, zip_code, lat_lookup_attempted_at, lat_lookup_failed_reason')
+          .eq('business_id', business.id)
+          // Hide rows the user has already silenced from the list (migration 047).
+          .eq('geocoding_ignored', false)
+          .is('lat', null)
+          .order('id', { ascending: true }).limit(pageSize);
+        if (afterId) q = q.gt('id', afterId);
+        return q;
+      }).then(rows => rows.sort((a, b) => (a.first_name ?? '').localeCompare(b.first_name ?? '')), () => [] as Row[]);
       if (!cancelled) {
-        setRows((data ?? []) as Row[]);
+        setRows(data);
         setLoading(false);
       }
     })();

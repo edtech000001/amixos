@@ -62,7 +62,7 @@ import { jobShortCode } from '@amixos/shared/lib/jobRef';
 import { canPauseStatus, fetchPauseLog, fetchPauseReasons, fetchPauseSummary, formatDuration, formatPauseSummary, logPauseEnd, logPauseStart, pausePatch, resumePatch, type PauseEpisode, type PauseReason, type PauseSummary } from '@amixos/shared/lib/jobPause';
 import { secureShareToken } from '@amixos/shared/lib/shareToken';
 import { logAudit } from '@amixos/shared/lib/audit';
-import { insertInvoiceUnique, removeJobFromInvoice, placeholderQtyFor, fetchClientDraftInvoices, addJobsToInvoice, type ClientDraftInvoice } from '@amixos/shared/lib/invoicing';
+import { insertInvoiceUnique, removeJobFromInvoice, placeholderQtyFor, fetchClientDraftInvoices, addJobsToInvoice, type ClientDraftInvoice, computeTotals } from '@amixos/shared/lib/invoicing';
 import { invoiceDefaultLanguage, nextInvoiceNumber, resolveConfig, buildInvoiceViewModel, buildInvoiceHtml, type InvoiceBranding, type InvoiceDocData } from '@amixos/shared/lib/invoiceTemplate';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
 import { memberNameMap } from '@amixos/shared/lib/memberNames';
@@ -991,14 +991,12 @@ export default function JobDetailRoute() {
   const generateInvoice = async () => {
     if (!job || !business) return;
     setUpdatingStatus(true);
-    const itemSubtotal = items.reduce((s, i) => s + i.total, 0);
+    // From an estimate: keep its tax rate + discount. Otherwise the job's own
+    // rate, else the business default (same as web). Amounts always come from
+    // the lines below (computeTotals), so the total matches what's printed.
     const useStored = job.estimate_number && job.subtotal_amount > 0;
-    const subtotal = useStored ? job.subtotal_amount : itemSubtotal;
-    // Business default tax (Ajustes → Facturas) when the job carries none.
-    const taxRate = useStored ? job.tax_rate : (business?.invoice_tax_rate ?? 0);
-    const taxAmount = useStored ? job.tax_amount : subtotal * (taxRate / 100);
-    const discount = useStored ? job.discount : 0;
-    const total = subtotal + taxAmount - discount;
+    const taxRate = useStored ? job.tax_rate : (job.tax_rate > 0 ? job.tax_rate : (business?.invoice_tax_rate ?? 0));
+    const discount = useStored ? (job.discount ?? 0) : 0;
 
     const { count } = await supabase
       .from('invoices')
@@ -1035,6 +1033,8 @@ export default function JobDetailRoute() {
         job_id: job.id,
       });
     }
+
+    const { subtotal, tax: taxAmount, total } = computeTotals(lineItems, taxRate, discount);
 
     // insertInvoiceUnique: count-based numbers collide after a delete — walk
     // forward to the next free number instead of failing silently.
