@@ -6,7 +6,7 @@
 // and Tailwind doesn't apply. This file is resolved BEFORE the .tsx variant
 // on web via the `.web.tsx` extension priority in web/next.config.js.
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -62,6 +62,17 @@ export function LoginScreen({
 
   const [error, setError] = useState<string | undefined>(initialError);
   const [showPassword, setShowPassword] = useState(false);
+  // Wrong password → the password box shakes (and turns red) BEFORE the
+  // message appears: the instant, familiar "no" from macOS / iOS sign-in.
+  const [passwordBad, setPasswordBad] = useState(false);
+  const passwordBoxRef = useRef<HTMLDivElement>(null);
+  const shake = () => {
+    const el = passwordBoxRef.current;
+    if (!el) return;
+    el.classList.remove('amixos-shake');
+    void el.offsetWidth; // restart the animation on repeat failures
+    el.classList.add('amixos-shake');
+  };
 
   const reasonToMessage = (reason: Exclude<LoginAttemptResult, { ok: true }>['reason']): string => {
     switch (reason) {
@@ -76,8 +87,16 @@ export function LoginScreen({
 
   const onSubmit = handleSubmit(async (data) => {
     setError(undefined);
+    setPasswordBad(false);
     const result = await onLogin(data.email, data.password);
-    if (!result.ok) setError(reasonToMessage(result.reason));
+    if (!('reason' in result)) return;
+    if (result.reason === 'invalid-credentials' || result.reason === 'user-not-found') {
+      setPasswordBad(true);
+      shake();
+      // Let the shake land first, then explain it.
+      await new Promise(r => setTimeout(r, 360));
+    }
+    setError(reasonToMessage(result.reason));
   });
 
   return (
@@ -118,15 +137,15 @@ export function LoginScreen({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">{t.register.password}</label>
-            <div className="relative">
+            <div ref={passwordBoxRef} className="relative">
               <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
                 placeholder="••••••••"
-                {...register('password')}
+                {...register('password', { onChange: () => setPasswordBad(false) })}
                 className={`w-full rounded-xl border bg-white pl-10 pr-11 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary ${
-                  errors.password ? 'border-red-300' : 'border-gray-200'
+                  errors.password || passwordBad ? 'border-red-300' : 'border-gray-200'
                 }`}
               />
               <button

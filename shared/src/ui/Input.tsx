@@ -7,6 +7,9 @@ import { forwardRef, useState, type ReactNode } from 'react';
 interface InputProps extends TextInputProps {
   label?: string;
   error?: string;
+  /** Red border without a message under the field (the screen explains it
+   *  elsewhere, e.g. a failed sign-in banner). */
+  invalid?: boolean;
   // Small grey helper note under the field (e.g. "leave blank if…").
   hint?: string;
   leftIcon?: ReactNode;
@@ -24,7 +27,7 @@ interface InputProps extends TextInputProps {
 }
 
 export const Input = forwardRef<TextInput, InputProps>(function Input(
-  { label, error, hint, leftIcon, rightIcon, onClear, containerClassName, className, centerText, editable = true, onFocus, onBlur, style, ...rest },
+  { label, error, invalid, hint, leftIcon, rightIcon, onClear, containerClassName, className, centerText, editable = true, onFocus, onBlur, style, ...rest },
   ref,
 ) {
   const c = useThemeColors();
@@ -49,7 +52,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
       <View
         className={clsx(
           'flex-row items-center rounded-2xl border bg-card px-4',
-          error
+          error || invalid
             ? 'border-red-300'
             : focused
               ? 'border-primary'

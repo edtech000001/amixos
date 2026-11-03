@@ -1,4 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
+import { haptics } from '../../lib/haptics';
 import {
   View,
   Text,
@@ -67,6 +69,15 @@ export function LoginScreen({
   // Recommended by NIST SP 800-63B: letting people check what they typed
   // means fewer failed attempts and fewer resets.
   const [showPassword, setShowPassword] = useState(false);
+  // Wrong password → the password box shakes (and turns red) BEFORE the
+  // message appears: the instant, familiar "no" from iOS / macOS sign-in.
+  const [passwordBad, setPasswordBad] = useState(false);
+  const shakeX = useSharedValue(0);
+  const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeX.value }] }));
+  const shake = () => {
+    const step = (x: number) => withTiming(x, { duration: 55 });
+    shakeX.value = withSequence(step(-10), step(9), step(-7), step(5), step(-3), step(0));
+  };
 
   const reasonToMessage = (reason: Extract<LoginAttemptResult, { ok: false }>['reason']): string => {
     switch (reason) {
@@ -82,8 +93,16 @@ export function LoginScreen({
 
   const onSubmit = async (data: LoginForm) => {
     setError('');
+    setPasswordBad(false);
     const result = await onLogin(data.email, data.password);
     if ('reason' in result) {
+      if (result.reason === 'invalid-credentials' || result.reason === 'user-not-found') {
+        setPasswordBad(true);
+        shake();
+        haptics.error();
+        // Let the shake land first, then explain it.
+        await new Promise(r => setTimeout(r, 360));
+      }
       setError(reasonToMessage(result.reason));
     }
   };
@@ -175,6 +194,7 @@ export function LoginScreen({
                   />
                 )}
               />
+              <Animated.View style={shakeStyle}>
               <Controller
                 control={control}
                 name="password"
@@ -195,12 +215,14 @@ export function LoginScreen({
                     }
                     leftIcon={<Lock size={18} color={c.faint} />}
                     error={errors.password?.message}
+                    invalid={passwordBad}
                     value={value ?? ''}
-                    onChangeText={onChange}
+                    onChangeText={(v) => { setPasswordBad(false); onChange(v); }}
                     onBlur={onBlur}
                   />
                 )}
               />
+              </Animated.View>
 
               {error ? (
                 <View className="bg-red-500/10 border border-red-100 rounded-xl px-4 py-3">
