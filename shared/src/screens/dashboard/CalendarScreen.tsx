@@ -431,7 +431,13 @@ export function CalendarScreen({
                 <Pressable
                   key={v}
                   onPress={() => switchView(v)}
-                  className={`px-3.5 py-1.5 rounded-lg ${active ? 'bg-card shadow-sm' : ''}`}
+                  className="px-3.5 py-1.5 rounded-lg"
+                  // Selected look via `style` — toggling shadow-sm in className
+                  // crashes dev builds (NativeWind remount, "navigation context").
+                  style={active ? {
+                    backgroundColor: c.card,
+                    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1,
+                  } : undefined}
                 >
                   <Text className={`text-xs font-semibold ${active ? 'text-ink' : 'text-muted'}`}>
                     {t.views[v]}

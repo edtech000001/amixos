@@ -574,12 +574,6 @@ export function ClientsListScreen({
         </View>
       ) : null}
 
-      {showList ? (
-        // Rounded top edge of the white card; section headers + rows continue
-        // the frame below it (mirrors the footer strip).
-        <View className="bg-card rounded-t-2xl h-3" />
-      ) : null}
-
       {loading && filtered.length === 0 ? (
         <SkeletonList rows={8} />
       ) : filtered.length === 0 && searching ? (
