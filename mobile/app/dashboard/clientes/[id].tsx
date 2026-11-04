@@ -1306,11 +1306,11 @@ export default function ClienteDetailRoute() {
           <Text className="text-xs font-semibold text-faint uppercase mb-1">{td.summary}</Text>
           <View className="flex-row justify-between">
             <Text className="text-sm text-muted">{td.totalPaid}</Text>
-            <Text className="text-sm font-semibold text-emerald-600">{fmtMoney(stats.totalPaid)}</Text>
+            <Text className="text-sm font-semibold text-emerald-600 tabular-nums">{fmtMoney(stats.totalPaid)}</Text>
           </View>
           <View className="flex-row justify-between">
             <Text className="text-sm text-muted">{td.pending}</Text>
-            <Text className="text-sm font-semibold text-blue-600">{fmtMoney(stats.pendingTotal)}</Text>
+            <Text className="text-sm font-semibold text-blue-600 tabular-nums">{fmtMoney(stats.pendingTotal)}</Text>
           </View>
           <View className="flex-row justify-between">
             <Text className="text-sm text-muted">{td.invoicesCount}</Text>

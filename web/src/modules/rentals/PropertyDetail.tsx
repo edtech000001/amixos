@@ -1352,7 +1352,7 @@ export function PropertyDetail({
                     <div className="ml-7 mt-1.5 flex flex-col gap-1">
                       {cPays.map(p => (
                         <div key={p.id} className="flex items-center gap-2 rounded-lg bg-surface px-2.5 py-1.5">
-                          <p className="text-xs text-ink">{fmtMoney(p.amount)}</p>
+                          <p className="text-xs text-ink tabular-nums">{fmtMoney(p.amount)}</p>
                           <p className="text-[11px] text-muted flex-1 truncate">
                             {[p.method, formatDateLong(`${p.paid_on}T00:00:00`, locale), p.note].filter(Boolean).join(' · ')}
                           </p>
@@ -1445,7 +1445,7 @@ export function PropertyDetail({
             </div>
             <div className="rounded-2xl border border-border-soft bg-card p-4">
               <p className="text-xs text-muted">{t.overview.expensesLabel}</p>
-              <p className="text-xl font-bold text-ink mt-1">{fmtMoney(totalExpenses)}</p>
+              <p className="text-xl font-bold text-ink mt-1 tabular-nums">{fmtMoney(totalExpenses)}</p>
             </div>
             <div className="rounded-2xl border border-border-soft bg-card p-4">
               <p className="text-xs text-muted">{t.detailTabs.maintenance}</p>
@@ -1524,7 +1524,7 @@ export function PropertyDetail({
                       {formatDateLong(`${e.expense_date}T00:00:00`, locale)}{e.note ? ` · ${e.note}` : ''}
                     </p>
                   </div>
-                  <p className="text-sm font-semibold text-ink shrink-0">{fmtMoney(e.amount)}</p>
+                  <p className="text-sm font-semibold text-ink shrink-0 tabular-nums">{fmtMoney(e.amount)}</p>
                   {e.receipt_path ? (
                     <button onClick={() => viewReceipt(e)} className="p-1.5 rounded-lg hover:bg-border-soft">
                       <Camera size={13} className="text-muted" />

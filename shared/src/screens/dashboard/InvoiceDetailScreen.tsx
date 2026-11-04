@@ -431,7 +431,7 @@ export function InvoiceDetailScreen({
             <Text className="text-xs text-faint font-medium">
               {businessName ? tBt.ownShare.replace('{{company}}', businessName) : t.total}
             </Text>
-            <Text className="text-xl font-bold text-ink">{fmt(invoice.totalAmount - (invoice.passthroughAmount ?? 0))}</Text>
+            <Text className="text-xl font-bold text-ink tabular-nums">{fmt(invoice.totalAmount - (invoice.passthroughAmount ?? 0))}</Text>
             <Text className="text-xs text-muted mt-0.5">
               {tBt.clientPays.replace('{{total}}', fmt(invoice.totalAmount)).replace('{{amount}}', fmt(invoice.passthroughAmount ?? 0))}
             </Text>
@@ -439,7 +439,7 @@ export function InvoiceDetailScreen({
         ) : (
           <View>
             <Text className="text-xs text-faint font-medium">{t.total}</Text>
-            <Text className="text-xl font-bold text-ink">{fmt(invoice.totalAmount)}</Text>
+            <Text className="text-xl font-bold text-ink tabular-nums">{fmt(invoice.totalAmount)}</Text>
           </View>
         )}
       </View>
@@ -601,7 +601,7 @@ export function InvoiceDetailScreen({
               {invoice.status !== 'paid' ? (
                 <View className="flex-row justify-between pt-1 border-t border-border-soft">
                   <Text className="text-sm font-semibold text-amber-700">{tInv.payments.remaining}</Text>
-                  <Text className="text-sm font-semibold text-amber-700">{fmt(balanceDue)}</Text>
+                  <Text className="text-sm font-semibold text-amber-700 tabular-nums">{fmt(balanceDue)}</Text>
                 </View>
               ) : null}
             </View>
@@ -691,7 +691,7 @@ export function InvoiceDetailScreen({
                         {li.excluded ? <EyeOff size={15} color={c.faint} /> : <Eye size={15} color={c.faint} />}
                       </Pressable>
                     ) : null}
-                    <Text className={`text-sm font-semibold ${li.excluded ? 'text-faint line-through' : 'text-ink'}`}>{fmt(q * r)}</Text>
+                    <Text className={`text-sm font-semibold ${li.excluded ? 'text-faint line-through' : 'text-ink'} tabular-nums`}>{fmt(q * r)}</Text>
                   </View>
                 </View>
                 {showActions ? (
@@ -760,19 +760,19 @@ export function InvoiceDetailScreen({
         <View className="mt-3 pt-3 border-t border-border-soft gap-1.5">
           <View className="flex-row justify-between">
             <Text className="text-sm text-muted">{t.subtotal}</Text>
-            <Text className="text-sm text-ink">{fmt(invoice.subtotalAmount)}</Text>
+            <Text className="text-sm text-ink tabular-nums">{fmt(invoice.subtotalAmount)}</Text>
           </View>
           {/* Shown whenever a rate is set — even if the amount is $0 (e.g.
              no line prices yet), so the configured tax is always visible. */}
           {invoice.taxRate > 0 ? (
             <View className="flex-row justify-between">
               <Text className="text-sm text-muted">{`${t.tax} (${invoice.taxRate}%)`}</Text>
-              <Text className="text-sm text-ink">{fmt(invoice.taxAmount)}</Text>
+              <Text className="text-sm text-ink tabular-nums">{fmt(invoice.taxAmount)}</Text>
             </View>
           ) : null}
           <View className="flex-row justify-between pt-2 border-t border-border-soft">
             <Text className="text-base font-bold text-ink">{t.total}</Text>
-            <Text className="text-base font-bold text-primary">{fmt(invoice.totalAmount)}</Text>
+            <Text className="text-base font-bold text-primary tabular-nums">{fmt(invoice.totalAmount)}</Text>
           </View>
           {payments.length > 0 ? (
             <View className="pt-2 border-t border-border-soft gap-1">
@@ -783,7 +783,7 @@ export function InvoiceDetailScreen({
               {invoice.status !== 'paid' ? (
                 <View className="flex-row justify-between">
                   <Text className="text-sm font-semibold text-amber-700">{tInv.payments.remaining}</Text>
-                  <Text className="text-sm font-semibold text-amber-700">{fmt(balanceDue)}</Text>
+                  <Text className="text-sm font-semibold text-amber-700 tabular-nums">{fmt(balanceDue)}</Text>
                 </View>
               ) : null}
             </View>

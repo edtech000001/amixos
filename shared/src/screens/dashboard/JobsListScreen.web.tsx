@@ -1259,7 +1259,7 @@ export function JobsListScreen({
                     {/* Amount — hidden entirely when no visible job has one */}
                     {showAmountCol ? (
                       <div className="hidden md:block w-24 shrink-0 text-right">
-                        {job.totalAmount > 0 ? <span className="text-xs font-bold text-ink">{fmt(job.totalAmount)}</span> : null}
+                        {job.totalAmount > 0 ? <span className="text-xs font-bold text-ink tabular-nums">{fmt(job.totalAmount)}</span> : null}
                       </div>
                     ) : null}
                   </button>

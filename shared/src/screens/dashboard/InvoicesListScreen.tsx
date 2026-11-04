@@ -565,7 +565,7 @@ export function InvoicesListScreen({
       {showTotal ? (
         <Text className="text-xs text-muted mb-3">
           {t.summaryTotal}:{' '}
-          <Text className="text-ink font-bold">{fmt(total)}</Text>
+          <Text className="text-ink font-bold tabular-nums">{fmt(total)}</Text>
           {clientPaysTotal != null ? ` · ${t.billThrough.listClientPays.replace('{{total}}', fmt(clientPaysTotal))}` : null}
         </Text>
       ) : null}
@@ -652,7 +652,7 @@ export function InvoicesListScreen({
                 </Text>
               </View>
               <View className="items-end">
-                <Text className="text-sm font-bold text-ink">{fmt(inv.totalAmount)}</Text>
+                <Text className="text-sm font-bold text-ink tabular-nums">{fmt(inv.totalAmount)}</Text>
                 {inv.clientPays != null ? (
                   <Text className="text-[11px] text-faint">
                     {t.billThrough.listClientPays.replace('{{total}}', fmt(inv.clientPays))}

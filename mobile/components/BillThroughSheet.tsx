@@ -345,7 +345,7 @@ export function BillThroughSheet({
                               {[tStatus[inv.status] ?? inv.status, inv.issueDate ? formatDateLong(inv.issueDate, locale === 'en' ? 'en-US' : 'es-MX') : null].filter(Boolean).join(' · ')}
                             </Text>
                           </View>
-                          <Text className="text-sm font-semibold text-ink">{fmt(inv.totalAmount)}</Text>
+                          <Text className="text-sm font-semibold text-ink tabular-nums">{fmt(inv.totalAmount)}</Text>
                         </>
                       ), invoice !== 'new' && invoice?.id === inv.id)
                     )}
@@ -378,7 +378,7 @@ export function BillThroughSheet({
                             <Text className={`text-sm ${l.excluded ? 'text-faint' : 'text-ink'}`} numberOfLines={2}>{l.name}</Text>
                             <Text className="text-xs text-faint">{l.qty} × {fmt(l.rate)}</Text>
                           </View>
-                          <Text className="text-sm font-semibold text-ink">{fmt((Number(l.qty) || 0) * (Number(l.rate) || 0))}</Text>
+                          <Text className="text-sm font-semibold text-ink tabular-nums">{fmt((Number(l.qty) || 0) * (Number(l.rate) || 0))}</Text>
                         </Pressable>
                       );
                     })}

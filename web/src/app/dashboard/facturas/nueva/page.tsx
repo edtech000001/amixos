@@ -679,7 +679,7 @@ function NuevaFacturaContent() {
           <div className="mt-5 border-t border-border-soft pt-4 flex flex-col items-end gap-1">
             <div className="flex items-center gap-8 text-sm">
               <span className="text-muted">{t.subtotal}</span>
-              <span className="font-medium text-ink w-24 text-right">{fmt(subtotal)}</span>
+              <span className="font-medium text-ink w-24 text-right tabular-nums">{fmt(subtotal)}</span>
             </div>
             <div className="flex items-center gap-4 text-sm">
               <span className="text-muted">{t.taxPercent}</span>
@@ -694,7 +694,7 @@ function NuevaFacturaContent() {
                 }}
                 className="w-16 rounded-lg border border-border px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary"
               />
-              <span className="font-medium text-ink w-24 text-right">{fmt(taxAmount)}</span>
+              <span className="font-medium text-ink w-24 text-right tabular-nums">{fmt(taxAmount)}</span>
             </div>
             {discount > 0 && (
               <div className="flex items-center gap-8 text-sm">
@@ -704,7 +704,7 @@ function NuevaFacturaContent() {
             )}
             <div className="flex items-center gap-8 text-base font-bold border-t border-border-soft pt-2 mt-1">
               <span className="text-ink">{t.total}</span>
-              <span className="text-primary w-24 text-right">{fmt(total)}</span>
+              <span className="text-primary w-24 text-right tabular-nums">{fmt(total)}</span>
             </div>
           </div>
         </div>

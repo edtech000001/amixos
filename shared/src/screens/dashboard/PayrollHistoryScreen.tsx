@@ -207,7 +207,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
         <Text className="text-xs text-muted">
           {t.historyTotalLabel} · {t.historyPaymentsCount.replace('{{count}}', String(filtered.length))} · {Math.round(shownHours * 100) / 100} h
         </Text>
-        <Text className="text-base font-bold text-primary">{fmt(shownTotal)}</Text>
+        <Text className="text-base font-bold text-primary tabular-nums">{fmt(shownTotal)}</Text>
       </View>
 
       {loading ? (
@@ -258,7 +258,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
                         {componentsText(h.components) ? ` · ${componentsText(h.components)}` : ''}
                       </Text>
                     </View>
-                    <Text className="text-sm font-bold text-ink">{fmt(h.grossPay)}</Text>
+                    <Text className="text-sm font-bold text-ink tabular-nums">{fmt(h.grossPay)}</Text>
                   </Pressable>
                 ))}
               </View>

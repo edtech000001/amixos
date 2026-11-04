@@ -525,7 +525,7 @@ export function InvoiceDetailScreen({
               <p className="text-xs text-faint font-medium">
                 {businessName ? tBt.ownShare.replace('{{company}}', businessName) : t.total}
               </p>
-              <p className="text-xl font-bold text-ink">{fmt(invoice.totalAmount - (invoice.passthroughAmount ?? 0))}</p>
+              <p className="text-xl font-bold text-ink tabular-nums">{fmt(invoice.totalAmount - (invoice.passthroughAmount ?? 0))}</p>
               <p className="text-xs text-muted mt-0.5">
                 {tBt.clientPays.replace('{{total}}', fmt(invoice.totalAmount)).replace('{{amount}}', fmt(invoice.passthroughAmount ?? 0))}
               </p>
@@ -533,7 +533,7 @@ export function InvoiceDetailScreen({
           ) : (
             <div>
               <p className="text-xs text-faint font-medium">{t.total}</p>
-              <p className="text-xl font-bold text-ink">{fmt(invoice.totalAmount)}</p>
+              <p className="text-xl font-bold text-ink tabular-nums">{fmt(invoice.totalAmount)}</p>
             </div>
           )}
         </div>
@@ -691,7 +691,7 @@ export function InvoiceDetailScreen({
                 {invoice.status !== 'paid' ? (
                   <div className="flex justify-between pt-1.5 border-t border-border-soft">
                     <span className="text-sm font-semibold text-amber-700">{tInv.payments.remaining}</span>
-                    <span className="text-sm font-semibold text-amber-700">{fmt(balanceDue)}</span>
+                    <span className="text-sm font-semibold text-amber-700 tabular-nums">{fmt(balanceDue)}</span>
                   </div>
                 ) : null}
               </div>
@@ -822,7 +822,7 @@ export function InvoiceDetailScreen({
                         {li.excluded ? <EyeOff size={14} /> : <Eye size={14} />}
                       </button>
                     ) : null}
-                    <p className={`text-sm font-semibold w-24 text-right ${li.excluded ? 'text-faint line-through' : 'text-ink'}`}>{fmt(q * r)}</p>
+                    <p className={`text-sm font-semibold w-24 text-right ${li.excluded ? 'text-faint line-through' : 'text-ink'} tabular-nums`}>{fmt(q * r)}</p>
                   </div>
                 </div>
               );
@@ -852,19 +852,19 @@ export function InvoiceDetailScreen({
           <div className="mt-3 pt-3 border-t border-border-soft flex flex-col gap-1.5">
             <div className="flex justify-between">
               <span className="text-sm text-muted">{t.subtotal}</span>
-              <span className="text-sm text-ink">{fmt(invoice.subtotalAmount)}</span>
+              <span className="text-sm text-ink tabular-nums">{fmt(invoice.subtotalAmount)}</span>
             </div>
             {/* Shown whenever a rate is set — even if the amount is $0 (e.g.
                no line prices yet), so the configured tax is always visible. */}
             {invoice.taxRate > 0 ? (
               <div className="flex justify-between">
                 <span className="text-sm text-muted">{`${t.tax} (${invoice.taxRate}%)`}</span>
-                <span className="text-sm text-ink">{fmt(invoice.taxAmount)}</span>
+                <span className="text-sm text-ink tabular-nums">{fmt(invoice.taxAmount)}</span>
               </div>
             ) : null}
             <div className="flex justify-between pt-2 border-t border-border-soft">
               <span className="text-base font-bold text-ink">{t.total}</span>
-              <span className="text-base font-bold text-primary">{fmt(invoice.totalAmount)}</span>
+              <span className="text-base font-bold text-primary tabular-nums">{fmt(invoice.totalAmount)}</span>
             </div>
             {payments.length > 0 ? (
               <div className="pt-2 border-t border-border-soft flex flex-col gap-1">
@@ -875,7 +875,7 @@ export function InvoiceDetailScreen({
                 {invoice.status !== 'paid' ? (
                   <div className="flex justify-between">
                     <span className="text-sm font-semibold text-amber-700">{tInv.payments.remaining}</span>
-                    <span className="text-sm font-semibold text-amber-700">{fmt(balanceDue)}</span>
+                    <span className="text-sm font-semibold text-amber-700 tabular-nums">{fmt(balanceDue)}</span>
                   </div>
                 ) : null}
               </div>

@@ -375,7 +375,7 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
                 </View>
                 <View className="flex-row items-center gap-4">
                   <Text className="text-xs text-faint">{loc.jobCount} {t.byLocation.jobs}</Text>
-                  <Text className="text-sm font-bold text-ink">{fmt(loc.revenue)}</Text>
+                  <Text className="text-sm font-bold text-ink tabular-nums">{fmt(loc.revenue)}</Text>
                 </View>
               </View>
             ))}
@@ -439,7 +439,7 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
       {inventoryEnabled ? (
         <Section title={t.sections.inventory}>
           <View className="items-center py-2 mb-3">
-            <Text className="text-3xl font-black text-ink">{fmt(m.inventoryValue)}</Text>
+            <Text className="text-3xl font-black text-ink tabular-nums">{fmt(m.inventoryValue)}</Text>
             <Text className="text-sm text-muted mt-1">{t.inventoryBlock.totalValueLabel}</Text>
           </View>
           <View className="gap-2">

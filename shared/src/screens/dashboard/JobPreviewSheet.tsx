@@ -147,7 +147,7 @@ export function JobPreviewSheet({ supabase, jobId, onClose, onOpenFull }: JobPre
               {(job.total_amount ?? 0) > 0 ? (
                 <View className="flex-row justify-between pt-2 border-t border-border-soft mb-1">
                   <Text className="text-sm font-semibold text-muted">Total</Text>
-                  <Text className="text-sm font-bold text-ink">{fmtMoney(job.total_amount ?? 0)}</Text>
+                  <Text className="text-sm font-bold text-ink tabular-nums">{fmtMoney(job.total_amount ?? 0)}</Text>
                 </View>
               ) : null}
 

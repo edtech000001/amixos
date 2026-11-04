@@ -1011,7 +1011,7 @@ export function JobsListScreen({
                 </View>
               ) : null}
               {job.totalAmount > 0 ? (
-                <Text className="text-xs font-bold text-ink">{fmt(job.totalAmount)}</Text>
+                <Text className="text-xs font-bold text-ink tabular-nums">{fmt(job.totalAmount)}</Text>
               ) : null}
               {job.delegatedToBusinessName ? (
                 <View className="flex-row items-center gap-1">

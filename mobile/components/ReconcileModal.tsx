@@ -266,7 +266,7 @@ export function ReconcileModal({ open, businessId, onClose }: Props) {
                   <Text className="text-xs font-mono text-faint mt-0.5">#{currentLine.invoiceNumber}</Text>
                   <Text className="text-xs text-muted mt-1">{current.job.clientName}</Text>
                   <Text className="text-xs text-muted mt-1">{currentLine.qty} × {money(currentLine.rate)}</Text>
-                  <Text className="text-xs font-semibold text-ink mt-0.5">{money(currentLine.amount)}</Text>
+                  <Text className="text-xs font-semibold text-ink mt-0.5 tabular-nums">{money(currentLine.amount)}</Text>
                   {currentLine.issueDate ? <Text className="text-xs text-faint mt-0.5">{fmtDate(currentLine.issueDate)}</Text> : null}
                 </Card>
               </View>

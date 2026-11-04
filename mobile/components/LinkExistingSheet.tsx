@@ -153,7 +153,7 @@ export function LinkExistingSheet({
                         {[inv.clientName, inv.issueDate ? formatDateLong(inv.issueDate, dateLoc) : null].filter(Boolean).join(' · ')}
                       </Text>
                     </View>
-                    <Text className="text-sm font-semibold text-ink">{money(inv.totalAmount)}</Text>
+                    <Text className="text-sm font-semibold text-ink tabular-nums">{money(inv.totalAmount)}</Text>
                     <ChevronRight size={16} color={c.faint} />
                   </Pressable>
                 ))}
@@ -179,7 +179,7 @@ export function LinkExistingSheet({
                         <Text className="text-sm text-ink" numberOfLines={2}>{l.description || '—'}</Text>
                         <Text className="text-xs text-faint">{l.taken ? t.linkTaken : `${l.qty} × ${money(l.rate)}`}</Text>
                       </View>
-                      <Text className="text-sm font-semibold text-ink">{money(l.qty * l.rate)}</Text>
+                      <Text className="text-sm font-semibold text-ink tabular-nums">{money(l.qty * l.rate)}</Text>
                     </Pressable>
                   );
                 })}

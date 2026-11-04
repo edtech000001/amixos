@@ -431,7 +431,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
       return <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.35, ...elStyle(el, accent) }}>{text}</div>;
     };
     return (
-      <div className="text-ink" style={{ background: vm.pageTint ? withAlpha(accent, 0.06) : '#fff', fontFamily: st.cssFontFamily, fontSize: st.fontPx }}>
+      <div className="text-ink" style={{ background: vm.pageTint ? withAlpha(accent, 0.06) : '#fff', fontFamily: st.cssFontFamily, fontVariantNumeric: 'tabular-nums', fontSize: st.fontPx }}>
         <div style={{ position: 'relative', width: '100%', aspectRatio: '8.5 / 11', overflow: 'hidden' }}>
           {ffDeco.full ? <DecoSvg spec={ffDeco.full} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} /> : null}
           {ffDeco.topBand ? <DecoSvg spec={ffDeco.topBand.spec} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: ffDeco.topBand.height }} /> : null}
@@ -494,7 +494,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
   return (
     <div
       className="text-ink inv-doc-page"
-      style={{ position: 'relative', overflow: 'hidden', background: vm.pageTint ? withAlpha(accent, 0.06) : '#fff', fontFamily: st.cssFontFamily, fontSize: st.fontPx, ...(fullPage ? { display: 'flex', flexDirection: 'column', aspectRatio: '8.5 / 11' } : null) }}
+      style={{ position: 'relative', overflow: 'hidden', background: vm.pageTint ? withAlpha(accent, 0.06) : '#fff', fontFamily: st.cssFontFamily, fontVariantNumeric: 'tabular-nums', fontSize: st.fontPx, ...(fullPage ? { display: 'flex', flexDirection: 'column', aspectRatio: '8.5 / 11' } : null) }}
     >
       {deco.full ? <DecoSvg spec={deco.full} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} /> : null}
       {deco.topBand ? <DecoSvg spec={deco.topBand.spec} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: deco.topBand.height }} /> : null}

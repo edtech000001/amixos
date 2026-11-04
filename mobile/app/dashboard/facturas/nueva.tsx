@@ -839,7 +839,7 @@ export default function NuevaFacturaRoute() {
               <View className="pt-2 border-t border-border-soft gap-2">
                 <View className="flex-row justify-between items-center">
                   <Text className="text-sm text-muted">{t.subtotal}</Text>
-                  <Text className="text-sm font-medium text-ink">{fmtMoney(subtotal)}</Text>
+                  <Text className="text-sm font-medium text-ink tabular-nums">{fmtMoney(subtotal)}</Text>
                 </View>
                 <View className="flex-row justify-between items-center">
                   <Text className="text-sm text-muted">{t.taxPercent}</Text>
@@ -863,7 +863,7 @@ export default function NuevaFacturaRoute() {
                 )}
                 <View className="flex-row justify-between items-center pt-2 border-t border-border-soft">
                   <Text className="text-base font-bold text-ink">{t.total}</Text>
-                  <Text className="text-lg font-bold text-primary">{fmtMoney(total)}</Text>
+                  <Text className="text-lg font-bold text-primary tabular-nums">{fmtMoney(total)}</Text>
                 </View>
               </View>
             </View>

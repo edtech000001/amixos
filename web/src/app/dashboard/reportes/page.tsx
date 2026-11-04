@@ -623,7 +623,7 @@ export default function ReportesPage() {
           <Section title={t.sections.inventory}>
             <div className="flex flex-col gap-4">
               <div className="text-center py-2">
-                <p className="text-3xl font-black text-ink">{fmt(inventoryValue)}</p>
+                <p className="text-3xl font-black text-ink tabular-nums">{fmt(inventoryValue)}</p>
                 <p className="text-sm text-muted mt-1">{t.inventoryBlock.totalValueLabel}</p>
               </div>
               <div className="flex flex-col gap-2">

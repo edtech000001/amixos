@@ -49,7 +49,7 @@ export function OwedByPartnersCard() {
       <div className="flex items-center gap-2">
         <Building2 size={16} className="text-amber-700" />
         <p className="flex-1 text-sm font-bold text-amber-800">{t.owedTitle}</p>
-        <p className="text-sm font-bold text-amber-800">{money(total)}</p>
+        <p className="text-sm font-bold text-amber-800 tabular-nums">{money(total)}</p>
       </div>
       <p className="text-xs text-amber-700 mt-1">{t.owedHint}</p>
       <div className="mt-2">
@@ -65,7 +65,7 @@ export function OwedByPartnersCard() {
                 .replace('{{company}}', r.partner_business_name)
                 .replace('{{date}}', formatDateLong(r.client_paid_at, locale === 'es' ? 'es-MX' : 'en-US'))}
             </span>
-            <span className="text-xs font-semibold text-amber-900">{money(r.total_amount)}</span>
+            <span className="text-xs font-semibold text-amber-900 tabular-nums">{money(r.total_amount)}</span>
             <ChevronRight size={14} className="text-amber-700" />
           </Link>
         ))}

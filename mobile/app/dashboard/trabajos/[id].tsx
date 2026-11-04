@@ -2072,7 +2072,7 @@ export default function JobDetailRoute() {
                       {it.quantity} × {fmt(it.unit_price)}{(it as { original_quantity?: number | null }).original_quantity ? `  ·  ${td.measuredNote.replace('{{qty}}', String((it as { original_quantity?: number | null }).original_quantity))}` : ''}
                     </Text>
                   </View>
-                  <Text className="text-sm font-semibold text-ink">{fmt(it.total)}</Text>
+                  <Text className="text-sm font-semibold text-ink tabular-nums">{fmt(it.total)}</Text>
                 </View>
               ))}
 
@@ -2080,7 +2080,7 @@ export default function JobDetailRoute() {
                 <View className="border-t border-border-soft mt-2 pt-2 gap-1">
                   <View className="flex-row justify-between">
                     <Text className="text-xs text-muted">{td.tax}</Text>
-                    <Text className="text-xs text-ink">{fmt(job.tax_amount)}</Text>
+                    <Text className="text-xs text-ink tabular-nums">{fmt(job.tax_amount)}</Text>
                   </View>
                   {job.discount > 0 ? (
                     <View className="flex-row justify-between">
@@ -2095,7 +2095,7 @@ export default function JobDetailRoute() {
                 <Text className="text-sm font-semibold text-ink">
                   {isProposal ? td.totalEstimated : td.totalEstimated}
                 </Text>
-                <Text className="text-lg font-bold text-ink">{fmt(total)}</Text>
+                <Text className="text-lg font-bold text-ink tabular-nums">{fmt(total)}</Text>
               </View>
             </View>
           )}

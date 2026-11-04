@@ -735,7 +735,7 @@ export function PayrollScreen({
                         <Text className="text-xs font-semibold text-faint"> {t.paidTag}</Text>
                       </Text>
                     ) : (
-                      <Text className="text-xl font-bold text-primary mt-1">{fmt(r.pay)}</Text>
+                      <Text className="text-xl font-bold text-primary mt-1 tabular-nums">{fmt(r.pay)}</Text>
                     )}
                     {gridTwoCol && action ? <View className="mt-2">{action}</View> : null}
                   </View>
@@ -768,16 +768,16 @@ export function PayrollScreen({
                 <View className="items-end">
                   {isPartial(r) ? (
                     <View className="items-end">
-                      <Text className="text-sm font-bold text-amber-600">{fmt(checkBaseOf(r))}</Text>
+                      <Text className="text-sm font-bold text-amber-600 tabular-nums">{fmt(checkBaseOf(r))}</Text>
                       <Text className="text-[11px] text-faint">{t.ofTotal.replace('{{total}}', fmt(r.pay))}</Text>
                     </View>
                   ) : overpaid(r) ? (
                     <View className="items-end">
-                      <Text className="text-sm font-bold text-amber-600">{fmt(paidTotal(r))}</Text>
+                      <Text className="text-sm font-bold text-amber-600 tabular-nums">{fmt(paidTotal(r))}</Text>
                       <Text className="text-[11px] text-faint">{t.paidTag}</Text>
                     </View>
                   ) : (
-                    <Text className="text-sm font-bold text-ink">{fmt(r.pay)}</Text>
+                    <Text className="text-sm font-bold text-ink tabular-nums">{fmt(r.pay)}</Text>
                   )}
                   {(r.payments?.length ?? 0) > 0 ? (
                     <Pressable onPress={() => canManage && openPay(r)} disabled={!canManage}>
@@ -892,14 +892,14 @@ export function PayrollScreen({
                 <View className="mb-4 rounded-2xl border border-border-soft bg-surface p-3">
                   <View className="flex-row items-center justify-between">
                     <Text className="text-sm font-semibold text-ink">{t.loanTitle}</Text>
-                    <Text className="text-sm font-bold text-amber-600">{fmt(manualLoanOwed)} {t.loanOwed}</Text>
+                    <Text className="text-sm font-bold text-amber-600 tabular-nums">{fmt(manualLoanOwed)} {t.loanOwed}</Text>
                   </View>
                   <Text className="text-xs text-muted mt-2 mb-1">{t.loanDeductLabel}</Text>
                   <TextInput value={formatMoneyInput(manualLoanDeduct)} onChangeText={v => setManualLoanDeduct(v.replace(/,/g, '').replace(/[^0-9.]/g, ''))}
                     placeholder="0.00" placeholderTextColor={c.faint} keyboardType="decimal-pad"
                     className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={{ fontSize: 16 }} />
                   {(parseFloat(manualLoanDeduct) || 0) > 0 ? (
-                    <Text className="text-xs text-muted mt-1.5">{t.loanNetToPay}: <Text className="font-bold text-ink">{fmt(manualNet)}</Text></Text>
+                    <Text className="text-xs text-muted mt-1.5">{t.loanNetToPay}: <Text className="font-bold text-ink tabular-nums">{fmt(manualNet)}</Text></Text>
                   ) : null}
                 </View>
               ) : null}
@@ -1258,7 +1258,7 @@ export function PayrollScreen({
                 <X size={20} color={c.faint} />
               </Pressable>
               <Text className="text-base font-semibold text-ink">{payRow?.name}</Text>
-              <Text className="text-3xl font-bold text-primary mt-1">{fmt(modalTotal)}</Text>
+              <Text className="text-3xl font-bold text-primary mt-1 tabular-nums">{fmt(modalTotal)}</Text>
               <Text className="text-sm text-faint mt-0.5">{payRow ? checkHoursOf(payRow) : 0} h</Text>
               {payRow && componentsText(checkComponentsOf(payRow)) ? (
                 <Text className="text-xs text-faint mt-0.5">{componentsText(checkComponentsOf(payRow))}</Text>
@@ -1272,7 +1272,7 @@ export function PayrollScreen({
                   {(payRow?.payments ?? []).map((pmt, i) => (
                     <View key={pmt.id} className={`px-3 py-2 flex-row items-center gap-2 ${i < (payRow?.payments?.length ?? 0) - 1 ? 'border-b border-border-soft' : ''}`}>
                       <View className="flex-1 min-w-0">
-                        <Text className="text-sm font-semibold text-ink">{fmt(pmt.grossPay)}</Text>
+                        <Text className="text-sm font-semibold text-ink tabular-nums">{fmt(pmt.grossPay)}</Text>
                         <Text className="text-[11px] text-faint">
                           {pmt.hours ? `${Math.round(pmt.hours * 100) / 100} h · ` : ''}
                           {paymentBadgeLabel(pmt)}
@@ -1365,7 +1365,7 @@ export function PayrollScreen({
                       placeholder="0.00" placeholderTextColor={c.faint} keyboardType="decimal-pad"
                       className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={{ fontSize: 16 }} />
                     {(parseFloat(loanDeduct) || 0) > 0 ? (
-                      <Text className="text-xs text-muted mt-1.5">{t.loanNetToPay}: <Text className="font-bold text-ink">{fmt(netToPay)}</Text></Text>
+                      <Text className="text-xs text-muted mt-1.5">{t.loanNetToPay}: <Text className="font-bold text-ink tabular-nums">{fmt(netToPay)}</Text></Text>
                     ) : null}
                   </View>
                 ) : null}
@@ -1648,7 +1648,7 @@ export function PayrollScreen({
                     <Pressable key={w.id} onPress={() => selectLoanWorker(w.id, true)}
                       className="flex-row items-center gap-3 py-3 border-b border-border-soft active:opacity-60">
                       <Text className="flex-1 min-w-0 text-sm font-semibold text-ink" numberOfLines={1}>{w.name}</Text>
-                      {loanBalanceOf(w.id) > 0 ? <Text className="text-xs font-semibold text-amber-600">{fmt(loanBalanceOf(w.id))}</Text> : null}
+                      {loanBalanceOf(w.id) > 0 ? <Text className="text-xs font-semibold text-amber-600 tabular-nums">{fmt(loanBalanceOf(w.id))}</Text> : null}
                       <ChevronRight size={16} color={c.faint} />
                     </Pressable>
                   ))}

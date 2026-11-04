@@ -1755,13 +1755,13 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                       )}
                       <div className="flex justify-between text-base font-bold pt-2 border-t border-border-soft">
                         <span>{t.new.total}</span>
-                        <span className="text-primary">{fmt(job.total_amount)}</span>
+                        <span className="text-primary tabular-nums">{fmt(job.total_amount)}</span>
                       </div>
                     </div>
                   ) : (
                     <div className="flex justify-between items-center w-full">
                       <span className="text-sm text-muted">{td.totalEstimated}</span>
-                      <span className="text-base font-bold text-ink">{fmt(itemSubtotal)}</span>
+                      <span className="text-base font-bold text-ink tabular-nums">{fmt(itemSubtotal)}</span>
                     </div>
                   )}
                 </div>
@@ -1949,12 +1949,12 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                 <>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted">{t.new.subtotal}</span>
-                    <span className="font-medium">{fmt(job.subtotal_amount)}</span>
+                    <span className="font-medium tabular-nums">{fmt(job.subtotal_amount)}</span>
                   </div>
                   {job.tax_rate > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted">{td.tax.replace('{{rate}}', String(job.tax_rate))}</span>
-                      <span className="font-medium">{fmt(job.tax_amount)}</span>
+                      <span className="font-medium tabular-nums">{fmt(job.tax_amount)}</span>
                     </div>
                   )}
                   {job.discount > 0 && (
@@ -1965,24 +1965,24 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                   )}
                   <div className="flex justify-between text-sm font-bold pt-1 border-t border-primary/10">
                     <span>{t.new.total}</span>
-                    <span className="text-primary">{fmt(job.total_amount)}</span>
+                    <span className="text-primary tabular-nums">{fmt(job.total_amount)}</span>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted">{t.new.subtotal}</span>
-                    <span className="font-medium">{fmt(itemSubtotal)}</span>
+                    <span className="font-medium tabular-nums">{fmt(itemSubtotal)}</span>
                   </div>
                   {taxRate > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted">{td.tax.replace('{{rate}}', String(taxRate))}</span>
-                      <span className="font-medium">{fmt(itemSubtotal * taxRate / 100)}</span>
+                      <span className="font-medium tabular-nums">{fmt(itemSubtotal * taxRate / 100)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm font-bold pt-1 border-t border-primary/10">
                     <span>{t.new.total}</span>
-                    <span className="text-primary">{fmt(itemSubtotal * (1 + taxRate / 100))}</span>
+                    <span className="text-primary tabular-nums">{fmt(itemSubtotal * (1 + taxRate / 100))}</span>
                   </div>
                 </>
               )}

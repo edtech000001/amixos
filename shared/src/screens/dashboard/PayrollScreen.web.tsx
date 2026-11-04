@@ -611,11 +611,11 @@ export function PayrollScreen({
           </div>
           <div className="flex-1 bg-card rounded-2xl border border-border-soft shadow-sm p-3">
             <p className="text-[11px] text-faint">{t.totalPay}</p>
-            <p className="text-lg font-bold text-primary">{fmt(totalPay)}</p>
+            <p className="text-lg font-bold text-primary tabular-nums">{fmt(totalPay)}</p>
           </div>
           <div className="flex-1 bg-card rounded-2xl border border-border-soft shadow-sm p-3">
             <p className="text-[11px] text-faint">{t.totalPending}</p>
-            <p className={`text-lg font-bold ${totalPending > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>{fmt(totalPending)}</p>
+            <p className={`text-lg font-bold ${totalPending > 0 ? 'text-amber-600' : 'text-emerald-600'} tabular-nums`}>{fmt(totalPending)}</p>
           </div>
         </div>
         {rows.length > 0 && (
@@ -680,7 +680,7 @@ export function PayrollScreen({
                     <span className="text-xs font-semibold text-faint ml-1.5">{t.paidTag}</span>
                   </p>
                 ) : (
-                  <p className="text-2xl font-bold text-primary">{fmt(r.pay)}</p>
+                  <p className="text-2xl font-bold text-primary tabular-nums">{fmt(r.pay)}</p>
                 )}
                 <div className="mt-auto pt-1">
                   {(r.payments?.length ?? 0) > 0 ? (
@@ -726,16 +726,16 @@ export function PayrollScreen({
                 <div className="flex items-center gap-3 shrink-0">
                   {isPartial(r) ? (
                     <span className="text-right">
-                      <span className="text-sm font-bold text-amber-600">{fmt(checkBaseOf(r))}</span>
+                      <span className="text-sm font-bold text-amber-600 tabular-nums">{fmt(checkBaseOf(r))}</span>
                       <span className="block text-[11px] text-faint">{t.ofTotal.replace('{{total}}', fmt(r.pay))}</span>
                     </span>
                   ) : overpaid(r) ? (
                     <span className="text-right" title={t.paidDiffersNote}>
-                      <span className="text-sm font-bold text-amber-600">{fmt(paidTotal(r))}</span>
+                      <span className="text-sm font-bold text-amber-600 tabular-nums">{fmt(paidTotal(r))}</span>
                       <span className="block text-[11px] text-faint">{t.paidTag}</span>
                     </span>
                   ) : (
-                    <span className="text-sm font-bold text-ink">{fmt(r.pay)}</span>
+                    <span className="text-sm font-bold text-ink tabular-nums">{fmt(r.pay)}</span>
                   )}
                   {(r.payments?.length ?? 0) > 0 ? (
                     <button
@@ -833,13 +833,13 @@ export function PayrollScreen({
               <div className="mb-4 rounded-2xl border border-border-soft bg-surface p-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-ink">{t.loanTitle}</span>
-                  <span className="text-sm font-bold text-amber-600">{fmt(manualLoanOwed)} {t.loanOwed}</span>
+                  <span className="text-sm font-bold text-amber-600 tabular-nums">{fmt(manualLoanOwed)} {t.loanOwed}</span>
                 </div>
                 <label className="block text-xs text-muted mt-2 mb-1">{t.loanDeductLabel}</label>
                 <input value={formatMoneyInput(manualLoanDeduct)} onChange={e => setManualLoanDeduct(e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal"
                   className="w-full rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                 {(parseFloat(manualLoanDeduct) || 0) > 0 ? (
-                  <p className="text-xs text-muted mt-1.5">{t.loanNetToPay}: <span className="font-bold text-ink">{fmt(manualNet)}</span></p>
+                  <p className="text-xs text-muted mt-1.5">{t.loanNetToPay}: <span className="font-bold text-ink tabular-nums">{fmt(manualNet)}</span></p>
                 ) : null}
               </div>
             ) : null}
@@ -1069,7 +1069,7 @@ export function PayrollScreen({
               </button>
               <div className="text-center pt-1">
                 <p className="text-base font-semibold text-ink">{payRow.name}</p>
-                <p className="text-3xl font-bold text-primary mt-1">{fmt(modalTotal)}</p>
+                <p className="text-3xl font-bold text-primary mt-1 tabular-nums">{fmt(modalTotal)}</p>
                 <p className="text-sm text-faint mt-0.5">{checkHoursOf(payRow)} h</p>
                 {componentsText(checkComponentsOf(payRow)) ? (
                   <p className="text-xs text-faint mt-0.5">{componentsText(checkComponentsOf(payRow))}</p>
@@ -1084,7 +1084,7 @@ export function PayrollScreen({
                   {(payRow.payments ?? []).map((pmt, i) => (
                     <div key={pmt.id} className={`px-3 py-2 flex items-center gap-2 ${i < (payRow.payments?.length ?? 0) - 1 ? 'border-b border-border-soft' : ''}`}>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-ink">{fmt(pmt.grossPay)}</p>
+                        <p className="text-sm font-semibold text-ink tabular-nums">{fmt(pmt.grossPay)}</p>
                         <p className="text-[11px] text-faint">
                           {pmt.hours ? `${Math.round(pmt.hours * 100) / 100} h · ` : ''}
                           {paymentBadgeLabel(pmt)}
@@ -1176,7 +1176,7 @@ export function PayrollScreen({
                     <input value={formatMoneyInput(loanDeduct)} onChange={e => setLoanDeduct(e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal"
                       className="w-full rounded-xl border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                     {(parseFloat(loanDeduct) || 0) > 0 ? (
-                      <p className="text-xs text-muted mt-1.5">{t.loanNetToPay}: <span className="font-bold text-ink">{fmt(netToPay)}</span></p>
+                      <p className="text-xs text-muted mt-1.5">{t.loanNetToPay}: <span className="font-bold text-ink tabular-nums">{fmt(netToPay)}</span></p>
                     ) : null}
                   </div>
                 ) : null}
@@ -1425,7 +1425,7 @@ export function PayrollScreen({
                       <button key={w.id} type="button" onClick={() => selectLoanWorker(w.id, true)}
                         className="w-full flex items-center gap-3 py-3 text-left hover:bg-surface rounded-lg px-1">
                         <span className="flex-1 min-w-0 text-sm font-semibold text-ink truncate">{w.name}</span>
-                        {loanBalanceOf(w.id) > 0 ? <span className="text-xs font-semibold text-amber-600">{fmt(loanBalanceOf(w.id))}</span> : null}
+                        {loanBalanceOf(w.id) > 0 ? <span className="text-xs font-semibold text-amber-600 tabular-nums">{fmt(loanBalanceOf(w.id))}</span> : null}
                         <Chevron size={16} className="text-faint" />
                       </button>
                     ))}
@@ -1457,7 +1457,7 @@ export function PayrollScreen({
                       <button key={w.id} type="button" onClick={() => selectLoanWorker(w.id)}
                         className="w-full flex items-center gap-3 py-3 text-left hover:bg-surface rounded-lg px-1">
                         <span className="flex-1 min-w-0 text-sm font-semibold text-ink truncate">{w.name}</span>
-                        <span className={`text-sm font-bold ${loanBalanceOf(w.id) > 0 ? 'text-amber-600' : 'text-faint'}`}>{fmt(loanBalanceOf(w.id))}</span>
+                        <span className={`text-sm font-bold ${loanBalanceOf(w.id) > 0 ? 'text-amber-600' : 'text-faint'} tabular-nums`}>{fmt(loanBalanceOf(w.id))}</span>
                         <Chevron size={16} className="text-faint" />
                       </button>
                     ))}

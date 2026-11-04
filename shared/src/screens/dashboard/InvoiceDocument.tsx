@@ -97,7 +97,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
   const showBillTo = vm.sections.includes('billTo');
   // Every Text gets the chosen family (RN doesn't inherit font through View).
   const T = ({ style, children, ...rest }: { style?: TextStyle; children: ReactNode; numberOfLines?: number }) => (
-    <Text style={[{ fontFamily: ff }, style]} {...rest}>{children}</Text>
+    <Text style={[{ fontFamily: ff, fontVariant: ['tabular-nums'] }, style]} {...rest}>{children}</Text>
   );
 
   const SectLabel = ({ children, color }: { children: ReactNode; color?: string }) => (

@@ -383,7 +383,7 @@ export function BillThroughModal({
                       {[tStatus[inv.status] ?? inv.status, inv.issueDate ? formatDateLong(inv.issueDate, locale === 'en' ? 'en-US' : 'es-MX') : null].filter(Boolean).join(' · ')}
                     </span>
                   </span>
-                  <span className="text-sm font-semibold text-ink">{fmt(inv.totalAmount)}</span>
+                  <span className="text-sm font-semibold text-ink tabular-nums">{fmt(inv.totalAmount)}</span>
                 </button>
               ))}
             </div>
@@ -417,7 +417,7 @@ export function BillThroughModal({
                         <span className={`block text-sm ${l.excluded ? 'text-faint' : 'text-ink'}`}>{l.name}</span>
                         <span className="block text-xs text-faint">{l.qty} × {fmt(l.rate)}</span>
                       </span>
-                      <span className="text-sm font-semibold text-ink">{fmt((Number(l.qty) || 0) * (Number(l.rate) || 0))}</span>
+                      <span className="text-sm font-semibold text-ink tabular-nums">{fmt((Number(l.qty) || 0) * (Number(l.rate) || 0))}</span>
                     </button>
                   );
                 })}

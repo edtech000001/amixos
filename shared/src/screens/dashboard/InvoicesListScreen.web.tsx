@@ -625,7 +625,7 @@ export function InvoicesListScreen({
       {/* Summary */}
       {showTotal ? (
         <p className="text-xs text-muted mb-3">
-          {t.summaryTotal}: <span className="text-ink font-bold">{fmt(total)}</span>
+          {t.summaryTotal}: <span className="text-ink font-bold tabular-nums">{fmt(total)}</span>
           {clientPaysTotal != null ? ` · ${t.billThrough.listClientPays.replace('{{total}}', fmt(clientPaysTotal))}` : null}
         </p>
       ) : null}
@@ -752,7 +752,7 @@ export function InvoicesListScreen({
                         {overdueAgo ? `${due ? ' · ' : ''}${overdueAgo}` : ''}
                       </span>
                       <span className="shrink-0 w-28 text-right">
-                        <span className="block text-sm font-bold text-ink">{fmt(inv.totalAmount)}</span>
+                        <span className="block text-sm font-bold text-ink tabular-nums">{fmt(inv.totalAmount)}</span>
                         {inv.clientPays != null ? (
                           <span className="block text-[11px] text-faint whitespace-nowrap">
                             {t.billThrough.listClientPays.replace('{{total}}', fmt(inv.clientPays))}

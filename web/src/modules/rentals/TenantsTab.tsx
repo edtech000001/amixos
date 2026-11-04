@@ -306,7 +306,7 @@ export function TenantsTab({
                       </p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-semibold text-ink">{fmtMoney(l.monthly_rent)}</p>
+                      <p className="text-sm font-semibold text-ink tabular-nums">{fmtMoney(l.monthly_rent)}</p>
                       <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${l.status === 'active' ? 'bg-emerald-500/10 text-emerald-700' : 'bg-border-soft text-muted'}`}>
                         {l.status === 'active' ? t.activeLease : tRent.leases.endedBadge}
                       </span>

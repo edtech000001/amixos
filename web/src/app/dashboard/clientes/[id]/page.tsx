@@ -765,11 +765,11 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
             <div className="flex flex-col gap-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted">{td.totalPaid}</span>
-                <span className="font-semibold text-emerald-600">{fmt(totalSpent)}</span>
+                <span className="font-semibold text-emerald-600 tabular-nums">{fmt(totalSpent)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted">{td.pending}</span>
-                <span className="font-semibold text-blue-600">{fmt(pendingTotal)}</span>
+                <span className="font-semibold text-blue-600 tabular-nums">{fmt(pendingTotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted">{td.invoicesCount}</span>
@@ -822,7 +822,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                       </div>
                       <div className="flex items-center gap-3">
                         <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusColor}`}>{statusLabel}</span>
-                        <span className="text-sm font-bold text-ink">{fmt(inv.total_amount)}</span>
+                        <span className="text-sm font-bold text-ink tabular-nums">{fmt(inv.total_amount)}</span>
                       </div>
                     </Link>
                   );

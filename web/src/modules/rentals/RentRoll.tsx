@@ -345,15 +345,15 @@ export function RentRoll({ supabase, businessId, properties, tenants, leases, lo
         <div className="grid grid-cols-3 gap-3">
           <div>
             <p className="text-xs text-muted">{ov.ytdIncomeLabel}</p>
-            <p className="text-lg font-bold text-emerald-600">{fmtMoney(ytd.income)}</p>
+            <p className="text-lg font-bold text-emerald-600 tabular-nums">{fmtMoney(ytd.income)}</p>
           </div>
           <div>
             <p className="text-xs text-muted">{ov.ytdExpensesLabel}</p>
-            <p className="text-lg font-bold text-red-600">{fmtMoney(ytd.expenses)}</p>
+            <p className="text-lg font-bold text-red-600 tabular-nums">{fmtMoney(ytd.expenses)}</p>
           </div>
           <div>
             <p className="text-xs text-muted">{ov.ytdNetLabel}</p>
-            <p className={`text-lg font-bold ${ytd.net >= 0 ? 'text-ink' : 'text-red-600'}`}>{fmtMoney(ytd.net)}</p>
+            <p className={`text-lg font-bold ${ytd.net >= 0 ? 'text-ink' : 'text-red-600'} tabular-nums`}>{fmtMoney(ytd.net)}</p>
           </div>
         </div>
       </div>
@@ -440,7 +440,7 @@ export function RentRoll({ supabase, businessId, properties, tenants, leases, lo
                       <td className="px-3 py-2.5 text-right text-sm text-amber-700">{a.d1_30 > 0 ? fmtMoney(a.d1_30) : '—'}</td>
                       <td className="px-3 py-2.5 text-right text-sm text-orange-700">{a.d31_60 > 0 ? fmtMoney(a.d31_60) : '—'}</td>
                       <td className="px-3 py-2.5 text-right text-sm text-red-700">{a.d60plus > 0 ? fmtMoney(a.d60plus) : '—'}</td>
-                      <td className="px-4 py-2.5 text-right text-sm font-bold text-ink">{fmtMoney(a.total)}</td>
+                      <td className="px-4 py-2.5 text-right text-sm font-bold text-ink tabular-nums">{fmtMoney(a.total)}</td>
                     </tr>
                   );
                 })}
@@ -471,10 +471,10 @@ export function RentRoll({ supabase, businessId, properties, tenants, leases, lo
                   <tr key={p.propertyId} className="hover:bg-surface cursor-pointer" onClick={() => onOpenProperty(p.propertyId)}>
                     <td className="px-4 py-2.5 text-sm text-ink">{propOf.get(p.propertyId)?.name ?? '—'}</td>
                     <td className="px-3 py-2.5 text-right text-sm text-muted">{p.occupied}/{p.units}</td>
-                    <td className="px-3 py-2.5 text-right text-sm text-ink">{fmtMoney(p.monthlyRentRoll)}</td>
-                    <td className="px-3 py-2.5 text-right text-sm text-emerald-600">{fmtMoney(p.collected)}</td>
-                    <td className={`px-3 py-2.5 text-right text-sm ${p.outstanding > PAY_TOLERANCE ? 'text-red-600' : 'text-muted'}`}>{fmtMoney(p.outstanding)}</td>
-                    <td className={`px-4 py-2.5 text-right text-sm font-semibold ${p.ytdNet >= 0 ? 'text-ink' : 'text-red-600'}`}>{fmtMoney(p.ytdNet)}</td>
+                    <td className="px-3 py-2.5 text-right text-sm text-ink tabular-nums">{fmtMoney(p.monthlyRentRoll)}</td>
+                    <td className="px-3 py-2.5 text-right text-sm text-emerald-600 tabular-nums">{fmtMoney(p.collected)}</td>
+                    <td className={`px-3 py-2.5 text-right text-sm ${p.outstanding > PAY_TOLERANCE ? 'text-red-600' : 'text-muted'} tabular-nums`}>{fmtMoney(p.outstanding)}</td>
+                    <td className={`px-4 py-2.5 text-right text-sm font-semibold ${p.ytdNet >= 0 ? 'text-ink' : 'text-red-600'} tabular-nums`}>{fmtMoney(p.ytdNet)}</td>
                   </tr>
                 ))}
               </tbody>

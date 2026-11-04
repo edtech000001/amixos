@@ -142,7 +142,7 @@ export function LinkExistingModal({
                       {[inv.clientName, inv.issueDate ? formatDateLong(inv.issueDate, dateLoc) : null].filter(Boolean).join(' · ')}
                     </span>
                   </span>
-                  <span className="text-sm font-semibold text-ink">{money(inv.totalAmount)}</span>
+                  <span className="text-sm font-semibold text-ink tabular-nums">{money(inv.totalAmount)}</span>
                   <ChevronRight size={14} className="text-faint" />
                 </button>
               ))}
@@ -170,7 +170,7 @@ export function LinkExistingModal({
                       <span className="block text-sm text-ink">{l.description || '—'}</span>
                       <span className="block text-xs text-faint">{l.taken ? t.linkTaken : `${l.qty} × ${money(l.rate)}`}</span>
                     </span>
-                    <span className="text-sm font-semibold text-ink">{money(l.qty * l.rate)}</span>
+                    <span className="text-sm font-semibold text-ink tabular-nums">{money(l.qty * l.rate)}</span>
                   </button>
                 );
               })}

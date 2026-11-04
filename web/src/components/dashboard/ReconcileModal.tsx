@@ -277,7 +277,7 @@ export default function ReconcileModal({ open, businessId, locale, onClose }: Pr
               {/* Same client as the job (matched by client) — show it for visual parity. */}
               <p className="text-xs text-muted mt-1">{current.job.clientName}</p>
               <p className="text-xs text-muted mt-1">
-                {currentLine.qty} × {money(currentLine.rate)} = <span className="font-semibold text-ink">{money(currentLine.amount)}</span>
+                {currentLine.qty} × {money(currentLine.rate)} = <span className="font-semibold text-ink tabular-nums">{money(currentLine.amount)}</span>
               </p>
               {currentLine.issueDate ? <p className="text-xs text-faint mt-0.5">{fmtDate(currentLine.issueDate)}</p> : null}
             </div>

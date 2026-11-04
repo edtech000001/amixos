@@ -285,7 +285,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
         <p className="text-xs text-muted">
           {t.historyTotalLabel} · {t.historyPaymentsCount.replace('{{count}}', String(filtered.length))} · {Math.round(shownHours * 100) / 100} h
         </p>
-        <p className="text-base font-bold text-primary">{fmt(shownTotal)}</p>
+        <p className="text-base font-bold text-primary tabular-nums">{fmt(shownTotal)}</p>
       </div>
 
       {loading ? (
@@ -332,7 +332,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
                         {componentsText(h.components) ? ` · ${componentsText(h.components)}` : ''}
                       </p>
                     </div>
-                    <span className="text-sm font-bold text-ink shrink-0">{fmt(h.grossPay)}</span>
+                    <span className="text-sm font-bold text-ink shrink-0 tabular-nums">{fmt(h.grossPay)}</span>
                   </div>
                 ))}
               </div>
