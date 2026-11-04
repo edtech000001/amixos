@@ -94,7 +94,8 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.314622478971-jpfm8nmg9aidtneg2qjfdq0f9e8lptpl"
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -109,7 +110,7 @@
       }
     },
     "owner": "edvinramirez56",
-    "runtimeVersion": "2.1.0",
+    "runtimeVersion": "2.2.0",
     "updates": {
       "url": "https://u.expo.dev/183b523e-43ee-4c85-8bdd-1e1851020cab"
     },

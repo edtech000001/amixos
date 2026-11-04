@@ -7,6 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { AnimatedDock } from '@/components/AnimatedDock';
 import { useApp } from '@/lib/AppContext';
+import { ensureBusinessTimezone } from '@amixos/shared/lib/notifications';
+import { registerForPush, usePushTapRouting } from '@/lib/push';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth/store';
 import { DOCK_APPS, dockAppLabel } from '@/lib/dockApps';
@@ -120,6 +122,13 @@ function DashboardTabs() {
   // visually by AnimatedDock from the store. So toggling apps in Navegación is
   // just a dock re-render, not a tab-navigator reconfigure (which felt sluggish).
   const supabase = useMemo(() => createSupabaseClient(), []);
+  useEffect(() => { ensureBusinessTimezone(supabase, business?.id); }, [supabase, business?.id]);
+  // Never while "Ver como": the session is the impersonated member's, and
+  // registering would send THEIR alerts to this (the admin's) phone.
+  useEffect(() => {
+    if (user?.id && !impersonating) void registerForPush(supabase);
+  }, [supabase, user?.id, impersonating]);
+  usePushTapRouting(!!business?.id && !impersonating);
   const loadDock = useDockStore(s => s.load);
   useEffect(() => {
     if (user?.id && business?.id) loadDock(supabase, user.id, business.id);
@@ -234,6 +243,9 @@ function DashboardTabs() {
              pops natively. Each CRUD section (clientes, trabajos, facturas,
              empleados) likewise has its own Stack, registered once via
              DOCK_APPS above. */}
+          {/* Opened from the home bell — never a dock entry. */}
+          <Tabs.Screen name="notificaciones" options={{ href: null }} />
+
           <Tabs.Screen
             name="mas"
             options={{

@@ -19,6 +19,7 @@ import {
 import { normalizeFrequency, parsePayrollAnchor } from '@amixos/shared/lib/payroll';
 import { useSwr } from '@amixos/shared/lib/swrCache';
 import { can } from '@amixos/shared/lib/permissions';
+import { NotificationBell } from '@/components/NotificationBell';
 
 // Field-role home for mobile. Owns data + writes via the shared fieldHome
 // module (same as web/src/components/dashboard/FieldHome.tsx) and renders the
@@ -97,6 +98,7 @@ export function FieldHomeContainer() {
         // The business's name for this worker first; the login's name only as
         // a fallback (a login with no name showed its email's local part).
         businessName={fh.data?.employeeFirstName || firstName(user?.name)}
+        headerAction={<NotificationBell />}
         jobs={jobs}
         recentCompleted={recentCompleted}
         openTimesheet={open}

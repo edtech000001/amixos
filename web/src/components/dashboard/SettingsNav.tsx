@@ -10,7 +10,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2, ClipboardList, Users, Link2, User, Activity, ArrowLeft, FileText, LifeBuoy, Upload, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Building2, ClipboardList, Users, Link2, User, Activity, ArrowLeft, FileText, LifeBuoy, Upload, PanelLeftClose, PanelLeftOpen, Bell } from 'lucide-react';
 import { useLang } from '@/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
 import { can } from '@amixos/shared/lib/permissions';
@@ -121,6 +121,11 @@ export function SettingsNav({ activeTab, onTabClick }: Props) {
             </Link>
           );
         })}
+
+        <Link href="/dashboard/notificaciones" title={collapsed ? full.notifications.title : undefined} className={itemCls(false)}>
+          <Bell size={18} className="text-faint" />
+          <span className={labelCls}>{full.notifications.title}</span>
+        </Link>
 
         {can.seeAuditLog(currentRole) && (
           <Link href="/dashboard/ajustes/actividad" title={collapsed ? t.tabs.actividad : undefined} className={itemCls(onActividad)}>

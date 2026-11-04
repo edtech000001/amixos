@@ -134,6 +134,30 @@ export async function POST(req: Request) {
         }
         break;
       }
+      // Owner alerts (bell + push, migration 269). Best-effort: a failed
+      // notification must not make Stripe retry the whole event.
+      case 'invoice.payment_failed': {
+        const inv = event.data.object as Stripe.Invoice;
+        const customerId = typeof inv.customer === 'string' ? inv.customer : inv.customer?.id;
+        if (customerId) {
+          const { data: bizs } = await admin.from('businesses').select('id').eq('stripe_customer_id', customerId);
+          for (const b of bizs ?? []) {
+            const { error } = await admin.rpc('notify_billing', { p_business: b.id, p_kind: 'payment_failed' });
+            if (error) console.warn('[billing/webhook] notify_billing failed', error.message);
+          }
+        }
+        break;
+      }
+      case 'customer.subscription.trial_will_end': {
+        const sub = event.data.object as Stripe.Subscription;
+        const businessId = sub.metadata?.business_id;
+        if (businessId) {
+          const trialEnd = sub.trial_end ? new Date(sub.trial_end * 1000).toISOString().slice(0, 10) : null;
+          const { error } = await admin.rpc('notify_billing', { p_business: businessId, p_kind: 'trial_ending', p_date: trialEnd });
+          if (error) console.warn('[billing/webhook] notify_billing failed', error.message);
+        }
+        break;
+      }
       default:
         break;
     }

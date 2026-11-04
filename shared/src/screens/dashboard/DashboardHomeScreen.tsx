@@ -96,6 +96,8 @@ export interface DashboardHomeScreenProps {
    * header. When this slot is set, businessName is ignored.
    */
   businessSlot?: ReactNode;
+  /** Small icon button beside Customize (mobile: the notifications bell). */
+  headerAction?: ReactNode;
   /** Optional card shown under the header, above the widgets — e.g. "Owed by
    *  your other companies" (bill-through, migration 250). Renders nothing
    *  when null. */
@@ -300,6 +302,7 @@ export function DashboardHomeScreen({
   role = null,
   businessName,
   businessSlot,
+  headerAction,
   notice,
   stats,
   recent,
@@ -1651,6 +1654,8 @@ export function DashboardHomeScreen({
             <Text className="text-white text-sm font-semibold">{t.home.customize.doneBtn}</Text>
           </PressableScale>
         ) : (
+          <>
+          {headerAction ? <View className="mr-2">{headerAction}</View> : null}
           <PressableScale scaleTo={0.96}
             onPress={() => setEditing(true)}
             className="flex-row items-center gap-2 bg-card border border-border px-4 py-2.5 rounded-xl"
@@ -1658,6 +1663,7 @@ export function DashboardHomeScreen({
             <SlidersHorizontal size={16} color={c.ink} />
             <Text className="text-ink text-sm font-semibold">{t.home.customize.editBtn}</Text>
           </PressableScale>
+          </>
         )}
       </View>
       {/* Business name / switcher gets its own row — sharing the title row

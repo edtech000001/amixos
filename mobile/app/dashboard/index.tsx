@@ -21,6 +21,7 @@ import { fetchPayrollPeriodSummary } from '@amixos/shared/lib/payrollSummary';
 import { BusinessSwitcher } from '@/components/BusinessSwitcher';
 import { LocationSwitcher } from '@/components/LocationSwitcher';
 import { FieldHomeContainer } from '@/components/FieldHomeContainer';
+import { NotificationBell } from '@/components/NotificationBell';
 import { TrialBanner } from '@/components/TrialBanner';
 import { useAppHref } from '@/lib/sectionNav';
 import { OwedByPartnersCard } from '@/components/OwedByPartnersCard';
@@ -329,6 +330,7 @@ function OwnerDashboardHome() {
         loading={appLoading || loading}
         role={currentRole}
         businessName={business?.name ?? ''}
+        headerAction={<NotificationBell />}
         businessSlot={
           // Business + branch, stacked like the web sidebar. LocationSwitcher
           // renders nothing for single-location businesses or roles locked to

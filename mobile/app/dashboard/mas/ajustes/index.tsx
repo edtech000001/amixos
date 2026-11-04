@@ -16,6 +16,7 @@ import {
   Upload,
   Moon,
   Sun,
+  Bell,
   type LucideIcon } from 'lucide-react-native';
 import Constants from 'expo-constants';
 import * as Application from 'expo-application';
@@ -147,6 +148,13 @@ export default function AjustesIndex() {
       icon: Activity,
       path: '/dashboard/mas/ajustes/actividad',
     }] : []),
+    {
+      key: 'notificaciones',
+      label: full.notifications.title,
+      description: full.notifications.settingsSubtitle,
+      icon: Bell,
+      path: '/dashboard/notificaciones?prefs=1',
+    },
     {
       key: 'cuenta',
       label: t.tabs.cuenta,

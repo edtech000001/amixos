@@ -6,7 +6,7 @@ import { clsx } from 'clsx';
 import {
   LayoutDashboard, Users, FileText, UsersRound, Calendar,
   Settings, ChevronLeft, Menu, X, ClipboardList, BarChart3,
-  Store as StoreIcon, PanelLeftClose, PanelLeftOpen,
+  Store as StoreIcon, PanelLeftClose, PanelLeftOpen, Bell,
 } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { useSidebarCollapsed } from './useSidebarCollapsed';
@@ -19,6 +19,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 import { can, type Role } from '@amixos/shared/lib/permissions';
 import { Tooltip } from '@amixos/shared/ui/Tooltip';
+import { useUnreadNotifications } from '@amixos/shared/lib/notifications';
 
 // Build identifier for the footer: app version (from package.json, injected via
 // next.config) + the short git commit SHA (auto-set by Vercel on deploy). Falls
@@ -162,13 +163,15 @@ export function Sidebar() {
   const isSettingsRoute =
     pathname.startsWith('/dashboard/ajustes') &&
     !pathname.startsWith('/dashboard/ajustes/tienda');
-  const { business, currentRole } = useApp();
+  const { business, currentRole, user } = useApp();
   const { t: full } = useLang();
   const t = full.dashboard.sidebar;
   const store = full.dashboard.settings.store;
   const modulesDict = full.dashboard.modules.list;
   const supabase = createSupabaseClient();
   const [open, setOpen] = useState(false);
+  const { data: unreadCount } = useUnreadNotifications(supabase, business?.id ?? null, user?.id ?? null);
+  const unreadLabel = unreadCount ? (unreadCount > 99 ? '99+' : String(unreadCount)) : '';
   // Desktop icon-only mode — shared with SettingsNav (one preference).
   const [collapsed, toggleCollapsed] = useSidebarCollapsed();
 
@@ -241,6 +244,34 @@ export function Sidebar() {
             </Link>
           );
         })}
+        {(() => {
+          const href = '/dashboard/notificaciones';
+          const active = isActive(href);
+          return (
+            <Link
+              href={href}
+              onClick={() => setOpen(false)}
+              title={mini ? full.notifications.title : undefined}
+              data-active={active}
+              className={clsx(
+                'relative flex items-center gap-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
+                mini ? 'justify-center px-0' : 'px-3',
+                active ? 'text-white' : 'text-muted hover:bg-border-soft hover:text-ink',
+              )}
+            >
+              <span className="relative">
+                <Bell size={18} />
+                {mini && unreadLabel ? <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500" /> : null}
+              </span>
+              {!mini && <span className="flex-1">{full.notifications.title}</span>}
+              {!mini && unreadLabel ? (
+                <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] font-bold flex items-center justify-center tabular-nums">
+                  {unreadLabel}
+                </span>
+              ) : null}
+            </Link>
+          );
+        })()}
         {toolModules.map(m => {
           const href = `/dashboard/modulos/${m.id}`;
           const active = isActive(href);
@@ -402,9 +433,19 @@ export function Sidebar() {
       {/* Mobile top bar */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-card border-b border-border-soft px-4 py-3 flex items-center justify-between">
         <p className="text-sm font-semibold text-ink">{business?.name ?? 'Amixos'}</p>
-        <button onClick={() => setOpen(true)} className="p-1.5 rounded-lg hover:bg-border-soft">
-          <Menu size={20} className="text-muted" />
-        </button>
+        <div className="flex items-center gap-1">
+          <Link href="/dashboard/notificaciones" aria-label={full.notifications.title} className="relative p-1.5 rounded-lg hover:bg-border-soft">
+            <Bell size={20} className="text-muted" />
+            {unreadLabel ? (
+              <span className="absolute top-0 right-0 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center tabular-nums">
+                {unreadLabel}
+              </span>
+            ) : null}
+          </Link>
+          <button onClick={() => setOpen(true)} className="p-1.5 rounded-lg hover:bg-border-soft">
+            <Menu size={20} className="text-muted" />
+          </button>
+        </div>
       </div>
 
       {/* Mobile drawer */}

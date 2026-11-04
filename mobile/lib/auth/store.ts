@@ -28,6 +28,7 @@ import {
   type ImpersonationTarget,
 } from '@amixos/shared/lib/impersonation';
 import { createSupabaseClient } from '../supabase';
+import { unregisterPush } from '../push';
 import { getApiBaseUrl, getJwt } from '../apiClient';
 import { useSyncExternalStore } from 'react';
 
@@ -380,6 +381,7 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       logout: async () => {
+        await unregisterPush(supabase);
         await supabase.auth.signOut();
         // SIGNED_OUT event will clear user/business and set status: 'logged_out'.
       },

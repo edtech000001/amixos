@@ -16,6 +16,7 @@ import { assistantRouter } from './routes/assistant';
 import { filesRouter } from './routes/files';
 import { accountRouter } from './routes/account';
 import { bugReportsRouter } from './routes/bugReports';
+import { notificationsRouter } from './routes/notifications';
 import { errorHandler } from './middleware/errorHandler';
 import { notFound } from './middleware/notFound';
 import { rejectImpersonated } from './middleware/auth';
@@ -91,6 +92,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'amixos-api'
 // Routes
 app.use('/api/v1/account', rejectImpersonated, accountRouter);
 app.use('/api/v1/bug-reports', bugReportsRouter);
+app.use('/api/v1/notifications', notificationsRouter);
 app.use('/api/v1/google-sync', rejectImpersonated, googleSyncRouter);
 app.use('/api/v1/invites', rejectImpersonated, invitesRouter);
 app.use('/api/v1/admin', rejectImpersonated, adminRouter);

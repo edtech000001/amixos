@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useMemo } from 'react';
+import { Fragment, useCallback, useEffect, useMemo } from 'react';
 import { AppProvider, useApp } from '@/lib/AppContext';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import AssistantWidget from '@/components/assistant/AssistantWidget';
@@ -11,6 +11,7 @@ import { PolicyConsentGate } from '@/components/PolicyConsentGate';
 import { AccountDeletionGate } from '@/components/AccountDeletionGate';
 import { BusinessDeletionBanner } from '@/components/BusinessDeletionBanner';
 import { useBusinessDeletionDate } from '@amixos/shared/lib/businessDeletion';
+import { ensureBusinessTimezone } from '@amixos/shared/lib/notifications';
 import { createSupabaseClient } from '@/lib/supabase';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import ConfirmHost from '@/components/ConfirmHost';
@@ -44,6 +45,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const { user, business, impersonating } = useApp();
   const supabase = useMemo(() => createSupabaseClient(), []);
   const deletion = useBusinessDeletionDate(supabase, business?.id);
+  useEffect(() => { ensureBusinessTimezone(supabase, business?.id); }, [supabase, business?.id]);
   const helpers = useMemo(() => ({
     getApiBaseUrl: () => getApiBaseUrl() || null,
     getJwt: () => getJwt().then(j => j || null).catch(() => null),

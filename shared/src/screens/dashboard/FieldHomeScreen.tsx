@@ -18,6 +18,8 @@ export interface FieldHomeScreenProps {
   loading: boolean;
   businessName: string;
   businessSlot?: ReactNode;
+  /** Top-right icon button (mobile: the notifications bell). */
+  headerAction?: ReactNode;
   jobs: FieldHomeJob[];
   /** Jobs completed in the last 7 days (most recent first). */
   recentCompleted?: FieldHomeJob[];
@@ -53,6 +55,7 @@ export function FieldHomeScreen({
   loading,
   businessName,
   businessSlot,
+  headerAction,
   jobs,
   recentCompleted = [],
   openTimesheet,
@@ -166,7 +169,10 @@ export function FieldHomeScreen({
   return (
     <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 176 }}>
       <View className="mb-6">
-        <Text className="text-2xl font-bold text-ink">{f.greeting}{!businessSlot && businessName ? ',' : ''}</Text>
+        <View className="flex-row items-center justify-between">
+          <Text className="flex-1 text-2xl font-bold text-ink">{f.greeting}{!businessSlot && businessName ? ',' : ''}</Text>
+          {headerAction}
+        </View>
         {businessSlot ? (
           <View className="mt-2 self-start">{businessSlot}</View>
         ) : businessName ? (
