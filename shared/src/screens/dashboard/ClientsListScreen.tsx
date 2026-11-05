@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { PullRefreshControl } from '../../ui/usePullRefresh';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Animated,
@@ -99,6 +100,8 @@ export const CLIENT_QUICK_CHIPS: { key: ClientQuickFilter; Icon: typeof User }[]
 ];
 
 export interface ClientsListScreenProps {
+  /** Pull-to-refresh (mobile containers pass usePullRefresh().control). */
+  refreshControl?: PullRefreshControl;
   /** Mobile: shown as a ← before the title when opened from Más. */
   onBack?: () => void;
   loading: boolean;
@@ -169,6 +172,7 @@ type Row =
   | { type: 'footer'; key: string; letter: '' };
 
 export function ClientsListScreen({
+  refreshControl,
   onBack,
   loading,
   clients,
@@ -643,7 +647,7 @@ export function ClientsListScreen({
 
   return (
     <View className="flex-1 bg-surface">
-      <FlatList
+      <FlatList refreshControl={refreshControl}
         ref={listRef}
         data={rows}
         keyExtractor={item => item.key}

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRefreshOnRefocus } from '@/lib/useRefreshOnRefocus';
+import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -96,6 +98,9 @@ export default function ReportesRoute() {
       fingerprint: reportsFingerprint,
     },
   );
+  const pull = usePullRefresh(() => reportsQuery.refresh({ force: true }));
+  useRefreshOnRefocus(() => reportsQuery.refresh());
+
   useEffect(() => {
     if (reportsQuery.data) setMetrics(reportsQuery.data);
     // Keep the previous report on screen while a new range loads, matching the
@@ -107,6 +112,7 @@ export default function ReportesRoute() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <LocationSwitcher />
       <ReportsScreen
+        refreshControl={pull.control}
         onBack={moreBack}
         loading={loading}
         range={range}

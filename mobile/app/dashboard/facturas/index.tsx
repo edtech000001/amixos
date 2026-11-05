@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { ownAndClientPays } from '@amixos/shared/lib/invoiceBillThrough';
 import { Alert, InteractionManager, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -310,15 +311,17 @@ export default function FacturasTab() {
   };
 
   const lastFilteredLoadRef = useRef<{ at: number; loc: string | null } | null>(null);
-  const reRun = (locationId: string | null) => {
-    if (defaultActive) { swr.refresh({ force: true }); return; }
-    if (!paramsRef.current) return;
+  // Returns the load's promise so pull-to-refresh can spin until it settles.
+  const reRun = (locationId: string | null): Promise<unknown> => {
+    if (defaultActive) return swr.refresh({ force: true });
+    if (!paramsRef.current) return Promise.resolve();
     lastFilteredLoadRef.current = { at: Date.now(), loc: locationId };
     const p = { ...paramsRef.current, locationId };
-    if (modeRef.current === 'group') void runGroupLazy(p);
-    else void runQuery(p, loadAllRef.current);
+    if (modeRef.current === 'group') return runGroupLazy(p);
+    return runQuery(p, loadAllRef.current);
   };
   const reload = () => reRun(activeLocationId ?? null);
+  const pull = usePullRefresh(reload);
   useEffect(() => {
     if (!defaultActive) reRun(activeLocationId ?? null); // SWR key covers the default view
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -401,6 +404,7 @@ export default function FacturasTab() {
     <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       <LocationSwitcher />
       <InvoicesListScreen
+        refreshControl={pull.control}
         onBack={moreBack}
         initialStatuses={initialStatuses}
         showCollectFilter={usesBillThrough}

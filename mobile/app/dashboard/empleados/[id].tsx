@@ -4,6 +4,7 @@
 // links work). Mirrors the data + UX the previous in-list modal exposed:
 // view ↔ edit, access section, history timeline.
 
+import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { SkeletonBlock, SkeletonCard } from '@amixos/shared/ui/Skeleton';
 import {
@@ -398,9 +399,10 @@ export default function EmpleadoDetailRoute() {
     );
   };
 
-  const load = useCallback(async () => {
+  // silent: pull-to-refresh keeps the page on screen instead of the skeleton.
+  const load = useCallback(async (silent = false) => {
     if (!business || !user || !id) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     const [empRes, tplRes, { data: rawMembers }, invitesRes] = await Promise.all([
       supabase.from('employees').select('*').eq('id', id).single(),
       supabase.from('employee_field_templates').select('*').eq('business_id', business.id).order('sort_order'),
@@ -447,6 +449,7 @@ export default function EmpleadoDetailRoute() {
     });
     setLoading(false);
   }, [business, user, id, supabase, locale]);
+  const pull = usePullRefresh(() => load(true));
 
   useEffect(() => { void load(); }, [load]);
 
@@ -786,7 +789,7 @@ export default function EmpleadoDetailRoute() {
         </View>
       </View>
 
-      <ScrollView contentContainerClassName="px-5 py-5 pb-44 gap-5" keyboardShouldPersistTaps="handled"
+      <ScrollView contentContainerClassName="px-5 py-5 pb-44 gap-5" keyboardShouldPersistTaps="handled" refreshControl={pull.control}
         automaticallyAdjustKeyboardInsets
         keyboardDismissMode="interactive"
       >

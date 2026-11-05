@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRefreshOnRefocus } from '@/lib/useRefreshOnRefocus';
+import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { View, Text, Pressable, Alert, Modal as RNModal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TrendingUp, TrendingDown, ScanLine, Sparkles, X } from 'lucide-react-native';
@@ -157,10 +159,12 @@ export default function InventoryModuleScreen() {
     finally { setLoadingMore(false); }
   };
 
-  const reRun = () => {
-    if (defaultActive) { swr.refresh({ force: true }); return; }
-    if (paramsRef.current) void runQuery(paramsRef.current);
+  const reRun = (): Promise<unknown> => {
+    if (defaultActive) return swr.refresh({ force: true });
+    return paramsRef.current ? runQuery(paramsRef.current) : Promise.resolve();
   };
+  const pull = usePullRefresh(reRun);
+  useRefreshOnRefocus(() => (defaultActive ? swr.refresh() : reRun()));
   const handleFiltersChange = (f: { search: string; lowStockOnly: boolean }) => {
     setInvFilters(f);
     if (!f.search && !f.lowStockOnly) return; // SWR owns the default view
@@ -499,6 +503,7 @@ export default function InventoryModuleScreen() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <LocationSwitcher />
       <SharedInventoryScreen
+        refreshControl={pull.control}
         onBack={moreBack}
         loading={loading}
         items={screenItems}

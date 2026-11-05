@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { PullRefreshControl } from '../../ui/usePullRefresh';
 import { SkeletonBlock, SkeletonStats, SkeletonChart } from '../../ui/Skeleton';
 import { useBarScrub } from '../../ui/useBarScrub';
 import { niceCeil, axisTick } from '../../lib/chartAxis';
@@ -17,6 +18,8 @@ import {
 import { ScreenTitle } from '../../ui/ScreenTitle';
 
 export interface ReportsScreenProps {
+  /** Pull-to-refresh (mobile containers pass usePullRefresh().control). */
+  refreshControl?: PullRefreshControl;
   /** Mobile: shown as a ← before the title when opened from Más. */
   onBack?: () => void;
   loading: boolean;
@@ -82,7 +85,7 @@ function Kpi({ icon, label, value, sub, color }: { icon: React.ReactNode; label:
   );
 }
 
-export function ReportsScreen({ loading, range, onRangeChange, metrics, inventoryEnabled, customFrom, customTo, onCustomChange, onOpenPayroll, onBack }: ReportsScreenProps) {
+export function ReportsScreen({ refreshControl, loading, range, onRangeChange, metrics, inventoryEnabled, customFrom, customTo, onCustomChange, onOpenPayroll, onBack }: ReportsScreenProps) {
   const { t: full } = useLang();
   const c = useThemeColors();
   const t = full.dashboard.reports;
@@ -135,7 +138,12 @@ export function ReportsScreen({ loading, range, onRangeChange, metrics, inventor
 
   return (
     <View className="flex-1 bg-surface">
-    <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 144 }}>
+    <ScrollView refreshControl={refreshControl}
+      className="flex-1 bg-surface"
+      // Page holds still while a finger scrubs the revenue bars.
+      scrollEnabled={!scrub.scrubbing}
+      contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 144 }}
+    >
       <ScreenTitle title={t.title} onBack={onBack} />
       <Text className="text-sm text-muted mt-0.5 mb-4">{t.subtitle}</Text>
 

@@ -224,7 +224,9 @@ export interface UseSwrResult<T> {
   verified: boolean;
   cachedAt: number | null;
   error: unknown;
-  refresh: (opts?: { force?: boolean }) => void;
+  /** Resolves when the revalidation settles (immediately if throttled), so
+   *  pull-to-refresh can hold its spinner exactly that long. Never rejects. */
+  refresh: (opts?: { force?: boolean }) => Promise<void>;
   mutate: (updater: (prev: T | null) => T | null) => void;
 }
 
@@ -312,9 +314,9 @@ export function useSwr<T>(
     }
   }, []);
 
-  const doFetch = useCallback((key: string, force: boolean) => {
+  const doFetch = useCallback((key: string, force: boolean): Promise<void> => {
     const last = lastFetchedAt.get(key);
-    if (!force && last != null && Date.now() - last < throttleMs) return;
+    if (!force && last != null && Date.now() - last < throttleMs) return Promise.resolve();
     lastFetchedAt.set(key, Date.now());
     // Probe first so the stamp we persist can only lag the payload, never lead
     // it. Errors resolve to null = "don't vouch for this cache".
@@ -332,7 +334,7 @@ export function useSwr<T>(
       void p.then(cleanup, cleanup);
     }
     setFetching(true);
-    p.then(
+    return p.then(
       (fresh) => {
         applyFresh(key, fresh, stampP);
         if (fetchKeyRef.current === key) setFetching(false);
@@ -412,9 +414,9 @@ export function useSwr<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchKey, resetKey, cacheKey]);
 
-  const refresh = useCallback((o?: { force?: boolean }) => {
+  const refresh = useCallback((o?: { force?: boolean }): Promise<void> => {
     const key = fetchKeyRef.current;
-    if (key) doFetch(key, o?.force ?? false);
+    return key ? doFetch(key, o?.force ?? false) : Promise.resolve();
   }, [doFetch]);
 
   const mutate = useCallback((updater: (prev: T | null) => T | null) => {

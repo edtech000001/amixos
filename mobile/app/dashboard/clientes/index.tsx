@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { Alert, InteractionManager, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -279,11 +280,13 @@ export default function ClientesTab() {
   }, [loading, loadingMore, hasMore, serverTotal]);
 
   const lastFilteredLoadRef = useRef<{ at: number; loc: string | null } | null>(null);
-  const reRun = () => {
-    if (defaultActive) { swr.refresh({ force: true }); return; }
+  // Returns the load's promise so pull-to-refresh can spin until it settles.
+  const reRun = (): Promise<unknown> => {
+    if (defaultActive) return swr.refresh({ force: true });
     lastFilteredLoadRef.current = { at: Date.now(), loc: activeLocationId ?? null };
-    if (paramsRef.current) void runQuery(paramsRef.current, loadAllRef.current);
+    return paramsRef.current ? runQuery(paramsRef.current, loadAllRef.current) : Promise.resolve();
   };
+  const pull = usePullRefresh(reRun);
   // Re-run when the branch scope changes (locations load, or branch switch).
   // Keyed on the joined ids, not the array, so a same-contents refetch is a no-op.
   useEffect(() => {
@@ -458,6 +461,7 @@ export default function ClientesTab() {
     <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       <LocationSwitcher />
       <ClientsListScreen
+        refreshControl={pull.control}
         onBack={moreBack}
         onJumpToLetter={letter => {
           const base = paramsRef.current ?? (business ? { businessId: business.id, search: '' } : null);

@@ -44,6 +44,11 @@ export interface BarScrub {
   active: number | null;
   /** Measured plot width — callers position their bubble with it. */
   width: number;
+  /** A hold-and-drag is in progress. Pass `scrollEnabled={!scrubbing}` to the
+   *  enclosing ScrollView: on iOS the native scroll view pans regardless of
+   *  the JS responder, so refusing termination alone doesn't stop the page
+   *  scrolling under the finger. */
+  scrubbing: boolean;
   handlers: BarScrubHandlers;
 }
 
@@ -62,6 +67,7 @@ export function useBarScrub({ count, gap = 0, enabled = true, holdMs = HOLD_MS }
   /** Bar latched open by a tap. Survives the finger lifting, unlike `active`. */
   const [sticky, setSticky] = useState<number | null>(null);
   const [width, setWidth] = useState(0);
+  const [scrubbing, setScrubbing] = useState(false);
 
   // Refs shadow the state the gesture callbacks read: they are created once
   // and captured by the responder, so they must not close over stale values.
@@ -98,6 +104,7 @@ export function useBarScrub({ count, gap = 0, enabled = true, holdMs = HOLD_MS }
   const end = useCallback(() => {
     clearTimer();
     holding.current = false;
+    setScrubbing(false);
     setActive(null);
   }, []);
 
@@ -108,6 +115,7 @@ export function useBarScrub({ count, gap = 0, enabled = true, holdMs = HOLD_MS }
     const wasHolding = holding.current;
     clearTimer();
     holding.current = false;
+    setScrubbing(false);
     setActive(null);
     // A scrub ends by clearing everything; a tap toggles the bar it landed on.
     if (wasHolding) setSticky(null);
@@ -119,6 +127,7 @@ export function useBarScrub({ count, gap = 0, enabled = true, holdMs = HOLD_MS }
     // A live scrub wins over a latched tap; otherwise the latched bar shows.
     active: enabled ? (active ?? sticky) : null,
     width,
+    scrubbing: enabled && scrubbing,
     handlers: {
       onLayout: (e: LayoutChangeEvent) => {
         const w = e.nativeEvent.layout.width;
@@ -135,6 +144,7 @@ export function useBarScrub({ count, gap = 0, enabled = true, holdMs = HOLD_MS }
         clearTimer();
         timer.current = setTimeout(() => {
           holding.current = true;
+          setScrubbing(true);
           setActive(indexAt(xRef.current));
         }, holdMs);
       },

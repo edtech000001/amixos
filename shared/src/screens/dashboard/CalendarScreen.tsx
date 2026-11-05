@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { PullRefreshControl } from '../../ui/usePullRefresh';
 import { SkeletonRow } from '../../ui/Skeleton';
 import { View, Text, Pressable, ScrollView, Platform } from 'react-native';
 import {
@@ -77,6 +78,8 @@ export interface CalendarEventInput {
 }
 
 export interface CalendarScreenProps {
+  /** Pull-to-refresh (mobile containers pass usePullRefresh().control). */
+  refreshControl?: PullRefreshControl;
   /** Mobile: shown as a ← before the title when opened from Más. */
   onBack?: () => void;
   items: CalItem[];
@@ -170,6 +173,7 @@ function hm(d: Date): string {
 }
 
 export function CalendarScreen({
+  refreshControl,
   onBack,
   items,
   clients,
@@ -393,7 +397,7 @@ export function CalendarScreen({
     <View className="flex-1 bg-surface">
       {/* Padding lives on an inner View (not contentContainerClassName) so it
           applies on web too, where react-native-web doesn't run NativeWind. */}
-      <ScrollView className="flex-1" ref={scrollRef}
+      <ScrollView refreshControl={refreshControl} className="flex-1" ref={scrollRef}
         automaticallyAdjustKeyboardInsets
         keyboardDismissMode="interactive"
       >

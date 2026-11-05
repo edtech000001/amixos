@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from 'react';
+import type { PullRefreshControl } from '../../ui/usePullRefresh';
 import { SkeletonBlock, SkeletonStats, SkeletonCard, SkeletonList } from '../../ui/Skeleton';
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { Clock, MapPin, Play, CheckCircle2, CalendarDays, Briefcase, Timer, type LucideIcon } from 'lucide-react-native';
@@ -15,6 +16,8 @@ type HoursView = 'active' | 'week' | 'month';
 // FieldHome.tsx.
 
 export interface FieldHomeScreenProps {
+  /** Pull-to-refresh (mobile containers pass usePullRefresh().control). */
+  refreshControl?: PullRefreshControl;
   loading: boolean;
   businessName: string;
   businessSlot?: ReactNode;
@@ -52,6 +55,7 @@ const JOB_STATUS_PILL_TEXT: Record<string, string> = {
 };
 
 export function FieldHomeScreen({
+  refreshControl,
   loading,
   businessName,
   businessSlot,
@@ -167,7 +171,7 @@ export function FieldHomeScreen({
   };
 
   return (
-    <ScrollView className="flex-1 bg-surface" contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 176 }}>
+    <ScrollView refreshControl={refreshControl} className="flex-1 bg-surface" contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 176 }}>
       <View className="mb-6">
         <View className="flex-row items-center justify-between">
           <Text className="flex-1 text-2xl font-bold text-ink">{f.greeting}{!businessSlot && businessName ? ',' : ''}</Text>

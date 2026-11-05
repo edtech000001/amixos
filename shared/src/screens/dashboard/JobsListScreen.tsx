@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { PullRefreshControl } from '../../ui/usePullRefresh';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, Pressable, ScrollView, SectionList, ActivityIndicator, Modal as RNModal, Alert, type ViewToken } from 'react-native';
 import { JobsSummarySheet } from './JobsSummarySheet';
@@ -145,6 +146,8 @@ const TAB_ICON: Record<StatusTabKey, typeof List> = {
 };
 
 export interface JobsListScreenProps {
+  /** Pull-to-refresh (mobile containers pass usePullRefresh().control). */
+  refreshControl?: PullRefreshControl;
   /** Mobile: shown as a ← before the title when opened from Más. */
   onBack?: () => void;
   /** Opens the filtered-set summary — or, given jobIds, the summary of exactly
@@ -289,6 +292,7 @@ function isExpired(j: JobListItem) {
 type JobFlatSection = { title: string; data: JobListItem[] };
 
 export function JobsListScreen({
+  refreshControl,
   onBack,
   loading,
   jobs,
@@ -1264,7 +1268,7 @@ export function JobsListScreen({
       ) : staleCaption ? (
         <Text className="text-[10px] text-faint text-center py-0.5">{staleCaption}</Text>
       ) : null}
-      <SectionList
+      <SectionList refreshControl={refreshControl}
         ref={sectionListRef}
         sections={filtered.length === 0 ? [] : flatSections}
         keyExtractor={item => item.id}

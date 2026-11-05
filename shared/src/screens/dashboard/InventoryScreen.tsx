@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { PullRefreshControl } from '../../ui/usePullRefresh';
 import { SkeletonList, SkeletonRow } from '../../ui/Skeleton';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { View, Text, Pressable, FlatList } from 'react-native';
@@ -29,6 +30,8 @@ export interface InventoryItem {
 }
 
 export interface InventoryScreenProps {
+  /** Pull-to-refresh (mobile containers pass usePullRefresh().control). */
+  refreshControl?: PullRefreshControl;
   /** Mobile: shown as a ← before the title when opened from Más. */
   onBack?: () => void;
   loading: boolean;
@@ -57,6 +60,7 @@ export interface InventoryScreenProps {
 type Filter = 'todos' | 'bajo_stock';
 
 export function InventoryScreen({
+  refreshControl,
   onBack,
   loading,
   items,
@@ -228,7 +232,7 @@ export function InventoryScreen({
 
   return (
     <View className="flex-1 bg-surface">
-      <FlatList
+      <FlatList refreshControl={refreshControl}
         data={filtered}
         keyExtractor={i => i.id}
         renderItem={renderItem}

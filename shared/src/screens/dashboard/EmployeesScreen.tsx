@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { PullRefreshControl } from '../../ui/usePullRefresh';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, Pressable, ScrollView, TextInput, FlatList } from 'react-native';
 import { PressableScale } from '../../ui/PressableScale';
@@ -95,6 +96,8 @@ export interface HourTotalItem {
 }
 
 export interface EmployeesScreenProps {
+  /** Pull-to-refresh (mobile containers pass usePullRefresh().control). */
+  refreshControl?: PullRefreshControl;
   /** Mobile: shown as a ← before the title when opened from Más. */
   onBack?: () => void;
   employees: EmployeeListItem[];
@@ -142,6 +145,7 @@ const CHIP_LIMIT = 10;
 type Tab = 'empleados' | 'horas' | 'historial';
 
 export function EmployeesScreen({
+  refreshControl,
   onBack,
   employees,
   timesheets,
@@ -627,7 +631,7 @@ export function EmployeesScreen({
   return (
     <View className="flex-1 bg-surface">
       {tab === 'empleados' ? (
-        <FlatList
+        <FlatList refreshControl={refreshControl}
           data={employees.length === 0 ? [] : empRows}
           keyExtractor={r => r.key}
           renderItem={renderEmployee}
@@ -656,7 +660,7 @@ export function EmployeesScreen({
           maxToRenderPerBatch={10}
         />
       ) : tab === 'historial' ? (
-        <FlatList
+        <FlatList refreshControl={refreshControl}
           data={filteredTimesheets}
           keyExtractor={ts => ts.id}
           renderItem={renderTimesheet}
@@ -684,7 +688,7 @@ export function EmployeesScreen({
           maxToRenderPerBatch={12}
         />
       ) : (
-        <ScrollView className="flex-1" contentContainerClassName="px-6 pt-6 pb-44" keyboardShouldPersistTaps="handled">
+        <ScrollView refreshControl={refreshControl} className="flex-1" contentContainerClassName="px-6 pt-6 pb-44" keyboardShouldPersistTaps="handled">
           {topBar}
           {otherTabBody}
           {modalsSlot}

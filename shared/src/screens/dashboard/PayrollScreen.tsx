@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
+import type { PullRefreshControl } from '../../ui/usePullRefresh';
 import { SkeletonList } from '../../ui/Skeleton';
 import { View, Text, Pressable, ScrollView, TextInput, Modal as RNModal, Alert, Keyboard, useWindowDimensions, KeyboardAvoidingView, Platform } from 'react-native';
 import { PressableScale } from '../../ui/PressableScale';
@@ -67,6 +68,8 @@ export interface LoanLedgerEntry {
 }
 
 export interface PayrollScreenProps {
+  /** Pull-to-refresh (mobile containers pass usePullRefresh().control). */
+  refreshControl?: PullRefreshControl;
   /** Method to preselect when a payment sheet opens — the one this
    *  business uses most (see fetchPreferredPayMethod). Omitted falls back
    *  to 'check', which is what everyone used to get. */
@@ -139,6 +142,7 @@ function fmt(n: number) {
 const FREQS: PayrollFrequency[] = ['weekly', 'biweekly', 'monthly', 'custom'];
 
 export function PayrollScreen({
+  refreshControl,
   defaultPayMethod = 'check',
   loading,
   frequency,
@@ -601,7 +605,7 @@ export function PayrollScreen({
         ) : null}
       </View>
 
-      <ScrollView contentContainerClassName="px-5 py-5 pb-32 gap-4">
+      <ScrollView refreshControl={refreshControl} contentContainerClassName="px-5 py-5 pb-32 gap-4">
         {/* Branch switcher (multi-location) — self-wraps; renders nothing for
            single-location businesses or roles locked to their home branch. */}
         {locationSwitcher ? <View className="-mx-5 -mt-1">{locationSwitcher}</View> : null}

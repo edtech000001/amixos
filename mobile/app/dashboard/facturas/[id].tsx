@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { Alert, Share, View, Text, Pressable, ScrollView, Modal as RNModal, Linking, TextInput, KeyboardAvoidingView, Keyboard, Platform, Image, useWindowDimensions } from 'react-native';
 import { haptics } from '@amixos/shared/lib/haptics';
 import { PressableScale } from '@amixos/shared/ui/PressableScale';
@@ -394,6 +395,8 @@ export default function FacturaDetailRoute() {
     await loadJobs();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, supabase, loadJobs]);
+  // loadPayments is declared further down; it's only called on pull, after render.
+  const pull = usePullRefresh(() => Promise.all([reloadInvoice(), loadPayments()]));
 
   // Autoprice data + handler (parity with web).
   useEffect(() => {
@@ -1279,6 +1282,7 @@ export default function FacturaDetailRoute() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <InvoiceDetailScreen
+        refreshControl={pull.control}
         loading={loading}
         invoice={invoice && {
           ...invoice,

@@ -3,6 +3,8 @@
 // add/edit/delete, attach photos (camera or library), and assign to
 // an active employee.
 
+import { useRefreshOnRefocus } from '@/lib/useRefreshOnRefocus';
+import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { SkeletonCard, SkeletonRow } from '@amixos/shared/ui/Skeleton';
 import {
@@ -604,7 +606,9 @@ export default function EquipmentScreen() {
     finally { setLoadingMore(false); }
   };
 
-  const reRun = () => { void runQuery(); };
+  const reRun = () => runQuery();
+  const pull = usePullRefresh(reRun);
+  useRefreshOnRefocus(reRun);
 
   const loadEmployees = useCallback(async () => {
     if (!business) return;
@@ -1066,6 +1070,7 @@ export default function EquipmentScreen() {
       {/* List — SectionList virtualizes rows (+ their images) for large fleets. */}
       <SectionList
         className="flex-1"
+        refreshControl={pull.control}
         sections={filtered.length === 0 ? [] : sections}
         keyExtractor={(item) => item.id}
         stickySectionHeadersEnabled={false}

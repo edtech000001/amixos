@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { markSectionVisitor } from '@/lib/sectionEntry';
@@ -204,6 +205,7 @@ export default function NominaRoute() {
   // reloading the whole screen every few seconds. refetchBusiness is a stable
   // store action.
   const loadRef = useRef(load);
+  const pull = usePullRefresh(() => load());
   loadRef.current = load;
   // Which worker's breakdown to reopen when this screen comes back into focus.
   // The sheet must be CLOSED before pushing a job (an open RNModal covers the
@@ -494,6 +496,7 @@ export default function NominaRoute() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <PayrollScreen
+        refreshControl={pull.control}
         defaultPayMethod={payMethodDefault}
         loading={loading}
         frequency={frequency}

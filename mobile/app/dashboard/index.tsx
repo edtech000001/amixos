@@ -1,4 +1,7 @@
 import { readCachedDashLayout, writeCachedDashLayout } from '@amixos/shared/lib/dashboardLayoutCache';
+import { useRefreshOnRefocus } from '@/lib/useRefreshOnRefocus';
+import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
+import { unreadNotificationsChanged } from '@amixos/shared/lib/notifications';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -320,10 +323,20 @@ function OwnerDashboardHome() {
     return null;
   };
 
+  // Pull-to-refresh: dashboard + payroll card + the bell badge, bypassing the
+  // focus throttle.
+  // Back on Home after paying an invoice / finishing a job elsewhere: revalidate
+  // (throttled — quick tab hops don't refetch).
+  useRefreshOnRefocus(() => { dash.refresh(); payrollSwr.refresh(); });
+  const pull = usePullRefresh(() => {
+    unreadNotificationsChanged();
+    return Promise.all([dash.refresh({ force: true }), payrollSwr.refresh({ force: true })]);
+  });
   return (
     <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       <TrialBanner />
       <DashboardHomeScreen
+        refreshControl={pull.control}
         // Bill-through: unpaid invoices whose client already paid the other
         // company (migration 250). Hidden when there are none / no access.
         notice={<OwedByPartnersCard />}

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import type { PullRefreshControl } from '../../ui/usePullRefresh';
 import { lineBasisText, type PriceBasis } from '../../lib/priceSheet';
 import { SkeletonCard, SkeletonDetail } from '../../ui/Skeleton';
 import { View, Text, Pressable, ScrollView, Image, Modal as RNModal } from 'react-native';
@@ -134,6 +135,8 @@ export interface InvoicePaymentRow {
 }
 
 export interface InvoiceDetailScreenProps {
+  /** Pull-to-refresh (mobile passes usePullRefresh().control). */
+  refreshControl?: PullRefreshControl;
   loading: boolean;
   invoice: InvoiceDetail | null;
   /** Business branding for the invoice document header (logo, contact, tax id). */
@@ -259,6 +262,7 @@ function fmt(n: number) {
 }
 
 export function InvoiceDetailScreen({
+  refreshControl,
   loading,
   invoice,
   canEdit = true,
@@ -369,7 +373,7 @@ export function InvoiceDetailScreen({
   const formatDate = (iso: string) => formatDateLong(iso, dateLoc);
 
   return (
-    <ScrollView className="flex-1 bg-surface" contentContainerClassName="px-6 pt-6 pb-44">
+    <ScrollView className="flex-1 bg-surface" contentContainerClassName="px-6 pt-6 pb-44" refreshControl={refreshControl}>
       {/* Header — title left, utility actions top-right (jobs/equipment pattern) */}
       <View className="flex-row items-start justify-between mb-4 gap-3">
         <View className="flex-row items-center gap-3 flex-1 min-w-0">

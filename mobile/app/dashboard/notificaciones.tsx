@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRefreshOnRefocus } from '@/lib/useRefreshOnRefocus';
+import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { BackHandler, FlatList, Pressable, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -62,6 +64,9 @@ export default function NotificacionesScreen() {
   }, [business, supabase]);
 
   useEffect(() => { void load(0); }, [load]);
+  const pull = usePullRefresh(() => { unreadNotificationsChanged(); return load(0); });
+  // This tab stays mounted — reopening it must show alerts that arrived since.
+  useRefreshOnRefocus(() => load(0));
   useEffect(() => {
     if (!business || !user) return;
     loadNotificationPrefs(supabase, business.id, user.id).then(setPrefs).catch(() => setPrefs(null));
@@ -157,6 +162,7 @@ export default function NotificacionesScreen() {
 
       <FlatList
         data={rows}
+        refreshControl={pull.control}
         keyExtractor={n => n.id}
         contentContainerStyle={{ padding: 16, paddingBottom: 160 }}
         ListHeaderComponent={

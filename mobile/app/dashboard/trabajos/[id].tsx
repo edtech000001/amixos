@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { SkeletonBlock, SkeletonCard } from '@amixos/shared/ui/Skeleton';
 import {
   View,
@@ -553,6 +554,7 @@ export default function JobDetailRoute() {
       void load();
     }, [id, business?.id, locale]),
   );
+  const pull = usePullRefresh(() => load());
 
   // user_id → display name, for the "created by / edited by" lines
   // (migration 150 stamps created_by/updated_by at the DB level).
@@ -1553,7 +1555,7 @@ export default function JobDetailRoute() {
         </View>
       </View>
 
-      <ScrollView contentContainerClassName="px-6 pt-6 pb-36">
+      <ScrollView contentContainerClassName="px-6 pt-6 pb-36" refreshControl={pull.control}>
         {/* Title + client + created date */}
         <View className="mb-6">
           {isProposal ? (

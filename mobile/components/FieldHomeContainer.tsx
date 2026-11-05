@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { markSectionVisitor } from '@/lib/sectionEntry';
@@ -66,6 +67,7 @@ export function FieldHomeContainer() {
   useEffect(() => { if (fh.error) setLoading(false); }, [fh.error]);
   useFocusEffect(useCallback(() => { fh.refresh(); }, [fh.refresh]));
   const load = useCallback(async () => { fh.refresh({ force: true }); }, [fh.refresh]);
+  const pull = usePullRefresh(() => fh.refresh({ force: true }));
 
   const onToggleClock = async () => {
     if (!business || !user || busy) return;
@@ -94,6 +96,7 @@ export function FieldHomeContainer() {
     <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       {/* Crew don't get a business logo/switcher — greet them by name. */}
       <FieldHomeScreen
+        refreshControl={pull.control}
         loading={appLoading || loading}
         // The business's name for this worker first; the login's name only as
         // a fallback (a login with no name showed its email's local part).

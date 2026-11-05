@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useHomeOriginBack } from '@/lib/useHomeOriginBack';
 import { markSectionVisitor } from '@/lib/sectionEntry';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -229,6 +230,21 @@ export default function CalendarioRoute() {
     reload();
   }, [reload]);
 
+  // Coming back from a job (date changed, crew changed…) or a tab switch:
+  // refetch the visible range quietly — items stay on screen, no spinner.
+  // The first focus is the mount, which onRangeChange already loads.
+  const focusedOnce = useRef(false);
+  useFocusEffect(useCallback(() => {
+    if (!focusedOnce.current) { focusedOnce.current = true; return; }
+    const r = rangeRef.current;
+    if (r) void fetchItems(r.start, r.end).then(setItems).catch(() => {});
+  }, [fetchItems]));
+
+  const pull = usePullRefresh(() => {
+    const r = rangeRef.current;
+    return r ? fetchItems(r.start, r.end).then(setItems) : undefined;
+  });
+
   const onRangeChange = useCallback(
     (start: Date, end: Date) => {
       rangeRef.current = { start, end };
@@ -281,6 +297,7 @@ export default function CalendarioRoute() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <LocationSwitcher />
       <CalendarScreen
+        refreshControl={pull.control}
         onBack={from === 'home' ? homeBack : moreBack}
         items={items}
         loading={loading}

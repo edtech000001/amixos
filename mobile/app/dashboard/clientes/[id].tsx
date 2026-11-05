@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { SkeletonBlock, SkeletonStats, SkeletonCard, SkeletonList } from '@amixos/shared/ui/Skeleton';
 import {
   View,
@@ -372,6 +373,7 @@ export default function ClienteDetailRoute() {
       void load();
     }, [id, business?.id, locale]),
   );
+  const pull = usePullRefresh(() => load());
 
   const stats = useMemo(() => {
     const totalPaid = invoices
@@ -912,7 +914,7 @@ export default function ClienteDetailRoute() {
         </View>
       </RNModal>
 
-      <ScrollView contentContainerClassName="px-5 pt-5 pb-44"
+      <ScrollView contentContainerClassName="px-5 pt-5 pb-44" refreshControl={pull.control}
         automaticallyAdjustKeyboardInsets
         keyboardDismissMode="interactive"
       >

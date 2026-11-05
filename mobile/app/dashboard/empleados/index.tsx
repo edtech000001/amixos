@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { useDataFingerprint } from '@amixos/shared/lib/dataFingerprint';
 import {
   View,
@@ -410,6 +411,7 @@ export default function EmpleadosRoute() {
   const empStampRef = useRef<string | null>(null);
 
   const lastFocusLoadRef = useRef(0);
+  const pull = usePullRefresh(() => Promise.all([loadEmployees(), loadTimesheets(), loadHourTotals(), loadPeople()]));
   useFocusEffect(
     useCallback(() => {
       const now = Date.now();
@@ -1106,6 +1108,7 @@ export default function EmpleadosRoute() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <LocationSwitcher />
       <EmployeesScreen
+        refreshControl={pull.control}
         businessId={business?.id}
         onBack={moreBack}
         customFieldDefs={templates.map((tpl) => ({

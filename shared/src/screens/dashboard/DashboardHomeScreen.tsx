@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import type { PullRefreshControl } from '../../ui/usePullRefresh';
 import { SkeletonBlock, SkeletonStats, SkeletonChart, SkeletonCard } from '../../ui/Skeleton';
 import { useBarScrub } from '../../ui/useBarScrub';
 import { niceCeil, axisTick } from '../../lib/chartAxis';
@@ -85,6 +86,8 @@ export interface DashboardUpcomingJob {
 }
 
 export interface DashboardHomeScreenProps {
+  /** Pull-to-refresh (mobile containers pass usePullRefresh().control). */
+  refreshControl?: PullRefreshControl;
   loading: boolean;
   /** Caller's role — filters widgets + quick actions to what they can use. */
   role?: Role | null;
@@ -298,6 +301,7 @@ function MiniBars({
 }
 
 export function DashboardHomeScreen({
+  refreshControl,
   loading,
   role = null,
   businessName,
@@ -1690,8 +1694,10 @@ export function DashboardHomeScreen({
   );
 
   return (
-    <Animated.ScrollView
+    <Animated.ScrollView refreshControl={refreshControl}
       ref={scrollRef}
+      // Page holds still while a finger scrubs the earnings bars.
+      scrollEnabled={!earningsScrub.scrubbing}
       className="flex-1 bg-surface"
       contentContainerStyle={{ paddingHorizontal: H_PAD, paddingTop: 24, paddingBottom: 176 }}
     >

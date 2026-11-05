@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { PullRefreshControl } from '../../ui/usePullRefresh';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, Pressable, SectionList, ActivityIndicator } from 'react-native';
 import { FileText, Search, List, Building2, MapPin, ListChecks, Trash2, X, DollarSign, Bell, BellRing, AlertTriangle, ArrowUp, ArrowDown, BadgeCheck, History, CalendarClock, CircleDollarSign } from 'lucide-react-native';
@@ -50,6 +51,8 @@ export interface InvoiceListItem {
 }
 
 export interface InvoicesListScreenProps {
+  /** Pull-to-refresh (mobile containers pass usePullRefresh().control). */
+  refreshControl?: PullRefreshControl;
   /** Mobile: shown as a ← before the title when opened from Más. */
   onBack?: () => void;
   /** Business payroll config — powers the pay-period presets in the date
@@ -141,6 +144,7 @@ const QUICK_CHIPS: { key: InvoiceQuickFilter; Icon: typeof Bell }[] = [
 ];
 
 export function InvoicesListScreen({
+  refreshControl,
   onBack,
   payPeriod,
   showCollectFilter,
@@ -574,7 +578,7 @@ export function InvoicesListScreen({
 
   return (
     <View className="flex-1 bg-surface">
-      <SectionList
+      <SectionList refreshControl={refreshControl}
         className="flex-1"
         sections={filtered.length === 0 ? [] : sections}
         keyExtractor={(item) => item.id}

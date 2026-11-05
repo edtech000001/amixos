@@ -8,6 +8,8 @@
 // as in-modal overlays, never a nested RNModal). Ledger math lives in
 // shared/lib/rentals.ts.
 
+import { useRefreshOnRefocus } from '@/lib/useRefreshOnRefocus';
+import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SkeletonBlock, SkeletonStats, SkeletonChart, SkeletonCard, SkeletonList } from '@amixos/shared/ui/Skeleton';
 import {
@@ -362,6 +364,15 @@ export default function RentalsScreen() {
   }, [business?.id, canEdit, peopleSeq]);
 
   const reloadPeople = () => setPeopleSeq(n => n + 1);
+  // shortcut: the property/people loads are effect-driven (seq bumps), not
+  // awaitable, so the spinner holds a fixed beat; make them return promises if
+  // it ever needs to track the real load.
+  useRefreshOnRefocus(() => { reRun(); reloadPeople(); });
+  const pull = usePullRefresh(() => {
+    reRun();
+    reloadPeople();
+    return new Promise(r => setTimeout(r, 700));
+  });
   const activeLeases = useMemo(() => leases.filter(l => l.status === 'active'), [leases]);
   const tenantOf = useCallback((id: string) => tenants.find(x => x.id === id) ?? null, [tenants]);
 
@@ -2764,6 +2775,7 @@ export default function RentalsScreen() {
           ) : (
             <FlatList
               className="flex-1"
+              refreshControl={pull.control}
               data={properties}
               keyExtractor={p => p.id}
               contentContainerStyle={{ padding: 16, paddingBottom: 220, gap: 12 }}
@@ -2826,6 +2838,7 @@ export default function RentalsScreen() {
         ) : (
           <FlatList
             className="flex-1"
+            refreshControl={pull.control}
             data={sortedTenants}
             keyExtractor={tn => tn.id}
             contentContainerStyle={{ padding: 16, paddingBottom: 220, gap: 10 }}

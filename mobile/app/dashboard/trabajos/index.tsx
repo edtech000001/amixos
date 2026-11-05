@@ -1,4 +1,5 @@
 import { todayLocalISO } from '@amixos/shared/lib/format';
+import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, InteractionManager, View, Text, Pressable, TextInput, ScrollView, Modal as RNModal, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -388,16 +389,18 @@ export default function TrabajosTab() {
   };
 
   const lastFilteredLoadRef = useRef<{ at: number; loc: string | null } | null>(null);
-  const reRun = (locationId: string | null) => {
-    if (defaultActive) { swr.refresh({ force: true }); return; }
-    if (!paramsRef.current) return;
+  // Returns the load's promise so pull-to-refresh can spin until it settles.
+  const reRun = (locationId: string | null): Promise<unknown> => {
+    if (defaultActive) return swr.refresh({ force: true });
+    if (!paramsRef.current) return Promise.resolve();
     lastFilteredLoadRef.current = { at: Date.now(), loc: locationId };
     const p = { ...paramsRef.current, locationId };
-    if (modeRef.current === 'group') void runGroupLazy(p, groupByRef.current);
-    else if (modeRef.current === 'sorted') void runSorted(p, sortKeyRef.current, sortDescRef.current);
-    else void runQuery(p);
+    if (modeRef.current === 'group') return runGroupLazy(p, groupByRef.current);
+    if (modeRef.current === 'sorted') return runSorted(p, sortKeyRef.current, sortDescRef.current);
+    return runQuery(p);
   };
   const reload = () => reRun(activeLocationId ?? null);
+  const pull = usePullRefresh(reload);
 
   // Bulk "move to client" — search clients + reassign the selected jobs.
   const loadMoveClients = async (term: string) => {
@@ -538,6 +541,7 @@ export default function TrabajosTab() {
     <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
       <LocationSwitcher />
       <JobsListScreen
+        refreshControl={pull.control}
         jobCustomFields={jobTemplates}
         onLoadFilterValues={business ? (field) => fetchJobFilterValues(supabase, { businessId: business.id, field, locationId: activeLocationId ?? null }) : undefined}
         onBack={moreBack}
