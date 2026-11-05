@@ -126,8 +126,10 @@ export default function ActividadPage() {
         </Pressable>
         <Text className="ml-1 text-lg font-semibold text-ink">{t.heading}</Text>
       </View>
-      {/* Pinned header + search — stay fixed while the list scrolls below. */}
-      <View className="px-5 pt-5">
+      {/* Pinned header + search — stay fixed while the list scrolls below. The
+          gap + divider live HERE, not in the scroll content, so scrolled rows
+          tuck under a clear edge instead of butting into the search bar. */}
+      <View className="px-5 pt-5 pb-3 border-b border-border-soft">
         <View className="flex-row items-start gap-3 mb-4">
           <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
             <Activity size={18} color={c.primary} />
