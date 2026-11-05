@@ -367,7 +367,9 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
     setJob(prev => (prev ? { ...prev, subtotal_amount: subtotal, tax_amount: tax, total_amount: total } : prev));
     setSavingItems(false);
   };
-  const canEditItems = can.editJobMetadata(currentRole) && !['invoiced', 'cancelled', 'declined'].includes(job?.status ?? '');
+  // Crew edit details only on jobs they created (status stays theirs to move).
+  const canEditDetails = can.editJobDetails(currentRole, !!job && !!user && job.created_by === user.id);
+  const canEditItems = canEditDetails && !['invoiced', 'cancelled', 'declined'].includes(job?.status ?? '');
   const editSubtotal = editRows.reduce((s, r) => s + (parseFloat(r.quantity) || 0) * (parseFloat(r.unit_price) || 0), 0);
 
   // Autoprice — best-effort: for each row, match a price item from its text
@@ -1088,7 +1090,7 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
                 )}
               </div>
             )}
-            {can.editJobMetadata(currentRole) && (
+            {canEditDetails && (
               <Link href={`/dashboard/trabajos/nuevo?edit=${job.id}${backCtx}`}
                 className="p-2 rounded-xl text-muted hover:text-primary hover:bg-primary/5 transition-colors"
                 title={td.editTooltip}>

@@ -655,7 +655,7 @@ export default function TrabajosTab() {
             ]);
           })
         }
-        onBulkChangeClient={can.editJobMetadata(currentRole) ? (ids => { setMoveClientIds(ids); setClientSearch(''); void loadMoveClients(''); }) : undefined}
+        onBulkChangeClient={can.editJobDetails(currentRole, false) ? (ids => { setMoveClientIds(ids); setClientSearch(''); void loadMoveClients(''); }) : undefined}
         onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}
         onNewJob={() => router.push(`${sectionBase}/nuevo` as never)}
         onNewProposal={() => router.push(`${sectionBase}/nuevo?modo=propuesta` as never)}

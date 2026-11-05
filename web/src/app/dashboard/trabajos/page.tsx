@@ -664,7 +664,7 @@ export default function TrabajosPage() {
         void logAudit(supabase, business.id, archive ? 'job.archived' : 'job.unarchived', 'job', null, { count: jobIds.length, bulk: true });
         reload();
       }}
-      onBulkChangeClient={can.editJobMetadata(currentRole) ? (ids => { setMoveClientIds(ids); setClientSearch(''); void loadMoveClients(''); }) : undefined}
+      onBulkChangeClient={can.editJobDetails(currentRole, false) ? (ids => { setMoveClientIds(ids); setClientSearch(''); void loadMoveClients(''); }) : undefined}
       onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}
       onNewJob={() => router.push('/dashboard/trabajos/nuevo')}
       onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta')}

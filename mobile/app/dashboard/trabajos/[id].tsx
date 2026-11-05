@@ -329,7 +329,7 @@ export default function JobDetailRoute() {
   const c = useThemeColors();
   // currentRole from useApp is impersonation-aware — under "Ver como" it is
   // the TARGET member's role, so every can.* gate previews faithfully.
-  const { business, currentRole } = useApp();
+  const { business, currentRole, user } = useApp();
   // Labor/Material/Equipment/Other categories on job line items — hidden when
   // the business turns them off (billed flat / by qty × rate instead).
   const showItemTypes = business?.job_item_types_enabled !== false;
@@ -590,12 +590,12 @@ export default function JobDetailRoute() {
     }
   };
 
-  // Texts the assigned crew lead a ready-to-send summary: the maps pin link,
+  // Texts the job's crew (group text) a ready-to-send summary: the maps pin link,
   // job name, client and scheduled date. We open the SMS composer directly
   // (sms: with a body) rather than the OS share sheet because iOS Messages
   // drops the surrounding text when a shared message leads with a URL — the
-  // composer keeps the full body verbatim. Pre-addresses the lead when they
-  // have a phone on file; otherwise opens an unaddressed draft + falls back to
+  // composer keeps the full body verbatim. Pre-addresses everyone assigned who
+  // has a phone on file; otherwise opens an unaddressed draft + falls back to
   // the share sheet if SMS isn't available.
   const shareJobToCrew = async () => {
     if (!job) return;
@@ -609,25 +609,29 @@ export default function JobDetailRoute() {
     // Messages from gluing the map-link preview to the job name.
     const message = lines.join('\n\n');
 
-    // Look up the assigned lead's phone to pre-address the text.
-    let leadDigits = '';
+    // Address everyone on the job who has a phone (lead first) → one group
+    // text. Workers without a phone on file are simply left off.
+    let numbers: string[] = [];
     try {
       const { data } = await supabase
         .from('job_assignments')
-        .select('employees(phone)')
-        .eq('job_id', job.id)
-        .eq('is_lead', true)
-        .limit(1)
-        .maybeSingle();
-      const phone = (data?.employees as { phone?: string | null } | null)?.phone;
-      if (phone) leadDigits = phone.replace(/\D/g, '');
+        .select('is_lead, employees(phone)')
+        .eq('job_id', job.id);
+      const rows = ((data ?? []) as { is_lead: boolean | null; employees: { phone?: string | null } | null }[])
+        .sort((a, b) => Number(!!b.is_lead) - Number(!!a.is_lead));
+      numbers = [...new Set(rows.map(r => (r.employees?.phone ?? '').replace(/\D/g, '')).filter(Boolean))];
     } catch {
-      /* no lead / no read access — fall through to an unaddressed draft */
+      /* no read access — fall through to an unaddressed draft */
     }
 
-    // iOS uses `&body=`, Android uses `?body=`.
-    const sep = Platform.OS === 'ios' ? '&' : '?';
-    const smsUrl = `sms:${leadDigits}${sep}body=${encodeURIComponent(message)}`;
+    // iOS: one number → sms:NUM&body=; several → sms:/open?addresses=A,B&body=.
+    // Android: sms:A,B?body=.
+    const body = encodeURIComponent(message);
+    const smsUrl = Platform.OS === 'ios'
+      ? (numbers.length > 1
+          ? `sms:/open?addresses=${numbers.join(',')}&body=${body}`
+          : `sms:${numbers[0] ?? ''}&body=${body}`)
+      : `sms:${numbers.join(',')}?body=${body}`;
     const canSms = await Linking.canOpenURL(smsUrl).catch(() => false);
     if (canSms) {
       openLink(smsUrl);
@@ -1473,7 +1477,9 @@ export default function JobDetailRoute() {
     setSavingItems(false);
     setItemsEditOpen(false);
   };
-  const canEditItems = can.editJobMetadata(currentRole) && !['invoiced', 'cancelled', 'declined'].includes(job?.status ?? '');
+  // Crew edit details only on jobs they created (status stays theirs to move).
+  const canEditDetails = can.editJobDetails(currentRole, !!job && !!user && job.created_by === user.id);
+  const canEditItems = canEditDetails && !['invoiced', 'cancelled', 'declined'].includes(job?.status ?? '');
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
@@ -1534,7 +1540,7 @@ export default function JobDetailRoute() {
               <Copy size={18} color={c.muted} />
             </Pressable>
           ) : null}
-          {can.editJobMetadata(currentRole) ? (
+          {canEditDetails ? (
             <Pressable
               onPress={() => router.push(`${sectionBase}/nuevo?edit=${job.id}` as never)}
               hitSlop={8}

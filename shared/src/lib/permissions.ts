@@ -360,6 +360,10 @@ export const can = {
   // Jobs
   createJob:        (role: Role | null) => !!res(role, 'jobs')?.create,
   editJobMetadata:  (role: Role | null) => !!res(role, 'jobs')?.edit,
+  // Crew (assigned-only job view) edit details only on jobs they created —
+  // on everyone else's they move the status only (DB-enforced, migration 272).
+  editJobDetails: (role: Role | null, isCreator: boolean) =>
+    !!res(role, 'jobs')?.edit && (res(role, 'jobs')?.view !== 'assigned' || isCreator),
   // Status change: writers always; field worker if assigned (checked separately).
   changeJobStatus:  (role: Role | null) => !!res(role, 'jobs')?.edit,
   changeJobStatusIfAssigned: (role: Role | null) =>
