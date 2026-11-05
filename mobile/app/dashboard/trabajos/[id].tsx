@@ -262,6 +262,8 @@ export default function JobDetailRoute() {
       // screen belongs to the TRABAJOS stack — router.back() would pop to the
       // last job viewed from the dashboard instead of the dashboard itself.
       router.replace('/dashboard' as never);
+    } else if (from === 'notifications') {
+      router.replace('/dashboard/notificaciones' as never);
     } else if (router.canGoBack()) {
       // Pop back to the existing list screen (each section is its own Stack)
       // so the list keeps its scroll position and loaded data — replace()

@@ -21,7 +21,7 @@ export function NotificationBell() {
 
   return (
     <Pressable
-      onPress={() => router.push('/dashboard/notificaciones' as never)}
+      onPress={() => router.push('/dashboard/notificaciones?from=home' as never)}
       hitSlop={8}
       accessibilityRole="button"
       accessibilityLabel={label ? `${t.notifications.title} (${label})` : t.notifications.title}

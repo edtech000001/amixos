@@ -7,6 +7,7 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { requireOptionalNativeModule } from 'expo';
 import { router } from 'expo-router';
 import { notificationHref } from '@amixos/shared/lib/notifications';
 
@@ -16,6 +17,9 @@ type SupabaseLike = any;
 let mod: NotificationsModule | null | undefined;
 function notifications(): NotificationsModule | null {
   if (mod === undefined) {
+    // Check the native side first: even inside try/catch, requiring the JS
+    // package in a binary without it trips a red "Uncaught Error" in dev.
+    if (!requireOptionalNativeModule('ExpoPushTokenManager')) { mod = null; return mod; }
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       mod = require('expo-notifications') as NotificationsModule;

@@ -153,7 +153,7 @@ export default function AjustesIndex() {
       label: full.notifications.title,
       description: full.notifications.settingsSubtitle,
       icon: Bell,
-      path: '/dashboard/notificaciones?prefs=1',
+      path: '/dashboard/notificaciones?prefs=1&from=ajustes',
     },
     {
       key: 'cuenta',

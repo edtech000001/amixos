@@ -6,6 +6,9 @@ export type NotificationsDict = {
   empty: string;
   emptyHint: string;
   markAllRead: string;
+  markRead: string;
+  markUnread: string;
+  longPressHint: string;
   loadMore: string;
   justNow: string;
   minutesAgo: string;   // {{n}}
@@ -40,6 +43,9 @@ export const notifications: Record<Locale, NotificationsDict> = {
     empty: 'Sin notificaciones',
     emptyHint: 'Aquí verás pagos, trabajos asignados, propuestas aceptadas y más.',
     markAllRead: 'Marcar todo como leído',
+    markRead: 'Marcar como leído',
+    markUnread: 'Marcar como no leído',
+    longPressHint: 'Mantén presionado para marcar como leído o no leído',
     loadMore: 'Cargar más',
     justNow: 'Ahora',
     minutesAgo: 'Hace {{n}} min',
@@ -72,6 +78,9 @@ export const notifications: Record<Locale, NotificationsDict> = {
     empty: 'No notifications',
     emptyHint: 'Payments, job assignments, accepted proposals and more will show up here.',
     markAllRead: 'Mark all as read',
+    markRead: 'Mark as read',
+    markUnread: 'Mark as unread',
+    longPressHint: 'Long-press to mark as read or unread',
     loadMore: 'Load more',
     justNow: 'Now',
     minutesAgo: '{{n}} min ago',

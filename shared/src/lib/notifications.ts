@@ -60,6 +60,12 @@ export async function markNotificationRead(supabase: SupabaseLike, id: string): 
   await supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', id).is('read_at', null);
 }
 
+/** "Look at it later" — puts the dot and the badge back. */
+export async function markNotificationUnread(supabase: SupabaseLike, id: string): Promise<void> {
+  const { error } = await supabase.from('notifications').update({ read_at: null }).eq('id', id);
+  if (error) throw error;
+}
+
 export async function markAllNotificationsRead(supabase: SupabaseLike, businessId: string): Promise<void> {
   const { error } = await supabase
     .from('notifications')
@@ -130,9 +136,12 @@ export function notificationHref(
   platform: 'web' | 'native',
 ): string | null {
   const web = platform === 'web';
+  // Native: the detail screen lives in another tab's stack — ?from marks it a
+  // visitor so back returns to the inbox and it doesn't pile up in that stack.
+  const from = web ? '' : '?from=notifications';
   switch (n.entity_type) {
-    case 'job': return n.entity_id ? `/dashboard/trabajos/${n.entity_id}` : null;
-    case 'invoice': return n.entity_id ? `/dashboard/facturas/${n.entity_id}` : null;
+    case 'job': return n.entity_id ? `/dashboard/trabajos/${n.entity_id}${from}` : null;
+    case 'invoice': return n.entity_id ? `/dashboard/facturas/${n.entity_id}${from}` : null;
     case 'inventory': return web ? '/dashboard/modulos/inventory' : '/dashboard/inventory';
     case 'equipment': return web ? '/dashboard/modulos/equipment' : '/dashboard/equipment';
     case 'timesheet':

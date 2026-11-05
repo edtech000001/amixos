@@ -13,7 +13,7 @@ import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import {
   NOTIFICATIONS_PAGE, NOTIFICATION_CATEGORIES, fetchNotifications, loadNotificationPrefs,
-  markAllNotificationsRead, markNotificationRead, notificationAge, notificationHref,
+  markAllNotificationsRead, markNotificationRead, markNotificationUnread, notificationAge, notificationHref,
   saveNotificationPrefs, unreadNotificationsChanged, useUnreadNotifications,
   type NotificationCategory, type NotificationPrefs, type NotificationRow,
 } from '@amixos/shared/lib/notifications';
@@ -60,6 +60,18 @@ export default function NotificacionesPage() {
     }
     const href = notificationHref(n, 'web');
     if (href) router.push(href);
+  };
+
+  const toggleRead = async (n: NotificationRow) => {
+    const nextRead = n.read_at ? null : new Date().toISOString();
+    setRows(prev => prev.map(r => (r.id === n.id ? { ...r, read_at: nextRead } : r)));
+    try {
+      if (nextRead) await markNotificationRead(supabase, n.id);
+      else await markNotificationUnread(supabase, n.id);
+    } catch {
+      setRows(prev => prev.map(r => (r.id === n.id ? { ...r, read_at: n.read_at } : r)));
+    }
+    unreadNotificationsChanged();
   };
 
   const readAll = async () => {
@@ -115,7 +127,7 @@ export default function NotificacionesPage() {
         ) : (
           <ul>
             {rows.map(n => (
-              <li key={n.id}>
+              <li key={n.id} className="relative group">
                 <button
                   onClick={() => open(n)}
                   className={clsx(
@@ -129,6 +141,13 @@ export default function NotificacionesPage() {
                     {n.body ? <span className="block text-sm text-muted mt-0.5">{n.body}</span> : null}
                   </span>
                   <span className="text-xs text-faint shrink-0 mt-0.5">{notificationAge(n.created_at, t)}</span>
+                </button>
+                {/* Sibling, not nested (no button inside a button); shows on hover/focus. */}
+                <button
+                  onClick={() => toggleRead(n)}
+                  className="absolute right-6 bottom-3 text-xs font-medium text-primary hover:underline opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                >
+                  {n.read_at ? t.markUnread : t.markRead}
                 </button>
               </li>
             ))}

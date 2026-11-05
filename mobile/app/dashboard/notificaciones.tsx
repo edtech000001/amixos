@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { BackHandler, FlatList, Pressable, Text, View } from 'react-native';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Bell, CheckCheck, ChevronLeft } from 'lucide-react-native';
 import { SkeletonRow } from '@amixos/shared/ui/Skeleton';
@@ -9,9 +9,10 @@ import { useApp } from '@/lib/AppContext';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
+import { haptics } from '@amixos/shared/lib/haptics';
 import {
   NOTIFICATIONS_PAGE, NOTIFICATION_CATEGORIES, fetchNotifications, loadNotificationPrefs,
-  markAllNotificationsRead, markNotificationRead, notificationAge, notificationHref,
+  markAllNotificationsRead, markNotificationRead, markNotificationUnread, notificationAge, notificationHref,
   saveNotificationPrefs, unreadNotificationsChanged,
   type NotificationCategory, type NotificationPrefs, type NotificationRow,
 } from '@amixos/shared/lib/notifications';
@@ -29,8 +30,19 @@ export default function NotificacionesScreen() {
   const [page, setPage] = useState(0);
   const [reachedEnd, setReachedEnd] = useState(false);
   // Opened from Ajustes → straight to the preference switches.
-  const { prefs: prefsParam } = useLocalSearchParams<{ prefs?: string }>();
+  const { prefs: prefsParam, from } = useLocalSearchParams<{ prefs?: string; from?: string }>();
   const [showPrefs, setShowPrefs] = useState(prefsParam === '1');
+
+  // Explicit destination, not router.back(): this is its own tab, and tab
+  // history still holds the job/invoice just viewed from here — back() landed
+  // on it again. Ajustes → back to Ajustes; the bell (default) → Home.
+  const goBack = useCallback(() => {
+    router.navigate((from === 'ajustes' ? '/dashboard/mas/ajustes' : '/dashboard') as never);
+  }, [from, router]);
+  useFocusEffect(useCallback(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => { goBack(); return true; });
+    return () => sub.remove();
+  }, [goBack]));
   const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
   const [prefsError, setPrefsError] = useState('');
 
@@ -62,6 +74,20 @@ export default function NotificacionesScreen() {
     }
     const href = notificationHref(n, 'native');
     if (href) router.push(href as never);
+  };
+
+  // Long-press: flip read ⇄ unread ("look at it later").
+  const toggleRead = async (n: NotificationRow) => {
+    const nextRead = n.read_at ? null : new Date().toISOString();
+    haptics.select();
+    setRows(prev => prev.map(r => (r.id === n.id ? { ...r, read_at: nextRead } : r)));
+    try {
+      if (nextRead) await markNotificationRead(supabase, n.id);
+      else await markNotificationUnread(supabase, n.id);
+    } catch {
+      setRows(prev => prev.map(r => (r.id === n.id ? { ...r, read_at: n.read_at } : r)));
+    }
+    unreadNotificationsChanged();
   };
 
   const readAll = async () => {
@@ -116,7 +142,7 @@ export default function NotificacionesScreen() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
-        <Pressable onPress={() => router.back()} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
+        <Pressable onPress={goBack} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
           <ChevronLeft size={22} color={c.ink} />
         </Pressable>
         <Text className="flex-1 text-xl font-bold text-ink ml-1">{t.title}</Text>
@@ -147,6 +173,8 @@ export default function NotificacionesScreen() {
         renderItem={({ item: n, index }) => (
           <Pressable
             onPress={() => open(n)}
+            onLongPress={() => toggleRead(n)}
+            accessibilityHint={t.longPressHint}
             className={`flex-row items-start gap-3 px-4 py-4 bg-card border-x border-border-soft ${
               index === 0 ? 'rounded-t-2xl border-t' : ''
             } ${index === rows.length - 1 ? 'rounded-b-2xl border-b' : 'border-b'} active:bg-surface`}

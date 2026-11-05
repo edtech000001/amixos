@@ -130,7 +130,11 @@ export default function FacturaDetailRoute() {
   // job/client (not the invoice list). We navigate explicitly because
   // facturas/[id] and trabajos/[id] share the same Tabs navigator, where
   // back() can land on the wrong tab.
+  // Set while goBack / the blur pop is leaving, so the beforeRemove reroute
+  // below doesn't run on our own exits.
+  const leavingRef = useRef(false);
   const goBack = () => {
+    leavingRef.current = true;
     if (params.from === 'job' && params.jobId) {
       router.replace(`/dashboard/trabajos/${params.jobId}` as never);
     } else if (params.from === 'client' && params.clientId) {
@@ -138,6 +142,8 @@ export default function FacturaDetailRoute() {
     } else if (params.from === 'home') {
       // Created from the dashboard's "New invoice" quick action.
       router.replace('/dashboard' as never);
+    } else if (params.from === 'notifications') {
+      router.replace('/dashboard/notificaciones' as never);
     } else if (router.canGoBack()) {
       // Pop back to the existing list screen (each section is its own Stack)
       // so the list keeps its scroll position and loaded data — replace()
@@ -162,9 +168,28 @@ export default function FacturaDetailRoute() {
       if (top?.key !== routeKey) return;
       // Origin params stay put — the dock needs ?from to recognise a visitor
       // if this pop doesn't land. Never pop the navigator's last route.
-      if ((st?.index ?? 0) > 0) navigation.dispatch(StackActions.pop());
+      if ((st?.index ?? 0) > 0) {
+        leavingRef.current = true;
+        navigation.dispatch(StackActions.pop());
+      }
     });
   }, [params.from, navigation, routeKey]);
+  // The back ARROW calls goBack, but the iOS swipe-back gesture and Android's
+  // back button pop the stack directly — landing on the invoice list under
+  // this visitor instead of where it came from. Route those through goBack.
+  const goBackRef = useRef(goBack);
+  goBackRef.current = goBack;
+  useEffect(() => {
+    if (!params.from) return undefined;
+    return navigation.addListener('beforeRemove', (e) => {
+      if (leavingRef.current) return;
+      const type = e.data.action.type;
+      if (type !== 'GO_BACK' && type !== 'POP') return;
+      // beforeRemove IS preventable; the untyped useNavigation() just doesn't say so.
+      (e as unknown as { preventDefault: () => void }).preventDefault();
+      goBackRef.current();
+    });
+  }, [params.from, navigation]);
 
   const supabase = createSupabaseClient();
   const { business, currentRole, businesses, setActiveBusiness } = useApp();
