@@ -4,7 +4,7 @@ import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { BackHandler, Pressable, SectionList, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Bell, CheckCheck, ChevronLeft } from 'lucide-react-native';
+import { Bell, CheckCheck, ChevronLeft, Settings, X } from 'lucide-react-native';
 import { SkeletonRow } from '@amixos/shared/ui/Skeleton';
 import { Toggle } from '@amixos/shared/ui/Toggle';
 import { useApp } from '@/lib/AppContext';
@@ -149,12 +149,14 @@ export default function NotificacionesScreen() {
           <ChevronLeft size={22} color={c.ink} />
         </Pressable>
         <Text className="flex-1 text-xl font-bold text-ink ml-1">{t.title}</Text>
+        {/* Gear → the on/off switches (same as web's bell gear); ✕ closes them. */}
         <Pressable
           onPress={() => setShowPrefs(v => !v)}
-          hitSlop={8}
-          className="px-3 py-2 rounded-lg active:bg-border-soft"
+          hitSlop={10}
+          accessibilityLabel={showPrefs ? full.common.buttons.close : t.prefsTitle}
+          className="p-2 -mr-2 rounded-lg active:bg-border-soft"
         >
-          <Text className="text-sm font-semibold text-primary">{showPrefs ? full.common.buttons.close : t.prefsTitle}</Text>
+          {showPrefs ? <X size={20} color={c.ink} /> : <Settings size={20} color={c.ink} />}
         </Pressable>
       </View>
 
