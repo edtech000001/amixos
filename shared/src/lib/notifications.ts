@@ -27,7 +27,9 @@ export interface NotificationPrefs {
   muted_categories: NotificationCategory[];
 }
 
-export const NOTIFICATIONS_PAGE = 50;
+// The server keeps at most 200 per person per company (migration 274), so one
+// request loads the whole inbox — no paging UI.
+export const NOTIFICATIONS_PAGE = 200;
 const COLS = 'id, type, category, title, body, entity_type, entity_id, read_at, created_at';
 
 /** One page, newest first. The inbox loads more with a button (paged, never "all"). */
@@ -173,6 +175,28 @@ export function notificationHref(
     case 'billing': return web ? '/dashboard/ajustes?tab=cuenta' : '/dashboard/mas/ajustes/cuenta';
     default: return null;
   }
+}
+
+export type NotificationDayGroup = 'today' | 'yesterday' | 'week' | 'earlier';
+
+/** Split a newest-first list into Hoy / Ayer / Esta semana / Antes, by the
+ *  device's local calendar day. Empty groups are dropped. */
+export function groupNotificationsByDay(
+  rows: NotificationRow[],
+  now = new Date(),
+): { key: NotificationDayGroup; rows: NotificationRow[] }[] {
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const today = startOfDay(now);
+  const day = 86_400_000;
+  const order: NotificationDayGroup[] = ['today', 'yesterday', 'week', 'earlier'];
+  const buckets: Record<NotificationDayGroup, NotificationRow[]> = { today: [], yesterday: [], week: [], earlier: [] };
+  for (const r of rows) {
+    const d = startOfDay(new Date(r.created_at));
+    const key: NotificationDayGroup =
+      d >= today ? 'today' : d >= today - day ? 'yesterday' : d >= today - 6 * day ? 'week' : 'earlier';
+    buckets[key].push(r);
+  }
+  return order.filter(k => buckets[k].length).map(k => ({ key: k, rows: buckets[k] }));
 }
 
 /** "Hace 5 min" style stamp. */

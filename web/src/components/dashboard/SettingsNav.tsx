@@ -139,14 +139,8 @@ export function SettingsNav({ activeTab, onTabClick }: Props) {
           it reads identically while drilled into Settings. */}
       {!collapsed ? (
         <div className="px-6 py-3 border-t border-border-soft flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[10px] text-faint">
-              Powered by <span className="font-semibold text-muted">Amixos</span>
-            </p>
-            {APP_VERSION && (
-              <p className="text-[10px] text-faint mt-0.5">{APP_VERSION}</p>
-            )}
-          </div>
+          {/* Brand lives in the logo at the top; the footer keeps just the version. */}
+          <p className="text-[10px] text-faint">{APP_VERSION}</p>
           <div className="flex items-center gap-1">
             <ThemeToggle />
             <Tooltip tip="collapseSidebar">

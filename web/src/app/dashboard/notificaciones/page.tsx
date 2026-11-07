@@ -12,7 +12,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import {
-  NOTIFICATIONS_PAGE, NOTIFICATION_CATEGORIES, fetchNotifications, loadNotificationPrefs,
+  NOTIFICATION_CATEGORIES, fetchNotifications, groupNotificationsByDay, loadNotificationPrefs,
   markAllNotificationsRead, markNotificationRead, markNotificationUnread, notificationAge, notificationHref,
   saveNotificationPrefs, unreadNotificationsChanged, useUnreadNotifications,
   type NotificationCategory, type NotificationPrefs, type NotificationRow,
@@ -28,25 +28,23 @@ export default function NotificacionesPage() {
 
   const [rows, setRows] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(0);
-  const [reachedEnd, setReachedEnd] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
   const [prefsError, setPrefsError] = useState('');
 
-  const load = useCallback(async (p: number) => {
+  // The server caps the inbox at 200 per person per company (migration 274),
+  // so one request is the whole list.
+  const load = useCallback(async () => {
     if (!business) return;
     setLoading(true);
     try {
-      const next = await fetchNotifications(supabase, business.id, p);
-      setRows(prev => (p === 0 ? next : [...prev, ...next]));
-      setReachedEnd(next.length < NOTIFICATIONS_PAGE);
-      setPage(p);
+      setRows(await fetchNotifications(supabase, business.id));
     } finally {
       setLoading(false);
     }
   }, [business, supabase]);
 
-  useEffect(() => { void load(0); }, [load]);
+  useEffect(() => { void load(); }, [load]);
   useEffect(() => {
     if (!business || !user) return;
     loadNotificationPrefs(supabase, business.id, user.id).then(setPrefs).catch(() => setPrefs(null));
@@ -98,6 +96,8 @@ export default function NotificacionesPage() {
   };
 
   const hasUnread = rows.some(r => !r.read_at);
+  const shown = filter === 'unread' ? rows.filter(r => !r.read_at) : rows;
+  const groups = groupNotificationsByDay(shown);
 
   return (
     <div className="p-6 flex flex-col lg:flex-row gap-6 items-start">
@@ -116,6 +116,18 @@ export default function NotificacionesPage() {
           ) : null}
         </div>
 
+        {rows.length > 0 ? (
+          <div className="flex gap-2 px-6 pt-4">
+            {(['all', 'unread'] as const).map(f => (
+              <button key={f} onClick={() => setFilter(f)}
+                className={clsx('px-3 py-1.5 rounded-full text-sm font-medium border transition-colors',
+                  filter === f ? 'bg-primary text-white border-primary' : 'bg-card text-muted border-border hover:text-ink')}>
+                {f === 'all' ? t.filterAll : t.filterUnread}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         {loading && rows.length === 0 ? (
           <div className="p-4 space-y-2">{Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)}</div>
         ) : rows.length === 0 ? (
@@ -124,9 +136,15 @@ export default function NotificacionesPage() {
             <p className="text-sm font-semibold text-ink mt-3">{t.empty}</p>
             <p className="text-sm text-muted mt-1">{t.emptyHint}</p>
           </div>
+        ) : shown.length === 0 ? (
+          <p className="py-12 text-center text-sm text-muted px-6">{t.emptyUnread}</p>
         ) : (
+          <div className="pt-2">
+          {groups.map(g => (
+          <section key={g.key}>
+          <h2 className="px-6 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wide text-faint">{t.groups[g.key]}</h2>
           <ul>
-            {rows.map(n => (
+            {g.rows.map(n => (
               <li key={n.id} className="relative group">
                 <button
                   onClick={() => open(n)}
@@ -152,14 +170,10 @@ export default function NotificacionesPage() {
               </li>
             ))}
           </ul>
-        )}
-        {!reachedEnd && rows.length > 0 ? (
-          <div className="p-4 text-center">
-            <button disabled={loading} onClick={() => load(page + 1)} className="text-sm font-medium text-primary hover:underline disabled:opacity-50">
-              {t.loadMore}
-            </button>
+          </section>
+          ))}
           </div>
-        ) : null}
+        )}
       </div>
 
       <div className="w-full lg:w-96 shrink-0 bg-card rounded-2xl border border-border-soft shadow-sm p-6">

@@ -144,16 +144,17 @@ export function BusinessSwitcher() {
       <button
         ref={btnRef}
         onClick={() => setOpen((v) => !v)}
-        className="max-w-full flex items-center gap-2 border border-border bg-elevated rounded-full pl-2 pr-3 py-1.5 shadow-sm hover:bg-surface transition-colors"
+        // Same box as LocationSwitcher so the two read as one control set; the
+        // name wraps (up to 3 lines, full name on hover) instead of truncating.
+        className="w-full flex items-center gap-2 rounded-xl border border-border bg-elevated px-3 py-2.5 text-left hover:bg-surface transition-colors"
         aria-label={tw.switcherLabel}
+        title={business.name}
       >
-        <span className="w-5 h-5 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
-          <Building2 size={12} className="text-primary" />
-        </span>
-        <span className="text-sm font-semibold text-ink truncate min-w-0">
+        <Building2 size={16} className="text-primary shrink-0" />
+        <span className="flex-1 min-w-0 text-sm font-semibold text-ink leading-snug line-clamp-3 break-words">
           {business.name}
         </span>
-        <ChevronDown size={14} className="text-primary shrink-0" />
+        <ChevronDown size={14} className="text-faint shrink-0" />
       </button>
 
       {open && pos

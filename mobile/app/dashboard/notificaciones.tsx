@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRefreshOnRefocus } from '@/lib/useRefreshOnRefocus';
 import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
-import { BackHandler, FlatList, Pressable, Text, View } from 'react-native';
+import { BackHandler, Pressable, SectionList, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Bell, CheckCheck, ChevronLeft } from 'lucide-react-native';
@@ -13,7 +13,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { haptics } from '@amixos/shared/lib/haptics';
 import {
-  NOTIFICATIONS_PAGE, NOTIFICATION_CATEGORIES, fetchNotifications, loadNotificationPrefs,
+  NOTIFICATION_CATEGORIES, fetchNotifications, groupNotificationsByDay, loadNotificationPrefs,
   markAllNotificationsRead, markNotificationRead, markNotificationUnread, notificationAge, notificationHref,
   saveNotificationPrefs, unreadNotificationsChanged,
   type NotificationCategory, type NotificationPrefs, type NotificationRow,
@@ -29,8 +29,7 @@ export default function NotificacionesScreen() {
 
   const [rows, setRows] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(0);
-  const [reachedEnd, setReachedEnd] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'unread'>('all');
   // Opened from Ajustes → straight to the preference switches.
   const { prefs: prefsParam, from } = useLocalSearchParams<{ prefs?: string; from?: string }>();
   const [showPrefs, setShowPrefs] = useState(prefsParam === '1');
@@ -48,25 +47,24 @@ export default function NotificacionesScreen() {
   const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
   const [prefsError, setPrefsError] = useState('');
 
-  const load = useCallback(async (p: number) => {
+  // The server caps the inbox at 200 per person per company (migration 274),
+  // so one request is the whole list.
+  const load = useCallback(async () => {
     if (!business) return;
     setLoading(true);
     try {
-      const next = await fetchNotifications(supabase, business.id, p);
-      setRows(prev => (p === 0 ? next : [...prev, ...next]));
-      setReachedEnd(next.length < NOTIFICATIONS_PAGE);
-      setPage(p);
+      setRows(await fetchNotifications(supabase, business.id));
     } catch {
-      setReachedEnd(true);
+      /* offline — keep what's on screen */
     } finally {
       setLoading(false);
     }
   }, [business, supabase]);
 
-  useEffect(() => { void load(0); }, [load]);
-  const pull = usePullRefresh(() => { unreadNotificationsChanged(); return load(0); });
+  useEffect(() => { void load(); }, [load]);
+  const pull = usePullRefresh(() => { unreadNotificationsChanged(); return load(); });
   // This tab stays mounted — reopening it must show alerts that arrived since.
-  useRefreshOnRefocus(() => load(0));
+  useRefreshOnRefocus(() => load());
   useEffect(() => {
     if (!business || !user) return;
     loadNotificationPrefs(supabase, business.id, user.id).then(setPrefs).catch(() => setPrefs(null));
@@ -160,30 +158,54 @@ export default function NotificacionesScreen() {
         </Pressable>
       </View>
 
-      <FlatList
-        data={rows}
+      <SectionList
+        sections={groupNotificationsByDay(filter === 'unread' ? rows.filter(r => !r.read_at) : rows)
+          .map(g => ({ key: g.key, data: g.rows }))}
         refreshControl={pull.control}
         keyExtractor={n => n.id}
+        stickySectionHeadersEnabled={false}
+        renderSectionHeader={({ section }) => (
+          <Text className="text-[11px] font-semibold uppercase tracking-wide text-faint mt-4 mb-2 px-1">
+            {t.groups[section.key as keyof typeof t.groups]}
+          </Text>
+        )}
         contentContainerStyle={{ padding: 16, paddingBottom: 160 }}
         ListHeaderComponent={
           <>
             {showPrefs ? prefsCard : null}
-            {hasUnread ? (
-              <Pressable onPress={readAll} className="flex-row items-center gap-1.5 self-end mb-3 px-1 py-1">
-                <CheckCheck size={16} color={c.primary} />
-                <Text className="text-sm font-semibold text-primary">{t.markAllRead}</Text>
-              </Pressable>
+            {rows.length > 0 ? (
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row gap-2">
+                  {(['all', 'unread'] as const).map(f => (
+                    <Pressable key={f} onPress={() => setFilter(f)}
+                      className="px-3.5 py-1.5 rounded-full border"
+                      style={filter === f
+                        ? { backgroundColor: c.primary, borderColor: c.primary }
+                        : { backgroundColor: c.card, borderColor: c.border }}>
+                      <Text className="text-sm font-semibold" style={{ color: filter === f ? '#FFFFFF' : c.muted }}>
+                        {f === 'all' ? t.filterAll : t.filterUnread}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                {hasUnread ? (
+                  <Pressable onPress={readAll} hitSlop={8} className="flex-row items-center gap-1.5 px-1 py-1">
+                    <CheckCheck size={16} color={c.primary} />
+                    <Text className="text-sm font-semibold text-primary">{t.markAllRead}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             ) : null}
           </>
         }
-        renderItem={({ item: n, index }) => (
+        renderItem={({ item: n, index, section }) => (
           <Pressable
             onPress={() => open(n)}
             onLongPress={() => toggleRead(n)}
             accessibilityHint={t.longPressHint}
             className={`flex-row items-start gap-3 px-4 py-4 bg-card border-x border-border-soft ${
               index === 0 ? 'rounded-t-2xl border-t' : ''
-            } ${index === rows.length - 1 ? 'rounded-b-2xl border-b' : 'border-b'} active:bg-surface`}
+            } ${index === section.data.length - 1 ? 'rounded-b-2xl border-b' : 'border-b'} active:bg-surface`}
           >
             <View
               className="mt-1.5 w-2 h-2 rounded-full"
@@ -197,7 +219,9 @@ export default function NotificacionesScreen() {
           </Pressable>
         )}
         ListEmptyComponent={
-          loading ? (
+          rows.length > 0 ? (
+            <Text className="text-sm text-muted text-center py-12 px-6">{t.emptyUnread}</Text>
+          ) : loading ? (
             <View className="gap-2">{Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)}</View>
           ) : (
             <View className="items-center py-16 px-6">
@@ -206,13 +230,6 @@ export default function NotificacionesScreen() {
               <Text className="text-sm text-muted mt-1 text-center">{t.emptyHint}</Text>
             </View>
           )
-        }
-        ListFooterComponent={
-          !reachedEnd && rows.length > 0 ? (
-            <Pressable disabled={loading} onPress={() => load(page + 1)} className="items-center py-4">
-              <Text className="text-sm font-semibold text-primary">{t.loadMore}</Text>
-            </Pressable>
-          ) : null
         }
       />
     </SafeAreaView>

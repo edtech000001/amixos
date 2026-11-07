@@ -20,6 +20,8 @@ import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 import { can, type Role } from '@amixos/shared/lib/permissions';
 import { Tooltip } from '@amixos/shared/ui/Tooltip';
 import { useUnreadNotifications } from '@amixos/shared/lib/notifications';
+import { NotificationBell } from '@/components/dashboard/NotificationBell';
+import { Logo } from '@amixos/shared/ui/Logo';
 
 // Build identifier for the footer: app version (from package.json, injected via
 // next.config) + the short git commit SHA (auto-set by Vercel on deploy). Falls
@@ -204,15 +206,22 @@ export function Sidebar() {
       {/* Business switcher (replaces the read-only logo + name block). In
           icon-only mode the switchers hide — expand to switch. */}
       {!mini ? (
-        <div className="px-6 py-5 border-b border-border-soft flex flex-col gap-3">
+        // Logo + bell on a slim row of their own so the company switcher gets
+        // the full width (long names wrap instead of "The Pivo…").
+        <div className="px-4 pt-4 pb-5 border-b border-border-soft flex flex-col gap-3">
+          <div className="flex items-center justify-between pl-1">
+            <Logo variant="side" width={96} />
+            <NotificationBell onNavigate={() => setOpen(false)} />
+          </div>
           <BusinessSwitcher />
           <LocationSwitcher />
         </div>
       ) : (
-        <div className="py-4 border-b border-border-soft flex items-center justify-center">
+        <div className="py-4 border-b border-border-soft flex flex-col items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-sm font-bold" title={business?.name ?? 'Amixos'}>
             {(business?.name ?? 'A').charAt(0).toUpperCase()}
           </div>
+          <NotificationBell />
         </div>
       )}
 
@@ -244,34 +253,6 @@ export function Sidebar() {
             </Link>
           );
         })}
-        {(() => {
-          const href = '/dashboard/notificaciones';
-          const active = isActive(href);
-          return (
-            <Link
-              href={href}
-              onClick={() => setOpen(false)}
-              title={mini ? full.notifications.title : undefined}
-              data-active={active}
-              className={clsx(
-                'relative flex items-center gap-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
-                mini ? 'justify-center px-0' : 'px-3',
-                active ? 'text-white' : 'text-muted hover:bg-border-soft hover:text-ink',
-              )}
-            >
-              <span className="relative">
-                <Bell size={18} />
-                {mini && unreadLabel ? <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500" /> : null}
-              </span>
-              {!mini && <span className="flex-1">{full.notifications.title}</span>}
-              {!mini && unreadLabel ? (
-                <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] font-bold flex items-center justify-center tabular-nums">
-                  {unreadLabel}
-                </span>
-              ) : null}
-            </Link>
-          );
-        })()}
         {toolModules.map(m => {
           const href = `/dashboard/modulos/${m.id}`;
           const active = isActive(href);
@@ -381,14 +362,8 @@ export function Sidebar() {
           toggle sits here (light ↔ dark). */}
       {!mini ? (
         <div className="px-6 py-3 border-t border-border-soft flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[10px] text-faint">
-              Powered by <span className="font-semibold text-muted">Amixos</span>
-            </p>
-            {APP_VERSION && (
-              <p className="text-[10px] text-faint mt-0.5">{APP_VERSION}</p>
-            )}
-          </div>
+          {/* Brand lives in the logo at the top; the footer keeps just the version. */}
+          <p className="text-[10px] text-faint">{APP_VERSION}</p>
           <div className="flex items-center gap-1">
             <ThemeToggle />
             <Tooltip tip="collapseSidebar">

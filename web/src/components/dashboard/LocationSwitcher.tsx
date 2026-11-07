@@ -36,8 +36,9 @@ export function LocationSwitcher() {
   return (
     <div className="relative" ref={ref}>
       <button type="button" onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 rounded-xl border border-border bg-elevated px-3 py-2 text-sm text-left hover:bg-surface transition-colors">
-        <MapPin size={15} className="text-faint shrink-0" />
+        className="w-full flex items-center gap-2 rounded-xl border border-border bg-elevated px-3 py-2.5 text-sm text-left hover:bg-surface transition-colors">
+        {/* Matches the BusinessSwitcher box (icon, padding, chevron). */}
+        <MapPin size={16} className="text-primary shrink-0" />
         <span className="flex-1 truncate text-ink">{active?.name ?? allLabel}</span>
         <ChevronDown size={14} className="text-faint shrink-0" />
       </button>

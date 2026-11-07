@@ -6,10 +6,14 @@ export type NotificationsDict = {
   empty: string;
   emptyHint: string;
   markAllRead: string;
+  viewAll: string;
   markRead: string;
   markUnread: string;
   longPressHint: string;
-  loadMore: string;
+  filterAll: string;
+  filterUnread: string;
+  emptyUnread: string;
+  groups: { today: string; yesterday: string; week: string; earlier: string };
   justNow: string;
   minutesAgo: string;   // {{n}}
   hoursAgo: string;     // {{n}}
@@ -43,10 +47,14 @@ export const notifications: Record<Locale, NotificationsDict> = {
     empty: 'Sin notificaciones',
     emptyHint: 'Aquí verás pagos, trabajos asignados, propuestas aceptadas y más.',
     markAllRead: 'Marcar todo como leído',
+    viewAll: 'Ver todas',
     markRead: 'Marcar como leído',
     markUnread: 'Marcar como no leído',
     longPressHint: 'Mantén presionado para marcar como leído o no leído',
-    loadMore: 'Cargar más',
+    filterAll: 'Todas',
+    filterUnread: 'No leídas',
+    emptyUnread: 'Estás al día. No hay notificaciones sin leer.',
+    groups: { today: 'Hoy', yesterday: 'Ayer', week: 'Esta semana', earlier: 'Antes' },
     justNow: 'Ahora',
     minutesAgo: 'Hace {{n}} min',
     hoursAgo: 'Hace {{n}} h',
@@ -78,10 +86,14 @@ export const notifications: Record<Locale, NotificationsDict> = {
     empty: 'No notifications',
     emptyHint: 'Payments, job assignments, accepted proposals and more will show up here.',
     markAllRead: 'Mark all as read',
+    viewAll: 'View all',
     markRead: 'Mark as read',
     markUnread: 'Mark as unread',
     longPressHint: 'Long-press to mark as read or unread',
-    loadMore: 'Load more',
+    filterAll: 'All',
+    filterUnread: 'Unread',
+    emptyUnread: "You're all caught up. No unread notifications.",
+    groups: { today: 'Today', yesterday: 'Yesterday', week: 'This week', earlier: 'Earlier' },
     justNow: 'Now',
     minutesAgo: '{{n}} min ago',
     hoursAgo: '{{n}} h ago',
