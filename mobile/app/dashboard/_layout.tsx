@@ -7,8 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { AnimatedDock } from '@/components/AnimatedDock';
 import { useApp } from '@/lib/AppContext';
-import { ensureBusinessTimezone } from '@amixos/shared/lib/notifications';
-import { registerForPush, usePushTapRouting } from '@/lib/push';
+import { ensureBusinessTimezone, useUnreadByBusiness } from '@amixos/shared/lib/notifications';
+import { registerForPush, setAppBadge, usePushTapRouting } from '@/lib/push';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useAuthStore } from '@/lib/auth/store';
 import { DOCK_APPS, dockAppLabel } from '@/lib/dockApps';
@@ -129,6 +129,13 @@ function DashboardTabs() {
     if (user?.id && !impersonating) void registerForPush(supabase);
   }, [supabase, user?.id, impersonating]);
   usePushTapRouting(!!business?.id && !impersonating);
+  // App-icon number = unread across every company; resyncs when the app opens
+  // and whenever something is read (pushes set it while the app is closed).
+  const { data: unreadByBiz } = useUnreadByBusiness(supabase, impersonating ? null : user?.id ?? null);
+  useEffect(() => {
+    if (!unreadByBiz) return;
+    setAppBadge(Object.values(unreadByBiz).reduce((a, n) => a + n, 0));
+  }, [unreadByBiz]);
   const loadDock = useDockStore(s => s.load);
   useEffect(() => {
     if (user?.id && business?.id) loadDock(supabase, user.id, business.id);

@@ -9,7 +9,9 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { requireOptionalNativeModule } from 'expo';
 import { router } from 'expo-router';
-import { notificationHref } from '@amixos/shared/lib/notifications';
+import { markNotificationRead, notificationHref, unreadNotificationsChanged } from '@amixos/shared/lib/notifications';
+import { createSupabaseClient } from '@/lib/supabase';
+import { useAuthStore } from '@/lib/auth/store';
 
 type NotificationsModule = typeof import('expo-notifications');
 type SupabaseLike = any;
@@ -67,13 +69,38 @@ export async function registerForPush(supabase: SupabaseLike): Promise<void> {
   }
 }
 
+/** Set the number on the app icon (total unread across all companies). */
+export function setAppBadge(count: number): void {
+  const N = notifications();
+  if (!N) return;
+  void N.setBadgeCountAsync(Math.max(0, count)).catch(() => {});
+}
+
 /** Remove this device's token before signing out, so the next account on the
  *  phone doesn't receive the previous user's alerts. */
 export async function unregisterPush(supabase: SupabaseLike): Promise<void> {
+  setAppBadge(0); // the next account on this phone starts clean
   if (!currentToken) return;
   const token = currentToken;
   currentToken = null;
   try { await supabase.from('push_tokens').delete().eq('token', token); } catch { /* best-effort */ }
+}
+
+/** An alert from another of the user's companies: switch to it first, so the
+ *  job/invoice opens inside the right business (not a "not found" in the
+ *  current one). Resolves once the switch lands, or after 3 s regardless. */
+async function ensureBusiness(businessId: unknown): Promise<void> {
+  if (typeof businessId !== 'string') return;
+  const st = useAuthStore.getState();
+  if (st.activeBusinessId === businessId || !st.businesses.some(b => b.id === businessId)) return;
+  await new Promise<void>(resolve => {
+    let unsub = () => {};
+    const timer = setTimeout(() => { unsub(); resolve(); }, 3000);
+    unsub = useAuthStore.subscribe(s2 => {
+      if (s2.activeBusinessId === businessId) { clearTimeout(timer); unsub(); resolve(); }
+    });
+    st.setActiveBusiness(businessId);
+  });
 }
 
 /** Open the related screen when a notification is tapped (warm or cold start). */
@@ -82,11 +109,17 @@ export function usePushTapRouting(ready: boolean): void {
     const N = notifications();
     if (!N || !ready) return undefined;
     const go = (data: Record<string, unknown> | undefined) => {
+      // Opening the alert from the push counts as reading it — the inbox
+      // and the bell badge shouldn't still show it as new.
+      const nid = data?.notificationId;
+      if (typeof nid === 'string') {
+        void markNotificationRead(createSupabaseClient(), nid).then(unreadNotificationsChanged, () => {});
+      }
       const href = notificationHref(
         { entity_type: (data?.entityType as string) ?? null, entity_id: (data?.entityId as string) ?? null },
         'native',
       );
-      if (href) router.push(href as never);
+      void ensureBusiness(data?.businessId).then(() => { if (href) router.push(href as never); });
     };
     let handled: string | null = null;
     N.getLastNotificationResponseAsync().then(r => {

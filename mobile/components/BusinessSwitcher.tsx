@@ -9,6 +9,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useNetworkStore } from '@/lib/offline/network';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
+import { unreadBadgeLabel, useUnreadByBusiness } from '@amixos/shared/lib/notifications';
 
 /**
  * Tap the active business name to open a bottom sheet listing every business
@@ -23,6 +24,9 @@ export function BusinessSwitcher() {
   const businesses = useAuthStore((s) => s.businesses);
   const activeId = useAuthStore((s) => s.activeBusinessId);
   const setActiveBusiness = useAuthStore((s) => s.setActiveBusiness);
+  // Unread alerts per company, shown on each row of the list.
+  const userId = useAuthStore((s) => s.user?.id ?? null);
+  const { data: unreadByBiz } = useUnreadByBusiness(createSupabaseClient(), userId);
   // Switching is blocked offline: each business can customize its role
   // permissions (business_roles), and those overrides can't be fetched without
   // a connection — so switching offline would silently apply the looser
@@ -85,6 +89,9 @@ export function BusinessSwitcher() {
                     className={`flex-row items-center gap-3 px-4 py-3.5 ${
                       i < businesses.length - 1 ? 'border-b border-border-soft' : ''
                     } ${locked ? 'opacity-40' : 'active:bg-border-soft'}`}
+                    // Active business: ~15% primary tint + left accent bar. Via style,
+                    // not a conditional className (NativeWind remounts on class changes).
+                    style={isActive ? { backgroundColor: c.primary + '26', borderLeftWidth: 3, borderLeftColor: c.primary } : undefined}
                   >
                     <View className="w-9 h-9 rounded-xl bg-primary/10 items-center justify-center">
                       <Building2 size={16} color={c.primary} />
@@ -100,7 +107,15 @@ export function BusinessSwitcher() {
                         </Text>
                       ) : null}
                     </View>
-                    {isActive ? <Check size={18} color={c.primary} /> : null}
+                    {unreadBadgeLabel(unreadByBiz?.[b.id]) ? (
+                      <View className="min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 items-center justify-center">
+                        <Text className="text-white text-[11px] font-bold tabular-nums">{unreadBadgeLabel(unreadByBiz?.[b.id])}</Text>
+                      </View>
+                    ) : null}
+                    {/* Fixed slot so unread counts line up whether or not the row has the check. */}
+                    <View className="w-5 items-center">
+                      {isActive ? <Check size={18} color={c.primary} /> : null}
+                    </View>
                   </Pressable>
                 );
   };

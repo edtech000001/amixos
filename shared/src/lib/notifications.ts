@@ -90,14 +90,38 @@ export function useUnreadNotifications(supabase: SupabaseLike, businessId: strin
     resetKey: key ?? '',
     focusThrottleMs: 30_000,
   });
-  const { refresh } = swr;
+  useUnreadSync(swr.refresh);
+  return swr;
+}
+
+/** Recount when anything is marked read, and when the app returns to front. */
+function useUnreadSync(refresh: (o?: { force?: boolean }) => unknown) {
   useEffect(() => {
-    const force = () => refresh({ force: true });
+    const force = () => { void refresh({ force: true }); };
     unreadListeners.add(force);
-    const sub = AppState.addEventListener('change', st => { if (st === 'active') refresh(); });
+    const sub = AppState.addEventListener('change', st => { if (st === 'active') void refresh(); });
     return () => { unreadListeners.delete(force); sub.remove(); };
   }, [refresh]);
+}
+
+/** Unread counts for EVERY business the user belongs to (migration 273) —
+ *  badges in the business switcher. businessId → count; missing = 0. */
+export function useUnreadByBusiness(supabase: SupabaseLike, userId: string | null) {
+  const key = userId ? `notif_unread_by_biz_${userId}` : null;
+  const swr = useSwr<Record<string, number>>(key, async () => {
+    const { data, error } = await supabase.rpc('my_unread_notification_counts');
+    if (error) throw error;
+    const out: Record<string, number> = {};
+    for (const r of (data ?? []) as { business_id: string; unread: number }[]) out[r.business_id] = r.unread;
+    return out;
+  }, { cacheKey: key, resetKey: key ?? '', focusThrottleMs: 30_000 });
+  useUnreadSync(swr.refresh);
   return swr;
+}
+
+/** "3", "99+", or '' for none. */
+export function unreadBadgeLabel(n: number | null | undefined): string {
+  return n ? (n > 99 ? '99+' : String(n)) : '';
 }
 
 export async function loadNotificationPrefs(

@@ -8,6 +8,7 @@ import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import { createSupabaseClient } from '@/lib/supabase';
 import { SortableList } from '@/components/dashboard/SortableList';
+import { unreadBadgeLabel, useUnreadByBusiness } from '@amixos/shared/lib/notifications';
 
 /**
  * Click the active business name to drop down a list of every business the
@@ -22,6 +23,9 @@ import { SortableList } from '@/components/dashboard/SortableList';
  */
 export function BusinessSwitcher() {
   const { businesses, business, activeBusinessId, setActiveBusiness, user, reorderBusinesses } = useApp();
+  // Unread alerts per company, shown on each row of the list.
+  const { data: unreadByBiz } = useUnreadByBusiness(createSupabaseClient(), user?.id ?? null);
+
   const supabase = createSupabaseClient();
 
   /**
@@ -105,9 +109,9 @@ export function BusinessSwitcher() {
                   // showing stale/out-of-context data. Only on a real switch.
                   if (switching) router.push('/dashboard');
                 }}
-                className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-surface transition-colors text-left ${
+                className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${
                   i < businesses.length - 1 ? 'border-b border-border-soft' : ''
-                }`}
+                } ${isActive ? 'bg-primary/15 border-l-[3px] border-l-primary' : 'hover:bg-surface'}`}
               >
                 <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                   <Building2 size={16} className="text-primary" />
@@ -121,7 +125,15 @@ export function BusinessSwitcher() {
                     </p>
                   ) : null}
                 </div>
-                {isActive ? <Check size={16} className="text-primary shrink-0" /> : null}
+                {unreadBadgeLabel(unreadByBiz?.[b.id]) ? (
+                  <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] font-bold flex items-center justify-center tabular-nums shrink-0">
+                    {unreadBadgeLabel(unreadByBiz?.[b.id])}
+                  </span>
+                ) : null}
+                {/* Fixed slot so unread counts line up whether or not the row has the check. */}
+                <span className="w-4 shrink-0 flex justify-center">
+                  {isActive ? <Check size={16} className="text-primary" /> : null}
+                </span>
               </button>
       </div>
     );

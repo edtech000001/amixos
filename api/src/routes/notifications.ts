@@ -68,32 +68,61 @@ notificationsRouter.post('/dispatch', async (req, res) => {
   if (!rows.length) return res.json({ success: true, data: { claimed: claimed.size, sent: 0 } });
 
   const userIds = [...new Set(rows.map(r => r.user_id))];
-  const [{ data: tokens, error: tokErr }, { data: prefs, error: prefErr }] = await Promise.all([
-    supabase.from('push_tokens').select('token, user_id').in('user_id', userIds),
+  const businessIds = [...new Set(rows.map(r => r.business_id))];
+  const [{ data: tokens, error: tokErr }, { data: prefs, error: prefErr }, { data: memberships }, { data: bizRows }] = await Promise.all([
+    supabase.from('push_tokens').select('token, user_id, platform').in('user_id', userIds),
     supabase.from('notification_prefs').select('user_id, business_id, push_enabled')
       .in('user_id', userIds).eq('push_enabled', false),
+    // Best-effort context: which business an alert is from only matters to
+    // people in more than one (owner of 3 companies) — the push still goes
+    // out without it.
+    supabase.from('business_members').select('user_id').in('user_id', userIds),
+    supabase.from('businesses').select('id, name').in('id', businessIds),
   ]);
   if (tokErr || prefErr) {
     return res.status(500).json({ success: false, message: (tokErr ?? prefErr)!.message });
   }
+  // App-icon badge: each user's total unread across all their companies, as of
+  // this send (the app re-syncs it whenever it opens or something is read).
+  const unreadTotal = new Map<string, number>();
+  await Promise.all(userIds.map(async u => {
+    const { count } = await supabase.from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', u).is('read_at', null);
+    unreadTotal.set(u, count ?? 0);
+  }));
+  const membershipCount = new Map<string, number>();
+  for (const m of memberships ?? []) {
+    const u = m.user_id as string;
+    membershipCount.set(u, (membershipCount.get(u) ?? 0) + 1);
+  }
+  const bizName = new Map((bizRows ?? []).map(b => [b.id as string, (b.name as string | null)?.trim() || '']));
   const pushOff = new Set((prefs ?? []).map(p => `${p.user_id}:${p.business_id}`));
-  const tokensByUser = new Map<string, string[]>();
+  const tokensByUser = new Map<string, { token: string; platform: string }[]>();
   for (const t of tokens ?? []) {
     const list = tokensByUser.get(t.user_id as string) ?? [];
-    list.push(t.token as string);
+    list.push({ token: t.token as string, platform: (t.platform as string | null) ?? 'ios' });
     tokensByUser.set(t.user_id as string, list);
   }
 
   const messages = rows.flatMap(r =>
     pushOff.has(`${r.user_id}:${r.business_id}`)
       ? []
-      : (tokensByUser.get(r.user_id) ?? []).map(to => ({
+      : (tokensByUser.get(r.user_id) ?? []).map(({ token: to, platform }) => {
+          // Multi-business users: say which company. iOS shows `subtitle` on
+          // its own line; Android has none, so the title carries it there.
+          const company = (membershipCount.get(r.user_id) ?? 0) > 1 ? bizName.get(r.business_id) || '' : '';
+          const ios = platform === 'ios';
+          return {
           to,
-          title: r.title,
+          title: company && !ios ? `${company} · ${r.title}` : r.title,
+          ...(company && ios ? { subtitle: company } : {}),
           body: r.body,
           sound: 'default',
+          badge: unreadTotal.get(r.user_id) ?? 0,
           data: { notificationId: r.id, businessId: r.business_id, entityType: r.entity_type, entityId: r.entity_id },
-        })),
+          };
+        }),
   );
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
