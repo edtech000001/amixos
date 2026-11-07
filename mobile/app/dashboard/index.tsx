@@ -352,7 +352,7 @@ function OwnerDashboardHome() {
             <BusinessSwitcher />
             {/* className="" clears the component's default px-5 pt-3, which is
                 for screens that render it as a standalone bar. */}
-            <LocationSwitcher className="" align="center" />
+            <LocationSwitcher className="" variant="box" />
           </View>
         }
         stats={stats}

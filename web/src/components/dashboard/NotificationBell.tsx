@@ -3,20 +3,19 @@
 // Bell + unread badge at the top of the sidebar; opens a dropdown with the
 // latest alerts. The full inbox (filters, preferences) is /dashboard/notificaciones.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Bell, CheckCheck } from 'lucide-react';
+import { Bell, CheckCheck, Settings } from 'lucide-react';
 import { clsx } from 'clsx';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import {
-  fetchNotifications, markAllNotificationsRead, markNotificationRead, notificationAge, notificationHref,
+  fetchNotifications, groupNotificationsByDay, markAllNotificationsRead, markNotificationRead, notificationAge, notificationHref,
   unreadBadgeLabel, unreadNotificationsChanged, useUnreadNotifications,
   type NotificationRow,
 } from '@amixos/shared/lib/notifications';
-
-const PREVIEW = 8;
 
 export function NotificationBell({ onNavigate }: { onNavigate?: () => void }) {
   const supabase = useMemo(() => createSupabaseClient(), []);
@@ -29,25 +28,45 @@ export function NotificationBell({ onNavigate }: { onNavigate?: () => void }) {
 
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<NotificationRow[] | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
+  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const btnRef = useRef<HTMLButtonElement>(null);
+  // The menu is portalled to <body> (like BusinessSwitcher): rendered inside
+  // the sticky sidebar it painted UNDER the page content. Anchor to the button.
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const toggle = () => {
+    if (open) { setOpen(false); return; }
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 8, left: r.left });
+    setOpen(true);
+  };
 
   // Fresh list every time it opens (cheap: one request, newest first).
   useEffect(() => {
     if (!open || !business) return;
     let cancelled = false;
     fetchNotifications(supabase, business.id)
-      .then(r => { if (!cancelled) setRows(r.slice(0, PREVIEW)); })
+      .then(r => { if (!cancelled) setRows(r); })
       .catch(() => { if (!cancelled) setRows([]); });
     return () => { cancelled = true; };
   }, [open, business, supabase]);
 
+  // Outside clicks land on the backdrop; Escape and resizing close it too.
+  // While open the page behind can't scroll (wheel over the backdrop, or the
+  // list hitting its end, would otherwise scroll the dashboard).
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const html = document.documentElement;
+    const prevOverflow = html.style.overflow;
+    html.style.overflow = 'hidden';
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('mousedown', onDown);
+    const onResize = () => setOpen(false);
     document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+    window.addEventListener('resize', onResize);
+    return () => {
+      html.style.overflow = prevOverflow;
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', onResize);
+    };
   }, [open]);
 
   const go = (n: NotificationRow) => {
@@ -66,10 +85,11 @@ export function NotificationBell({ onNavigate }: { onNavigate?: () => void }) {
   };
 
   return (
-    <div className="relative shrink-0" ref={ref}>
+    <div className="relative shrink-0">
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={toggle}
         aria-label={label ? `${t.title} (${label})` : t.title}
         aria-expanded={open}
         className="relative w-9 h-9 rounded-xl border border-border bg-elevated flex items-center justify-center text-muted hover:text-ink hover:bg-surface transition-colors"
@@ -82,17 +102,40 @@ export function NotificationBell({ onNavigate }: { onNavigate?: () => void }) {
         ) : null}
       </button>
 
-      {open ? (
-        <div className="absolute z-50 top-full left-0 mt-2 w-[360px] max-w-[calc(100vw-2rem)] bg-card border border-border rounded-2xl shadow-lg overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border-soft">
+      {open && pos ? createPortal(
+        <>
+        {/* Same dim + blur layer as the business switcher; click closes. */}
+        <div aria-hidden onMouseDown={() => setOpen(false)}
+          className="fixed inset-0 bg-black/40 backdrop-blur-[2px]" style={{ zIndex: 9998 }} />
+        <div
+          style={{ position: 'fixed', top: pos.top, left: Math.max(16, Math.min(pos.left, window.innerWidth - 376)), zIndex: 9999 }}
+          className="w-[360px] max-w-[calc(100vw-2rem)] bg-elevated border border-border rounded-2xl shadow-2xl overflow-hidden">
+          <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-2">
             <p className="text-sm font-bold text-ink">{t.title}</p>
-            {rows?.some(r => !r.read_at) ? (
-              <button type="button" onClick={readAll} className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-                <CheckCheck size={14} /> {t.markAllRead}
-              </button>
-            ) : null}
+            <div className="flex items-center gap-1">
+              {rows?.some(r => !r.read_at) ? (
+                <button type="button" onClick={readAll} className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-primary hover:bg-primary/5">
+                  <CheckCheck size={14} /> {t.markAllRead}
+                </button>
+              ) : null}
+              {/* Straight to the on/off switches (the page's preferences panel). */}
+              <Link href="/dashboard/notificaciones" onClick={() => { setOpen(false); onNavigate?.(); }}
+                title={t.prefsTitle} aria-label={t.prefsTitle}
+                className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-surface">
+                <Settings size={16} />
+              </Link>
+            </div>
           </div>
-          <div className="max-h-[420px] overflow-y-auto">
+          <div className="flex gap-2 px-4 pb-3 border-b border-border-soft">
+            {(['all', 'unread'] as const).map(f => (
+              <button key={f} type="button" onClick={() => setFilter(f)}
+                className={clsx('px-3 py-1 rounded-full text-xs font-semibold border transition-colors',
+                  filter === f ? 'bg-primary text-white border-primary' : 'bg-card text-muted border-border hover:text-ink')}>
+                {f === 'all' ? t.filterAll : t.filterUnread}
+              </button>
+            ))}
+          </div>
+          <div className="max-h-[min(520px,calc(100vh-160px))] overflow-y-auto overscroll-contain pb-1">
             {rows === null ? (
               <p className="px-4 py-6 text-sm text-faint text-center">…</p>
             ) : rows.length === 0 ? (
@@ -100,7 +143,12 @@ export function NotificationBell({ onNavigate }: { onNavigate?: () => void }) {
                 <Bell size={28} className="mx-auto text-faint" />
                 <p className="text-sm font-semibold text-ink mt-2">{t.empty}</p>
               </div>
-            ) : rows.map(n => (
+            ) : filter === 'unread' && !rows.some(r => !r.read_at) ? (
+              <p className="px-4 py-8 text-sm text-muted text-center">{t.emptyUnread}</p>
+            ) : groupNotificationsByDay(filter === 'unread' ? rows.filter(r => !r.read_at) : rows).map(g => (
+              <section key={g.key}>
+              <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-faint">{t.groups[g.key]}</p>
+              {g.rows.map(n => (
               <button key={n.id} type="button" onClick={() => go(n)}
                 className={clsx('w-full text-left flex items-start gap-2.5 px-4 py-3 border-b border-border-soft last:border-b-0 hover:bg-surface transition-colors',
                   !n.read_at && 'bg-primary/5')}>
@@ -111,13 +159,13 @@ export function NotificationBell({ onNavigate }: { onNavigate?: () => void }) {
                 </span>
                 <span className="text-[11px] text-faint shrink-0 mt-0.5">{notificationAge(n.created_at, t)}</span>
               </button>
+              ))}
+              </section>
             ))}
           </div>
-          <Link href="/dashboard/notificaciones" onClick={() => { setOpen(false); onNavigate?.(); }}
-            className="block text-center px-4 py-2.5 text-sm font-semibold text-primary border-t border-border-soft hover:bg-surface">
-            {t.viewAll}
-          </Link>
         </div>
+        </>,
+        document.body,
       ) : null}
     </div>
   );

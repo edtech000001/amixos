@@ -18,7 +18,10 @@ export function LocationSwitcher({
    *  business switcher. A prop rather than a parent style because the pill
    *  sets its own alignSelf, which a parent's alignItems can't override. */
   align = 'start',
-}: { className?: string; align?: 'start' | 'center' }) {
+  /** 'box' = full-width box matching the BusinessSwitcher (dashboard header,
+   *  where the two stack). Default 'pill' = compact bar on list screens. */
+  variant = 'pill',
+}: { className?: string; align?: 'start' | 'center'; variant?: 'pill' | 'box' }) {
   const { locations, activeLocationId, setActiveLocation, currentRole } = useApp();
   const { locale } = useLang();
   const c = useThemeColors();
@@ -53,6 +56,23 @@ export function LocationSwitcher({
 
   return (
     <View className={className ?? 'px-5 pt-3'}>
+      {variant === 'box' ? (
+        // Same shape as the BusinessSwitcher button above it.
+        <Pressable
+          onPress={() => setOpen(true)}
+          className="flex-row items-center gap-2 border border-border bg-card rounded-2xl active:bg-surface"
+          style={{
+            paddingLeft: 20, paddingRight: 12, paddingTop: 8, paddingBottom: 8,
+            shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1,
+          }}
+        >
+          <View className="w-5 h-5 rounded-md bg-primary/10 items-center justify-center">
+            <MapPin size={12} color={c.primary} />
+          </View>
+          <Text className="flex-1 text-sm font-semibold text-ink" numberOfLines={1}>{current}</Text>
+          <ChevronDown size={14} color={c.primary} />
+        </Pressable>
+      ) : (
       <Pressable
         onPress={() => setOpen(true)}
         className={`${align === 'center' ? 'self-center' : 'self-start'} flex-row items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 active:opacity-80`}
@@ -61,6 +81,7 @@ export function LocationSwitcher({
         <Text className="text-sm font-medium text-ink" numberOfLines={1}>{current}</Text>
         <ChevronDown size={14} color={c.faint} />
       </Pressable>
+      )}
 
       <RNModal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <View className="flex-1 justify-end">

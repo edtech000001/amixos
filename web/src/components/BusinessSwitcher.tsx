@@ -61,6 +61,10 @@ export function BusinessSwitcher() {
       if (r) setPos({ top: r.bottom + 8, left: r.left });
     };
     update();
+    // Page behind stays put while the menu is open (matches the bell).
+    const html = document.documentElement;
+    const prevOverflow = html.style.overflow;
+    html.style.overflow = 'hidden';
     const onDocClick = (e: MouseEvent) => {
       const target = e.target as Node;
       if (btnRef.current?.contains(target) || menuRef.current?.contains(target)) return;
@@ -71,6 +75,7 @@ export function BusinessSwitcher() {
     window.addEventListener('scroll', update, true);
     document.addEventListener('mousedown', onDocClick);
     return () => {
+      html.style.overflow = prevOverflow;
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
       document.removeEventListener('mousedown', onDocClick);
@@ -111,7 +116,7 @@ export function BusinessSwitcher() {
                 }}
                 className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${
                   i < businesses.length - 1 ? 'border-b border-border-soft' : ''
-                } ${isActive ? 'bg-primary/15 border-l-[3px] border-l-primary' : 'hover:bg-surface'}`}
+                } ${isActive ? 'bg-primary/15 shadow-[inset_3px_0_0_0_rgb(var(--color-primary))]' : 'hover:bg-surface'}`}
               >
                 <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                   <Building2 size={16} className="text-primary" />
@@ -159,10 +164,19 @@ export function BusinessSwitcher() {
 
       {open && pos
         ? createPortal(
+        <>
+        {/* Dim + soft blur behind the menu so it reads as a layer above the
+           page, not part of it. Clicking it closes the menu. */}
+        <div
+          aria-hidden
+          onMouseDown={() => setOpen(false)}
+          className="fixed inset-0 bg-black/40 backdrop-blur-[2px]"
+          style={{ zIndex: 9998 }}
+        />
         <div
           ref={menuRef}
           style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
-          className="w-72 bg-elevated rounded-2xl border border-border-soft shadow-xl overflow-hidden"
+          className="w-80 max-w-[calc(100vw-2rem)] bg-elevated rounded-2xl border border-border shadow-2xl overflow-hidden"
         >
           <div className="px-4 py-2 text-[10px] font-semibold text-faint uppercase tracking-wider">
             {tw.switcherLabel}
@@ -191,7 +205,8 @@ export function BusinessSwitcher() {
             </div>
             <span className="text-sm font-semibold text-primary">{tw.createBusiness}</span>
           </button>
-        </div>,
+        </div>
+        </>,
             document.body,
           )
         : null}
