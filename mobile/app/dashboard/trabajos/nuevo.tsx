@@ -1642,11 +1642,17 @@ export default function NuevoTrabajoRoute() {
   // lead who should also be PAID for the job must be checked in the crew too
   // (e.g. the owner leads without billing hours). Clearing leaves nobody lead.
   const setLead = (id: string) => {
+    const prevLead = leadEmployeeId;
     setLeadEmployeeId(id || null);
     // Leads normally work the job, so they join the crew by default and get
     // paid. Removing them from the crew afterwards is the deliberate
     // "supervises but is not paid" case migration 189 exists for.
-    if (id) setAssignedEmployees(prev => (prev.includes(id) ? prev : [...prev, id]));
+    // Switching lead is a SWAP: the previous lead was auto-added with them, so
+    // they leave the crew too (re-tick them in Crew to keep them on the job).
+    setAssignedEmployees(prev => {
+      const next = prevLead && id && prevLead !== id ? prev.filter(e => e !== prevLead) : prev;
+      return id && !next.includes(id) ? [...next, id] : next;
+    });
   };
 
   // Photos picked while CREATING a job — staged locally (nothing uploads if
