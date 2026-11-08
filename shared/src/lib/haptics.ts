@@ -7,7 +7,16 @@
 // lazily inside a try/catch and every call is a silent no-op without it.
 // Web gets haptics.web.ts (no-ops).
 
-type HapticsModule = typeof import('expo-haptics');
+// Just the slice we call. Not `typeof import('expo-haptics')`: web's tsc also
+// checks this file, and the package only exists in mobile's dependencies
+// (Vercel installs without it → "Cannot find module 'expo-haptics'").
+type HapticsModule = {
+  impactAsync: (style: unknown) => Promise<void>;
+  selectionAsync: () => Promise<void>;
+  notificationAsync: (type: unknown) => Promise<void>;
+  ImpactFeedbackStyle: { Light: unknown; Medium: unknown };
+  NotificationFeedbackType: { Success: unknown; Warning: unknown; Error: unknown };
+};
 
 let mod: HapticsModule | null | undefined;
 function load(): HapticsModule | null {
