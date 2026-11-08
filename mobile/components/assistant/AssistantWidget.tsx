@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { assistantScreenHref } from '@amixos/shared/assistant/screens';
+import { useAppHref } from '@/lib/sectionNav';
 import { useApp } from '@/lib/AppContext';
 import { isAssistantEnabled } from '@amixos/shared/assistant/config';
 import { useLang } from '@/lib/i18n/LangProvider';
@@ -16,7 +19,20 @@ export function AssistantWidget() {
   const { business, impersonating } = useApp();
   const { t: full } = useLang();
   const [open, setOpen] = useState(false);
-  const assistant = useAssistant(business?.id ?? null);
+  // Minimized = the call keeps running as a floating pill while the user
+  // moves around the app (the sheet stays mounted underneath it).
+  const [mini, setMini] = useState(false);
+  const callActiveRef = useRef(false);
+  const router = useRouter();
+  const appHref = useAppHref();
+  // Ami asked to open a screen: go there, and get out of the way — shrink to
+  // the pill mid-call (keep talking), otherwise close the chat.
+  const assistant = useAssistant(business?.id ?? null, (action) => {
+    router.push(assistantScreenHref(action, 'native', appHref) as never);
+    if (callActiveRef.current) setMini(true);
+    else setOpen(false);
+  });
+  const closeAmi = () => { setMini(false); setOpen(false); };
   // App Store 5.1.2(i): explicit permission before Ami shares data with
   // third-party AI. Asked on first open; withdrawable in Ajustes → Cuenta.
   const consent = useAiConsent(createSupabaseClient());
@@ -49,7 +65,17 @@ export function AssistantWidget() {
           return ok;
         }}
       />
-      {open && <AssistantSheet assistant={assistant} businessId={business.id} onClose={() => setOpen(false)} />}
+      {open && (
+        <AssistantSheet
+          assistant={assistant}
+          businessId={business.id}
+          onClose={closeAmi}
+          mini={mini}
+          onMinimize={() => setMini(true)}
+          onExpand={() => setMini(false)}
+          callActiveRef={callActiveRef}
+        />
+      )}
     </>
   );
 }

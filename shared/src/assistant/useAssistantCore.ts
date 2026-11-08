@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import type {
   AssistantChatMessage,
   AssistantChatResponse,
+  AssistantClientAction,
   AssistantConfirmResponse,
   AssistantDraft,
 } from './types';
@@ -30,7 +31,12 @@ const nextId = () => `b${++bubbleSeq}`;
 // Keep the wire transcript bounded — the server also enforces this.
 const MAX_WIRE_MESSAGES = 20;
 
-export function useAssistantCore(businessId: string | null, fetcher: AssistantFetcher) {
+export function useAssistantCore(
+  businessId: string | null,
+  fetcher: AssistantFetcher,
+  /** Platform handler for "open this screen" replies. */
+  onNavigate?: (a: Extract<AssistantClientAction, { type: 'navigate' }>) => void,
+) {
   const [bubbles, setBubbles] = useState<AssistantBubble[]>([]);
   const [pendingDraft, setPendingDraft] = useState<AssistantDraft | null>(null);
   const [sending, setSending] = useState(false);
@@ -38,6 +44,46 @@ export function useAssistantCore(businessId: string | null, fetcher: AssistantFe
   const [error, setError] = useState(false);
   // Guard against out-of-order responses if the user fires twice quickly.
   const seqRef = useRef(0);
+  const onNavigateRef = useRef(onNavigate);
+  onNavigateRef.current = onNavigate;
+  const confirmingRef = useRef(false);
+
+  // Press Confirmar on `draft` — the card button and a spoken "sí, confírmalo"
+  // (client_action confirm) share this exact path.
+  const confirmDraft = useCallback(async (draft: AssistantDraft): Promise<string | null> => {
+    if (!businessId || confirmingRef.current) return null;
+    confirmingRef.current = true;
+    setConfirming(true);
+    setError(false);
+    try {
+      const data = await fetcher.post<AssistantConfirmResponse>('/api/v1/assistant/confirm', {
+        business_id: businessId,
+        draft,
+      });
+      // Mark the bubble that carried this draft as created + clear the draft.
+      setBubbles(prev =>
+        prev.map(b =>
+          b.draft?.job_id === draft.job_id ? { ...b, createdJobId: data.job_id } : b,
+        ),
+      );
+      setPendingDraft(null);
+      return data.job_id;
+    } catch (e) {
+      // Server-side validation (e.g. required fields the draft is missing)
+      // comes back as a human-readable message — say it as Ami instead of
+      // the generic error row. Machine codes / network errors stay generic.
+      const msg = e instanceof Error ? e.message : '';
+      if (msg && msg.includes(' ') && !/^HTTP \d+/.test(msg)) {
+        setBubbles(prev => [...prev, { id: nextId(), role: 'assistant', content: msg }]);
+      } else {
+        setError(true);
+      }
+      return null;
+    } finally {
+      confirmingRef.current = false;
+      setConfirming(false);
+    }
+  }, [businessId, fetcher]);
 
   // Core send: appends a user turn onto `base`, POSTs the transcript, appends
   // the reply. Shared by send() (base = full transcript) and editAndResend()
@@ -69,6 +115,12 @@ export function useAssistantCore(businessId: string | null, fetcher: AssistantFe
         { id: nextId(), role: 'assistant', content: data.reply, draft: data.pending_draft ?? null },
       ]);
       setPendingDraft(data.pending_draft ?? null);
+      const action = data.client_action;
+      if (action?.type === 'confirm' && draftForBody && data.pending_draft?.job_id === draftForBody.job_id) {
+        void confirmDraft(draftForBody);
+      } else if (action?.type === 'navigate') {
+        onNavigateRef.current?.(action);
+      }
       return data.reply;
     } catch {
       if (mySeq !== seqRef.current) return null;
@@ -77,7 +129,7 @@ export function useAssistantCore(businessId: string | null, fetcher: AssistantFe
     } finally {
       if (mySeq === seqRef.current) setSending(false);
     }
-  }, [businessId, fetcher]);
+  }, [businessId, fetcher, confirmDraft]);
 
   /** Sends a user message; resolves the assistant's reply text (null on error/superseded). */
   const send = useCallback(async (text: string): Promise<string | null> => {
@@ -97,37 +149,9 @@ export function useAssistantCore(businessId: string | null, fetcher: AssistantFe
   }, [bubbles, sending, runChat]);
 
   const confirm = useCallback(async (): Promise<string | null> => {
-    if (!pendingDraft || !businessId || confirming) return null;
-    setConfirming(true);
-    setError(false);
-    try {
-      const data = await fetcher.post<AssistantConfirmResponse>('/api/v1/assistant/confirm', {
-        business_id: businessId,
-        draft: pendingDraft,
-      });
-      // Mark the bubble that carried this draft as created + clear the draft.
-      setBubbles(prev =>
-        prev.map(b =>
-          b.draft?.job_id === pendingDraft.job_id ? { ...b, createdJobId: data.job_id } : b,
-        ),
-      );
-      setPendingDraft(null);
-      return data.job_id;
-    } catch (e) {
-      // Server-side validation (e.g. required fields the draft is missing)
-      // comes back as a human-readable message — say it as Ami instead of
-      // the generic error row. Machine codes / network errors stay generic.
-      const msg = e instanceof Error ? e.message : '';
-      if (msg && msg.includes(' ') && !/^HTTP \d+/.test(msg)) {
-        setBubbles(prev => [...prev, { id: nextId(), role: 'assistant', content: msg }]);
-      } else {
-        setError(true);
-      }
-      return null;
-    } finally {
-      setConfirming(false);
-    }
-  }, [businessId, confirming, fetcher, pendingDraft]);
+    if (!pendingDraft) return null;
+    return confirmDraft(pendingDraft);
+  }, [pendingDraft, confirmDraft]);
 
   const reset = useCallback(() => {
     seqRef.current++;

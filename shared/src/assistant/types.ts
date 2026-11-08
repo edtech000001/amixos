@@ -72,6 +72,10 @@ export interface JobUpdateDraft {
   time_end?: string | null;
   /** Present = replace the job's crew with this list. */
   crew?: DraftCrewMember[];
+  /** New pipeline status (work phase only). */
+  status?: JobUpdateStatus;
+  /** true = archive, false = unarchive. */
+  archived?: boolean;
   /** Current values, for the before → after display. */
   before: {
     scheduled_date?: string | null;
@@ -80,12 +84,29 @@ export interface JobUpdateDraft {
     time_start?: string | null;
     time_end?: string | null;
     crew?: string[];
+    status?: string;
+    archived?: boolean;
   };
   warnings: string[];
 }
 
 /** Either draft the assistant can propose; discriminated by `kind`. */
+/** Statuses Ami may move an existing job to (invoicing goes through Facturas). */
+export type JobUpdateStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+
 export type AssistantDraft = JobDraft | JobUpdateDraft;
+
+/** Screens Ami can open for the user (mapped to a route per platform). */
+export type AssistantScreen =
+  | 'home' | 'jobs' | 'invoices' | 'clients' | 'calendar' | 'employees'
+  | 'reports' | 'map' | 'settings' | 'notifications' | 'payroll'
+  | 'job' | 'invoice' | 'client';
+
+/** Something the CLIENT does after a reply: open a screen, or press
+ *  Confirmar on the pending draft because the user said so by voice. */
+export type AssistantClientAction =
+  | { type: 'navigate'; screen: AssistantScreen; id?: string }
+  | { type: 'confirm' };
 
 /** True when a draft targets an existing job (reschedule/edit). */
 export function isJobUpdateDraft(d: AssistantDraft | null | undefined): d is JobUpdateDraft {
@@ -101,6 +122,7 @@ export interface AssistantChatRequest {
 export interface AssistantChatResponse {
   reply: string;
   pending_draft?: AssistantDraft | null;
+  client_action?: AssistantClientAction | null;
 }
 
 export interface AssistantConfirmResponse {

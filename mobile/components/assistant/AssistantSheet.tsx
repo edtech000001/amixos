@@ -15,6 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AudioLines,
   Mic,
+  MicOff,
+  Minimize2,
   PhoneOff,
   RotateCcw,
   Send,
@@ -45,7 +47,7 @@ const endPillStyle = {
 
 // Expanding ring behind the mic while Ami listens — the "you can talk now"
 // signal. RN has no CSS animations, so a tiny native-driver loop.
-function PulseRing() {
+function PulseRing({ color = 'rgba(79, 70, 229, 0.25)' }: { color?: string }) {
   const scale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(0.5)).current;
   useEffect(() => {
@@ -66,7 +68,7 @@ function PulseRing() {
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: 'rgba(79, 70, 229, 0.25)',
+        backgroundColor: color,
         transform: [{ scale }],
         opacity,
       }}
@@ -78,12 +80,18 @@ interface Props {
   assistant: ReturnType<typeof useAssistant>;
   businessId: string;
   onClose: () => void;
+  /** Call shrunk to the floating pill (see AssistantWidget). */
+  mini: boolean;
+  onMinimize: () => void;
+  onExpand: () => void;
+  /** Lets the widget know whether a call is live when Ami navigates. */
+  callActiveRef: { current: boolean };
 }
 
 // Near-full-height chat sheet for Ami. An ABSOLUTE OVERLAY, not an RN Modal
 // (app convention — see shared/src/ui/DateRangeSheet.tsx), at zIndex 1001 so
 // it also covers the top-banner overlay (zIndex 1000 in dashboard/_layout).
-export function AssistantSheet({ assistant, businessId, onClose }: Props) {
+export function AssistantSheet({ assistant, businessId, onClose, mini, onMinimize, onExpand, callActiveRef }: Props) {
   const { t: full, locale } = useLang();
   const a = full.dashboard.assistant;
   const insets = useSafeAreaInsets();
@@ -98,6 +106,11 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
   // (Dictation-into-the-box is the keyboard mic's job on mobile; spoken
   // replies happen in call mode, so there's no separate read-aloud toggle.)
   const call = useVoiceCall({ businessId, locale, send });
+  callActiveRef.current = call.active;
+  // Hanging up from the pill closes Ami entirely (back to the edge tab).
+  useEffect(() => {
+    if (mini && !call.active) onClose();
+  }, [mini, call.active, onClose]);
 
   const callStatusLabel =
     call.status === 'connecting'
@@ -126,9 +139,76 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
     }
   };
 
+  const callIcon =
+    call.status === 'thinking' ? (
+      <ActivityIndicator size="small" color={c.primary} />
+    ) : call.status === 'speaking' ? (
+      <Volume2 size={18} color={c.primary} />
+    ) : (
+      <Mic size={18} color={c.primary} />
+    );
+  const callSubline =
+    call.muted && call.status === 'listening'
+      ? a.callMuted
+      : call.status === 'speaking'
+      ? a.callInterrupt
+      : call.status === 'thinking'
+        ? a.callThinkingHint
+        : liveTail(call.partial) || (pendingDraft ? a.callDraftHint : a.callHint);
+
+  // Minimized: the Ami edge tab itself shows the live call — green and
+  // pulsing while it listens — with a mute button under it. Tap the tab to
+  // go back to the full chat (hang up lives there). Same spot as
+  // AssistantFab; everything else on screen stays touchable.
+  if (mini && call.active) {
+    const live = call.muted ? '#6B7280' : '#16A34A';
+    return (
+      <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { zIndex: 1001 }]}>
+        <View
+          pointerEvents="box-none"
+          style={{ position: 'absolute', right: -6, bottom: insets.bottom + 184, alignItems: 'center' }}
+        >
+          <Pressable
+            onPress={onExpand}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 0 }}
+            accessibilityLabel={a.callExpand}
+          >
+            <View
+              style={{
+                width: 44, height: 48, borderTopLeftRadius: 16, borderBottomLeftRadius: 16,
+                backgroundColor: live, alignItems: 'center', justifyContent: 'center',
+                elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
+              }}
+            >
+              {(call.status === 'listening' && !call.muted) || call.status === 'speaking' ? <PulseRing color="rgba(255,255,255,0.45)" /> : null}
+              {call.status === 'thinking' || call.status === 'connecting' ? (
+                <ActivityIndicator size="small" color="#fff" style={{ marginRight: 6 }} />
+              ) : (
+                <BotMessageSquare size={19} color="#fff" style={{ marginRight: 6 }} />
+              )}
+            </View>
+          </Pressable>
+          <Pressable onPress={call.toggleMute} hitSlop={6} accessibilityLabel={call.muted ? a.callUnmute : a.callMute}>
+            <View
+              style={{
+                width: 36, height: 36, borderRadius: 18, marginTop: 10, marginRight: 6,
+                alignItems: 'center', justifyContent: 'center',
+                backgroundColor: call.muted ? '#DC2626' : c.card,
+                borderWidth: call.muted ? 0 : 1, borderColor: c.border,
+                elevation: 4, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
+              }}
+            >
+              {call.muted ? <MicOff size={16} color="#fff" /> : <Mic size={16} color={c.muted} />}
+            </View>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[StyleSheet.absoluteFill, { zIndex: 1001 }]}>
-      <Pressable onPress={onClose} style={SHEET_BACKDROP} />
+      <Pressable onPress={call.active ? onMinimize : onClose} style={SHEET_BACKDROP} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         pointerEvents="box-none"
@@ -148,6 +228,18 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
               <Text className="text-lg font-bold text-ink">{a.title}</Text>
               <Text className="text-xs text-muted">{a.subtitle}</Text>
             </View>
+            {/* Floating mode: start talking (if not already) and shrink to the
+               pill so the app stays usable. */}
+            {call.supported ? (
+              <Pressable
+                onPress={() => { if (!call.active) call.start(); onMinimize(); }}
+                hitSlop={8}
+                accessibilityLabel={a.callMinimize}
+                className="w-9 h-9 rounded-full items-center justify-center active:bg-border-soft ml-1"
+              >
+                <Minimize2 size={18} color={c.muted} />
+              </Pressable>
+            ) : null}
             <Pressable
               onPress={reset}
               hitSlop={8}
@@ -201,7 +293,7 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
                   activeDraftId={pendingDraft?.job_id ?? null}
                   confirming={confirming}
                   onConfirm={() => void confirm()}
-                  onNavigate={onClose}
+                  onNavigate={call.active ? onMinimize : onClose}
                   onEdit={item.role === 'user' ? () => { setEditingId(item.id); setText(item.content); } : undefined}
                 />
               )}
@@ -229,28 +321,33 @@ export function AssistantSheet({ assistant, businessId, onClose }: Props) {
               className="flex-row items-center mx-4 mt-2 rounded-2xl bg-primary/5 px-3 py-2.5"
               style={{ marginBottom: insets.bottom + 12 }}
             >
-              <View className="w-10 h-10 items-center justify-center">
-                {call.status === 'listening' ? <PulseRing /> : null}
-                <View className="w-10 h-10 rounded-full bg-primary/10 items-center justify-center">
-                  {call.status === 'thinking' ? (
-                    <ActivityIndicator size="small" color={c.primary} />
-                  ) : call.status === 'speaking' ? (
-                    <Volume2 size={18} color={c.primary} />
+              {/* The mic circle doubles as the mute toggle. */}
+              <Pressable onPress={call.toggleMute} hitSlop={6} accessibilityLabel={call.muted ? a.callUnmute : a.callMute}>
+                <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+                  {call.status === 'listening' && !call.muted ? <PulseRing /> : null}
+                  {call.muted ? (
+                    <View key="muted" style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center' }}>
+                      <MicOff size={18} color="#fff" />
+                    </View>
                   ) : (
-                    <Mic size={18} color={c.primary} />
+                    <View key="live" className="w-10 h-10 rounded-full bg-primary/10 items-center justify-center">
+                      {callIcon}
+                    </View>
                   )}
                 </View>
-              </View>
+              </Pressable>
               <View className="flex-1" style={{ marginLeft: 28, marginRight: 12 }}>
                 <Text className="text-sm font-semibold text-ink">{callStatusLabel}</Text>
                 <Text className="text-xs text-muted" numberOfLines={1}>
-                  {call.status === 'speaking'
-                    ? a.callInterrupt
-                    : call.status === 'thinking'
-                      ? a.callThinkingHint
-                      : liveTail(call.partial) || a.callHint}
+                  {callSubline}
                 </Text>
               </View>
+              {/* Shrink to the edge tab and keep talking while using the app. */}
+              <Pressable onPress={onMinimize} hitSlop={6} accessibilityLabel={a.callMinimize}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 6 }}>
+                  <Minimize2 size={18} color={c.muted} />
+                </View>
+              </Pressable>
               {/* NativeWind 4's interop drops function-style props on
                  Pressable — keep the Pressable bare and style a plain View. */}
               <Pressable onPress={call.end} hitSlop={4} accessibilityLabel={a.callEnd}>

@@ -42,6 +42,10 @@ export function useVoiceCall({
   const [status, setStatus] = useState<VoiceCallStatus>('idle');
   /** Live partial transcript while the user is speaking. */
   const [partial, setPartial] = useState('');
+  /** Mic muted: the call stays open (Ami can finish talking) but nothing you
+   *  say is heard until unmuted. */
+  const [muted, setMuted] = useState(false);
+  const mutedRef = useRef(false);
 
   // Session generation — bumping it cancels whatever the loop is doing.
   const genRef = useRef(0);
@@ -119,6 +123,14 @@ export function useVoiceCall({
           // Keep the platform recognizer open — ITS end-of-speech detection
           // cuts off after ~1.5s of silence; our SILENCE_MS timer owns the turn.
           continuous: true,
+          // The library's default iOS session mode is 'measurement', which
+          // lingers after listening and makes Ami's reply play very quietly.
+          // Normal mode + loudspeaker keeps her at full media volume.
+          iosCategory: {
+            category: 'playAndRecord',
+            categoryOptions: ['defaultToSpeaker', 'allowBluetooth'],
+            mode: 'default',
+          },
         });
       } catch {
         finish();
@@ -173,13 +185,32 @@ export function useVoiceCall({
 
   const end = useCallback(() => {
     stopEverything();
+    mutedRef.current = false;
+    setMuted(false);
     setStatus('idle');
   }, [stopEverything]);
+
+  const toggleMute = useCallback(() => {
+    const next = !mutedRef.current;
+    mutedRef.current = next;
+    setMuted(next);
+    if (next) {
+      // Close the open turn; the loop discards what it heard.
+      try {
+        SpeechRecognition?.ExpoSpeechRecognitionModule.stop();
+      } catch {
+        /* noop */
+      }
+      setPartial('');
+    }
+  }, []);
 
   const start = useCallback(() => {
     const speech = SpeechRecognition;
     if (!speech || !businessId || status !== 'idle') return;
     stopEverything();
+    mutedRef.current = false;
+    setMuted(false);
     const gen = genRef.current;
     setStatus('connecting');
     (async () => {
@@ -199,9 +230,14 @@ export function useVoiceCall({
       while (gen === genRef.current) {
         setStatus('listening');
         setPartial('');
+        if (mutedRef.current) {
+          await new Promise(r => setTimeout(r, 250));
+          continue;
+        }
         const startedAt = Date.now();
         const transcript = await listenOnce(gen);
         if (gen !== genRef.current) break;
+        if (mutedRef.current) continue; // muted mid-turn — drop it
         if (!transcript) {
           if (Date.now() - startedAt < 700) {
             fastFails++;
@@ -239,5 +275,5 @@ export function useVoiceCall({
   useEffect(() => stopEverything, [stopEverything]);
 
   const active = status !== 'idle';
-  return { supported: !!SpeechRecognition, active, status, partial, start, end, interrupt };
+  return { supported: !!SpeechRecognition, active, status, partial, start, end, interrupt, muted, toggleMute };
 }

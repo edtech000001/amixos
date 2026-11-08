@@ -1,10 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { AssistantChatMessage, AssistantContext, AssistantDraft } from './types';
+import type { AssistantChatMessage, AssistantClientAction, AssistantContext, AssistantDraft } from './types';
 import { buildSystemBlocks } from './prompt';
 import {
   TOOL_DEFINITIONS,
   buildDraft,
   buildJobUpdateDraft,
+  buildNavigateAction,
+  executeQueryInvoices,
   executeQueryClients,
   executeQueryEmployees,
   executeQueryJobs,
@@ -31,7 +33,8 @@ async function executeTool(
   ctx: AssistantContext,
   name: string,
   input: Record<string, any>,
-): Promise<{ result: string; draft?: AssistantDraft }> {
+  pendingDraft: AssistantDraft | null,
+): Promise<{ result: string; draft?: AssistantDraft; action?: AssistantClientAction }> {
   switch (name) {
     case 'query_jobs':
       return { result: JSON.stringify(await executeQueryJobs(ctx, input)) };
@@ -53,6 +56,16 @@ async function executeTool(
       const draft = await buildJobUpdateDraft(ctx, input);
       return { result: JSON.stringify({ draft_prepared: true, draft }), draft };
     }
+    case 'query_invoices':
+      return { result: JSON.stringify(await executeQueryInvoices(ctx, input)) };
+    case 'open_screen': {
+      const action = await buildNavigateAction(ctx, input);
+      return { result: JSON.stringify({ will_open: action }), action };
+    }
+    case 'confirm_pending_draft':
+      // The client presses Confirmar itself (same /confirm path + validation).
+      if (!pendingDraft) throw new Error('no hay borrador pendiente que confirmar');
+      return { result: JSON.stringify({ confirming: true }), action: { type: 'confirm' } };
     default:
       throw new Error(`unknown tool: ${name}`);
   }
@@ -62,13 +75,13 @@ export async function runAssistant(
   ctx: AssistantContext,
   transcript: AssistantChatMessage[],
   pendingDraft?: AssistantDraft | null,
-): Promise<{ reply: string; pendingDraft: AssistantDraft | null }> {
+): Promise<{ reply: string; pendingDraft: AssistantDraft | null; clientAction: AssistantClientAction | null }> {
   // Bound + sanitize the client-held transcript.
   const turns = transcript
     .filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
     .slice(-MAX_WIRE_MESSAGES);
   if (!turns.length || turns[turns.length - 1].role !== 'user') {
-    return { reply: FALLBACK_REPLY, pendingDraft: pendingDraft ?? null };
+    return { reply: FALLBACK_REPLY, pendingDraft: pendingDraft ?? null, clientAction: null };
   }
   // Attach the pending draft to the final user turn so corrections work.
   if (pendingDraft) {
@@ -87,6 +100,7 @@ export async function runAssistant(
   const system = buildSystemBlocks(ctx);
 
   let latestDraft: AssistantDraft | null = null;
+  let clientAction: AssistantClientAction | null = null;
   for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
     const response = await anthropic.messages.create({
       model: MODEL,
@@ -112,8 +126,9 @@ export async function runAssistant(
       const results: Anthropic.ToolResultBlockParam[] = await Promise.all(
         toolBlocks.map(async (block) => {
           try {
-            const { result, draft } = await executeTool(ctx, block.name, block.input as Record<string, any>);
+            const { result, draft, action } = await executeTool(ctx, block.name, block.input as Record<string, any>, pendingDraft ?? null);
             if (draft) latestDraft = draft;
+            if (action) clientAction = action;
             // Wrap tool output in a data fence so the model treats it as DATA,
             // never instructions — client/employee names or notes could carry
             // injected orders. The system prompt tells Ami to ignore any
@@ -149,12 +164,15 @@ export async function runAssistant(
         // A new proposal replaces the old pending draft; otherwise keep the
         // incoming one so the preview card survives ordinary Q&A turns.
         pendingDraft: latestDraft ?? pendingDraft ?? null,
+        // A confirm only applies to the draft the user was looking at — not
+        // one this same turn just (re)proposed.
+        clientAction: (clientAction as AssistantClientAction | null)?.type === 'confirm' && latestDraft ? null : clientAction,
       };
     }
 
     // refusal / anything unexpected
-    return { reply: FALLBACK_REPLY, pendingDraft: pendingDraft ?? null };
+    return { reply: FALLBACK_REPLY, pendingDraft: pendingDraft ?? null, clientAction: null };
   }
 
-  return { reply: FALLBACK_REPLY, pendingDraft: latestDraft ?? pendingDraft ?? null };
+  return { reply: FALLBACK_REPLY, pendingDraft: latestDraft ?? pendingDraft ?? null, clientAction: null };
 }

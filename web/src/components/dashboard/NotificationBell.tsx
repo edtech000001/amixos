@@ -6,13 +6,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Bell, CheckCheck, Settings } from 'lucide-react';
+import { Bell, CheckCheck, Mail, MailOpen, Settings } from 'lucide-react';
 import { clsx } from 'clsx';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import {
-  fetchNotifications, groupNotificationsByDay, markAllNotificationsRead, markNotificationRead, notificationAge, notificationHref,
+  fetchNotifications, groupNotificationsByDay, markAllNotificationsRead, markNotificationRead, markNotificationUnread, notificationAge, notificationHref,
   unreadBadgeLabel, unreadNotificationsChanged, useUnreadNotifications,
   type NotificationRow,
 } from '@amixos/shared/lib/notifications';
@@ -68,6 +68,19 @@ export function NotificationBell({ onNavigate }: { onNavigate?: () => void }) {
       window.removeEventListener('resize', onResize);
     };
   }, [open]);
+
+  // Hover icon on each row: read ⇄ unread ("look at it later").
+  const toggleRead = async (n: NotificationRow) => {
+    const nextRead = n.read_at ? null : new Date().toISOString();
+    setRows(prev => prev?.map(r => (r.id === n.id ? { ...r, read_at: nextRead } : r)) ?? prev);
+    try {
+      if (nextRead) await markNotificationRead(supabase, n.id);
+      else await markNotificationUnread(supabase, n.id);
+    } catch {
+      setRows(prev => prev?.map(r => (r.id === n.id ? { ...r, read_at: n.read_at } : r)) ?? prev);
+    }
+    unreadNotificationsChanged();
+  };
 
   const go = (n: NotificationRow) => {
     if (!n.read_at) void markNotificationRead(supabase, n.id).then(unreadNotificationsChanged);
@@ -149,16 +162,25 @@ export function NotificationBell({ onNavigate }: { onNavigate?: () => void }) {
               <section key={g.key}>
               <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-faint">{t.groups[g.key]}</p>
               {g.rows.map(n => (
-              <button key={n.id} type="button" onClick={() => go(n)}
-                className={clsx('w-full text-left flex items-start gap-2.5 px-4 py-3 border-b border-border-soft last:border-b-0 hover:bg-surface transition-colors',
+              <div key={n.id} className="relative group border-b border-border-soft last:border-b-0">
+              <button type="button" onClick={() => go(n)}
+                className={clsx('w-full text-left flex items-start gap-2.5 px-4 py-3 hover:bg-surface transition-colors',
                   !n.read_at && 'bg-primary/5')}>
                 <span className={clsx('mt-1.5 w-2 h-2 rounded-full shrink-0', n.read_at ? 'bg-transparent' : 'bg-primary')} />
                 <span className="flex-1 min-w-0">
                   <span className={clsx('block text-sm text-ink', !n.read_at && 'font-semibold')}>{n.title}</span>
                   {n.body ? <span className="block text-xs text-muted mt-0.5 line-clamp-2">{n.body}</span> : null}
                 </span>
-                <span className="text-[11px] text-faint shrink-0 mt-0.5">{notificationAge(n.created_at, t)}</span>
+                <span className="text-[11px] text-faint shrink-0 mt-0.5 group-hover:invisible group-has-[:focus-visible]:invisible">{notificationAge(n.created_at, t)}</span>
               </button>
+              {/* Sibling, not nested (no button in a button). Shows on hover/focus
+                 in place of the time stamp. */}
+              <button type="button" onClick={() => toggleRead(n)}
+                title={n.read_at ? t.markUnread : t.markRead} aria-label={n.read_at ? t.markUnread : t.markRead}
+                className="absolute right-3 top-2.5 p-1.5 rounded-lg text-muted hover:text-primary hover:bg-primary/10 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity">
+                {n.read_at ? <Mail size={15} /> : <MailOpen size={15} />}
+              </button>
+              </div>
               ))}
               </section>
             ))}

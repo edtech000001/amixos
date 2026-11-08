@@ -5,6 +5,8 @@ import {
   AudioLines,
   Loader2,
   Mic,
+  MicOff,
+  Minimize2,
   PhoneOff,
   RotateCcw,
   Send,
@@ -12,7 +14,9 @@ import {
   Volume2,
   X,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useLang } from '@/i18n/LangProvider';
+import { assistantScreenHref } from '@amixos/shared/assistant/screens';
 import { useAssistant } from './useAssistant';
 import { useSpeechToText } from './useSpeechToText';
 import { useVoiceCall } from './useVoiceCall';
@@ -35,13 +39,25 @@ const liveTail = (s: string, max = 90) => (s.length > max ? `…${s.slice(-max)}
 export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProps) {
   const { t: full, locale } = useLang();
   const t = full.dashboard.assistant;
+  const router = useRouter();
+  // Minimized = the call keeps running as a floating bar while the user
+  // works in the app; the panel (and its transcript) stays mounted.
+  const [mini, setMini] = useState(false);
+  const callActiveRef = useRef(false);
+  // Ami asked to open a screen: go there and get out of the way — shrink to
+  // the floating bar mid-call (keep talking), otherwise close the panel.
   const { bubbles, pendingDraft, sending, confirming, error, send, editAndResend, confirm, reset } =
-    useAssistant(businessId);
+    useAssistant(businessId, action => {
+      router.push(assistantScreenHref(action, 'web', k => `/dashboard/${k}`));
+      if (callActiveRef.current) setMini(true);
+      else onClose();
+    });
 
   const [input, setInput] = useState('');
   // Hands-free call mode: continuous listen → think → speak-aloud loop.
   // (Spoken replies happen in call mode — no separate read-aloud toggle.)
   const call = useVoiceCall({ businessId, locale, send });
+  callActiveRef.current = call.active;
   // Text that was already in the box when dictation started — the live
   // transcript is appended after it rather than replacing it.
   const dictationBaseRef = useRef('');
@@ -76,6 +92,13 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
   useEffect(() => {
     if (!open && call.active) call.end();
   }, [open, call]);
+  // Hanging up from the floating bar closes Ami entirely.
+  useEffect(() => {
+    if (mini && !call.active) {
+      setMini(false);
+      onClose();
+    }
+  }, [mini, call.active, onClose]);
 
   const callStatusLabel =
     call.status === 'connecting'
@@ -88,10 +111,63 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
 
   if (!open) return null;
 
+  const callIcon =
+    call.status === 'thinking' ? (
+      <Loader2 className="h-5 w-5 animate-spin" />
+    ) : call.status === 'speaking' ? (
+      <Volume2 className="h-5 w-5" />
+    ) : (
+      <Mic className="h-5 w-5" />
+    );
+  const callSubline =
+    call.muted && call.status === 'listening'
+      ? t.callMuted
+      : call.status === 'speaking'
+      ? t.callInterrupt
+      : call.status === 'thinking'
+        ? t.callThinkingHint
+        : liveTail(call.partial) || (pendingDraft ? t.callDraftHint : t.callHint);
+
+  // Minimized: the Ami edge tab itself shows the live call — green and
+  // pulsing while it listens — with a mute button beside it. Click the tab
+  // to go back to the full panel (hang up lives there).
+  if (mini && call.active) {
+    const pulsing = (call.status === 'listening' && !call.muted) || call.status === 'speaking';
+    return (
+      <div className="fixed bottom-6 right-0 z-50 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={call.toggleMute}
+          aria-label={call.muted ? t.callUnmute : t.callMute}
+          title={call.muted ? t.callUnmute : t.callMute}
+          className={`flex h-9 w-9 items-center justify-center rounded-full shadow-lg transition-colors ${
+            call.muted ? 'bg-red-600 text-white hover:bg-red-700' : 'border border-border bg-card text-muted hover:text-ink'
+          }`}
+        >
+          {call.muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+        </button>
+        <button
+          type="button"
+          onClick={() => setMini(false)}
+          aria-label={t.callExpand}
+          title={t.callExpand}
+          className={`relative flex h-12 w-11 items-center justify-center rounded-l-2xl pr-1 text-white shadow-lg ${
+            call.muted ? 'bg-gray-500' : 'bg-green-600'
+          }`}
+        >
+          {pulsing && <span className="absolute h-9 w-9 animate-ping rounded-full bg-white/30" />}
+          {call.status === 'thinking' || call.status === 'connecting'
+            ? <Loader2 className="relative h-5 w-5 animate-spin" />
+            : <BotMessageSquare className="relative h-5 w-5" />}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose} aria-hidden="true" />
+      {/* Backdrop — mid-call it minimizes instead of hanging up. */}
+      <div className="fixed inset-0 z-40 bg-black/20" onClick={call.active ? () => setMini(true) : onClose} aria-hidden="true" />
 
       <div
         role="dialog"
@@ -107,6 +183,19 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
             <p className="text-sm font-semibold text-ink">{t.title}</p>
             <p className="truncate text-xs text-muted">{t.subtitle}</p>
           </div>
+          {/* Floating mode: start talking (if not already) and shrink to the
+             bar so the app stays usable. */}
+          {call.supported && (
+            <button
+              type="button"
+              onClick={() => { if (!call.active) call.start(); setMini(true); }}
+              aria-label={t.callMinimize}
+              title={t.callMinimize}
+              className="rounded-lg p-2 text-faint transition-colors hover:bg-surface hover:text-muted"
+            >
+              <Minimize2 className="h-4 w-4" />
+            </button>
+          )}
           <Tooltip tip="resetChat">
             <button
               type="button"
@@ -151,30 +240,36 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
                 call.status === 'speaking' ? 'cursor-pointer' : ''
               }`}
             >
-              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center">
-                {call.status === 'listening' && (
+              {/* The mic circle doubles as the mute toggle. */}
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); call.toggleMute(); }}
+                aria-label={call.muted ? t.callUnmute : t.callMute}
+                title={call.muted ? t.callUnmute : t.callMute}
+                className="relative flex h-10 w-10 shrink-0 items-center justify-center"
+              >
+                {call.status === 'listening' && !call.muted && (
                   <span className="absolute h-10 w-10 animate-ping rounded-full bg-primary/25" />
                 )}
-                <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  {call.status === 'thinking' ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : call.status === 'speaking' ? (
-                    <Volume2 className="h-5 w-5" />
-                  ) : (
-                    <Mic className="h-5 w-5" />
-                  )}
-                </div>
-              </div>
+                <span className={`relative flex h-10 w-10 items-center justify-center rounded-full ${
+                  call.muted ? 'bg-red-600 text-white' : 'bg-primary/10 text-primary'
+                }`}>
+                  {call.muted ? <MicOff className="h-5 w-5" /> : callIcon}
+                </span>
+              </button>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-ink">{callStatusLabel}</p>
-                <p className="truncate text-xs text-muted">
-                  {call.status === 'speaking'
-                    ? t.callInterrupt
-                    : call.status === 'thinking'
-                      ? t.callThinkingHint
-                      : liveTail(call.partial) || t.callHint}
-                </p>
+                <p className="truncate text-xs text-muted">{callSubline}</p>
               </div>
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); setMini(true); }}
+                aria-label={t.callMinimize}
+                title={t.callMinimize}
+                className="shrink-0 rounded-full p-2 text-muted transition-colors hover:bg-surface hover:text-ink"
+              >
+                <Minimize2 className="h-4 w-4" />
+              </button>
               <button
                 type="button"
                 onClick={e => {

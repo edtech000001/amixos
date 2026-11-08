@@ -35,6 +35,15 @@ export function JobUpdateCard({ draft, active, createdJobId, onConfirm, confirmi
       to: timeStr(nextAllDay, draft.time_start ?? draft.before.time_start, draft.time_end ?? draft.before.time_end),
     });
   }
+  const st = (x?: string | null) => (x && x in t.jobStatus ? t.jobStatus[x as keyof typeof t.jobStatus] : x) || '—';
+  if (draft.status !== undefined) rows.push({ label: t.statusLabel, from: st(draft.before.status), to: st(draft.status) });
+  if (draft.archived !== undefined) {
+    rows.push({
+      label: t.archivedLabel,
+      from: draft.before.archived ? t.archivedYes : t.archivedNo,
+      to: draft.archived ? t.archivedYes : t.archivedNo,
+    });
+  }
   const crewChanged = draft.crew !== undefined;
 
   return (

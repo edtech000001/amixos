@@ -287,7 +287,7 @@ export async function confirmJobUpdate(
   // The row must exist in this business (RLS re-checks the write too).
   const { data: job } = await ctx.db
     .from('jobs')
-    .select('id, title, all_day')
+    .select('id, title, all_day, status, archived_at')
     .eq('business_id', ctx.businessId)
     .eq('id', jobId)
     .maybeSingle();
@@ -321,6 +321,22 @@ export async function confirmJobUpdate(
     if (draft.time_start !== undefined) update.time_start = draft.time_start;
     if (draft.time_end !== undefined) update.time_end = draft.time_end;
   }
+
+  // Status: same timestamps the job detail's status buttons stamp.
+  const prevStatus = (job as any).status as string | null;
+  if (draft.status !== undefined) {
+    if (!['scheduled', 'in_progress', 'completed', 'cancelled'].includes(draft.status)) {
+      throw new DraftValidationError('estado inválido');
+    }
+    if (prevStatus === 'invoiced') throw new DraftValidationError('Este trabajo ya está facturado — cambia su estado desde la factura.');
+    const now = new Date().toISOString();
+    update.status = draft.status;
+    if (draft.status === 'scheduled') update.scheduled_at = now;
+    if (draft.status === 'in_progress') update.in_progress_at = now;
+    if (draft.status === 'completed') { update.completed_at = now; update.completed_date = now.slice(0, 10); }
+    if (draft.status === 'cancelled') update.cancelled_at = now;
+  }
+  if (draft.archived !== undefined) update.archived_at = draft.archived ? new Date().toISOString() : null;
 
   const changingCrew = Array.isArray(draft.crew);
 
@@ -397,14 +413,18 @@ export async function confirmJobUpdate(
     }
   }
 
-  await supabase.from('audit_log').insert({
+  const audit = (action: string, details: Record<string, unknown>) => supabase.from('audit_log').insert({
     business_id: ctx.businessId,
     user_id: ctx.userId,
-    action: 'job.updated',
+    action,
     entity_type: 'job',
     entity_id: jobId,
-    details: { title: (job as any).title, source: 'assistant', reschedule: true },
+    details: { title: (job as any).title, source: 'assistant', ...details },
   });
+  const otherChange = changingCrew || Object.keys(update).some(k => !['status', 'archived_at', 'scheduled_at', 'in_progress_at', 'completed_at', 'completed_date', 'cancelled_at'].includes(k));
+  if (otherChange) await audit('job.updated', { reschedule: true });
+  if (draft.status !== undefined) await audit('job.status_changed', { from: prevStatus, to: draft.status, job_title: (job as any).title });
+  if (draft.archived !== undefined) await audit(draft.archived ? 'job.archived' : 'job.unarchived', {});
 
   return { jobId, alreadyExisted: false };
 }

@@ -7,6 +7,7 @@ import { dashboard, DashboardDict } from './dashboard';
 import { proposal, ProposalDict } from './proposal';
 import { splash, SplashDict, SplashSlide } from './splash';
 import { notifications, NotificationsDict } from './notifications';
+import { offline, OfflineDict } from './offline';
 
 export type { SplashSlide };
 
@@ -19,6 +20,7 @@ export type Dictionary = {
   proposal: ProposalDict;
   splash: SplashDict;
   notifications: NotificationsDict;
+  offline: OfflineDict;
 };
 
 export const dictionaries: Record<Locale, Dictionary> = LOCALES.reduce((acc, locale) => {
@@ -31,6 +33,7 @@ export const dictionaries: Record<Locale, Dictionary> = LOCALES.reduce((acc, loc
     proposal: proposal[locale],
     splash: splash[locale],
     notifications: notifications[locale],
+    offline: offline[locale],
   };
   return acc;
 }, {} as Record<Locale, Dictionary>);

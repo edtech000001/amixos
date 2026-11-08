@@ -2012,6 +2012,10 @@ export default function NuevoTrabajoRoute() {
             const byId = row.employee_id && pickedIds.has(row.employee_id);
             const byName = (row.worker_name ?? '').trim() && pickedNames.has((row.worker_name ?? '').trim().toLowerCase());
             if (byId || byName) continue;
+            // Rows the pickers own (crew, lead, name-only workers) are not carried:
+            // un-ticking someone in the form must actually remove them.
+            if (!row.employee_id) continue;
+            if ((row.crew !== false || row.is_lead) && employees.some((e) => e.id === row.employee_id)) continue;
             if (!row.employee_id && !(row.worker_name ?? '').trim()) continue; // nothing to keep
             assignments.push({
               job_id: jobId,
@@ -2088,6 +2092,11 @@ export default function NuevoTrabajoRoute() {
         // replacing — replace stacked a duplicate detail, so the detail's Back
         // button returned to the detail again rather than the list.
         router.back();
+      } else if (duplicateId && router.canGoBack()) {
+        // Duplicate: pop the form, then the copy REPLACES the original detail,
+        // so Back from the copy goes past both instead of landing on the original.
+        router.dismiss();
+        router.replace(`${sectionBase}/${jobId}${from === 'home' ? '?from=home' : ''}` as never);
       } else {
         router.replace(`${sectionBase}/${jobId}${from === 'home' ? '?from=home' : ''}` as never);
       }

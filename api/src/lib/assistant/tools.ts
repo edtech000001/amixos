@@ -4,7 +4,7 @@ import { checkRequiredFields } from './draft';
 import { geocodeAddress } from '../geocoding';
 import { buildCrewSuggestions } from '../crewFinder';
 import { fetchCrewFinderData, type CrewFinderTarget } from '../crewFinderData';
-import type { AssistantContext, JobDraft, JobUpdateDraft, DraftCrewMember } from './types';
+import type { AssistantClientAction, AssistantContext, JobDraft, JobUpdateDraft, DraftCrewMember } from './types';
 
 // Tool surface for the Ami loop. All executors run on ctx.db — the caller's
 // RLS-scoped client — so cross-business access is structurally impossible.
@@ -20,7 +20,7 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
     name: 'query_jobs',
     description:
-      'Busca trabajos del negocio. Devuelve total_count (el TOTAL exacto que cumple los filtros — úsalo para "¿cuántos trabajos…?") y hasta `limit` filas de detalle. Usa crew_member para filtrar por persona asignada ("¿cuántos trabajos tiene Elmer?" → crew_member="Elmer", responde con total_count). Usa created_from/created_to para "¿qué agregué ayer?" (fecha de creación) y date_from/date_to para fecha agendada. Llama con include_assignments=true y sin filtros (recientes primero) para ver la cuadrilla de los últimos trabajos cuando el usuario diga "la misma cuadrilla de siempre".',
+      'Busca trabajos del negocio. Devuelve total_count (el TOTAL exacto que cumple los filtros — úsalo para "¿cuántos trabajos…?") y hasta `limit` filas de detalle. Usa crew_member para filtrar por persona asignada ("¿cuántos trabajos tiene Elmer?" → crew_member="Elmer", responde con total_count). Usa created_from/created_to para "¿qué agregué ayer?" (fecha de creación) y date_from/date_to para fecha agendada. Llama con include_assignments=true y sin filtros (recientes primero) para ver la cuadrilla de los últimos trabajos cuando el usuario diga "la misma cuadrilla de siempre". Por defecto busca en TODOS (incluye archivados; cada fila trae archived). Usa archived="only" para "¿qué trabajos archivé?" o archived="exclude" para solo los activos.',
     input_schema: {
       type: 'object',
       properties: {
@@ -34,6 +34,7 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
         crew_member: { type: 'string', description: 'nombre (parcial) de un empleado — solo trabajos donde está asignado en la cuadrilla; las filas incluyen la cuadrilla completa' },
         crew_lead_only: { type: 'boolean', description: 'con crew_member: solo trabajos donde esa persona es el líder' },
         include_assignments: { type: 'boolean', description: 'incluir nombres de cuadrilla/líder' },
+        archived: { type: 'string', enum: ['include', 'only', 'exclude'], description: 'archivados: include (default) | only | exclude' },
         limit: { type: 'integer', description: 'máx 100, default 10' },
       },
       required: [],
@@ -159,7 +160,7 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
     name: 'update_job',
     description:
-      'Genera el BORRADOR de un CAMBIO a un trabajo EXISTENTE (reprogramar fecha, cambiar horario o cambiar la cuadrilla). NO aplica el cambio — el usuario debe presionar Confirmar. Primero usa query_jobs para encontrar el job_id exacto. Incluye SOLO los campos que cambian (p. ej. solo scheduled_date para posponer un día). Para cambiar la cuadrilla, manda la lista COMPLETA de crew que debe quedar (reemplaza la actual); los ids deben venir del roster.',
+      'Genera el BORRADOR de un CAMBIO a un trabajo EXISTENTE (reprogramar fecha, cambiar horario, cambiar la cuadrilla, cambiar el estado o archivar/desarchivar). NO aplica el cambio — el usuario debe presionar Confirmar. Primero usa query_jobs para encontrar el job_id exacto. Incluye SOLO los campos que cambian (p. ej. solo scheduled_date para posponer un día). Para cambiar la cuadrilla, manda la lista COMPLETA de crew que debe quedar (reemplaza la actual); los ids deben venir del roster.',
     input_schema: {
       type: 'object',
       properties: {
@@ -169,6 +170,8 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
         all_day: { type: 'boolean', description: 'false si el usuario da horas de inicio/fin' },
         time_start: { type: 'string', description: 'HH:MM 24h' },
         time_end: { type: 'string', description: 'HH:MM 24h' },
+        status: { type: 'string', enum: ['scheduled', 'in_progress', 'completed', 'cancelled'], description: 'nuevo estado ("márcalo completado", "empezamos", "cancélalo")' },
+        archived: { type: 'boolean', description: 'true = archivar, false = desarchivar' },
         crew: {
           type: 'array',
           description: 'lista COMPLETA de la cuadrilla que debe quedar (reemplaza la actual)',
@@ -188,6 +191,48 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'query_invoices',
+    description:
+      'Busca facturas del negocio (solo lectura). Devuelve total_count, sum_total y sum_balance (lo que falta cobrar) sobre TODAS las que cumplen los filtros, más hasta `limit` filas. Usa status="overdue" para "¿qué facturas están vencidas?", unpaid=true para "¿quién me debe?" (enviadas o vencidas con saldo), client_search para "¿cuánto me debe Bob?".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['draft', 'sent', 'paid', 'overdue', 'total_loss'] },
+        unpaid: { type: 'boolean', description: 'solo enviadas/vencidas con saldo pendiente' },
+        client_search: { type: 'string', description: 'nombre o empresa del cliente (parcial)' },
+        invoice_number: { type: 'string' },
+        issued_from: { type: 'string', description: 'issue_date >= YYYY-MM-DD' },
+        issued_to: { type: 'string', description: 'issue_date <= YYYY-MM-DD' },
+        limit: { type: 'integer', description: 'máx 50, default 10' },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'open_screen',
+    description:
+      'Abre una pantalla de la app para el usuario ("abre el trabajo 7 Tower", "llévame a facturas", "muéstrame el calendario"). Para job/invoice/client pasa el id exacto (de query_jobs / query_invoices / query_clients). Úsala solo cuando el usuario pida ver/abrir/ir a algo; la app navega cuando termine tu respuesta. Responde en una frase corta ("Te abro 7 Tower").',
+    input_schema: {
+      type: 'object',
+      properties: {
+        screen: {
+          type: 'string',
+          enum: ['home', 'jobs', 'invoices', 'clients', 'calendar', 'employees', 'reports', 'map', 'settings', 'notifications', 'payroll', 'job', 'invoice', 'client'],
+        },
+        id: { type: 'string', description: 'requerido para job / invoice / client' },
+      },
+      required: ['screen'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'confirm_pending_draft',
+    description:
+      'Presiona Confirmar por el usuario sobre el borrador pendiente (<pending_draft>). Llama SOLO si en su ÚLTIMO mensaje el usuario dijo claramente que sí lo confirma ("sí", "confírmalo", "dale", "hazlo") refiriéndose a ese borrador, y no pidió cambios. Nunca por iniciativa propia. Después di que lo estás confirmando.',
+    input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
+  },
 ];
 
 // ── Executors ───────────────────────────────────────────────────────────────
@@ -205,8 +250,8 @@ export async function executeQueryJobs(ctx: AssistantContext, input: ToolInput) 
   // A crew filter implies the caller cares about crews — return them.
   const withAssignments = !!input.include_assignments || !!crewTerm;
   let select = withAssignments
-    ? 'id, title, status, priority, scheduled_date, total_hours, created_at, clients(first_name, last_name, company), job_assignments(worker_name, is_lead), driver_employee_ids, driver_hours'
-    : 'id, title, status, priority, scheduled_date, total_hours, created_at, clients(first_name, last_name, company)';
+    ? 'id, title, status, priority, scheduled_date, total_hours, created_at, archived_at, clients(first_name, last_name, company), job_assignments(worker_name, is_lead), driver_employee_ids, driver_hours'
+    : 'id, title, status, priority, scheduled_date, total_hours, created_at, archived_at, clients(first_name, last_name, company)';
   // The crew filter rides on a SEPARATE aliased inner-join embed so the plain
   // job_assignments embed still lists the FULL crew, not just the match.
   if (crewTerm) select += ', crew_match:job_assignments!inner(worker_name, is_lead)';
@@ -217,6 +262,8 @@ export async function executeQueryJobs(ctx: AssistantContext, input: ToolInput) 
     q = q.ilike('crew_match.worker_name', `%${crewTerm}%`);
     if (input.crew_lead_only) q = q.eq('crew_match.is_lead', true);
   }
+  if (input.archived === 'only') q = q.not('archived_at', 'is', null);
+  else if (input.archived === 'exclude') q = q.is('archived_at', null);
   if (input.status) q = q.eq('status', input.status);
   if (input.client_id) q = q.eq('client_id', input.client_id);
   if (input.date_from) q = q.gte('scheduled_date', input.date_from);
@@ -233,6 +280,7 @@ export async function executeQueryJobs(ctx: AssistantContext, input: ToolInput) 
     scheduled_date: j.scheduled_date,
     total_hours: j.total_hours,
     created_at: j.created_at,
+    archived: !!j.archived_at,
     client: j.clients
       ? `${j.clients.first_name ?? ''} ${j.clients.last_name ?? ''}`.trim() + (j.clients.company ? ` (${j.clients.company})` : '')
       : null,
@@ -550,7 +598,7 @@ export async function buildJobUpdateDraft(ctx: AssistantContext, input: ToolInpu
   if (!jobId) throw new Error('Falta el job_id del trabajo a cambiar.');
   const { data: job, error } = await ctx.db
     .from('jobs')
-    .select('id, title, scheduled_date, end_date, all_day, time_start, time_end')
+    .select('id, title, scheduled_date, end_date, all_day, time_start, time_end, status, archived_at')
     .eq('business_id', ctx.businessId)
     .eq('id', jobId)
     .maybeSingle();
@@ -575,6 +623,8 @@ export async function buildJobUpdateDraft(ctx: AssistantContext, input: ToolInpu
       time_start: (job as any).time_start ?? null,
       time_end: (job as any).time_end ?? null,
       crew: beforeCrew,
+      status: (job as any).status ?? undefined,
+      archived: !!(job as any).archived_at,
     },
     warnings,
   };
@@ -589,11 +639,102 @@ export async function buildJobUpdateDraft(ctx: AssistantContext, input: ToolInpu
   if (ts) { draft.time_start = ts; if (draft.all_day === undefined) draft.all_day = false; }
   if (te) { draft.time_end = te; if (draft.all_day === undefined) draft.all_day = false; }
   if (Array.isArray(input.crew)) draft.crew = resolveCrew(ctx, input.crew, warnings);
+  if (UPDATE_STATUSES.includes(input.status) && input.status !== draft.before.status) {
+    if (draft.before.status === 'invoiced') warnings.push('Este trabajo ya está facturado — cambia su estado desde la factura.');
+    else draft.status = input.status;
+  }
+  if (typeof input.archived === 'boolean' && input.archived !== draft.before.archived) draft.archived = input.archived;
 
   const hasChange =
     draft.scheduled_date !== undefined || draft.end_date !== undefined ||
     draft.all_day !== undefined || draft.time_start !== undefined ||
-    draft.time_end !== undefined || draft.crew !== undefined;
-  if (!hasChange) warnings.push('No indicaste ningún cambio (fecha, horario o cuadrilla).');
+    draft.time_end !== undefined || draft.crew !== undefined ||
+    draft.status !== undefined || draft.archived !== undefined;
+  if (!hasChange) warnings.push('No indicaste ningún cambio (fecha, horario, cuadrilla, estado o archivo).');
   return draft;
+}
+
+const UPDATE_STATUSES = ['scheduled', 'in_progress', 'completed', 'cancelled'];
+
+export async function executeQueryInvoices(ctx: AssistantContext, input: ToolInput) {
+  const limit = clamp(input.limit, 50, 10);
+  // Client name → ids first (same token sanitizing as query_clients).
+  let clientIds: string[] | null = null;
+  const term = String(input.client_search ?? '').trim();
+  if (term) {
+    const tokens = term.split(/\s+/).map(t => t.replace(/[,().\\"]/g, '')).filter(Boolean).slice(0, 3);
+    if (tokens.length) {
+      const { data, error } = await ctx.db
+        .from('clients')
+        .select('id')
+        .eq('business_id', ctx.businessId)
+        .or(tokens.map(t => `first_name.ilike.%${t}%,last_name.ilike.%${t}%,company.ilike.%${t}%`).join(','))
+        .limit(50);
+      if (error) throw new Error(error.message);
+      clientIds = (data ?? []).map((r: any) => r.id);
+      if (!clientIds.length) return { total_count: 0, showing: 0, sum_total: 0, sum_balance: 0, invoices: [], note: `sin clientes que coincidan con "${term}"` };
+    }
+  }
+  const filter = (q: any) => {
+    q = q.eq('business_id', ctx.businessId);
+    if (clientIds) q = q.in('client_id', clientIds);
+    if (input.status) q = q.eq('status', input.status);
+    if (input.unpaid) q = q.in('status', ['sent', 'overdue']);
+    if (input.invoice_number) q = q.ilike('invoice_number', `%${String(input.invoice_number).replace(/[%,()]/g, '')}%`);
+    if (asDate(input.issued_from)) q = q.gte('issue_date', input.issued_from);
+    if (asDate(input.issued_to)) q = q.lte('issue_date', input.issued_to);
+    return q;
+  };
+  const { data, error, count } = await filter(
+    ctx.db.from('invoices').select('id, invoice_number, status, issue_date, due_date, total_amount, amount_paid, clients(first_name, last_name, company)', { count: 'exact' }),
+  ).order('issue_date', { ascending: false }).limit(limit);
+  if (error) throw new Error(error.message);
+  // Sums over EVERY matching invoice, not just the shown rows (paged, 1000-row cap).
+  let sumTotal = 0;
+  let sumBalance = 0;
+  for (let from = 0; ; from += 1000) {
+    const { data: page, error: e2 } = await filter(ctx.db.from('invoices').select('total_amount, amount_paid'))
+      .order('id').range(from, from + 999);
+    if (e2) throw new Error(e2.message);
+    for (const r of page ?? []) {
+      const total = Number(r.total_amount) || 0;
+      sumTotal += total;
+      sumBalance += Math.max(0, total - (Number(r.amount_paid) || 0));
+    }
+    if (!page || page.length < 1000) break;
+  }
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const invoices = (data ?? []).map((i: any) => {
+    const total = Number(i.total_amount) || 0;
+    return {
+      id: i.id,
+      invoice_number: i.invoice_number,
+      status: i.status,
+      issue_date: i.issue_date,
+      due_date: i.due_date,
+      total: round2(total),
+      balance: round2(Math.max(0, total - (Number(i.amount_paid) || 0))),
+      client: i.clients
+        ? `${i.clients.first_name ?? ''} ${i.clients.last_name ?? ''}`.trim() + (i.clients.company ? ` (${i.clients.company})` : '')
+        : null,
+    };
+  });
+  return { total_count: count ?? invoices.length, showing: invoices.length, sum_total: round2(sumTotal), sum_balance: round2(sumBalance), invoices };
+}
+
+const SCREENS = ['home', 'jobs', 'invoices', 'clients', 'calendar', 'employees', 'reports', 'map', 'settings', 'notifications', 'payroll', 'job', 'invoice', 'client'] as const;
+const ENTITY_TABLE: Record<string, string> = { job: 'jobs', invoice: 'invoices', client: 'clients' };
+
+/** Validate an open_screen call. Detail screens must name a row in THIS
+ *  business (RLS-scoped read), so a hallucinated id never reaches the app. */
+export async function buildNavigateAction(ctx: AssistantContext, input: ToolInput): Promise<AssistantClientAction> {
+  const screen = SCREENS.find(s => s === input.screen);
+  if (!screen) throw new Error('pantalla desconocida');
+  const table = ENTITY_TABLE[screen];
+  if (!table) return { type: 'navigate', screen };
+  const id = asStr(input.id);
+  if (!id) throw new Error(`falta el id para abrir ${screen} — búscalo primero`);
+  const { data } = await ctx.db.from(table).select('id').eq('business_id', ctx.businessId).eq('id', id).maybeSingle();
+  if (!data) throw new Error(`no encontré ese ${screen} en este negocio`);
+  return { type: 'navigate', screen, id };
 }

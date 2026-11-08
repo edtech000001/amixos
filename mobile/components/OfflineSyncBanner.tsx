@@ -1,7 +1,7 @@
 // Persistent banner reporting the offline write queue (outbox) state.
 //
 // Sits next to GoogleSyncBanner in the dashboard overlay and follows the same
-// inline-style approach. Spanish-only, like the rest of the app. States:
+// inline-style approach. Text follows the app language. States:
 //
 //   • errors    → red:   "N cambios no se pudieron sincronizar" + Reintentar
 //   • offline   → amber: "Sin conexión · N cambios sin sincronizar"
@@ -18,9 +18,11 @@ import { useNetworkStore } from '@/lib/offline/network';
 import { retryAndDrain } from '@/lib/offline/syncRunner';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { useAuthStore } from '@/lib/auth/store';
+import { useLang } from '@/lib/i18n/LangProvider';
+import type { OfflineDict } from '@amixos/shared/i18n/dict/offline';
 
 function plural(n: number, one: string, many: string): string {
-  return n === 1 ? one : many;
+  return (n === 1 ? one : many).replace('{{n}}', String(n));
 }
 
 type Banner = {
@@ -34,6 +36,7 @@ export function OfflineSyncBanner() {
   const ops = useOutboxStore((s) => s.ops);
   const isOnline = useNetworkStore((s) => s.isOnline);
   const [open, setOpen] = useState(false);
+  const t = useLang().t.offline;
 
   // Another account's parked ops must not show as "pending" here — they can
   // only sync once that person signs back in.
@@ -48,7 +51,7 @@ export function OfflineSyncBanner() {
         bg: '#FEF2F2',
         fg: '#991B1B',
         icon: 'error',
-        text: `${errors} ${plural(errors, 'cambio no se pudo', 'cambios no se pudieron')} sincronizar`,
+        text: plural(errors, t.errorsOne, t.errorsMany),
       };
     }
     if (pending > 0 && !isOnline) {
@@ -56,7 +59,7 @@ export function OfflineSyncBanner() {
         bg: '#FFFBEB',
         fg: '#92400E',
         icon: 'offline',
-        text: `Sin conexión · ${pending} ${plural(pending, 'cambio sin sincronizar', 'cambios sin sincronizar')}`,
+        text: plural(pending, t.pendingOne, t.pendingMany),
       };
     }
     if (pending > 0) {
@@ -64,7 +67,7 @@ export function OfflineSyncBanner() {
         bg: '#EFF6FF',
         fg: '#1E40AF',
         icon: 'sync',
-        text: `Sincronizando ${pending} ${plural(pending, 'cambio', 'cambios')}…`,
+        text: plural(pending, t.syncingOne, t.syncingMany),
       };
     }
     // Offline with nothing queued — let the user know they're viewing saved
@@ -74,11 +77,11 @@ export function OfflineSyncBanner() {
         bg: '#FFFBEB',
         fg: '#92400E',
         icon: 'offline',
-        text: 'Sin conexión · mostrando datos guardados',
+        text: t.showingSaved,
       };
     }
     return null;
-  }, [errors, pending, isOnline]);
+  }, [errors, pending, isOnline, t]);
 
   if (!banner) return null;
 
@@ -117,7 +120,7 @@ export function OfflineSyncBanner() {
               backgroundColor: banner.fg,
             }}
           >
-            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>Reintentar</Text>
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>{t.retry}</Text>
           </Pressable>
         )}
       </Pressable>
@@ -126,20 +129,20 @@ export function OfflineSyncBanner() {
           time; an always-mounted root Modal can block other screens' modals
           (e.g. the timesheet sheet) from presenting. */}
       {open && (
-        <DetailSheet open onClose={() => setOpen(false)} ops={myOps} hasErrors={errors > 0} />
+        <DetailSheet open onClose={() => setOpen(false)} ops={myOps} hasErrors={errors > 0} t={t} />
       )}
     </>
   );
 }
 
-function statusLabel(op: OutboxOp): { text: string; color: string } {
+function statusLabel(op: OutboxOp, t: OfflineDict): { text: string; color: string } {
   switch (op.status) {
     case 'error':
-      return { text: op.error ? `Error: ${op.error}` : 'Error', color: '#991B1B' };
+      return { text: op.error ? `${t.statusError}: ${op.error}` : t.statusError, color: '#991B1B' };
     case 'syncing':
-      return { text: 'Sincronizando…', color: '#1E40AF' };
+      return { text: t.statusSyncing, color: '#1E40AF' };
     default:
-      return { text: 'Pendiente', color: '#92400E' };
+      return { text: t.statusPending, color: '#92400E' };
   }
 }
 
@@ -148,11 +151,13 @@ function DetailSheet({
   onClose,
   ops,
   hasErrors,
+  t,
 }: {
   open: boolean;
   onClose: () => void;
   ops: OutboxOp[];
   hasErrors: boolean;
+  t: OfflineDict;
 }) {
   const c = useThemeColors();
   // fade (not slide) so the dim backdrop eases in smoothly instead of a gray
@@ -186,7 +191,7 @@ function DetailSheet({
             }}
           >
             <Text style={{ flex: 1, fontSize: 17, fontWeight: '700', color: '#111827' }}>
-              Cambios sin sincronizar
+              {t.sheetTitle}
             </Text>
             <Pressable onPress={onClose} hitSlop={8}>
               <X size={22} color={c.muted} />
@@ -196,11 +201,11 @@ function DetailSheet({
           <ScrollView style={{ paddingHorizontal: 20 }}>
             {ops.length === 0 ? (
               <Text style={{ color: '#6B7280', paddingVertical: 12 }}>
-                Todo está sincronizado.
+                {t.allSynced}
               </Text>
             ) : (
               ops.map((op) => {
-                const st = statusLabel(op);
+                const st = statusLabel(op, t);
                 return (
                   <View
                     key={op.id}
@@ -241,7 +246,7 @@ function DetailSheet({
                 }}
               >
                 <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>
-                  Reintentar todo
+                  {t.retryAll}
                 </Text>
               </Pressable>
             </View>

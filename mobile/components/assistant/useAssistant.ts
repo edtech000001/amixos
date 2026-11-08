@@ -3,6 +3,7 @@ import {
   useAssistantCore,
   type AssistantFetcher,
 } from '@amixos/shared/assistant/useAssistantCore';
+import type { AssistantClientAction } from '@amixos/shared/assistant/types';
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useLang } from '@/lib/i18n/LangProvider';
 
@@ -10,7 +11,10 @@ import { useLang } from '@/lib/i18n/LangProvider';
 // app's API helpers ({success,data} envelope, Bearer JWT) and hands it to
 // useAssistantCore. The app's language rides on every request so Ami
 // defaults to it.
-export function useAssistant(businessId: string | null) {
+export function useAssistant(
+  businessId: string | null,
+  onNavigate?: (a: Extract<AssistantClientAction, { type: 'navigate' }>) => void,
+) {
   const { locale } = useLang();
   const fetcher = useMemo<AssistantFetcher>(
     () => ({
@@ -34,5 +38,5 @@ export function useAssistant(businessId: string | null) {
     [locale],
   );
 
-  return useAssistantCore(businessId, fetcher);
+  return useAssistantCore(businessId, fetcher, onNavigate);
 }

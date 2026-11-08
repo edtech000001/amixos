@@ -1607,7 +1607,7 @@ function NuevoTrabajoContent() {
 
         if (!editId && pendingPhotos.length) await uploadPendingPhotos(finalJobId);
 
-        router.push(`/dashboard/trabajos/${finalJobId}${backCtx}`);
+        router.replace(`/dashboard/trabajos/${finalJobId}${backCtx}`); // form leaves history
       } else {
         const jobData: any = {
           client_id: clientId || null,
@@ -1744,6 +1744,10 @@ function NuevoTrabajoContent() {
             const byId = row.employee_id && pickedIds.has(row.employee_id);
             const byName = String(row.worker_name ?? '').trim() && pickedNames.has(String(row.worker_name ?? '').trim().toLowerCase());
             if (byId || byName) continue;
+            // Rows the pickers own (crew, lead, name-only workers) are not carried:
+            // un-ticking someone in the form must actually remove them.
+            if (!row.employee_id) continue;
+            if ((row.crew !== false || row.is_lead) && employees.some((e) => e.id === row.employee_id)) continue;
             if (!row.employee_id && !String(row.worker_name ?? '').trim()) continue; // nothing to keep
             assignments.push({
               job_id: finalJobId,
@@ -1786,7 +1790,7 @@ function NuevoTrabajoContent() {
 
         if (!editId && pendingPhotos.length) await uploadPendingPhotos(finalJobId);
 
-        router.push(`/dashboard/trabajos/${finalJobId}${backCtx}`);
+        router.replace(`/dashboard/trabajos/${finalJobId}${backCtx}`); // form leaves history
       }
     } catch (e: any) {
       setError(e.message || t.errorSaveGeneric);

@@ -3243,6 +3243,17 @@ export type DashboardDict = {
     callConnecting: string;
     callEnd: string;
     callHint: string;
+    callMinimize: string;
+    callExpand: string;
+    callMute: string;
+    callUnmute: string;
+    callMuted: string;
+    callDraftHint: string;
+    statusLabel: string;
+    archivedLabel: string;
+    archivedYes: string;
+    archivedNo: string;
+    jobStatus: { scheduled: string; in_progress: string; completed: string; cancelled: string; other: string };
     callMicDenied: string;
   };
   crewFinder: {
@@ -6699,7 +6710,18 @@ export const dashboard: Record<Locale, DashboardDict> = {
       callThinkingHint: 'Un momento — buscando la respuesta.',
       callConnecting: 'Conectando…',
       callEnd: 'Terminar',
-      callHint: 'Habla ahora — Ami te escucha.',
+      callHint: 'Habla ahora · toca el micrófono para silenciarte',
+      callMinimize: 'Minimizar — sigue hablando mientras usas la app',
+      callExpand: 'Abrir chat',
+      callMute: 'Silenciar micrófono',
+      callUnmute: 'Activar micrófono',
+      callMuted: 'Silenciado · toca el micrófono para hablar',
+      callDraftHint: 'Borrador listo — di "sí" para confirmar o abre el chat',
+      statusLabel: 'Estado',
+      archivedLabel: 'Archivo',
+      archivedYes: 'Archivado',
+      archivedNo: 'Activo',
+      jobStatus: { scheduled: 'Agendado', in_progress: 'En progreso', completed: 'Completado', cancelled: 'Cancelado', other: '—' },
       callMicDenied: 'Ami necesita permiso de micrófono para la llamada.',
     },
     crewFinder: {
@@ -10187,7 +10209,18 @@ export const dashboard: Record<Locale, DashboardDict> = {
       callThinkingHint: 'One moment — looking that up.',
       callConnecting: 'Connecting…',
       callEnd: 'End',
-      callHint: 'Speak now — Ami is listening.',
+      callHint: 'Speak now · tap the mic to mute yourself',
+      callMinimize: 'Minimize — keep talking while you use the app',
+      callExpand: 'Open chat',
+      callMute: 'Mute mic',
+      callUnmute: 'Unmute mic',
+      callMuted: 'Muted · tap the mic to talk',
+      callDraftHint: 'Draft ready — say "yes" to confirm or open the chat',
+      statusLabel: 'Status',
+      archivedLabel: 'Archive',
+      archivedYes: 'Archived',
+      archivedNo: 'Active',
+      jobStatus: { scheduled: 'Scheduled', in_progress: 'In progress', completed: 'Completed', cancelled: 'Cancelled', other: '—' },
       callMicDenied: 'Ami needs microphone permission for the call.',
     },
     crewFinder: {

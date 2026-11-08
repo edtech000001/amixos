@@ -127,12 +127,12 @@ assistantRouter.post('/chat', authenticate, chatLimiter, async (req: AuthRequest
     const ctx = await buildContext(req, business_id, locale);
     if (!ctx) return res.status(403).json({ success: false, message: 'Not a member of this business' });
 
-    const { reply, pendingDraft } = await runAssistant(
+    const { reply, pendingDraft, clientAction } = await runAssistant(
       ctx,
       messages as AssistantChatMessage[],
       (pending_draft ?? null) as AssistantDraft | null,
     );
-    return res.json({ success: true, data: { reply, pending_draft: pendingDraft } });
+    return res.json({ success: true, data: { reply, pending_draft: pendingDraft, client_action: clientAction } });
   } catch (e) {
     console.error('[assistant/chat]', e);
     return res.status(500).json({ success: false, message: 'assistant_failed' });

@@ -176,7 +176,7 @@ export function BusinessSwitcher() {
               <View className="flex-row items-center gap-2 mb-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-100">
                 <CloudOff size={14} color={c.warning} />
                 <Text className="flex-1 text-xs font-medium text-amber-700">
-                  Sin conexión · conéctate para cambiar de negocio
+                  {full.offline.switchBusiness}
                 </Text>
               </View>
             ) : null}
