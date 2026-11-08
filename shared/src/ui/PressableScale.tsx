@@ -13,7 +13,13 @@
 import { forwardRef, useRef } from 'react';
 import { Pressable, type PressableProps, type View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
-import { cssInterop } from 'nativewind';
+// require, not import: web's tsc also checks this file (web runs
+// PressableScale.web.tsx), and nativewind only exists in mobile's dependencies —
+// a static import broke every Vercel build.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { cssInterop } = require('nativewind') as {
+  cssInterop: (component: unknown, mapping: Record<string, string>) => void;
+};
 import { playHaptic, type HapticKind } from '../lib/haptics';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
