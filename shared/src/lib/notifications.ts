@@ -7,8 +7,17 @@ import { useSwr } from './swrCache';
 
 type SupabaseLike = any;
 
-export type NotificationCategory = 'jobs' | 'invoices' | 'team' | 'inventory' | 'account';
-export const NOTIFICATION_CATEGORIES: NotificationCategory[] = ['jobs', 'invoices', 'team', 'inventory', 'account'];
+export type NotificationCategory = 'jobs' | 'invoices' | 'team' | 'inventory' | 'equipment' | 'account';
+export const NOTIFICATION_CATEGORIES: NotificationCategory[] = ['jobs', 'invoices', 'team', 'inventory', 'equipment', 'account'];
+
+/** Categories that belong to a module: their switch only shows while that
+ *  module is on (the server only sends them then, too — migration 276). */
+const MODULE_CATEGORIES: Partial<Record<NotificationCategory, string>> = { inventory: 'inventory', equipment: 'equipment' };
+
+/** The preference switches to show, given the business's enabled module ids. */
+export function visibleNotificationCategories(enabledModuleIds: string[]): NotificationCategory[] {
+  return NOTIFICATION_CATEGORIES.filter(c => !MODULE_CATEGORIES[c] || enabledModuleIds.includes(MODULE_CATEGORIES[c]!));
+}
 
 export interface NotificationRow {
   id: string;

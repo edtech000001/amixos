@@ -2,6 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
+import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, CheckCheck } from 'lucide-react';
@@ -12,7 +13,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useLang } from '@/i18n/LangProvider';
 import {
-  NOTIFICATION_CATEGORIES, fetchNotifications, groupNotificationsByDay, loadNotificationPrefs,
+  visibleNotificationCategories, fetchNotifications, groupNotificationsByDay, loadNotificationPrefs,
   markAllNotificationsRead, markNotificationRead, markNotificationUnread, notificationAge, notificationHref,
   saveNotificationPrefs, unreadNotificationsChanged, useUnreadNotifications,
   type NotificationCategory, type NotificationPrefs, type NotificationRow,
@@ -22,6 +23,9 @@ export default function NotificacionesPage() {
   const supabase = useMemo(() => createSupabaseClient(), []);
   const router = useRouter();
   const { business, user } = useApp();
+  // Inventory / Equipment switches only while that module is on.
+  const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
+  const categories = useMemo(() => visibleNotificationCategories(enabledModules.map(m => m.id)), [enabledModules]);
   const { t: full } = useLang();
   const t = full.notifications;
   const unread = useUnreadNotifications(supabase, business?.id ?? null, user?.id ?? null);
@@ -188,7 +192,7 @@ export default function NotificacionesPage() {
               </span>
               <Toggle checked={prefs.push_enabled} onChange={v => updatePrefs({ ...prefs, push_enabled: v })} />
             </div>
-            {NOTIFICATION_CATEGORIES.map(c => (
+            {categories.map(c => (
               <div key={c} className="flex items-start justify-between gap-4 py-3">
                 <span>
                   <span className="block text-sm font-semibold text-ink">{t.categories[c]}</span>

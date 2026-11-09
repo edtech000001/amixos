@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 import { useRefreshOnRefocus } from '@/lib/useRefreshOnRefocus';
 import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { BackHandler, Pressable, SectionList, Text, View } from 'react-native';
@@ -13,7 +14,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { haptics } from '@amixos/shared/lib/haptics';
 import {
-  NOTIFICATION_CATEGORIES, fetchNotifications, groupNotificationsByDay, loadNotificationPrefs,
+  visibleNotificationCategories, fetchNotifications, groupNotificationsByDay, loadNotificationPrefs,
   markAllNotificationsRead, markNotificationRead, markNotificationUnread, notificationAge, notificationHref,
   saveNotificationPrefs, unreadNotificationsChanged,
   type NotificationCategory, type NotificationPrefs, type NotificationRow,
@@ -23,6 +24,9 @@ export default function NotificacionesScreen() {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseClient(), []);
   const { business, user } = useApp();
+  // Inventory / Equipment switches only while that module is on.
+  const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
+  const categories = useMemo(() => visibleNotificationCategories(enabledModules.map(m => m.id)), [enabledModules]);
   const { t: full } = useLang();
   const t = full.notifications;
   const c = useThemeColors();
@@ -127,8 +131,8 @@ export default function NotificacionesScreen() {
         <Toggle label={t.pushLabel} hint={t.pushHint} value={prefs.push_enabled}
           onValueChange={v => updatePrefs({ ...prefs, push_enabled: v })} />
       </View>
-      {NOTIFICATION_CATEGORIES.map((cat, i) => (
-        <View key={cat} className={`py-3 ${i < NOTIFICATION_CATEGORIES.length - 1 ? 'border-b border-border-soft' : ''}`}>
+      {categories.map((cat, i) => (
+        <View key={cat} className={`py-3 ${i < categories.length - 1 ? 'border-b border-border-soft' : ''}`}>
           <Toggle
             label={t.categories[cat]}
             hint={cat === 'account' ? t.accountAlwaysOn : t.categoryHints[cat]}

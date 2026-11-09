@@ -26,6 +26,7 @@ export type NotificationsDict = {
     invoices: string;
     team: string;
     inventory: string;
+    equipment: string;
     account: string;
   };
   categoryHints: {
@@ -33,6 +34,7 @@ export type NotificationsDict = {
     invoices: string;
     team: string;
     inventory: string;
+    equipment: string;
     account: string;
   };
   accountAlwaysOn: string;
@@ -65,14 +67,16 @@ export const notifications: Record<Locale, NotificationsDict> = {
       jobs: 'Trabajos',
       invoices: 'Facturas',
       team: 'Equipo',
-      inventory: 'Inventario y equipo',
+      inventory: 'Inventario',
+      equipment: 'Maquinaria',
       account: 'Cuenta y suscripción',
     },
     categoryHints: {
       jobs: 'Propuestas aceptadas, trabajos asignados, cambios de fecha, trabajos completados',
       invoices: 'Facturas pagadas y vencidas',
       team: 'Nuevos miembros y salidas sin marcar',
-      inventory: 'Inventario bajo, placas y seguros por vencer',
+      inventory: 'Inventario bajo',
+      equipment: 'Placas, seguros y garantías por vencer',
       account: 'Problemas de pago de la suscripción',
     },
     accountAlwaysOn: 'Siempre activo',
@@ -103,14 +107,16 @@ export const notifications: Record<Locale, NotificationsDict> = {
       jobs: 'Jobs',
       invoices: 'Invoices',
       team: 'Team',
-      inventory: 'Inventory & equipment',
+      inventory: 'Inventory',
+      equipment: 'Equipment',
       account: 'Account & subscription',
     },
     categoryHints: {
       jobs: 'Accepted proposals, job assignments, date changes, completed jobs',
       invoices: 'Paid and overdue invoices',
       team: 'New members and missed clock-outs',
-      inventory: 'Low stock, expiring plates and insurance',
+      inventory: 'Low stock',
+      equipment: 'Expiring plates, insurance and warranties',
       account: 'Subscription payment problems',
     },
     accountAlwaysOn: 'Always on',

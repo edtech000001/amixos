@@ -823,8 +823,9 @@ export default function MapScreen() {
       </View>
 
       {/* Layer toggle pills — horizontal-scrollable so a 4th pill (weather)
-         doesn't get clipped off the right edge on narrow phones. */}
-      <View className="pb-2">
+         doesn't get clipped off the right edge on narrow phones. pt-2: room
+         below the header's divider line so the pills don't touch it. */}
+      <View className="pt-2 pb-2">
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
