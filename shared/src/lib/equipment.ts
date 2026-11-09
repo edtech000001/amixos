@@ -90,3 +90,14 @@ export function plateExpirationDays(plate_expiration: string | null): number | n
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   return Math.round((exp - today) / 86_400_000);
 }
+
+/** Suggested new date when renewing a plate / insurance: the next yearly
+ *  anniversary of the old date that's after today (renewals keep the same
+ *  month/day), or one year from today when there's no old date. YYYY-MM-DD. */
+export function renewalDate(oldDate: string | null | undefined, today: string): string {
+  const plusYear = (iso: string) => `${Number(iso.slice(0, 4)) + 1}${iso.slice(4, 10)}`.replace(/-02-29$/, '-02-28');
+  if (!oldDate || !/^\d{4}-\d{2}-\d{2}/.test(oldDate)) return plusYear(today);
+  let next = plusYear(oldDate.slice(0, 10));
+  for (let i = 0; next <= today && i < 100; i++) next = plusYear(next);
+  return next;
+}

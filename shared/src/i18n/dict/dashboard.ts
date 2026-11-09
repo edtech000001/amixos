@@ -2798,6 +2798,8 @@ export type DashboardDict = {
       deleteBtn: string;
       deleteConfirmTitle: string;
       deleteConfirmMsg: string;
+      renewBtn: string;
+      renewSaveError: string;
       nameRequiredError: string;
       assignedToSearch: string;
       selectNoResults: string;
@@ -6266,8 +6268,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
           saveSuccess: 'Equipo guardado.',
           saveError: 'No se pudo guardar el equipo.',
           deleteBtn: 'Eliminar equipo',
-          deleteConfirmTitle: 'Eliminar equipo',
-          deleteConfirmMsg: 'Esta acción no se puede deshacer. ¿Continuar?',
+          deleteConfirmTitle: '¿Eliminar {{name}}?',
+          deleteConfirmMsg: 'Se borrarán sus fotos y todos sus datos. Esto no se puede deshacer.',
+          renewBtn: 'Renovar',
+          renewSaveError: 'No se pudo guardar la fecha.',
           nameRequiredError: 'El nombre es requerido.',
           assignedToSearch: 'Buscar empleado...',
           selectNoResults: 'Sin resultados',
@@ -9765,8 +9769,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
           saveSuccess: 'Equipment saved.',
           saveError: 'Could not save equipment.',
           deleteBtn: 'Delete equipment',
-          deleteConfirmTitle: 'Delete equipment',
-          deleteConfirmMsg: 'This cannot be undone. Continue?',
+          deleteConfirmTitle: 'Delete {{name}}?',
+          deleteConfirmMsg: "Its photos and all its details will be deleted. This can't be undone.",
+          renewBtn: 'Renew',
+          renewSaveError: "Couldn't save the date.",
           nameRequiredError: 'Name is required.',
           assignedToSearch: 'Search employee...',
           selectNoResults: 'No results',

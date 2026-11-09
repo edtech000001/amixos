@@ -60,6 +60,10 @@ import {
   ArrowDown,
   type LucideIcon,
   ClipboardPaste,
+  CreditCard,
+  ShieldCheck,
+  StickyNote,
+  UserCheck,
 } from 'lucide-react-native';
 import { hasClipboardImage, readClipboardImageToFile, type PhotoSource } from '@/lib/clipboardPhoto';
 import { useApp } from '@/lib/AppContext';
@@ -89,11 +93,12 @@ import {
   MAX_PHOTOS_PER_EQUIPMENT,
   equipmentPhotoPath,
   plateExpirationDays,
+  renewalDate,
   type Equipment,
   type EquipmentPhoto,
 } from '@amixos/shared/lib/equipment';
 import { useSignedUrls } from '@amixos/shared/lib/storageUrls';
-import { formatDateLong, formatDateTimeLong } from '@amixos/shared/lib/format';
+import { formatDateLong, formatDateTimeLong, todayLocalISO } from '@amixos/shared/lib/format';
 import { nextRotation } from '@amixos/shared/lib/jobPhotos';
 import {
   groupEquipment,
@@ -305,23 +310,93 @@ const cardShadow = {
   elevation: 2,
 };
 
-type DetailRowData = { label: string; value: string | null | undefined };
+type DetailRowData = { label: string; value: string | null | undefined; badge?: ReactNode };
 
-// A grouped white card holding several labeled rows (divider between each),
-// with an optional footer (e.g. a status badge). Renders nothing if every row
-// is empty and there's no footer.
-function DetailCard({ rows, footer }: { rows: DetailRowData[]; footer?: ReactNode }) {
+// A grouped white card: optional icon + title, then labeled rows (divider
+// between each; a row can carry a badge under its value). Renders nothing if
+// every row is empty.
+function DetailCard({ title, icon: Icon, rows }: { title?: string; icon?: LucideIcon; rows: DetailRowData[] }) {
+  const c = useThemeColors();
   const visible = rows.filter((r) => r.value);
-  if (visible.length === 0 && !footer) return null;
+  if (visible.length === 0) return null;
   return (
     <View className="rounded-2xl bg-card border border-border-soft" style={cardShadow}>
+      {title ? (
+        <View className="flex-row items-center gap-1.5 px-4 pt-3">
+          {Icon ? <Icon size={13} color={c.faint} /> : null}
+          <Text className="text-[11px] font-semibold uppercase tracking-wide text-faint">{title}</Text>
+        </View>
+      ) : null}
       {visible.map((r, i) => (
-        <View key={r.label} className={`px-4 py-3 ${i > 0 ? 'border-t border-border-soft' : ''}`}>
-          <Text className="text-xs font-medium text-faint">{r.label}</Text>
-          <Text className="text-base text-ink mt-0.5">{r.value}</Text>
+        <View key={r.label || `row-${i}`} className={`px-4 py-3 ${i > 0 ? 'border-t border-border-soft' : ''}`}>
+          {r.label ? <Text className="text-xs font-medium text-faint mb-0.5">{r.label}</Text> : null}
+          <Text className="text-base text-ink">{r.value}</Text>
+          {r.badge ? <View className="mt-1.5">{r.badge}</View> : null}
         </View>
       ))}
-      {footer ? <View className="px-4 pb-3.5 pt-0.5">{footer}</View> : null}
+    </View>
+  );
+}
+
+/** "Expired" / "Expires in N days" pill for an expiration date (null when
+ *  it's more than 30 days out). Sits under the date it describes. */
+type RenewProps = { label: string; saveLabel: string; cancelLabel: string; errorLabel: string; onSave: (iso: string) => Promise<boolean> };
+
+function ExpiryBadge({ date, expired, soon, renew }: {
+  date: string | null | undefined;
+  expired: string;
+  soon: string;
+  /** Quick "Renew" — just this date, no full edit form. Omit when read-only. */
+  renew?: RenewProps;
+}) {
+  const c = useThemeColors();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const days = plateExpirationDays(date ?? null);
+  if (days === null || days > 30) return null;
+  const late = days < 0;
+  if (editing && renew) {
+    return (
+      <View className="gap-2 self-stretch">
+        <DatePicker value={value} onChange={setValue} />
+        <View className="flex-row gap-2">
+          <View className="flex-1">
+            <Button variant="secondary" size="sm" onPress={() => setEditing(false)} fullWidth>{renew.cancelLabel}</Button>
+          </View>
+          <View className="flex-1">
+            <Button size="sm" loading={saving} disabled={!value} fullWidth onPress={async () => {
+              setSaving(true);
+              setFailed(false);
+              const ok = await renew.onSave(value);
+              setSaving(false);
+              if (ok) setEditing(false); else setFailed(true);
+            }}>{renew.saveLabel}</Button>
+          </View>
+        </View>
+        {failed ? <Text className="text-xs text-red-500">{renew.errorLabel}</Text> : null}
+      </View>
+    );
+  }
+  return (
+    <View className="flex-row items-center gap-3">
+      <View className={`flex-row items-center gap-1 px-2 py-1 rounded-full ${late ? 'bg-red-500/10' : 'bg-amber-500/10'}`}>
+        <AlertTriangle size={11} color={late ? c.danger : c.warning} />
+        <Text className={`text-[11px] font-semibold ${late ? 'text-red-600' : 'text-amber-600'}`}>
+          {late ? expired : soon.replace('{{days}}', String(days))}
+        </Text>
+      </View>
+      {renew ? (
+        <Pressable
+          hitSlop={8}
+          onPress={() => { setValue(renewalDate(date, todayLocalISO())); setFailed(false); setEditing(true); }}
+          className="flex-row items-center gap-1"
+        >
+          <CalendarClock size={13} color={c.primary} />
+          <Text className="text-xs font-semibold text-primary">{renew.label}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -815,6 +890,27 @@ export default function EquipmentScreen() {
   };
 
   // Opens the bottom-sheet confirmation (one-hand friendly vs a centered Alert).
+  // Quick renew from the detail view: write just this one date (offline-safe,
+  // same queued path as the edit form) and patch the list + cache.
+  const renewField = async (field: 'plate_expiration' | 'insurance_expiration', iso: string): Promise<boolean> => {
+    if (!selected || !business) return false;
+    const id = selected.id;
+    try {
+      await queuedUpdate({ table: 'equipment', match: { id }, payload: { [field]: iso }, businessId: business.id, label: `Equipo: ${selected.name}` });
+    } catch {
+      return false;
+    }
+    const apply = (list: Equipment[]) => list.map(e => (e.id === id ? { ...e, [field]: iso } : e));
+    setEquipment(apply);
+    setSelected(prev => (prev ? { ...prev, [field]: iso } : prev));
+    void swrPatch<EquipmentCache>(equipmentCacheKey(), d => ({ ...d, items: apply(d.items) }));
+    return true;
+  };
+  const renewProps = (field: 'plate_expiration' | 'insurance_expiration'): RenewProps | undefined => canEdit ? {
+    label: t.renewBtn, saveLabel: tc.buttons.save, cancelLabel: tc.buttons.cancel, errorLabel: t.renewSaveError,
+    onSave: (iso: string) => renewField(field, iso),
+  } : undefined;
+
   const onDelete = () => {
     if (!selected) return;
     setConfirmingDelete(true);
@@ -1510,6 +1606,8 @@ export default function EquipmentScreen() {
 
                 {/* Vehicle */}
                 <DetailCard
+                  title={t.basicInfoHeading}
+                  icon={Truck}
                   rows={[
                     { label: t.typeLabel, value: selected.equipment_type },
                     { label: t.makeLabel, value: selected.make },
@@ -1521,61 +1619,44 @@ export default function EquipmentScreen() {
                     { label: t.mileageLabel, value: selected.mileage != null ? selected.mileage.toLocaleString('en-US') : null },
                   ]}
                 />
-                {/* Plate (+ expiry countdown badge, same as the list cards) */}
-                {(() => {
-                  const days = plateExpirationDays(selected.plate_expiration);
-                  const badge =
-                    days === null ? null
-                    : days < 0 ? { text: t.plateExpired, bg: 'bg-red-500/10', fg: 'text-red-700', icon: c.danger }
-                    : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), bg: 'bg-amber-500/10', fg: 'text-amber-700', icon: c.warning }
-                    : null;
-                  return (
-                    <DetailCard
-                      rows={[
-                        { label: t.plateNumberLabel, value: selected.plate_number },
-                        { label: t.plateExpirationLabel, value: selected.plate_expiration ? formatDateLong(selected.plate_expiration, locale) : null },
-                      ]}
-                      footer={badge ? (
-                        <View className={`self-start flex-row items-center gap-1 ${badge.bg} px-2 py-1 rounded-full`}>
-                          <AlertTriangle size={11} color={badge.icon} />
-                          <Text className={`text-[11px] font-semibold ${badge.fg}`}>{badge.text}</Text>
-                        </View>
-                      ) : null}
-                    />
-                  );
-                })()}
-                {/* Insurance (+ renewal countdown badge) */}
-                {(selected.insurance_carrier || selected.insurance_policy_number || selected.insurance_agent || selected.insurance_agent_phone || selected.insurance_expiration) ? (() => {
-                  const days = plateExpirationDays(selected.insurance_expiration);
-                  const badge =
-                    days === null ? null
-                    : days < 0 ? { text: t.insuranceExpired, bg: 'bg-red-500/10', fg: 'text-red-700', icon: c.danger }
-                    : days <= 30 ? { text: t.insuranceExpiresSoon.replace('{{days}}', String(days)), bg: 'bg-amber-500/10', fg: 'text-amber-700', icon: c.warning }
-                    : null;
-                  return (
-                    <DetailCard
-                      rows={[
-                        { label: t.insuranceCarrierLabel, value: selected.insurance_carrier },
-                        { label: t.insurancePolicyLabel, value: selected.insurance_policy_number },
-                        { label: t.insuranceAgentLabel, value: selected.insurance_agent },
-                        { label: t.insuranceAgentPhoneLabel, value: selected.insurance_agent_phone },
-                        { label: t.insuranceExpirationLabel, value: selected.insurance_expiration ? formatDateLong(selected.insurance_expiration, locale) : null },
-                      ]}
-                      footer={badge ? (
-                        <View className={`self-start flex-row items-center gap-1 ${badge.bg} px-2 py-1 rounded-full`}>
-                          <AlertTriangle size={11} color={badge.icon} />
-                          <Text className={`text-[11px] font-semibold ${badge.fg}`}>{badge.text}</Text>
-                        </View>
-                      ) : null}
-                    />
-                  );
-                })() : null}
+                {/* Plate — the expiry badge sits under the plate's expiration date */}
+                <DetailCard
+                  title={t.registrationHeading}
+                  icon={CreditCard}
+                  rows={[
+                    { label: t.plateNumberLabel, value: selected.plate_number },
+                    {
+                      label: t.plateExpirationLabel,
+                      value: selected.plate_expiration ? formatDateLong(selected.plate_expiration, locale) : null,
+                      badge: <ExpiryBadge key={selected.plate_expiration ?? ''} date={selected.plate_expiration} expired={t.plateExpired} soon={t.plateExpiresSoon} renew={renewProps('plate_expiration')} />,
+                    },
+                  ]}
+                />
+                {/* Insurance — badge under its expiration date */}
+                <DetailCard
+                  title={t.insuranceHeading}
+                  icon={ShieldCheck}
+                  rows={[
+                    { label: t.insuranceCarrierLabel, value: selected.insurance_carrier },
+                    { label: t.insurancePolicyLabel, value: selected.insurance_policy_number },
+                    { label: t.insuranceAgentLabel, value: selected.insurance_agent },
+                    { label: t.insuranceAgentPhoneLabel, value: selected.insurance_agent_phone },
+                    {
+                      label: t.insuranceExpirationLabel,
+                      value: selected.insurance_expiration ? formatDateLong(selected.insurance_expiration, locale) : null,
+                      badge: <ExpiryBadge key={selected.insurance_expiration ?? ''} date={selected.insurance_expiration} expired={t.insuranceExpired} soon={t.insuranceExpiresSoon} renew={renewProps('insurance_expiration')} />,
+                    },
+                  ]}
+                />
                 {/* Value + ownership + acquisition */}
                 <DetailCard
+                  title={t.ownershipHeading}
+                  icon={Wallet}
                   rows={[
                     { label: t.valueLabel, value: selected.value != null ? fmtMoney(selected.value) : null },
                     ...(selected.paid_off
-                      ? [{ label: t.ownershipHeading, value: t.paidOffLabel }]
+                      // Card is titled "Ownership" — no repeated row label.
+                      ? [{ label: '', value: t.paidOffLabel }]
                       : [
                           { label: t.loanLenderLabel, value: selected.loan_lender },
                           { label: t.loanAmountLabel, value: selected.loan_amount != null ? fmtMoney(selected.loan_amount) : null },
@@ -1586,20 +1667,22 @@ export default function EquipmentScreen() {
                 />
                 {/* Assignment */}
                 <DetailCard
+                  title={t.assignmentHeading}
+                  icon={UserCheck}
                   rows={[
                     { label: t.assignedToLabel, value: employeeName(selected.assigned_employee_id) ?? t.unassignedBadge },
                     { label: t.locationLabel, value: selected.location },
                   ]}
                 />
                 {/* Notes */}
-                <DetailCard rows={[{ label: t.notesLabel, value: selected.notes }]} />
-                {/* Audit timestamps */}
-                <DetailCard
-                  rows={[
-                    { label: t.createdLabel, value: selected.created_at ? formatDateTimeLong(selected.created_at, locale) : null },
-                    { label: t.updatedLabel, value: selected.updated_at ? formatDateTimeLong(selected.updated_at, locale) : null },
-                  ]}
-                />
+                <DetailCard title={t.notesLabel} icon={StickyNote} rows={[{ label: '', value: selected.notes }]} />
+                {/* Audit timestamps — reference info, so a quiet line, not a card. */}
+                <Text className="px-1 text-xs text-faint">
+                  {[
+                    selected.created_at ? `${t.createdLabel}: ${formatDateTimeLong(selected.created_at, locale)}` : null,
+                    selected.updated_at ? `${t.updatedLabel}: ${formatDateTimeLong(selected.updated_at, locale)}` : null,
+                  ].filter(Boolean).join('\n')}
+                </Text>
           </ScrollView>
         </View>
       ) : null}
@@ -1709,7 +1792,7 @@ export default function EquipmentScreen() {
             className="bg-card rounded-3xl px-5 pt-5 mx-3 overflow-hidden"
             style={{ paddingBottom: insets.bottom + 16, ...sheetShadow }}
           >
-            <Text className="text-lg font-bold text-ink">{t.deleteConfirmTitle}</Text>
+            <Text className="text-lg font-bold text-ink">{t.deleteConfirmTitle.replace('{{name}}', selected?.name ?? '')}</Text>
             <Text className="text-sm text-muted mt-1.5">{t.deleteConfirmMsg}</Text>
             <View className="flex-row gap-3 mt-5">
               <View className="flex-1">

@@ -36,6 +36,9 @@ import {
   Wallet,
   CalendarClock,
   UserCheck,
+  CreditCard,
+  ShieldCheck,
+  StickyNote,
   type LucideIcon,
 } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -60,11 +63,12 @@ import {
   MAX_PHOTOS_PER_EQUIPMENT,
   equipmentPhotoPath,
   plateExpirationDays,
+  renewalDate,
   type Equipment,
   type EquipmentPhoto,
 } from '@amixos/shared/lib/equipment';
 import { useSignedUrls } from '@amixos/shared/lib/storageUrls';
-import { formatDateLong, formatDateTimeLong, formatPhoneInput } from '@amixos/shared/lib/format';
+import { formatDateLong, formatDateTimeLong, formatPhoneInput, todayLocalISO } from '@amixos/shared/lib/format';
 import { nextRotation } from '@amixos/shared/lib/jobPhotos';
 import { can } from '@amixos/shared/lib/permissions';
 import { normalizeImageFiles } from '@/lib/imageFile';
@@ -164,26 +168,97 @@ function withCommas(raw: string): string {
 }
 
 // One labeled read-only row in the detail view; renders nothing when empty.
-function DetailRow({ label, value }: { label: string; value: string | null | undefined }) {
+function DetailRow({ label, value, badge }: { label: string; value: string | null | undefined; badge?: ReactNode }) {
   if (!value) return null;
   return (
     <div>
       <p className="text-xs font-medium text-muted">{label}</p>
       <p className="text-sm text-ink mt-0.5 whitespace-pre-wrap">{value}</p>
+      {badge ? <div className="mt-1.5">{badge}</div> : null}
+    </div>
+  );
+}
+
+/** "Expired" / "Expires in N days" pill for an expiration date (null when
+ *  it's more than 30 days out). Sits under the date it describes. */
+function ExpiryBadge({
+  date, expired, soon, renew,
+}: {
+  date: string | null | undefined;
+  expired: string;
+  soon: string;
+  /** Quick "Renew" — just this date, no full edit form. Omit when read-only. */
+  renew?: { label: string; saveLabel: string; cancelLabel: string; errorLabel: string; onSave: (iso: string) => Promise<boolean> };
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const days = plateExpirationDays(date ?? null);
+  if (days === null || days > 30) return null;
+  const late = days < 0;
+  if (editing && renew) {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="date"
+          value={value}
+          autoFocus
+          onChange={e => setValue(e.target.value)}
+          className="rounded-lg border border-border bg-card px-2 py-1 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
+        />
+        <Button size="sm" loading={saving} disabled={!value} onClick={async () => {
+          setSaving(true);
+          setFailed(false);
+          const ok = await renew.onSave(value);
+          setSaving(false);
+          if (ok) setEditing(false); else setFailed(true);
+        }}>{renew.saveLabel}</Button>
+        <button type="button" onClick={() => setEditing(false)} className="text-xs font-medium text-muted hover:text-ink">
+          {renew.cancelLabel}
+        </button>
+        {failed ? <span className="w-full text-xs text-red-500">{renew.errorLabel}</span> : null}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
+        late ? 'bg-red-500/10 text-red-600 border-red-500/30' : 'bg-amber-500/10 text-amber-600 border-amber-500/30'
+      }`}>
+        <AlertTriangle size={11} /> {late ? expired : soon.replace('{{days}}', String(days))}
+      </span>
+      {renew ? (
+        <button
+          type="button"
+          onClick={() => { setValue(renewalDate(date, todayLocalISO())); setFailed(false); setEditing(true); }}
+          className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+        >
+          <CalendarClock size={12} /> {renew.label}
+        </button>
+      ) : null}
     </div>
   );
 }
 
 // A grouped card of detail rows (mirrors the mobile detail layout) — a soft
 // card holding a 2-column grid of DetailRows.
-function DetailCard({ children }: { children: ReactNode }) {
+function DetailCard({ title, icon: Icon, children }: { title?: string; icon?: LucideIcon; children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-border-soft bg-surface px-4 py-3.5 grid grid-cols-2 gap-x-4 gap-y-3">
-      {children}
+    <div className="rounded-2xl border border-border-soft bg-surface px-4 py-3.5">
+      {title ? (
+        <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-faint mb-3">
+          {Icon ? <Icon size={13} /> : null} {title}
+        </p>
+      ) : null}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3">{children}</div>
     </div>
   );
 }
 
+
+// Detail view shows at most this many photo tiles (2 rows of 3).
+const DETAIL_GRID_MAX = 6;
 export default function EquipmentModule() {
   const supabase = createSupabaseClient();
   const { business, user, locations, activeLocationId, myHomeLocationId, currentRole } = useApp();
@@ -657,9 +732,24 @@ export default function EquipmentModule() {
     setSelected(null);
   };
 
+  // Quick renew from the detail view: write just this one date.
+  const renewField = async (field: 'plate_expiration' | 'insurance_expiration', iso: string): Promise<boolean> => {
+    if (!selected) return false;
+    const { data, error } = await supabase.from('equipment').update({ [field]: iso }).eq('id', selected.id).select('id');
+    if (error || !data?.length) return false;
+    setSelected(prev => (prev ? { ...prev, [field]: iso } : prev));
+    reRun();
+    return true;
+  };
+  const renewProps = (field: 'plate_expiration' | 'insurance_expiration') => canEdit ? {
+    label: t.renewBtn, saveLabel: tc.buttons.save, cancelLabel: tc.buttons.cancel, errorLabel: t.renewSaveError,
+    onSave: (iso: string) => renewField(field, iso),
+  } : undefined;
+
   const onDelete = async () => {
     if (!selected) return;
-    if (!(await confirm({ message: t.deleteConfirmMsg, destructive: true }))) return;
+    // Name the item in the title — "This cannot be undone" alone didn't say WHAT was being deleted.
+    if (!(await confirm({ title: t.deleteConfirmTitle.replace('{{name}}', selected.name), message: t.deleteConfirmMsg, destructive: true }))) return;
     await supabase.from('equipment').delete().eq('id', selected.id);
     // Storage objects under equipment/<business_id>/<selected.id>/ are
     // left in the bucket; the DB rows cascade-delete (the photos table
@@ -1217,7 +1307,10 @@ export default function EquipmentModule() {
           <div className="flex flex-col gap-3 w-full max-w-2xl mx-auto">
             {photos.length > 0 ? (
               <div className="grid grid-cols-3 gap-2">
-                {photos.map((p, idx) => (
+                {/* Two rows max so the details below don't get pushed off-screen;
+                   the last tile carries "+N" and opens the viewer, which pages
+                   through the rest. */}
+                {photos.slice(0, DETAIL_GRID_MAX).map((p, idx) => (
                   <button
                     key={p.id}
                     type="button"
@@ -1233,19 +1326,23 @@ export default function EquipmentModule() {
                     <SkeletonImg
                       src={thumbUrl(photoUrls, p.storage_path)}
                       fallbackSrc={photoUrls[p.storage_path]}
-
                       onFallback={() => healThumb(supabase, EQUIPMENT_BUCKET, p.storage_path, photoUrls[p.storage_path])}
                       alt=""
                       className="w-full h-full object-cover"
                       style={{ transform: `rotate(${(p.rotation ?? 0) % 360}deg)` }}
                     />
+                    {idx === DETAIL_GRID_MAX - 1 && photos.length > DETAIL_GRID_MAX ? (
+                      <span className="absolute inset-0 z-10 flex items-center justify-center bg-black/55 text-white text-2xl font-bold">
+                        +{photos.length - DETAIL_GRID_MAX}
+                      </span>
+                    ) : null}
                   </button>
                 ))}
               </div>
             ) : null}
 
             {/* Vehicle */}
-            <DetailCard>
+            <DetailCard title={t.basicInfoHeading} icon={Truck}>
               <DetailRow label={t.typeLabel} value={selected.equipment_type} />
               <DetailRow label={t.makeLabel} value={selected.make} />
               <DetailRow label={t.modelLabel} value={selected.model} />
@@ -1261,31 +1358,19 @@ export default function EquipmentModule() {
 
             {/* Registration (+ expiry countdown badge) */}
             {(selected.plate_number || selected.plate_expiration) ? (
-              <DetailCard>
+              <DetailCard title={t.registrationHeading} icon={CreditCard}>
                 <DetailRow label={t.plateNumberLabel} value={selected.plate_number} />
                 <DetailRow
                   label={t.plateExpirationLabel}
                   value={selected.plate_expiration ? formatDateLong(selected.plate_expiration, locale) : null}
+                  badge={<ExpiryBadge key={selected.plate_expiration ?? ''} date={selected.plate_expiration} expired={t.plateExpired} soon={t.plateExpiresSoon} renew={renewProps('plate_expiration')} />}
                 />
-                {(() => {
-                  const days = plateExpirationDays(selected.plate_expiration);
-                  const badge =
-                    days === null ? null
-                    : days < 0 ? { text: t.plateExpired, cls: 'bg-red-500/10 text-red-700 border-red-200' }
-                    : days <= 30 ? { text: t.plateExpiresSoon.replace('{{days}}', String(days)), cls: 'bg-amber-500/10 text-amber-700 border-amber-200' }
-                    : null;
-                  return badge ? (
-                    <span className={`col-span-2 justify-self-start inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${badge.cls}`}>
-                      <AlertTriangle size={12} /> {badge.text}
-                    </span>
-                  ) : null;
-                })()}
               </DetailCard>
             ) : null}
 
             {/* Insurance (+ renewal countdown badge) */}
             {(selected.insurance_carrier || selected.insurance_policy_number || selected.insurance_agent || selected.insurance_agent_phone || selected.insurance_expiration) ? (
-              <DetailCard>
+              <DetailCard title={t.insuranceHeading} icon={ShieldCheck}>
                 <DetailRow label={t.insuranceCarrierLabel} value={selected.insurance_carrier} />
                 <DetailRow label={t.insurancePolicyLabel} value={selected.insurance_policy_number} />
                 <DetailRow label={t.insuranceAgentLabel} value={selected.insurance_agent} />
@@ -1293,28 +1378,19 @@ export default function EquipmentModule() {
                 <DetailRow
                   label={t.insuranceExpirationLabel}
                   value={selected.insurance_expiration ? formatDateLong(selected.insurance_expiration, locale) : null}
+                  badge={<ExpiryBadge key={selected.insurance_expiration ?? ''} date={selected.insurance_expiration} expired={t.insuranceExpired} soon={t.insuranceExpiresSoon} renew={renewProps('insurance_expiration')} />}
                 />
-                {(() => {
-                  const days = plateExpirationDays(selected.insurance_expiration);
-                  const badge =
-                    days === null ? null
-                    : days < 0 ? { text: t.insuranceExpired, cls: 'bg-red-500/10 text-red-700 border-red-200' }
-                    : days <= 30 ? { text: t.insuranceExpiresSoon.replace('{{days}}', String(days)), cls: 'bg-amber-500/10 text-amber-700 border-amber-200' }
-                    : null;
-                  return badge ? (
-                    <span className={`col-span-2 justify-self-start inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${badge.cls}`}>
-                      <AlertTriangle size={12} /> {badge.text}
-                    </span>
-                  ) : null;
-                })()}
               </DetailCard>
             ) : null}
 
             {/* Value + ownership + acquisition */}
-            <DetailCard>
+            <DetailCard title={t.ownershipHeading} icon={Wallet}>
               <DetailRow label={t.valueLabel} value={selected.value != null ? fmtMoney(selected.value) : null} />
               {selected.paid_off ? (
-                <DetailRow label={t.ownershipHeading} value={t.paidOffLabel} />
+                // The card is already titled "Ownership" — just the status pill.
+                <span className="col-span-2 justify-self-start inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+                  <Check size={12} /> {t.paidOffLabel}
+                </span>
               ) : (
                 <>
                   <DetailRow label={t.loanLenderLabel} value={selected.loan_lender} />
@@ -1329,7 +1405,7 @@ export default function EquipmentModule() {
             </DetailCard>
 
             {/* Assignment */}
-            <DetailCard>
+            <DetailCard title={t.assignmentHeading} icon={UserCheck}>
               <DetailRow
                 label={t.assignedToLabel}
                 value={employeeName(selected.assigned_employee_id) ?? t.unassignedBadge}
@@ -1339,18 +1415,18 @@ export default function EquipmentModule() {
 
             {/* Notes */}
             {selected.notes ? (
-              <DetailCard>
-                <div className="col-span-2">
-                  <DetailRow label={t.notesLabel} value={selected.notes} />
-                </div>
+              <DetailCard title={t.notesLabel} icon={StickyNote}>
+                <p className="col-span-2 text-sm text-ink whitespace-pre-wrap">{selected.notes}</p>
               </DetailCard>
             ) : null}
 
-            {/* Audit timestamps */}
-            <DetailCard>
-              <DetailRow label={t.createdLabel} value={selected.created_at ? formatDateTimeLong(selected.created_at, locale) : null} />
-              <DetailRow label={t.updatedLabel} value={selected.updated_at ? formatDateTimeLong(selected.updated_at, locale) : null} />
-            </DetailCard>
+            {/* Audit timestamps — reference info, so a quiet line, not a card. */}
+            <p className="px-1 text-xs text-faint">
+              {[
+                selected.created_at ? `${t.createdLabel}: ${formatDateTimeLong(selected.created_at, locale)}` : null,
+                selected.updated_at ? `${t.updatedLabel}: ${formatDateTimeLong(selected.updated_at, locale)}` : null,
+              ].filter(Boolean).join('  ·  ')}
+            </p>
 
             {canEdit ? (
               <div className="flex gap-3 pt-1">
