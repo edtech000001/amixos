@@ -10,6 +10,7 @@
 // moves on, so one bad op can't block the rest. Errored ops are re-armed to
 // 'pending' by retryErrors() on reconnect / manual retry.
 
+import { GALLERY_PHOTO_TABLES, uploadGalleryPhoto } from '@/lib/photoThumbs';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useOutboxStore, type OutboxOp } from './outbox';
 
@@ -40,12 +41,13 @@ async function applyOp(op: OutboxOp): Promise<void> {
     // reads the durable file:// uri into a blob (same path as the online code).
     // upsert:true so a retry after a partial success re-writes cleanly instead
     // of failing with "already exists".
-    const res = await fetch(op.localUri!);
-    const blob = await res.blob();
-    const arrayBuffer = await new Response(blob).arrayBuffer();
-    const { error: upErr } = await supabase.storage
-      .from(op.bucket!)
-      .upload(op.storagePath!, arrayBuffer, { upsert: true, contentType: op.contentType ?? 'image/jpeg' });
+    const { error: upErr } = GALLERY_PHOTO_TABLES.has(op.table)
+      ? await uploadGalleryPhoto(supabase, op.bucket!, op.storagePath!, op.localUri!, true)
+      : await supabase.storage.from(op.bucket!).upload(
+          op.storagePath!,
+          await new Response(await (await fetch(op.localUri!)).blob()).arrayBuffer(),
+          { upsert: true, contentType: op.contentType ?? 'image/jpeg' },
+        );
     if (upErr) throw upErr;
     const { error: insErr } = await supabase.from(op.table).insert(op.payload);
     if (insErr && !isDuplicateError(insErr)) throw insErr;

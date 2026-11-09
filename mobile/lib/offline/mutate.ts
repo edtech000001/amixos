@@ -13,6 +13,7 @@
 // true, the row isn't on the server yet — show optimistic UI and let the sync
 // banner report progress.
 
+import { GALLERY_PHOTO_TABLES, uploadGalleryPhoto } from '@/lib/photoThumbs';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useNetworkStore } from './network';
 import { useOutboxStore, type NewOutboxOp } from './outbox';
@@ -139,12 +140,13 @@ export async function queuedUpload(args: UploadArgs): Promise<MutateResult> {
   if (useNetworkStore.getState().isOnline) {
     try {
       const supabase = createSupabaseClient();
-      const res = await fetch(localUri);
-      const blob = await res.blob();
-      const arrayBuffer = await new Response(blob).arrayBuffer();
-      const { error: upErr } = await supabase.storage
-        .from(bucket)
-        .upload(storagePath, arrayBuffer, { upsert: true, contentType: contentType ?? 'image/jpeg' });
+      const { error: upErr } = GALLERY_PHOTO_TABLES.has(table)
+        ? await uploadGalleryPhoto(supabase, bucket, storagePath, localUri, true)
+        : await supabase.storage.from(bucket).upload(
+            storagePath,
+            await new Response(await (await fetch(localUri)).blob()).arrayBuffer(),
+            { upsert: true, contentType: contentType ?? 'image/jpeg' },
+          );
       if (upErr) throw upErr;
       const { error: insErr } = await supabase.from(table).insert(payload);
       if (insErr && !isDuplicateError(insErr)) throw insErr;

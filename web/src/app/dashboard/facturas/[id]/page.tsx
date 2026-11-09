@@ -2,9 +2,12 @@
 
 export const dynamic = 'force-dynamic';
 
+import { ZoomControls } from '@/components/ui/ZoomControls';
+import { useEscapeKey } from '@/lib/useEscapeKey';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createSupabaseClient } from '@/lib/supabase';
+import { useMarkEntityNotificationsRead } from '@amixos/shared/lib/notifications';
 import { useApp } from '@/lib/AppContext';
 import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
 import { Camera, RotateCw, X } from 'lucide-react';
@@ -101,6 +104,8 @@ interface InvoiceFieldTemplate {
 export default function FacturaDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
   const router = useRouter();
+  // Seeing the invoice clears its unread alerts, however you got here.
+  useMarkEntityNotificationsRead(createSupabaseClient(), 'invoice', id);
   const searchParams = useSearchParams();
   // ?from=job&job=… or ?from=client&client=… → back returns to that job/client
   // instead of the invoice list.
@@ -173,7 +178,8 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   // Full-screen payment-photo viewer: id + rotation ride along so the rotate
   // button can persist (invoice_payments.photo_rotation, migration 190).
   const [viewPhoto, setViewPhoto] = useState<{ id: string; url: string; rotation: number } | null>(null);
-  const [viewZoom, setViewZoom] = useState(false);
+  useEscapeKey(!!viewPhoto, () => setViewPhoto(null));
+  const [viewZoom, setViewZoom] = useState(1);
   const rotateViewPhoto = async () => {
     if (!viewPhoto) return;
     const next = (viewPhoto.rotation + 90) % 360;
@@ -1139,7 +1145,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         onRecordPayment={canEdit ? openRecordPayment : undefined}
         onEditPayment={canEdit ? openEditPayment : undefined}
         onDeletePayment={canEdit ? setDelPayment : undefined}
-        onViewPaymentPhoto={(p) => { if (p.photoUrl) { setViewZoom(false); setViewPhoto({ id: p.id, url: p.photoUrl, rotation: p.photoRotation ?? 0 }); } }}
+        onViewPaymentPhoto={(p) => { if (p.photoUrl) { setViewZoom(1); setViewPhoto({ id: p.id, url: p.photoUrl, rotation: p.photoRotation ?? 0 }); } }}
         onUndoPaid={canEdit ? () => setUndoPaidOpen(true) : undefined}
         onClientPress={(clientId) => router.push(`/dashboard/clientes/${clientId}?from=invoice&invoice=${id}`)}
         jobTitles={Object.fromEntries(attachedJobs.map(j => [j.id, j.title]))}
@@ -1519,10 +1525,11 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
           {/* Clicking the PHOTO toggles zoom — only the backdrop/X close. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={viewPhoto.url} alt=""
-            onClick={e => { e.stopPropagation(); setViewZoom(z => !z); }}
-            className={`max-w-full max-h-full object-contain transition-transform ${viewZoom ? 'cursor-zoom-out' : 'cursor-zoom-in'}`}
-            style={{ transform: `rotate(${viewPhoto.rotation}deg) scale(${viewZoom ? 2.2 : 1})` }} />
-          <div className="absolute bottom-10 left-0 right-0 flex justify-center gap-3">
+            onClick={e => { e.stopPropagation(); setViewZoom(z => (z > 1 ? 1 : 2.2)); }}
+            className={`max-w-full max-h-full object-contain transition-transform ${viewZoom > 1 ? 'cursor-zoom-out' : 'cursor-zoom-in'}`}
+            style={{ transform: `rotate(${viewPhoto.rotation}deg) scale(${viewZoom})` }} />
+          <ZoomControls zoom={viewZoom} onChange={setViewZoom} />
+          <div className="absolute top-4 left-0 right-0 flex justify-center gap-3">
             <button
               type="button"
               onClick={e => { e.stopPropagation(); void rotateViewPhoto(); }}

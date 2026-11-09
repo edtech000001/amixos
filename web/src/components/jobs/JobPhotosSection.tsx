@@ -1,5 +1,10 @@
 'use client';
 
+import { healThumb, resizeToJpeg, uploadThumb } from '@/lib/photoUpload';
+import { thumbUrl, withThumbPaths } from '@amixos/shared/lib/photoThumbs';
+import { SkeletonImg } from '@/components/ui/SkeletonImg';
+import { ZoomControls } from '@/components/ui/ZoomControls';
+import { useEscapeKey } from '@/lib/useEscapeKey';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ImagePlus, X, Trash2, RotateCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -36,25 +41,7 @@ interface Props {
 // file if anything in the canvas path fails. Exported for the new-job form,
 // which stages photos and uploads them right after the job row is created.
 export async function resizeImage(file: File): Promise<Blob> {
-  try {
-    const bitmap = await createImageBitmap(file);
-    const longest = Math.max(bitmap.width, bitmap.height);
-    const scale = longest > JOB_PHOTO_MAX_EDGE ? JOB_PHOTO_MAX_EDGE / longest : 1;
-    const w = Math.round(bitmap.width * scale);
-    const h = Math.round(bitmap.height * scale);
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return file;
-    ctx.drawImage(bitmap, 0, 0, w, h);
-    const blob = await new Promise<Blob | null>(resolve =>
-      canvas.toBlob(resolve, 'image/jpeg', JOB_PHOTO_QUALITY),
-    );
-    return blob ?? file;
-  } catch {
-    return file;
-  }
+  return (await resizeToJpeg(file, JOB_PHOTO_MAX_EDGE, JOB_PHOTO_QUALITY)) ?? file;
 }
 
 export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
@@ -67,6 +54,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  useEscapeKey(viewerIndex !== null, () => setViewerIndex(null));
   // Fullscreen viewer zoom/pan. zoom===1 is the reset (fit-to-screen) state.
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -109,6 +97,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
           .from(JOB_PHOTOS_BUCKET)
           .upload(path, blob, { upsert: false, contentType: 'image/jpeg' });
         if (upErr) throw upErr;
+        await uploadThumb(supabase, JOB_PHOTOS_BUCKET, path, blob);
         const { error: insErr } = await supabase.from('job_photos').insert({
           business_id: businessId,
           job_id: jobId,
@@ -167,7 +156,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
     );
 
   // Photos live in a private bucket — resolve short-lived signed URLs.
-  const photoUrls = useSignedUrls(supabase, photos.map((p) => p.storage_path));
+  const photoUrls = useSignedUrls(supabase, withThumbPaths(photos.map((p) => p.storage_path)));
 
   const atLimit = photos.length >= MAX_PHOTOS_PER_JOB;
   const viewerPhoto = viewerIndex !== null ? photos[viewerIndex] : null;
@@ -241,9 +230,11 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
               onClick={() => setViewerIndex(i)}
               className="relative aspect-square rounded-xl overflow-hidden bg-border-soft group"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={photoUrls[p.storage_path] ?? undefined}
+              <SkeletonImg
+                src={thumbUrl(photoUrls, p.storage_path)}
+                fallbackSrc={photoUrls[p.storage_path]}
+
+                onFallback={() => healThumb(supabase, JOB_PHOTOS_BUCKET, p.storage_path, photoUrls[p.storage_path])}
                 alt=""
                 className="w-full h-full object-cover"
                 style={{ transform: `rotate(${p.rotation ?? 0}deg)` }}
@@ -336,6 +327,9 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
               ) : null}
             </div>
           </div>
+
+          {/* Zoom buttons for mice without pinch (wheel/double-click still work). */}
+          <ZoomControls zoom={zoom} onChange={z => { setZoom(z); if (z === 1) setPan({ x: 0, y: 0 }); }} />
 
           {/* Prev */}
           {(viewerIndex ?? 0) > 0 ? (

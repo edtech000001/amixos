@@ -4,6 +4,12 @@
 // expenses, maintenance, and photos. All I/O for one property lives here;
 // ledger math comes from shared/lib/rentals.ts.
 
+import { healThumb, resizeToJpeg, uploadThumb } from '@/lib/photoUpload';
+import { thumbPath, thumbUrl, withThumbPaths } from '@amixos/shared/lib/photoThumbs';
+import { JOB_PHOTO_MAX_EDGE, JOB_PHOTO_QUALITY } from '@amixos/shared/lib/jobPhotos';
+import { SkeletonImg } from '@/components/ui/SkeletonImg';
+import { ZoomControls } from '@/components/ui/ZoomControls';
+import { useEscapeKey } from '@/lib/useEscapeKey';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SkeletonStats, SkeletonCard, SkeletonList } from '@amixos/shared/ui/Skeleton';
 import { confirm } from '@amixos/shared/ui/confirmBus';
@@ -749,9 +755,11 @@ export function PropertyDetail({
     try {
       for (const file of picked) {
         const path = rentalPropertyPhotoPath(business.id, property.id, rentalUid());
+        const resized = await resizeToJpeg(file, JOB_PHOTO_MAX_EDGE, JOB_PHOTO_QUALITY);
         const { error: upErr } = await supabase.storage.from(RENTALS_BUCKET)
-          .upload(path, file, { upsert: false, contentType: file.type || 'image/jpeg' });
+          .upload(path, resized ?? file, { upsert: false, contentType: resized ? 'image/jpeg' : file.type || 'image/jpeg' });
         if (upErr) throw upErr;
+        await uploadThumb(supabase, RENTALS_BUCKET, path, resized ?? file);
         const [catLease, catPhase] = photoCat ? photoCat.split('|') : [null, null];
         const { error: insErr } = await supabase.from('rental_property_photos').insert({
           business_id: business.id,
@@ -778,12 +786,12 @@ export function PropertyDetail({
     if (!(await confirm({ message: t.photos.deleteConfirm, destructive: true }))) return;
     setPhotoViewer(null);
     await supabase.from('rental_property_photos').delete().eq('id', p.id);
-    void supabase.storage.from(RENTALS_BUCKET).remove([p.storage_path]).then(() => {}, () => {});
+    void supabase.storage.from(RENTALS_BUCKET).remove([p.storage_path, thumbPath(p.storage_path)]).then(() => {}, () => {});
     onCoversChanged?.();
     await reload();
   };
 
-  const photoUrls = useSignedUrls(supabase, photos.map(p => p.storage_path));
+  const photoUrls = useSignedUrls(supabase, withThumbPaths(photos.map(p => p.storage_path)));
 
   // Upload category: '' = general, '<leaseId>|before' / '<leaseId>|after' =
   // damage-doc photos for one tenant's stay (migration 203).
@@ -819,6 +827,7 @@ export function PropertyDetail({
   // ── Fullscreen photo viewer (zoom/pan/rotate/cover) — JobPhotosSection's
   //    viewer adapted to rental_property_photos ─────────────────────────────
   const [photoViewer, setPhotoViewer] = useState<number | null>(null);
+  useEscapeKey(photoViewer !== null, () => setPhotoViewer(null));
   const [pvZoom, setPvZoom] = useState(1);
   const [pvPan, setPvPan] = useState({ x: 0, y: 0 });
   const pvDragRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
@@ -1629,11 +1638,9 @@ export function PropertyDetail({
               {g.items.map(({ p, index: i }) => (
                 <div key={p.id} className="relative group rounded-xl overflow-hidden border border-border-soft aspect-video bg-surface">
                   <button type="button" onClick={() => setPhotoViewer(i)} className="block w-full h-full">
-                    {photoUrls[p.storage_path] ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={photoUrls[p.storage_path]} alt="" className="w-full h-full object-cover"
-                        style={{ transform: `rotate(${p.rotation}deg)` }} />
-                    ) : null}
+                    <SkeletonImg src={thumbUrl(photoUrls, p.storage_path)} fallbackSrc={photoUrls[p.storage_path]}
+ onFallback={() => healThumb(supabase, RENTALS_BUCKET, p.storage_path, photoUrls[p.storage_path])} alt="" className="w-full h-full object-cover"
+                      style={{ transform: `rotate(${p.rotation}deg)` }} />
                   </button>
                   {p.is_cover ? (
                     <span className="absolute top-1.5 left-1.5 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/55 text-white text-[10px] font-semibold">
@@ -1694,6 +1701,9 @@ export function PropertyDetail({
               ) : null}
             </div>
           </div>
+          {/* Zoom buttons for mice without pinch (wheel/double-click still work). */}
+          <ZoomControls zoom={pvZoom} onChange={z => { setPvZoom(z); if (z === 1) setPvPan({ x: 0, y: 0 }); }} />
+
           {(photoViewer ?? 0) > 0 ? (
             <button onClick={e => { e.stopPropagation(); pvGoTo(-1); }}
               className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20">

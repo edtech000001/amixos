@@ -62,6 +62,42 @@ export async function markNotificationRead(supabase: SupabaseLike, id: string): 
   await supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', id).is('read_at', null);
 }
 
+/** Opening a job/invoice from anywhere counts as seeing its alerts: mark the
+ *  caller's unread ones for it read (RLS limits this to their own rows).
+ *  Resolves how many were cleared. */
+export async function markEntityNotificationsRead(
+  supabase: SupabaseLike,
+  entityType: 'job' | 'invoice',
+  entityId: string,
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('entity_type', entityType)
+    .eq('entity_id', entityId)
+    .is('read_at', null)
+    .select('id');
+  if (error) return 0;
+  return data?.length ?? 0;
+}
+
+/** Detail screens call this once per opened job/invoice; badges refresh only
+ *  when something was actually cleared. */
+export function useMarkEntityNotificationsRead(
+  supabase: SupabaseLike,
+  entityType: 'job' | 'invoice',
+  entityId: string | null | undefined,
+): void {
+  useEffect(() => {
+    if (!entityId) return;
+    void markEntityNotificationsRead(supabase, entityType, entityId).then(n => {
+      if (n > 0) unreadNotificationsChanged();
+    });
+    // supabase is a stable singleton per platform; keying on it would re-run every render on web.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entityType, entityId]);
+}
+
 /** "Look at it later" — puts the dot and the badge back. */
 export async function markNotificationUnread(supabase: SupabaseLike, id: string): Promise<void> {
   const { error } = await supabase.from('notifications').update({ read_at: null }).eq('id', id);

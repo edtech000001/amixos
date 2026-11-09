@@ -53,6 +53,7 @@ import { useConfirmSheet } from '@/lib/useConfirmSheet';
 import { useApp } from '@/lib/AppContext';
 import { useAuthStore } from '@/lib/auth/store';
 import { createSupabaseClient } from '@/lib/supabase';
+import { useMarkEntityNotificationsRead } from '@amixos/shared/lib/notifications';
 import { WEB_APP_URL } from '@/lib/webUrl';
 import { queuedUpdate } from '@/lib/offline/mutate';
 import { loadCached, patchCached, writeCached } from '@/lib/offline/cache';
@@ -239,6 +240,8 @@ export default function JobDetailRoute() {
   const appHref = useAppHref();
   const { id, from, invoice: fromInvoice, worker: fromWorker } =
     useLocalSearchParams<{ id: string; from?: string; invoice?: string; worker?: string }>();
+  // Seeing the job clears its unread alerts, however you got here.
+  useMarkEntityNotificationsRead(createSupabaseClient(), 'job', id);
   // ?from=map → back returns to the map module; ?from=calendar → back returns
   // to the calendar; ?from=invoice → back to that invoice; ?from=nomina → back
   // to payroll, reopening that worker's breakdown; ?from=home → back to the

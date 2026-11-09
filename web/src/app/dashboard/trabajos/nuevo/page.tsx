@@ -2,6 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
+import { uploadThumb } from '@/lib/photoUpload';
 import { Fragment, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { SkeletonBlock, SkeletonStats, SkeletonCard, SkeletonList, SkeletonDetail } from '@amixos/shared/ui/Skeleton';
 import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
@@ -1475,6 +1476,7 @@ function NuevoTrabajoContent() {
           .from(JOB_PHOTOS_BUCKET)
           .upload(path, blob, { upsert: false, contentType: 'image/jpeg' });
         if (upErr) continue;
+        await uploadThumb(supabase, JOB_PHOTOS_BUCKET, path, blob);
         await supabase.from('job_photos').insert({
           business_id: business!.id,
           job_id: jobId,

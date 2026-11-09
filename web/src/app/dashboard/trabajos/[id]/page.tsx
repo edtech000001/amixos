@@ -14,6 +14,7 @@ import {
   Share2, Download, RotateCcw, Building2, Sparkles,
   MessageSquare, Navigation, Archive, Mail, PenLine } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
+import { useMarkEntityNotificationsRead } from '@amixos/shared/lib/notifications';
 import { useApp } from '@/lib/AppContext';
 import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
 import { Button } from '@/components/ui/Button';
@@ -95,6 +96,8 @@ export default function TrabajoDetailPage({ params }: { params: { id: string } }
   const { id } = params;
   const supabase = createSupabaseClient();
   const { business, user, businesses, setActiveBusiness, currentRole } = useApp();
+  // Seeing the job clears its unread alerts, however you got here.
+  useMarkEntityNotificationsRead(createSupabaseClient(), 'job', id);
   // Labor/Material/Equipment/Other categories on job line items — hidden when
   // the business turns them off (billed flat / by qty × rate instead).
   const showItemTypes = business?.job_item_types_enabled !== false;

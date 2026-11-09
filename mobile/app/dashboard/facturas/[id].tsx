@@ -17,6 +17,7 @@ import { markSectionVisitor } from '@/lib/sectionEntry';
 import { StackActions, useRoute } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSupabaseClient } from '@/lib/supabase';
+import { useMarkEntityNotificationsRead } from '@amixos/shared/lib/notifications';
 import { WEB_APP_URL } from '@/lib/webUrl';
 import { useApp } from '@/lib/AppContext';
 import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
@@ -123,6 +124,8 @@ interface InvoiceFieldTemplate {
 export default function FacturaDetailRoute() {
   const params = useLocalSearchParams<{ id: string; from?: string; jobId?: string; clientId?: string }>();
   const id = String(params.id);
+  // Seeing the invoice clears its unread alerts, however you got here.
+  useMarkEntityNotificationsRead(createSupabaseClient(), 'invoice', id);
   const router = useRouter();
   // Section links stay in whichever stack this screen is in (its tab, or
   // the Más stack when opened from the Más menu) — lib/sectionNav.

@@ -6,6 +6,7 @@
 // files are matched CLIENT-SIDE by name (shared/lib/importPhotos), and only the
 // matches upload to equipment_photos. Unmatched files never leave the browser.
 
+import { uploadThumb } from '@/lib/photoUpload';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ImagePlus, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
@@ -161,6 +162,7 @@ export function ImportEquipmentPhotosModal({ open, businessId, onClose }: Props)
         const path = equipmentPhotoPath(businessId, m.jobId, `${crypto.randomUUID()}.${ext}`);
         const { error: upErr } = await supabase.storage.from(EQUIPMENT_BUCKET).upload(path, blob, { upsert: false, contentType: 'image/jpeg' });
         if (upErr) throw upErr;
+        await uploadThumb(supabase, EQUIPMENT_BUCKET, path, blob);
         const { error: insErr } = await supabase.from('equipment_photos').insert({
           business_id: businessId,
           equipment_id: m.jobId,

@@ -3,6 +3,8 @@
 // add/edit/delete, attach photos (camera or library), and assign to
 // an active employee.
 
+import { thumbPath, thumbUrl, withThumbPaths } from '@amixos/shared/lib/photoThumbs';
+import { SkeletonImage } from '@/components/SkeletonImage';
 import { useRefreshOnRefocus } from '@/lib/useRefreshOnRefocus';
 import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -476,10 +478,10 @@ export default function EquipmentScreen() {
 
   // Photos live in a private bucket — sign the list covers + the open
   // equipment's photos together, keyed by storage_path.
-  const photoUrls = useSignedUrls(supabase, [
+  const photoUrls = useSignedUrls(supabase, withThumbPaths([
     ...Object.values(coverPhotos).map((p) => p.storage_path),
     ...photos.map((p) => p.storage_path),
-  ]);
+  ]));
 
   const TYPE_OPTIONS = useMemo(() => [
     // "—" is the canonical "no selection" label across the app (matches
@@ -939,7 +941,7 @@ export default function EquipmentScreen() {
         style: 'destructive',
         onPress: async () => {
           await supabase.from('equipment_photos').delete().eq('id', photo.id);
-          await supabase.storage.from(EQUIPMENT_BUCKET).remove([photo.storage_path]);
+          await supabase.storage.from(EQUIPMENT_BUCKET).remove([photo.storage_path, thumbPath(photo.storage_path)]);
           if (selected) await loadPhotosFor(selected.id);
           if (selected) await refreshCover(selected.id);
         },
@@ -1096,8 +1098,9 @@ export default function EquipmentScreen() {
               className="bg-card rounded-2xl border border-border-soft overflow-hidden active:bg-surface"
             >
               {cover ? (
-                <Image
-                  source={{ uri: photoUrls[cover.storage_path] }}
+                <SkeletonImage
+                  source={{ uri: thumbUrl(photoUrls, cover.storage_path) }}
+                  fallbackUri={photoUrls[cover.storage_path]}
                   style={{ width: '100%', height: 160 }}
                   resizeMode="cover"
                 />
@@ -1351,8 +1354,9 @@ export default function EquipmentScreen() {
                             onLongPress={() => removePhoto(p)}
                             className="relative w-24 h-24 rounded-xl overflow-hidden bg-border-soft active:opacity-80"
                           >
-                            <Image
-                              source={{ uri: photoUrls[p.storage_path] }}
+                            <SkeletonImage
+                              source={{ uri: thumbUrl(photoUrls, p.storage_path) }}
+                              fallbackUri={photoUrls[p.storage_path]}
                               style={{ width: '100%', height: '100%' }}
                               resizeMode="cover"
                             />
@@ -1487,8 +1491,9 @@ export default function EquipmentScreen() {
                         onPress={() => setViewerIndex(idx)}
                         className="rounded-2xl overflow-hidden bg-border-soft active:opacity-80"
                       >
-                        <Image
-                          source={{ uri: photoUrls[p.storage_path] }}
+                        <SkeletonImage
+                          source={{ uri: thumbUrl(photoUrls, p.storage_path) }}
+                          fallbackUri={photoUrls[p.storage_path]}
                           style={{ width: 170, height: 170, transform: [{ rotate: `${(p.rotation ?? 0) % 360}deg` }] }}
                           resizeMode="cover"
                         />

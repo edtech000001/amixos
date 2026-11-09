@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { thumbUrl, withThumbPaths } from '@amixos/shared/lib/photoThumbs';
+import { SkeletonImage } from '@/components/SkeletonImage';
 import {
   View,
   Text,
@@ -125,12 +127,9 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
         : await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return;
 
-    // Compress at the picker (quality 0.6) — this is a pure-JS path, no
-    // native module, so it works in the current dev client. It recompresses
-    // to JPEG but keeps full pixel dimensions; a 12 MP phone photo lands
-    // around ~1 MB. (For a smaller ~300–500 KB downscale we'd need
-    // expo-image-manipulator, which requires a dev-client rebuild — the web
-    // side already does that downscale via canvas.)
+    // Compress at the picker (quality 0.6). The upload path (lib/photoThumbs)
+    // then downscales to 1600px and writes the grid thumbnail — on builds
+    // without expo-image-manipulator it uploads this file as-is.
     const result =
       source === 'camera'
         ? await ImagePicker.launchCameraAsync({ quality: 0.6 })
@@ -264,7 +263,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
 
   const viewerPhoto = viewerIndex !== null ? photos[viewerIndex] : null;
   // Photos live in a private bucket — resolve short-lived signed URLs.
-  const photoUrls = useSignedUrls(supabase, photos.map((p) => p.storage_path));
+  const photoUrls = useSignedUrls(supabase, withThumbPaths(photos.map((p) => p.storage_path)));
   // Available height for the image area (screen minus header/footer/safe-areas).
   const availH = screenH - insets.top - insets.bottom - 120;
 
@@ -335,8 +334,9 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
               style={{ width: tileSize, height: tileSize }}
               className="rounded-xl overflow-hidden bg-border-soft"
             >
-              <Image
-                source={{ uri: photoUrls[p.storage_path] }}
+              <SkeletonImage
+                source={{ uri: thumbUrl(photoUrls, p.storage_path) }}
+                fallbackUri={photoUrls[p.storage_path]}
                 style={{ width: tileSize, height: tileSize, transform: [{ rotate: `${p.rotation ?? 0}deg` }] }}
                 resizeMode="cover"
               />

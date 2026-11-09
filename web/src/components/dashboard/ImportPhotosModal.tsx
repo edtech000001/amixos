@@ -1,6 +1,7 @@
 'use client';
 
 // Step 4 of the import hub: bulk photo upload. The jobs CSV's "Fotos
+import { uploadThumb } from '@/lib/photoUpload';
 import { logImportRun } from '@amixos/shared/lib/importRunners';
 import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
 // (nombres de archivo)" column left pending file names on each imported job
@@ -195,6 +196,7 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
           .from(JOB_PHOTOS_BUCKET)
           .upload(path, blob, { upsert: false, contentType: 'image/jpeg' });
         if (upErr) throw upErr;
+        await uploadThumb(supabase, JOB_PHOTOS_BUCKET, path, blob);
         const { error: insErr } = await supabase.from('job_photos').insert({
           business_id: businessId,
           job_id: m.jobId,

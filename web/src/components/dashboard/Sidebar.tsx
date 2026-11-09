@@ -115,7 +115,7 @@ function SlidingHighlight({ activeKey, mini }: { activeKey: string; mini: boolea
       place(el, top, height);
     };
     // The route has caught up: drop the click-time color overrides below.
-    nav.querySelectorAll<HTMLElement>('a[data-active]').forEach(a => { a.style.color = ''; });
+    nav.querySelectorAll<HTMLElement>('a[data-active]').forEach(a => { a.style.color = ''; a.style.backgroundColor = ''; });
     moveTo(nav.querySelector<HTMLElement>('[data-active="true"]'), true);
 
     // Move on the CLICK, not when the route finishes loading (that lag made
@@ -131,6 +131,10 @@ function SlidingHighlight({ activeKey, mini }: { activeKey: string; mini: boolea
       const idleColor = idle ? getComputedStyle(idle).color : '';
       nav.querySelectorAll<HTMLElement>('a[data-active="true"]').forEach(o => { if (o !== a) o.style.color = idleColor; });
       a.style.color = '#fff';
+      // Until the route lands the clicked item is still "inactive", so its
+      // hover:bg-border-soft paints OVER the pill — a near-white box in light
+      // mode for a beat. Keep it see-through so the blue shows at once.
+      a.style.backgroundColor = 'transparent';
     };
     nav.addEventListener('click', onClick);
 

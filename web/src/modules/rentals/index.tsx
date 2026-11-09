@@ -8,6 +8,10 @@
 // shared/lib/rentals.ts for why tenants are NOT clients). All Supabase I/O
 // stays in this module; ledger math lives in shared/lib/rentals.ts.
 
+import { healThumb, resizeToJpeg, uploadThumb } from '@/lib/photoUpload';
+import { thumbPath, thumbUrl, withThumbPaths } from '@amixos/shared/lib/photoThumbs';
+import { SkeletonImg } from '@/components/ui/SkeletonImg';
+import { JOB_PHOTO_MAX_EDGE, JOB_PHOTO_QUALITY } from '@amixos/shared/lib/jobPhotos';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SkeletonCard } from '@amixos/shared/ui/Skeleton';
 import { confirm } from '@amixos/shared/ui/confirmBus';
@@ -362,8 +366,10 @@ export default function RentalsModule() {
       let photoFailMsg: string | null = null;
       for (const file of pendingPhotos) {
         const path = rentalPropertyPhotoPath(business.id, row.id, rentalUid());
+        const resized = await resizeToJpeg(file, JOB_PHOTO_MAX_EDGE, JOB_PHOTO_QUALITY);
         const { error: upErr } = await supabase.storage.from(RENTALS_BUCKET)
-          .upload(path, file, { upsert: false, contentType: file.type || 'image/jpeg' });
+          .upload(path, resized ?? file, { upsert: false, contentType: resized ? 'image/jpeg' : file.type || 'image/jpeg' });
+        if (!upErr) await uploadThumb(supabase, RENTALS_BUCKET, path, resized ?? file);
         if (!upErr) {
           const { error: insErr } = await supabase.from('rental_property_photos').insert({
             business_id: business.id, property_id: row.id, storage_path: path,
@@ -411,7 +417,7 @@ export default function RentalsModule() {
     const { error: err } = await supabase.from('rental_properties').delete().eq('id', p.id);
     if (err) return;
     const paths = [
-      ...((ph as { storage_path: string }[] | null) ?? []).map(r => r.storage_path),
+      ...((ph as { storage_path: string }[] | null) ?? []).flatMap(r => [r.storage_path, thumbPath(r.storage_path)]),
       ...((docs as { storage_path: string }[] | null) ?? []).map(r => r.storage_path),
       ...((pays as { photo_path: string | null }[] | null) ?? []).map(r => r.photo_path),
       ...((exps as { receipt_path: string | null }[] | null) ?? []).map(r => r.receipt_path),
@@ -424,7 +430,7 @@ export default function RentalsModule() {
     reRun();
   };
 
-  const photoUrls = useSignedUrls(supabase, Object.values(coverPhotos).map(p => p.storage_path));
+  const photoUrls = useSignedUrls(supabase, withThumbPaths(Object.values(coverPhotos).map(p => p.storage_path)));
 
   const tabs: { key: TabKey; label: string; Icon: typeof Home }[] = [
     { key: 'overview', label: t.tabs.overview, Icon: LayoutDashboard },
@@ -659,9 +665,10 @@ export default function RentalsModule() {
                   >
                     <div className="relative w-full aspect-video bg-surface overflow-hidden">
                       {cover ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={photoUrls[cover.storage_path] ?? undefined} alt={p.name}
-                          className="absolute inset-0 w-full h-full object-cover" />
+                        <SkeletonImg src={thumbUrl(photoUrls, cover.storage_path)} fallbackSrc={photoUrls[cover.storage_path]}
+
+                          onFallback={() => healThumb(supabase, RENTALS_BUCKET, cover.storage_path, photoUrls[cover.storage_path])}
+                          alt={p.name} className="absolute inset-0 w-full h-full object-cover" />
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center">
                           <Home size={40} className="text-faint" />

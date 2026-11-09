@@ -6,6 +6,12 @@
 // Storage layout for photos lives in shared/lib/equipment.ts; this
 // component is the UI on top.
 
+import { healThumb, resizeToJpeg, uploadThumb } from '@/lib/photoUpload';
+import { thumbPath, thumbUrl, withThumbPaths } from '@amixos/shared/lib/photoThumbs';
+import { JOB_PHOTO_MAX_EDGE, JOB_PHOTO_QUALITY } from '@amixos/shared/lib/jobPhotos';
+import { SkeletonImg } from '@/components/ui/SkeletonImg';
+import { ZoomControls } from '@/components/ui/ZoomControls';
+import { useEscapeKey } from '@/lib/useEscapeKey';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { SkeletonCard, SkeletonRow } from '@amixos/shared/ui/Skeleton';
 import { confirm, alertMessage } from '@amixos/shared/ui/confirmBus';
@@ -209,13 +215,14 @@ export default function EquipmentModule() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   // Full-screen photo viewer (detail view) — index into `photos`, or null.
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  useEscapeKey(viewerIndex !== null, () => setViewerIndex(null));
 
   // Photos live in a private bucket — sign the list covers + the open
   // equipment's photos together, keyed by storage_path.
-  const photoUrls = useSignedUrls(supabase, [
+  const photoUrls = useSignedUrls(supabase, withThumbPaths([
     ...Object.values(coverPhotos).map((p) => p.storage_path),
     ...photos.map((p) => p.storage_path),
-  ]);
+  ]));
 
   // Local object URLs for photos queued while adding. NO revoke-on-cleanup:
   // React StrictMode (next dev) double-invokes effects, so the cleanup revoked
@@ -670,13 +677,16 @@ export default function EquipmentModule() {
   // Upload one File to the private bucket + record its row.
   const uploadFile = async (file: File, equipmentId: string, sortOrder: number) => {
     if (!business) return;
-    const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase();
+    // Same downscale as job photos (was uploading the raw multi-MB original).
+    const resized = await resizeToJpeg(file, JOB_PHOTO_MAX_EDGE, JOB_PHOTO_QUALITY);
+    const ext = resized ? 'jpg' : (file.name.split('.').pop() ?? 'jpg').toLowerCase();
     const filename = `${crypto.randomUUID()}.${ext}`;
     const path = equipmentPhotoPath(business.id, equipmentId, filename);
     const { error: upErr } = await supabase.storage
       .from(EQUIPMENT_BUCKET)
-      .upload(path, file, { upsert: false, contentType: file.type || `image/${ext}` });
+      .upload(path, resized ?? file, { upsert: false, contentType: resized ? 'image/jpeg' : file.type || `image/${ext}` });
     if (upErr) throw upErr;
+    await uploadThumb(supabase, EQUIPMENT_BUCKET, path, resized ?? file);
     const { error: insErr } = await supabase.from('equipment_photos').insert({
       business_id: business.id,
       equipment_id: equipmentId,
@@ -738,7 +748,7 @@ export default function EquipmentModule() {
     // Delete the DB row first; the RLS policy gates writes. Best-effort
     // storage cleanup follows.
     await supabase.from('equipment_photos').delete().eq('id', photo.id);
-    await supabase.storage.from(EQUIPMENT_BUCKET).remove([photo.storage_path]);
+    await supabase.storage.from(EQUIPMENT_BUCKET).remove([photo.storage_path, thumbPath(photo.storage_path)]);
     if (selected) await loadPhotosFor(selected.id);
     if (selected) await refreshCover(selected.id);
   };
@@ -909,9 +919,11 @@ export default function EquipmentModule() {
                    height — keeps every card's photo identical in size. */}
                 <div className="relative w-full aspect-video bg-surface overflow-hidden">
                   {cover ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={photoUrls[cover.storage_path] ?? undefined}
+                    <SkeletonImg
+                      src={thumbUrl(photoUrls, cover.storage_path)}
+                      fallbackSrc={photoUrls[cover.storage_path]}
+
+                      onFallback={() => healThumb(supabase, EQUIPMENT_BUCKET, cover.storage_path, photoUrls[cover.storage_path])}
                       alt={e.name}
                       className="absolute inset-0 w-full h-full object-cover"
                     />
@@ -1133,9 +1145,11 @@ export default function EquipmentModule() {
                         ))
                       : photos.map(p => (
                           <div key={p.id} className="relative aspect-square rounded-lg overflow-hidden bg-border-soft group">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={photoUrls[p.storage_path] ?? undefined}
+                            <SkeletonImg
+                              src={thumbUrl(photoUrls, p.storage_path)}
+                              fallbackSrc={photoUrls[p.storage_path]}
+
+                              onFallback={() => healThumb(supabase, EQUIPMENT_BUCKET, p.storage_path, photoUrls[p.storage_path])}
                               alt=""
                               className="w-full h-full object-cover"
                             />
@@ -1216,9 +1230,11 @@ export default function EquipmentModule() {
                         <Star size={9} fill="currentColor" /> {t.coverBadge}
                       </span>
                     ) : null}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={photoUrls[p.storage_path] ?? undefined}
+                    <SkeletonImg
+                      src={thumbUrl(photoUrls, p.storage_path)}
+                      fallbackSrc={photoUrls[p.storage_path]}
+
+                      onFallback={() => healThumb(supabase, EQUIPMENT_BUCKET, p.storage_path, photoUrls[p.storage_path])}
                       alt=""
                       className="w-full h-full object-cover"
                       style={{ transform: `rotate(${(p.rotation ?? 0) % 360}deg)` }}
@@ -1392,6 +1408,9 @@ export default function EquipmentModule() {
               </div>
             ) : <div />}
           </div>
+
+          {/* Zoom buttons for mice without pinch (wheel/double-click still work). */}
+          <ZoomControls zoom={zoom} onChange={z => { setZoom(z); if (z === 1) setPan({ x: 0, y: 0 }); }} />
 
           {(viewerIndex ?? 0) > 0 ? (
             <button

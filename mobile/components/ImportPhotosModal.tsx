@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { uploadGalleryPhoto } from '@/lib/photoThumbs';
 import { logImportRun } from '@amixos/shared/lib/importRunners';
 import { useElapsedTimer } from '@amixos/shared/lib/useElapsedTimer';
 import { View, Text, Pressable, Modal as RNModal, ScrollView } from 'react-native';
@@ -194,13 +195,8 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
       try {
         // Picker already recompressed to quality 0.6 (same as the job photo
         // flow) — read the file and push it up.
-        const res = await fetch(p.uri);
-        const blob = await res.blob();
-        const arrayBuffer = await new Response(blob).arrayBuffer();
         const path = jobPhotoPath(businessId, m.jobId, jobPhotoFilename('jpg'));
-        const { error: upErr } = await supabase.storage
-          .from(JOB_PHOTOS_BUCKET)
-          .upload(path, arrayBuffer, { upsert: false, contentType: 'image/jpeg' });
+        const { error: upErr } = await uploadGalleryPhoto(supabase, JOB_PHOTOS_BUCKET, path, p.uri);
         if (upErr) throw upErr;
         const { error: insErr } = await supabase.from('job_photos').insert({
           business_id: businessId,

@@ -8,6 +8,9 @@
 // as in-modal overlays, never a nested RNModal). Ledger math lives in
 // shared/lib/rentals.ts.
 
+import { uploadGalleryPhoto } from '@/lib/photoThumbs';
+import { thumbPath, thumbUrl, withThumbPaths } from '@amixos/shared/lib/photoThumbs';
+import { SkeletonImage } from '@/components/SkeletonImage';
 import { useRefreshOnRefocus } from '@/lib/useRefreshOnRefocus';
 import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -549,6 +552,11 @@ export default function RentalsScreen() {
     return !r.canceled && r.assets[0] ? r.assets[0].uri : null;
   };
 
+  /** Property gallery photo: downscaled + thumbnail (lib/photoThumbs). */
+  const uploadGallery = async (uri: string, path: string): Promise<boolean> => {
+    try { return !(await uploadGalleryPhoto(supabase, RENTALS_BUCKET, path, uri)).error; } catch { return false; }
+  };
+
   const uploadImage = async (uri: string, path: string): Promise<boolean> => {
     try {
       const blob = await fetch(uri).then(r => r.blob());
@@ -635,7 +643,7 @@ export default function RentalsScreen() {
       let photoFailed = false;
       for (const uri of pendingPhotoUris) {
         const path = rentalPropertyPhotoPath(business.id, created.id, rentalUid());
-        if (await uploadImage(uri, path)) {
+        if (await uploadGallery(uri, path)) {
           const { error: insErr } = await supabase.from('rental_property_photos').insert({
             business_id: business.id, property_id: created.id, storage_path: path,
             created_by: user?.id ?? null,
@@ -674,7 +682,7 @@ export default function RentalsScreen() {
     const { error } = await supabase.from('rental_properties').delete().eq('id', p.id);
     if (error) return;
     removeStorage([
-      ...(((ph as { data: { storage_path: string }[] | null }).data) ?? []).map(r => r.storage_path),
+      ...(((ph as { data: { storage_path: string }[] | null }).data) ?? []).flatMap(r => [r.storage_path, thumbPath(r.storage_path)]),
       ...(((docs as { data: { storage_path: string }[] | null }).data) ?? []).map(r => r.storage_path),
       ...(((pays as { data: { photo_path: string | null }[] | null }).data) ?? []).map(r => r.photo_path),
       ...(((exps as { data: { receipt_path: string | null }[] | null }).data) ?? []).map(r => r.receipt_path),
@@ -1220,7 +1228,7 @@ export default function RentalsScreen() {
     if (!uri) return;
     setUploadingPhoto(true);
     const path = rentalPropertyPhotoPath(business.id, detail.id, rentalUid());
-    if (await uploadImage(uri, path)) {
+    if (await uploadGallery(uri, path)) {
       const [catLease, catPhase] = photoCat ? photoCat.split('|') : [null, null];
       await supabase.from('rental_property_photos').insert({
         business_id: business.id, property_id: detail.id, storage_path: path,
@@ -1419,7 +1427,7 @@ export default function RentalsScreen() {
     if (!(await confirm({ message: t.photos.deleteConfirm, destructive: true }))) return;
     setPhotoViewer(null);
     await supabase.from('rental_property_photos').delete().eq('id', p.id);
-    removeStorage([p.storage_path]);
+    removeStorage([p.storage_path, thumbPath(p.storage_path)]);
     await reloadDetail(detail.id);
     setCoverPhotos({});
     void loadCovers([detail.id]);
@@ -1582,10 +1590,10 @@ export default function RentalsScreen() {
     photoViewerListRef.current?.scrollToIndex({ index: next, animated: true });
   };
 
-  const detailPhotoUrls = useSignedUrls(supabase, [
+  const detailPhotoUrls = useSignedUrls(supabase, withThumbPaths([
     ...Object.values(coverPhotos).map(p => p.storage_path),
     ...propPhotos.map(p => p.storage_path),
-  ]);
+  ]));
 
   // ── Small UI helpers ────────────────────────────────────────────────────────
   const statusChip = (status: ChargeStatus, daysLate: number) => {
@@ -2174,7 +2182,7 @@ export default function RentalsScreen() {
                 const tile = (p: RentalPropertyPhoto, i: number) => (
                   <Pressable key={p.id} onPress={() => setPhotoViewer(i)}
                     className="rounded-xl overflow-hidden border border-border-soft" style={{ width: tileW, height: tileH }}>
-                    <Image source={{ uri: detailPhotoUrls[p.storage_path] }}
+                    <SkeletonImage source={{ uri: thumbUrl(detailPhotoUrls, p.storage_path) }} fallbackUri={detailPhotoUrls[p.storage_path]}
                       style={{ width: '100%', height: '100%', transform: [{ rotate: `${p.rotation ?? 0}deg` }] }} resizeMode="cover" />
                     {p.is_cover ? (
                       <View className="absolute top-1.5 left-1.5 flex-row items-center gap-1 px-2 py-0.5 rounded-full bg-black/55">
@@ -2790,7 +2798,7 @@ export default function RentalsScreen() {
                   <Pressable onPress={() => openDetail(p)}
                     className="bg-card rounded-2xl border border-border-soft overflow-hidden active:bg-surface">
                     {cover ? (
-                      <Image source={{ uri: detailPhotoUrls[cover.storage_path] }} style={{ width: '100%', height: 150 }} resizeMode="cover" />
+                      <SkeletonImage source={{ uri: thumbUrl(detailPhotoUrls, cover.storage_path) }} fallbackUri={detailPhotoUrls[cover.storage_path]} style={{ width: '100%', height: 150 }} resizeMode="cover" />
                     ) : (
                       <View style={{ height: 150 }} className="bg-surface items-center justify-center">
                         <Home size={38} color={c.faint} />

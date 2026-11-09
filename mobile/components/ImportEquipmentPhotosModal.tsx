@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { uploadGalleryPhoto } from '@/lib/photoThumbs';
 import { View, Text, Pressable, Modal as RNModal, ScrollView } from 'react-native';
 import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import * as ImagePicker from 'expo-image-picker';
@@ -128,14 +129,11 @@ export function ImportEquipmentPhotosModal({ open, businessId, onClose }: Props)
       const current = counts.get(m.jobId) ?? 0;
       if (current >= MAX_PHOTOS_PER_EQUIPMENT) { next[idx] = { ...p, status: 'limit' }; skippedByLimit++; setProgress({ done: ++done, total: queue.length }); continue; }
       try {
-        const resp = await fetch(p.uri);
-        const blob = await resp.blob();
-        const arrayBuffer = await new Response(blob).arrayBuffer();
-        const ext = (p.name.split('.').pop() || 'jpg').toLowerCase();
+        const ext = 'jpg'; // uploadGalleryPhoto re-encodes to JPEG
         // RN-safe uid (crypto.randomUUID isn't guaranteed on device).
         const uid = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
         const path = equipmentPhotoPath(businessId, m.jobId, `${uid}.${ext}`);
-        const { error: upErr } = await supabase.storage.from(EQUIPMENT_BUCKET).upload(path, arrayBuffer, { upsert: false, contentType: 'image/jpeg' });
+        const { error: upErr } = await uploadGalleryPhoto(supabase, EQUIPMENT_BUCKET, path, p.uri);
         if (upErr) throw upErr;
         const { error: insErr } = await supabase.from('equipment_photos').insert({ business_id: businessId, equipment_id: m.jobId, storage_path: path, sort_order: current, created_by: user?.id ?? null, source_name: p.name || null });
         if (insErr) throw insErr;
