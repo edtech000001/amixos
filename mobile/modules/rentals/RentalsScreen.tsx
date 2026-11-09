@@ -8,6 +8,7 @@
 // as in-modal overlays, never a nested RNModal). Ledger math lives in
 // shared/lib/rentals.ts.
 
+import { ViewerPhoto } from '@/components/ViewerPhoto';
 import { uploadGalleryPhoto } from '@/lib/photoThumbs';
 import { thumbPath, thumbUrl, withThumbPaths } from '@amixos/shared/lib/photoThumbs';
 import { SkeletonImage } from '@/components/SkeletonImage';
@@ -2310,10 +2311,9 @@ export default function RentalsScreen() {
                           showsHorizontalScrollIndicator={false}
                           showsVerticalScrollIndicator={false}
                         >
-                          <Image
-                            source={{ uri: detailPhotoUrls[item.storage_path] }}
+                          <ViewerPhoto
+                            uri={detailPhotoUrls[item.storage_path]}
                             style={{ width: swap ? availH : screenW, height: swap ? screenW : availH, transform: [{ rotate: `${r}deg` }] }}
-                            resizeMode="contain"
                           />
                         </ScrollView>
                       );

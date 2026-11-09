@@ -3,6 +3,7 @@
 // add/edit/delete, attach photos (camera or library), and assign to
 // an active employee.
 
+import { ViewerPhoto } from '@/components/ViewerPhoto';
 import { thumbPath, thumbUrl, withThumbPaths } from '@amixos/shared/lib/photoThumbs';
 import { SkeletonImage } from '@/components/SkeletonImage';
 import { useRefreshOnRefocus } from '@/lib/useRefreshOnRefocus';
@@ -1017,14 +1018,13 @@ export default function EquipmentScreen() {
         showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
       >
-        <Image
-          source={{ uri: photoUrls[item.storage_path] }}
+        <ViewerPhoto
+          uri={photoUrls[item.storage_path]}
           style={{
             width: swap ? viewerAvailH : screenW,
             height: swap ? screenW : viewerAvailH,
             transform: [{ rotate: `${r}deg` }],
           }}
-          resizeMode="contain"
         />
       </ScrollView>
     );

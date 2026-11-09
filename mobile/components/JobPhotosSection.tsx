@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ViewerPhoto } from '@/components/ViewerPhoto';
 import { thumbUrl, withThumbPaths } from '@amixos/shared/lib/photoThumbs';
 import { SkeletonImage } from '@/components/SkeletonImage';
 import {
@@ -292,14 +293,13 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
         showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
       >
-        <Image
-          source={{ uri: photoUrls[item.storage_path] }}
+        <ViewerPhoto
+          uri={photoUrls[item.storage_path]}
           style={{
             width: swap ? availH : screenW,
             height: swap ? screenW : availH,
             transform: [{ rotate: `${r}deg` }],
           }}
-          resizeMode="contain"
         />
       </ScrollView>
     );
