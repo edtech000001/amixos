@@ -1730,9 +1730,7 @@ export function PropertyDetail({
             src={photoUrls[viewerPhoto.storage_path] ?? undefined}
             alt=""
             draggable={false}
-            // Selectable at fit size so Safari's Live Text can pick up text in
-            // the photo; zoomed in, a drag pans instead.
-            className={`object-contain ${pvZoom > 1 ? 'select-none' : ''}`}
+            className="object-contain select-none"
             style={{
               transform: `translate(${pvPan.x}px, ${pvPan.y}px) scale(${pvZoom}) rotate(${viewerRot}deg)`,
               maxWidth: viewerSwap ? '90vh' : '92vw',

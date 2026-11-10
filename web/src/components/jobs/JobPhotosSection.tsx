@@ -355,9 +355,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
             src={photoUrls[viewerPhoto.storage_path] ?? undefined}
             alt=""
             draggable={false}
-            // Selectable at fit size so Safari's Live Text can pick up text in
-            // the photo; zoomed in, a drag pans instead.
-            className={`object-contain ${zoom > 1 ? 'select-none' : ''}`}
+            className="object-contain select-none"
             // When rotated 90/270 swap the max constraints so the rotated
             // image still fits the viewport instead of overflowing. Zoom/pan
             // layer on top of the rotation via scale + translate.
