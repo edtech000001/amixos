@@ -1116,6 +1116,7 @@ export default function EquipmentScreen() {
       >
         <ViewerPhoto
           uri={photoUrls[item.storage_path]}
+          thumbUri={thumbUrl(photoUrls, item.storage_path)}
           style={{
             width: swap ? viewerAvailH : screenW,
             height: swap ? screenW : viewerAvailH,

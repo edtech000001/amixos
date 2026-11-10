@@ -295,6 +295,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
       >
         <ViewerPhoto
           uri={photoUrls[item.storage_path]}
+          thumbUri={thumbUrl(photoUrls, item.storage_path)}
           style={{
             width: swap ? availH : screenW,
             height: swap ? screenW : availH,

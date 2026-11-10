@@ -392,21 +392,24 @@ export function PropertyDetail({
   const [docLeaseId, setDocLeaseId] = useState<string | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
 
+  // One or several at once; size cap + per-lease limit checked per file.
   const onDocChosen = async (ev: React.ChangeEvent<HTMLInputElement>) => {
-    const file = ev.target.files?.[0];
+    const files = Array.from(ev.target.files ?? []);
     ev.target.value = '';
-    if (!file || !business || !docLeaseId) return;
-    if (file.size > LEASE_DOC_MAX_BYTES) { window.alert(t.leases.docs.tooLarge); return; }
-    if ((docsByLease[docLeaseId] ?? []).length >= MAX_DOCS_PER_LEASE) {
-      window.alert(t.leases.docs.limitHit.replace('{{max}}', String(MAX_DOCS_PER_LEASE)));
-      return;
-    }
+    if (!files.length || !business || !docLeaseId) return;
+    const problems = new Set<string>(); // one message per kind, at the end
+    let count = (docsByLease[docLeaseId] ?? []).length;
     setUploadingDoc(true);
-    try {
+    for (const file of files) {
+      if (count >= MAX_DOCS_PER_LEASE) {
+        problems.add(t.leases.docs.limitHit.replace('{{max}}', String(MAX_DOCS_PER_LEASE)));
+        break;
+      }
+      if (file.size > LEASE_DOC_MAX_BYTES) { problems.add(t.leases.docs.tooLarge); continue; }
       const path = rentalLeaseDocPath(business.id, docLeaseId, rentalUid(), file.name);
       const { error: upErr } = await supabase.storage.from(RENTALS_BUCKET)
         .upload(path, file, { upsert: false, contentType: file.type || undefined });
-      if (upErr) throw upErr;
+      if (upErr) { problems.add(t.saveError); continue; }
       const { error: insErr } = await supabase.from('rental_lease_documents').insert({
         business_id: business.id,
         lease_id: docLeaseId,
@@ -416,10 +419,16 @@ export function PropertyDetail({
         mime_type: file.type || null,
         created_by: user?.id ?? null,
       });
-      if (insErr) throw insErr;
-      await reload();
-    } catch { /* surfaced by missing row */ }
+      if (insErr) {
+        void supabase.storage.from(RENTALS_BUCKET).remove([path]).then(() => {}, () => {});
+        problems.add(t.saveError);
+        continue;
+      }
+      count += 1;
+    }
+    await reload();
     setUploadingDoc(false);
+    if (problems.size) window.alert(Array.from(problems).join('\n\n'));
   };
 
   const openDoc = async (d: RentalLeaseDocument) => {
@@ -1742,7 +1751,7 @@ export function PropertyDetail({
       ) : null}
 
       {/* Hidden file inputs */}
-      <input ref={docInputRef} type="file" className="hidden" onChange={onDocChosen} />
+      <input ref={docInputRef} type="file" multiple className="hidden" onChange={onDocChosen} />
       <input ref={photoInputRef} type="file" accept="image/*" multiple className="hidden" onChange={onPhotosChosen} />
       <input ref={payPhotoInputRef} type="file" accept="image/*" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) { setPayPhotoFile(f); setPayPhotoRemoved(false); } }} />

@@ -1615,7 +1615,17 @@ export default function FacturaDetailRoute() {
               </Pressable>
             </View>
 
-            <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 4 }} keyboardShouldPersistTaps="handled">
+            {/* Scrolls ONLY when the form is taller than the screen (small
+               phones / keyboard up): no bounce when it fits, and no automatic
+               iOS inset, which pushed the form down and cut off the bottom. */}
+            <ScrollView
+              style={{ flexGrow: 0 }}
+              contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 4 }}
+              keyboardShouldPersistTaps="handled"
+              alwaysBounceVertical={false}
+              contentInsetAdjustmentBehavior="never"
+              automaticallyAdjustContentInsets={false}
+            >
             {(() => {
               // Balance still owed excluding the payment being edited — drives
               // the context line, the "Full amount" chip and the paid-in-full

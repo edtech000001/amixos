@@ -889,28 +889,42 @@ export default function RentalsScreen() {
       Alert.alert('', t.leases.docs.limitHit.replace('{{max}}', String(MAX_DOCS_PER_LEASE)));
       return;
     }
-    const res = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
-    if (res.canceled) return;
-    const f = res.assets[0];
-    if (f.size != null && f.size > LEASE_DOC_MAX_BYTES) { Alert.alert('', t.leases.docs.tooLarge); return; }
+    // One or several at once; size cap + per-lease limit checked per file.
+    const res = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: true });
+    if (res.canceled || !res.assets?.length) return;
+    const problems = new Set<string>(); // one message per kind, at the end
+    let count = (docsByLease[leaseId] ?? []).length;
     setUploadingDocLease(leaseId);
     try {
-      const path = rentalLeaseDocPath(business.id, leaseId, rentalUid(), f.name);
-      const blob = await fetch(f.uri).then(r => r.blob());
-      const arrayBuffer = await new Response(blob).arrayBuffer();
-      const { error: upErr } = await supabase.storage.from(RENTALS_BUCKET)
-        .upload(path, arrayBuffer, { contentType: f.mimeType ?? undefined, upsert: false });
-      if (upErr) { Alert.alert('', t.saveError); return; }
-      const { error: insErr } = await supabase.from('rental_lease_documents').insert({
-        business_id: business.id, lease_id: leaseId, storage_path: path,
-        file_name: f.name, file_size: f.size ?? null, mime_type: f.mimeType ?? null,
-        created_by: user?.id ?? null,
-      });
-      if (insErr) { Alert.alert('', t.saveError); return; }
+      for (const f of res.assets) {
+        if (count >= MAX_DOCS_PER_LEASE) {
+          problems.add(t.leases.docs.limitHit.replace('{{max}}', String(MAX_DOCS_PER_LEASE)));
+          break;
+        }
+        if (f.size != null && f.size > LEASE_DOC_MAX_BYTES) { problems.add(t.leases.docs.tooLarge); continue; }
+        try {
+          const path = rentalLeaseDocPath(business.id, leaseId, rentalUid(), f.name);
+          const blob = await fetch(f.uri).then(r => r.blob());
+          const arrayBuffer = await new Response(blob).arrayBuffer();
+          const { error: upErr } = await supabase.storage.from(RENTALS_BUCKET)
+            .upload(path, arrayBuffer, { contentType: f.mimeType ?? undefined, upsert: false });
+          if (upErr) { problems.add(t.saveError); continue; }
+          const { error: insErr } = await supabase.from('rental_lease_documents').insert({
+            business_id: business.id, lease_id: leaseId, storage_path: path,
+            file_name: f.name, file_size: f.size ?? null, mime_type: f.mimeType ?? null,
+            created_by: user?.id ?? null,
+          });
+          if (insErr) { removeStorage([path]); problems.add(t.saveError); continue; }
+          count += 1;
+        } catch {
+          problems.add(t.saveError);
+        }
+      }
       await reloadDetail(detail.id);
     } finally {
       setUploadingDocLease(null);
     }
+    if (problems.size) Alert.alert('', [...problems].join('\n\n'));
   };
 
   const openLeaseDoc = async (d: RentalLeaseDocument) => {
@@ -2313,6 +2327,7 @@ export default function RentalsScreen() {
                         >
                           <ViewerPhoto
                             uri={detailPhotoUrls[item.storage_path]}
+          thumbUri={thumbUrl(detailPhotoUrls, item.storage_path)}
                             style={{ width: swap ? availH : screenW, height: swap ? screenW : availH, transform: [{ rotate: `${r}deg` }] }}
                           />
                         </ScrollView>

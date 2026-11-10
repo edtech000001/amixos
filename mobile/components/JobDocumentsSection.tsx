@@ -51,57 +51,68 @@ export function JobDocumentsSection({ jobId, businessId, canWrite }: {
     current_period_end: business.current_period_end,
   } : null;
 
+  // Pick one or several documents at once (same rules as web, per file:
+  // size cap, photo check, plan storage, the per-job limit).
   const pickAndUpload = async () => {
     if (uploading) return;
     if (docs.length >= MAX_DOCS_PER_JOB) {
       Alert.alert('', td.docLimitReached.replace('{{max}}', String(MAX_DOCS_PER_JOB)));
       return;
     }
-    const res = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
-    if (res.canceled) return;
-    const f = res.assets[0];
-    if (f.size != null && f.size > JOB_DOC_MAX_BYTES) {
-      Alert.alert('', td.docTooBig);
-      return;
-    }
-    // Photos belong in the Photos section — catch the accidental pick, but
-    // let deliberate image documents (scanned contracts) through.
-    if (f.mimeType?.startsWith('image/')) {
-      const proceed = await new Promise<boolean>(resolve => {
-        Alert.alert('', td.docImageWarn, [
-          { text: full.common.buttons.cancel, style: 'cancel', onPress: () => resolve(false) },
-          { text: td.docImageAttachAnyway, onPress: () => resolve(true) },
-        ]);
-      });
-      if (!proceed) return;
-    }
+    const res = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: true });
+    if (res.canceled || !res.assets?.length) return;
+    // One message per kind of problem at the end, not an alert per file.
+    const problems = new Set<string>();
     setUploading(true);
     try {
-      // Plan storage quota — refetch usage fresh so the check is accurate.
-      if (subInfo) {
-        const { data: used } = await supabase.rpc('business_storage_bytes', { p_business_id: businessId });
-        if (wouldExceedStorage(subInfo, Number(used ?? 0), f.size ?? 0)) {
-          Alert.alert('', td.docStorageFull);
-          return;
+      let count = docs.length;
+      for (const f of res.assets) {
+        if (count >= MAX_DOCS_PER_JOB) {
+          problems.add(td.docLimitReached.replace('{{max}}', String(MAX_DOCS_PER_JOB)));
+          break;
+        }
+        if (f.size != null && f.size > JOB_DOC_MAX_BYTES) { problems.add(td.docTooBig); continue; }
+        // Photos belong in the Photos section — catch the accidental pick, but
+        // let deliberate image documents (scanned contracts) through.
+        if (f.mimeType?.startsWith('image/')) {
+          const proceed = await new Promise<boolean>(resolve => {
+            Alert.alert(f.name, td.docImageWarn, [
+              { text: full.common.buttons.cancel, style: 'cancel', onPress: () => resolve(false) },
+              { text: td.docImageAttachAnyway, onPress: () => resolve(true) },
+            ]);
+          });
+          if (!proceed) continue;
+        }
+        // Plan storage quota — refetch usage fresh so the check is accurate.
+        if (subInfo) {
+          const { data: used } = await supabase.rpc('business_storage_bytes', { p_business_id: businessId });
+          if (wouldExceedStorage(subInfo, Number(used ?? 0), f.size ?? 0)) {
+            problems.add(td.docStorageFull);
+            break;
+          }
+        }
+        try {
+          const path = jobDocPath(businessId, jobId, jobDocUid(), f.name);
+          const blob = await fetch(f.uri).then(r => r.blob());
+          const arrayBuffer = await new Response(blob).arrayBuffer();
+          const { error: upErr } = await supabase.storage.from(JOB_DOCS_BUCKET)
+            .upload(path, arrayBuffer, { contentType: f.mimeType ?? undefined, upsert: false });
+          if (upErr) { problems.add(td.docUploadError); continue; }
+          const { data: row, error: insErr } = await supabase.from('job_documents').insert({
+            business_id: businessId, job_id: jobId, storage_path: path,
+            file_name: f.name, file_size: f.size ?? null, mime_type: f.mimeType ?? null,
+          }).select().single();
+          if (insErr || !row) { problems.add(td.docUploadError); continue; }
+          setDocs(prev => [...prev, row as JobDocument]);
+          count += 1;
+        } catch {
+          problems.add(td.docUploadError);
         }
       }
-      const path = jobDocPath(businessId, jobId, jobDocUid(), f.name);
-      const blob = await fetch(f.uri).then(r => r.blob());
-      const arrayBuffer = await new Response(blob).arrayBuffer();
-      const { error: upErr } = await supabase.storage.from(JOB_DOCS_BUCKET)
-        .upload(path, arrayBuffer, { contentType: f.mimeType ?? undefined, upsert: false });
-      if (upErr) { Alert.alert('', td.docUploadError); return; }
-      const { data: row, error: insErr } = await supabase.from('job_documents').insert({
-        business_id: businessId, job_id: jobId, storage_path: path,
-        file_name: f.name, file_size: f.size ?? null, mime_type: f.mimeType ?? null,
-      }).select().single();
-      if (insErr || !row) { Alert.alert('', td.docUploadError); return; }
-      setDocs(prev => [...prev, row as JobDocument]);
-    } catch {
-      Alert.alert('', td.docUploadError);
     } finally {
       setUploading(false);
     }
+    if (problems.size) Alert.alert('', [...problems].join('\n\n'));
   };
 
   const openDoc = async (doc: JobDocument) => {
