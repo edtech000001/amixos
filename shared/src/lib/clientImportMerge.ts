@@ -19,6 +19,9 @@ export type DuplicateStrategy =
    *  its contact list with the file's. */
   | 'replace';
 
+/** Answer to a duplicate prompt: a strategy, or import those rows as new clients anyway. */
+export type PossibleDuplicateChoice = DuplicateStrategy | 'new';
+
 export interface ExistingClientLite {
   id: string;
   first_name: string;
@@ -48,34 +51,48 @@ export function normalizeKey(s: string | null | undefined): string {
 }
 
 /**
- * Name → id and company → id, matching createClientResolver in importRunners so
- * the two importers agree on what "already exists" means. A collision keeps the
- * FIRST id: with two clients of the same name there is no right answer, and
- * picking deterministically beats picking arbitrarily.
+ * Lookup for "does this client already exist". A sure match needs BOTH the
+ * person's name and the company to match: same name at a different company is
+ * a different client, and so is a different person at the same company.
+ * Company-only clients key on an empty name. A collision keeps the FIRST id.
  */
-export function buildClientIndex(clients: ExistingClientLite[]): Map<string, string> {
-  const index = new Map<string, string>();
+export interface ClientIndex {
+  exact: Map<string, string>;
+  byName: Map<string, string>;
+  byCompany: Map<string, string>;
+}
+
+export function buildClientIndex(clients: ExistingClientLite[]): ClientIndex {
+  const index: ClientIndex = { exact: new Map(), byName: new Map(), byCompany: new Map() };
+  const put = (m: Map<string, string>, k: string, id: string) => { if (k && !m.has(k)) m.set(k, id); };
   for (const c of clients) {
     const name = normalizeKey(`${c.first_name} ${c.last_name ?? ''}`);
-    if (name && !index.has(name)) index.set(name, c.id);
-    const company = normalizeKey(c.company);
-    if (company && !index.has(company)) index.set(company, c.id);
+    const co = normalizeKey(c.company);
+    if (name || co) put(index.exact, `${name}|${co}`, c.id);
+    put(index.byName, name, c.id);
+    put(index.byCompany, co, c.id);
   }
   return index;
 }
 
-/** The existing client this row refers to, or null when it is new. Name wins
- *  over company: two people at one company must not collapse into one client. */
+/**
+ * The existing client this row refers to, or null when it is new.
+ * `possible` = the FILE is missing the name or the company, so only half could
+ * be compared (name matches but the file has no company, or the reverse). The
+ * user decides whether those are the same client or a new one.
+ */
 export function matchExistingClient(
-  index: Map<string, string>,
+  index: ClientIndex,
   fullName: string | null | undefined,
   company: string | null | undefined,
-): string | null {
-  const byName = normalizeKey(fullName);
-  if (byName && index.has(byName)) return index.get(byName)!;
-  const byCompany = normalizeKey(company);
-  if (byCompany && index.has(byCompany)) return index.get(byCompany)!;
-  return null;
+): { id: string; possible: boolean } | null {
+  const name = normalizeKey(fullName);
+  const co = normalizeKey(company);
+  if (!name && !co) return null;
+  const exact = index.exact.get(`${name}|${co}`);
+  if (exact) return { id: exact, possible: false };
+  const half = name && !co ? index.byName.get(name) : !name && co ? index.byCompany.get(co) : undefined;
+  return half ? { id: half, possible: true } : null;
 }
 
 /** Treat '', null, undefined and whitespace as "not recorded". 0 and false are
@@ -85,15 +102,25 @@ function isBlank(v: unknown): boolean {
 }
 
 /**
+ * Client columns an import can fill. 'replace' clears whichever of these the
+ * file leaves blank or doesn't have (value = what "cleared" is for that
+ * column). first_name and the timestamps are never cleared.
+ */
+const REPLACE_CLEARS: Record<string, unknown> = {
+  last_name: '', company: null,
+  phone_cell: null, phone_office: null, email_office: null, email_home: null,
+  address: null, city: null, state: null, zip_code: null, notes: null,
+  custom_fields: {},
+};
+
+/**
  * Fields to write for an existing client.
  *
  * merge   → only where the existing value is blank. Never destroys data the
  *           user has in the app: a stale CSV cannot overwrite a corrected
  *           phone number.
- * replace → every field the file actually provides. Blank cells are still
- *           skipped, so an empty column does not wipe a populated field —
- *           "replace" means "the file wins where it says something", not
- *           "erase everything the file is silent about".
+ * replace → the file is the master copy: every field it provides is written,
+ *           and every importable field it is blank or silent about is cleared.
  */
 export function clientFieldPatch(
   existing: Record<string, unknown>,
@@ -106,6 +133,14 @@ export function clientFieldPatch(
     if (strategy === 'merge' && !isBlank(existing[key])) continue;
     if (existing[key] === value) continue; // no-op write
     patch[key] = value;
+  }
+  if (strategy === 'replace') {
+    for (const [key, cleared] of Object.entries(REPLACE_CLEARS)) {
+      if (!isBlank(incoming[key])) continue; // the file provides it
+      const had = existing[key];
+      if (isBlank(had) || (typeof had === 'object' && !Object.keys(had as object).length)) continue; // already empty
+      patch[key] = cleared;
+    }
   }
   return patch;
 }

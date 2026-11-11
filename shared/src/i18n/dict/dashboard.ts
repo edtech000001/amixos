@@ -567,6 +567,8 @@ export type DashboardDict = {
     dupMerge: string; dupMergeHint: string;
     dupReplace: string; dupReplaceHint: string;
     dupSkip: string; dupSkipHint: string;
+    dupMaybeTitle: string; dupMaybeBody: string;
+    dupNew: string; dupNewHint: string;
     importHint: string;
     searchPlaceholder: string;
     selectButton: string;
@@ -4111,9 +4113,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
       dupMerge: 'Completar lo que falta',
       dupMergeHint: 'Solo llena campos vacíos y agrega contactos nuevos. No cambia nada de lo que ya tienes.',
       dupReplace: 'Reemplazar con el archivo',
-      dupReplaceHint: 'El archivo gana. Reemplaza los datos y la lista de contactos.',
+      dupReplaceHint: 'El archivo manda. Reemplaza los datos y contactos, y borra lo que el archivo no tenga.',
       dupSkip: 'Dejarlos como están',
       dupSkipHint: 'Solo importa los clientes nuevos.',
+      dupMaybeTitle: 'Algunos clientes podrían ya existir',
+      dupMaybeBody: '{{count}} de {{total}} coinciden con un cliente existente, pero al archivo le falta el nombre o la empresa para confirmarlo. ¿Qué hacemos con esos?',
+      dupNew: 'Crear como clientes nuevos',
+      dupNewHint: 'Se agregan como clientes aparte. Útil para usar uno como plantilla y luego cambiarle el nombre.',
       importHint: 'Sube un archivo CSV o usa tus contactos del teléfono. Útil al migrar desde otra app.',
       searchPlaceholder: 'Buscar clientes...',
       selectButton: 'Seleccionar',
@@ -7615,9 +7621,13 @@ export const dashboard: Record<Locale, DashboardDict> = {
       dupMerge: 'Fill in what is missing',
       dupMergeHint: 'Only fills blank fields and adds new contacts. Nothing you already have is changed.',
       dupReplace: 'Replace with the file',
-      dupReplaceHint: 'The file wins. Overwrites the details and the contact list.',
+      dupReplaceHint: 'The file is the master. Overwrites details and contacts, and clears anything the file doesn\'t have.',
       dupSkip: 'Leave them alone',
       dupSkipHint: 'Import only the new clients.',
+      dupMaybeTitle: 'Some clients might already exist',
+      dupMaybeBody: '{{count}} of {{total}} match an existing client, but the file is missing the name or company to confirm it. What should happen to those?',
+      dupNew: 'Create as new clients',
+      dupNewHint: 'Adds them as separate clients. Handy for using one as a template and renaming it after.',
       importHint: 'Upload a CSV or pull from your phone contacts. Useful when migrating from another app.',
       searchPlaceholder: 'Search clients...',
       selectButton: 'Select',

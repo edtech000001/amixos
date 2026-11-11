@@ -21,7 +21,7 @@ import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { RecentImports } from './RecentImports';
 import {
   buildClientIndex, matchExistingClient, clientFieldPatch, mergeContacts,
-  type DuplicateStrategy, type ExistingClientLite, type ContactLite,
+  type DuplicateStrategy, type PossibleDuplicateChoice, type ExistingClientLite, type ContactLite,
 } from '@amixos/shared/lib/clientImportMerge';
 
 export interface ImportClientsModalProps {
@@ -126,20 +126,26 @@ export function ImportClientsModal({
   // Rows whose client already exists. The importer inserted unconditionally, so
   // re-importing a file silently created a second copy of every client and
   // contact. It now asks once, before writing anything. Mirrors web.
-  const [dupPrompt, setDupPrompt] = useState<{ count: number; total: number } | null>(null);
-  const dupChoice = useRef<((s: DuplicateStrategy | null) => void) | null>(null);
-  const askDuplicateStrategy = (count: number, total: number) =>
-    new Promise<DuplicateStrategy | null>(resolve => {
+  // `possible` = the file lacks the name or company, so the match is only a
+  // maybe (different wording). Both prompts offer "create as new" — e.g. using
+  // an existing client as a template for another location.
+  const [dupPrompt, setDupPrompt] = useState<{ count: number; total: number; possible: boolean } | null>(null);
+  const dupChoice = useRef<((s: PossibleDuplicateChoice | null) => void) | null>(null);
+  const askDuplicateStrategy = (count: number, total: number, possible: boolean) =>
+    new Promise<PossibleDuplicateChoice | null>(resolve => {
       dupChoice.current = resolve;
-      setDupPrompt({ count, total });
+      setDupPrompt({ count, total, possible });
     });
-  const answerDuplicates = (choice: DuplicateStrategy | null) => {
+  const answerDuplicates = (choice: PossibleDuplicateChoice | null) => {
     setDupPrompt(null);
     dupChoice.current?.(choice);
     dupChoice.current = null;
   };
 
   const reset = () => {
+    // Closing mid-prompt cancels the run (nothing written yet); otherwise the
+    // pending question reappears the next time the modal opens.
+    answerDuplicates(null);
     setStep('upload');
     setParsing(false);
     setImporting(false);
@@ -215,21 +221,28 @@ export function ImportClientsModal({
         .range(from, to),
     );
     const clientIndex = buildClientIndex(existingRows);
-    const withMatch = batch.map(b => ({
-      b,
-      existingId: matchExistingClient(
+    const withMatch = batch.map(b => {
+      const m = matchExistingClient(
         clientIndex,
         [b.entry.first_name, b.entry.last_name].filter(Boolean).join(' '),
         (b.entry.company as string | null) ?? null,
-      ),
-    }));
-    const dupes = withMatch.filter(x => x.existingId);
-    let strategy: DuplicateStrategy = 'skip';
-    if (dupes.length) {
-      const answer = await askDuplicateStrategy(dupes.length, batch.length);
+      );
+      return { b, existingId: m?.id ?? null, possible: !!m?.possible, strategy: 'skip' as DuplicateStrategy };
+    });
+    // Sure matches first, then the maybes (file missing name or company).
+    for (const possible of [false, true]) {
+      const group = withMatch.filter(x => x.existingId && x.possible === possible);
+      if (!group.length) continue;
+      const answer = await askDuplicateStrategy(group.length, batch.length, possible);
       if (answer === null) return { success: 0, insertedIds: [], failedRows: [], cancelled: true };
-      strategy = answer;
+      for (const x of group) {
+        if (answer === 'new') x.existingId = null;
+        else x.strategy = answer;
+      }
     }
+    const dupes = withMatch.filter(x => x.existingId);
+    const skippedExisting = dupes.filter(x => x.strategy === 'skip').length;
+    const toUpdate = dupes.filter(x => x.strategy !== 'skip');
     const toInsert = withMatch.filter(x => !x.existingId).map(x => x.b);
     // Branch links (matched branches only) written once all clients exist.
     const branchLinks: { business_id: string; client_id: string; location_id: string; is_primary: boolean }[] = [];
@@ -280,28 +293,28 @@ export function ImportClientsModal({
     }
     // Existing clients: apply the chosen strategy. 'skip' writes nothing, which
     // is why it is the safe default and what cancelling falls back to.
-    if (strategy !== 'skip') {
+    if (toUpdate.length) {
       // Re-read the duplicates in FULL. The match index only holds
       // id/first_name/last_name/company, and 'merge' means "fill blanks only" —
       // judged against a 4-column record, every phone, email and address looks
       // blank, so merge silently overwrote them exactly like replace. Reading
       // the whole row is what makes the two strategies actually differ.
-      const dupIds = dupes.map(d => d.existingId!);
+      const dupIds = toUpdate.map(d => d.existingId!);
       const fullExisting = new Map<string, Record<string, unknown>>();
       for (let i = 0; i < dupIds.length; i += 200) {
         const { data: rows } = await supabase
           .from('clients').select('*').in('id', dupIds.slice(i, i + 200));
         for (const r of (rows ?? []) as { id: string }[]) fullExisting.set(r.id, r as Record<string, unknown>);
       }
-      for (const { b, existingId } of dupes) {
+      for (const { b, existingId, strategy } of toUpdate) {
         const id = existingId!;
         const existing = fullExisting.get(id) ?? {};
-        const patch = clientFieldPatch(existing as Record<string, unknown>, b.entry, strategy);
+        const patch = clientFieldPatch(existing as Record<string, unknown>, b.entry, strategy as 'merge' | 'replace');
         if (Object.keys(patch).length) await supabase.from('clients').update(patch).eq('id', id);
         if (b.contacts?.length) {
           const { data: have } = await supabase
             .from('client_contacts').select('id, name, email').eq('client_id', id);
-          const plan = mergeContacts((have ?? []) as ContactLite[], b.contacts, strategy);
+          const plan = mergeContacts((have ?? []) as ContactLite[], b.contacts, strategy as 'merge' | 'replace');
           if (strategy === 'replace' && (have ?? []).length) {
             await supabase.from('client_contacts').delete().eq('client_id', id);
           }
@@ -322,7 +335,7 @@ export function ImportClientsModal({
     for (let i = 0; i < contactRows.length; i += 200) {
       await supabase.from('client_contacts').insert(contactRows.slice(i, i + 200));
     }
-    return { success, insertedIds, failedRows, merged: mergedCount, skippedExisting: strategy === 'skip' ? dupes.length : 0 };
+    return { success, insertedIds, failedRows, merged: mergedCount, skippedExisting };
   };
 
   // Build a sample CSV (headers + one example row) and share it via the
@@ -1146,12 +1159,13 @@ export function ImportClientsModal({
       {dupPrompt ? (
         <View>
           <View>
-            <Text className="text-base font-bold text-ink">{t.dupTitle}</Text>
+            <Text className="text-base font-bold text-ink">{dupPrompt.possible ? t.dupMaybeTitle : t.dupTitle}</Text>
             <Text className="text-sm text-muted mt-1">
-              {t.dupBody.replace('{{count}}', String(dupPrompt.count)).replace('{{total}}', String(dupPrompt.total))}
+              {(dupPrompt.possible ? t.dupMaybeBody : t.dupBody).replace('{{count}}', String(dupPrompt.count)).replace('{{total}}', String(dupPrompt.total))}
             </Text>
             <View className="gap-2 mt-4">
               {([
+                ['new', t.dupNew, t.dupNewHint],
                 ['merge', t.dupMerge, t.dupMergeHint],
                 ['replace', t.dupReplace, t.dupReplaceHint],
                 ['skip', t.dupSkip, t.dupSkipHint],
