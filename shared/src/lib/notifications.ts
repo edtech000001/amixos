@@ -4,6 +4,7 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { useSwr } from './swrCache';
+import { can, type Role } from './permissions';
 
 type SupabaseLike = any;
 
@@ -14,9 +15,22 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = ['jobs', 'invoice
  *  module is on (the server only sends them then, too — migration 276). */
 const MODULE_CATEGORIES: Partial<Record<NotificationCategory, string>> = { inventory: 'inventory', equipment: 'equipment' };
 
-/** The preference switches to show, given the business's enabled module ids. */
-export function visibleNotificationCategories(enabledModuleIds: string[]): NotificationCategory[] {
-  return NOTIFICATION_CATEGORIES.filter(c => !MODULE_CATEGORIES[c] || enabledModuleIds.includes(MODULE_CATEGORIES[c]!));
+/** Who the server sends each category to (migrations 269/271/276), so a
+ *  role never sees a switch for alerts it can't receive. Jobs and team
+ *  (missed clock-out) reach everyone. */
+const CATEGORY_ROLE_CHECK: Partial<Record<NotificationCategory, (role: Role | null) => boolean>> = {
+  invoices: role => role === 'owner' || can.seeInvoices(role),
+  inventory: role => role === 'owner' || can.editInventory(role),
+  equipment: role => role === 'owner' || role === 'admin',
+  account: role => role === 'owner',
+};
+
+/** The preference switches to show, given the business's enabled module ids
+ *  and the member's role. */
+export function visibleNotificationCategories(enabledModuleIds: string[], role: Role | null): NotificationCategory[] {
+  return NOTIFICATION_CATEGORIES.filter(c =>
+    (!MODULE_CATEGORIES[c] || enabledModuleIds.includes(MODULE_CATEGORIES[c]!))
+    && (CATEGORY_ROLE_CHECK[c]?.(role) ?? true));
 }
 
 export interface NotificationRow {

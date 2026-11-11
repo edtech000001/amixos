@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { clearImageCache } from '@/lib/cachedImage';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState } from 'react-native';
@@ -382,6 +383,7 @@ export const useAuthStore = create<AuthStore>()(
 
       logout: async () => {
         await unregisterPush(supabase);
+        void clearImageCache();
         await supabase.auth.signOut();
         // SIGNED_OUT event will clear user/business and set status: 'logged_out'.
       },

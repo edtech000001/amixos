@@ -9,7 +9,7 @@
 // shared/lib/rentals.ts.
 
 import { ViewerPhoto } from '@/components/ViewerPhoto';
-import { uploadGalleryPhoto } from '@/lib/photoThumbs';
+import { healThumb, uploadGalleryPhoto } from '@/lib/photoThumbs';
 import { thumbPath, thumbUrl, withThumbPaths } from '@amixos/shared/lib/photoThumbs';
 import { SkeletonImage } from '@/components/SkeletonImage';
 import { useRefreshOnRefocus } from '@/lib/useRefreshOnRefocus';
@@ -2197,7 +2197,7 @@ export default function RentalsScreen() {
                 const tile = (p: RentalPropertyPhoto, i: number) => (
                   <Pressable key={p.id} onPress={() => setPhotoViewer(i)}
                     className="rounded-xl overflow-hidden border border-border-soft" style={{ width: tileW, height: tileH }}>
-                    <SkeletonImage source={{ uri: thumbUrl(detailPhotoUrls, p.storage_path) }} fallbackUri={detailPhotoUrls[p.storage_path]}
+                    <SkeletonImage source={{ uri: thumbUrl(detailPhotoUrls, p.storage_path) }} fallbackUri={detailPhotoUrls[p.storage_path]} onFallback={() => healThumb(supabase, RENTALS_BUCKET, p.storage_path, detailPhotoUrls[p.storage_path])}
                       style={{ width: '100%', height: '100%', transform: [{ rotate: `${p.rotation ?? 0}deg` }] }} resizeMode="cover" />
                     {p.is_cover ? (
                       <View className="absolute top-1.5 left-1.5 flex-row items-center gap-1 px-2 py-0.5 rounded-full bg-black/55">
@@ -2302,6 +2302,11 @@ export default function RentalsScreen() {
                     extraData={propPhotos}
                     horizontal
                     pagingEnabled
+                    // Full-size photos are heavy: keep only the visible page and its neighbours
+                    // mounted (the default ~21 ran iOS out of image memory → black photos).
+                    initialNumToRender={1}
+                    maxToRenderPerBatch={1}
+                    windowSize={3}
                     showsHorizontalScrollIndicator={false}
                     initialScrollIndex={photoViewer ?? 0}
                     getItemLayout={(_, index) => ({ length: screenW, offset: screenW * index, index })}
@@ -2813,7 +2818,7 @@ export default function RentalsScreen() {
                   <Pressable onPress={() => openDetail(p)}
                     className="bg-card rounded-2xl border border-border-soft overflow-hidden active:bg-surface">
                     {cover ? (
-                      <SkeletonImage source={{ uri: thumbUrl(detailPhotoUrls, cover.storage_path) }} fallbackUri={detailPhotoUrls[cover.storage_path]} style={{ width: '100%', height: 150 }} resizeMode="cover" />
+                      <SkeletonImage source={{ uri: thumbUrl(detailPhotoUrls, cover.storage_path) }} fallbackUri={detailPhotoUrls[cover.storage_path]} onFallback={() => healThumb(supabase, RENTALS_BUCKET, cover.storage_path, detailPhotoUrls[cover.storage_path])} style={{ width: '100%', height: 150 }} resizeMode="cover" />
                     ) : (
                       <View style={{ height: 150 }} className="bg-surface items-center justify-center">
                         <Home size={38} color={c.faint} />

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { healThumb } from '@/lib/photoThumbs';
 import { ViewerPhoto } from '@/components/ViewerPhoto';
 import { thumbUrl, withThumbPaths } from '@amixos/shared/lib/photoThumbs';
 import { SkeletonImage } from '@/components/SkeletonImage';
@@ -338,6 +339,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
               <SkeletonImage
                 source={{ uri: thumbUrl(photoUrls, p.storage_path) }}
                 fallbackUri={photoUrls[p.storage_path]}
+                onFallback={() => healThumb(supabase, JOB_PHOTOS_BUCKET, p.storage_path, photoUrls[p.storage_path])}
                 style={{ width: tileSize, height: tileSize, transform: [{ rotate: `${p.rotation ?? 0}deg` }] }}
                 resizeMode="cover"
               />
@@ -479,6 +481,11 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
               extraData={photos}
               horizontal
               pagingEnabled
+              // Full-size photos are heavy: keep only the visible page and its neighbours
+              // mounted (the default ~21 ran iOS out of image memory → black photos).
+              initialNumToRender={1}
+              maxToRenderPerBatch={1}
+              windowSize={3}
               showsHorizontalScrollIndicator={false}
               initialScrollIndex={viewerIndex ?? 0}
               getItemLayout={(_, index) => ({ length: screenW, offset: screenW * index, index })}

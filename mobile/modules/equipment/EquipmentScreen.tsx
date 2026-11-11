@@ -4,6 +4,7 @@
 // an active employee.
 
 import { ViewerPhoto } from '@/components/ViewerPhoto';
+import { healThumb } from '@/lib/photoThumbs';
 import { thumbPath, thumbUrl, withThumbPaths } from '@amixos/shared/lib/photoThumbs';
 import { SkeletonImage } from '@/components/SkeletonImage';
 import { useRefreshOnRefocus } from '@/lib/useRefreshOnRefocus';
@@ -1198,6 +1199,7 @@ export default function EquipmentScreen() {
                 <SkeletonImage
                   source={{ uri: thumbUrl(photoUrls, cover.storage_path) }}
                   fallbackUri={photoUrls[cover.storage_path]}
+                  onFallback={() => healThumb(supabase, EQUIPMENT_BUCKET, cover.storage_path, photoUrls[cover.storage_path])}
                   style={{ width: '100%', height: 160 }}
                   resizeMode="cover"
                 />
@@ -1454,6 +1456,7 @@ export default function EquipmentScreen() {
                             <SkeletonImage
                               source={{ uri: thumbUrl(photoUrls, p.storage_path) }}
                               fallbackUri={photoUrls[p.storage_path]}
+                              onFallback={() => healThumb(supabase, EQUIPMENT_BUCKET, p.storage_path, photoUrls[p.storage_path])}
                               style={{ width: '100%', height: '100%' }}
                               resizeMode="cover"
                             />
@@ -1591,6 +1594,7 @@ export default function EquipmentScreen() {
                         <SkeletonImage
                           source={{ uri: thumbUrl(photoUrls, p.storage_path) }}
                           fallbackUri={photoUrls[p.storage_path]}
+                          onFallback={() => healThumb(supabase, EQUIPMENT_BUCKET, p.storage_path, photoUrls[p.storage_path])}
                           style={{ width: 170, height: 170, transform: [{ rotate: `${(p.rotation ?? 0) % 360}deg` }] }}
                           resizeMode="cover"
                         />
@@ -1741,6 +1745,11 @@ export default function EquipmentScreen() {
               extraData={photos}
               horizontal
               pagingEnabled
+              // Full-size photos are heavy: keep only the visible page and its neighbours
+              // mounted (the default ~21 ran iOS out of image memory → black photos).
+              initialNumToRender={1}
+              maxToRenderPerBatch={1}
+              windowSize={3}
               showsHorizontalScrollIndicator={false}
               initialScrollIndex={viewerIndex ?? 0}
               getItemLayout={(_, index) => ({ length: screenW, offset: screenW * index, index })}

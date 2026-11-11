@@ -23,10 +23,11 @@ import {
 export default function NotificacionesScreen() {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseClient(), []);
-  const { business, user } = useApp();
-  // Inventory / Equipment switches only while that module is on.
+  const { business, user, currentRole } = useApp();
+  // Inventory / Equipment switches only while that module is on; role hides
+  // categories this member never receives (e.g. invoices for field workers).
   const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
-  const categories = useMemo(() => visibleNotificationCategories(enabledModules.map(m => m.id)), [enabledModules]);
+  const categories = useMemo(() => visibleNotificationCategories(enabledModules.map(m => m.id), currentRole), [enabledModules, currentRole]);
   const { t: full } = useLang();
   const t = full.notifications;
   const c = useThemeColors();

@@ -22,10 +22,11 @@ import {
 export default function NotificacionesPage() {
   const supabase = useMemo(() => createSupabaseClient(), []);
   const router = useRouter();
-  const { business, user } = useApp();
-  // Inventory / Equipment switches only while that module is on.
+  const { business, user, currentRole } = useApp();
+  // Inventory / Equipment switches only while that module is on; role hides
+  // categories this member never receives (e.g. invoices for field workers).
   const { modules: enabledModules } = useEnabledModules(supabase, business?.id ?? null);
-  const categories = useMemo(() => visibleNotificationCategories(enabledModules.map(m => m.id)), [enabledModules]);
+  const categories = useMemo(() => visibleNotificationCategories(enabledModules.map(m => m.id), currentRole), [enabledModules, currentRole]);
   const { t: full } = useLang();
   const t = full.notifications;
   const unread = useUnreadNotifications(supabase, business?.id ?? null, user?.id ?? null);

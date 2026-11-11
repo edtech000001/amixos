@@ -78,3 +78,32 @@ export async function uploadGalleryPhoto(
   }
   return { error: null };
 }
+
+const healed = new Set<string>();
+
+/**
+ * A grid tile fell back to the full photo (uploaded before thumbnails, or the
+ * thumb upload failed): build and upload the missing `_thumb.jpg` in the
+ * background so later loads are light. Once per path per session; any failure
+ * (offline, no write permission, old build without the manipulator) just
+ * leaves the full-photo fallback. Mirrors web's healThumb.
+ */
+export function healThumb(supabase: SupabaseLike, bucket: string, path: string, fullUrl: string | undefined): void {
+  if (!fullUrl || healed.has(path) || !load()) return;
+  healed.add(path);
+  void (async () => {
+    try {
+      const FS = require('expo-file-system/legacy') as typeof import('expo-file-system/legacy');
+      const local = `${FS.cacheDirectory}heal_${Date.now()}.jpg`;
+      const { status } = await FS.downloadAsync(fullUrl, local);
+      if (status !== 200) return;
+      const thumbUri = await resized(local, THUMB_EDGE, THUMB_QUALITY);
+      if (thumbUri) {
+        await supabase.storage.from(bucket).upload(thumbPath(path), await bytes(thumbUri), { upsert: true, contentType: 'image/jpeg' });
+      }
+      void FS.deleteAsync(local, { idempotent: true });
+    } catch {
+      /* try again next session */
+    }
+  })();
+}

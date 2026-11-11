@@ -112,6 +112,10 @@ export function useSignedUrls(
   // Stable dependency key so the effect only re-runs when the set changes.
   const key = Array.from(new Set(paths.filter((p): p is string => !!p))).sort().join('|');
   const [urls, setUrls] = useState<Record<string, string>>({});
+  // Bumped to re-sign before the URLs expire. A screen left open (or a
+  // backgrounded app) past the TTL otherwise kept dead URLs: black photos
+  // until the app restarted. Timers pause in the background and fire on resume.
+  const [round, setRound] = useState(0);
   useEffect(() => {
     let cancelled = false;
     if (!key) {
@@ -119,11 +123,13 @@ export function useSignedUrls(
       return;
     }
     signedUrls(supabase, key.split('|'), ttl, bucket).then((m) => {
-      if (!cancelled) setUrls(m);
+      if (!cancelled && Object.keys(m).length) setUrls(m); // a failed re-sign keeps the old URLs
     });
+    const timer = setTimeout(() => setRound((r) => r + 1), ttl * 800); // 80% of the TTL
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, [supabase, key, ttl, bucket]);
+  }, [supabase, key, ttl, bucket, round]);
   return urls;
 }
