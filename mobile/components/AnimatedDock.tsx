@@ -206,7 +206,11 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
   // geometry measured for the other orientation.
   const { width: winWidth } = useWindowDimensions();
   const [barWidth, setBarWidth] = useState(winWidth);
-  useEffect(() => { setBarWidth(winWidth); }, [winWidth]);
+  // Window minus the bar's measured width: non-zero where the bar is narrower
+  // than the window (iPhone Duo's side strip). Seeding with plain winWidth put
+  // the last tab's bubble past the bar's right end there.
+  const insetRef = useRef(0);
+  useEffect(() => { setBarWidth(winWidth - insetRef.current); }, [winWidth]);
   const numTabs = Math.max(1, visibleRoutes.length);
   const tabWidth = barWidth / numTabs;
   // Natural icon center (flex-1 distribution across full bar width)
@@ -354,6 +358,7 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
 
   const handleLayout = (e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
+    insetRef.current = Math.max(0, winWidth - w);
     if (w !== barWidth) {
       setBarWidth(w);
       // Snap to current position on first layout so bubble doesn't fly in.

@@ -1560,6 +1560,10 @@ export type DashboardDict = {
       adjustStock: string;
     };
     confirmDelete: string;
+    splitEmpty: string;
+    scanFind: string;
+    scanNotFound: string;
+    detail: { stock: string; totalValue: string; minStock: string; lowStock: string; location: string };
     units: {
       unidad: string;
       pieza: string;
@@ -5082,6 +5086,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         adjustStock: 'Ajustar stock',
       },
       confirmDelete: '¿Eliminar este artículo?',
+      splitEmpty: 'Selecciona un artículo',
+      scanFind: 'Escanear código',
+      scanNotFound: 'Ningún artículo tiene el código {{code}}.',
+      detail: { stock: 'En existencia', totalValue: 'Valor total', minStock: 'Nivel mínimo', lowStock: 'Bajo stock', location: 'Ubicación' },
       units: {
         unidad: 'unidad',
         pieza: 'pieza',
@@ -5110,7 +5118,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         lowStockThresholdLabel: 'Stock mínimo (alerta)',
         errorNameRequired: 'El nombre es requerido',
         errorSave: 'Error al guardar.',
-        scanHint: 'Apunta la cámara al código de barras',
+        scanHint: 'Apunta la cámara al código de barras o QR',
         cameraDenied: 'Necesitamos acceso a la cámara para escanear.',
         scanSku: 'Escanear código',
         generateSku: 'Generar SKU',
@@ -8592,6 +8600,10 @@ export const dashboard: Record<Locale, DashboardDict> = {
         adjustStock: 'Adjust stock',
       },
       confirmDelete: 'Delete this item?',
+      splitEmpty: 'Select an item',
+      scanFind: 'Scan code',
+      scanNotFound: 'No item has the code {{code}}.',
+      detail: { stock: 'In stock', totalValue: 'Total value', minStock: 'Minimum level', lowStock: 'Low stock', location: 'Location' },
       units: {
         unidad: 'unit',
         pieza: 'piece',
@@ -8620,7 +8632,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         lowStockThresholdLabel: 'Low stock threshold',
         errorNameRequired: 'Name is required',
         errorSave: 'Save error.',
-        scanHint: 'Point the camera at the barcode',
+        scanHint: 'Point the camera at the barcode or QR code',
         cameraDenied: 'Camera access is needed to scan.',
         scanSku: 'Scan code',
         generateSku: 'Generate SKU',

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { confirm } from '@amixos/shared/ui/confirmBus';
-import { TrendingDown, TrendingUp, Sparkles } from 'lucide-react';
+import { TrendingDown, TrendingUp, Sparkles, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
 import { useSwr } from '@amixos/shared/lib/swrCache';
@@ -59,6 +59,8 @@ export default function InventoryModule() {
   const [items, setItems] = useState<RawItem[]>([]);
   const [modal, setModal] = useState<'add' | 'edit' | 'adjust' | null>(null);
   const [selected, setSelected] = useState<RawItem | null>(null);
+  // Item whose details are showing; edit / adjust open over it and return to it.
+  const [openId, setOpenId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<RawItem, 'id'>>(EMPTY);
   const [adjustQty, setAdjustQty] = useState(0);
   const [adjustType, setAdjustType] = useState<'add' | 'remove'>('add');
@@ -237,10 +239,60 @@ export default function InventoryModule() {
     if (!(await confirm({ message: t.confirmDelete, destructive: true }))) return;
     await supabase.from('inventory_items').delete().eq('id', id);
     setItems(prev => prev.filter(i => i.id !== id));
+    setOpenId(null);
   };
+
+  const openItem = items.find(i => i.id === openId) ?? null;
+  const openLow = !!openItem && openItem.quantity <= openItem.low_stock_threshold;
+  const money = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const detailRows: [string, string][] = openItem ? [
+    [t.modal.skuLabel, openItem.sku || '—'],
+    [t.modal.categoryLabel, openItem.category || '—'],
+    ...(locations.length >= 2 ? [[t.detail.location, locations.find(l => l.id === openItem.location_id)?.name ?? '—'] as [string, string]] : []),
+    [t.modal.unitCostLabel, money(openItem.unit_cost)],
+    [t.detail.minStock, `${openItem.low_stock_threshold} ${unitLabel(openItem.unit)}`],
+  ] : [];
 
   const modals = (
     <>
+      {/* Item details — closed while edit / adjust is open, back after. */}
+      <Modal open={!!openItem && modal === null} onClose={() => setOpenId(null)} title={openItem?.name ?? ''}>
+        {openItem ? (
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className={`rounded-2xl border p-4 ${openLow ? 'border-orange-200 bg-orange-500/10' : 'border-border-soft bg-surface'}`}>
+                <p className="text-xs font-semibold text-faint uppercase">{t.detail.stock}</p>
+                <p className={`text-2xl font-bold mt-1 ${openLow ? 'text-orange-500' : 'text-ink'}`}>
+                  {openItem.quantity} <span className="text-sm font-medium text-muted">{unitLabel(openItem.unit)}</span>
+                </p>
+                {openLow ? (
+                  <p className="flex items-center gap-1 text-xs font-semibold text-orange-600 mt-1"><AlertTriangle size={12} /> {t.detail.lowStock}</p>
+                ) : null}
+              </div>
+              <div className="rounded-2xl border border-border-soft bg-surface p-4">
+                <p className="text-xs font-semibold text-faint uppercase">{t.detail.totalValue}</p>
+                <p className="text-2xl font-bold text-ink mt-1">{money(openItem.quantity * openItem.unit_cost)}</p>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-border-soft divide-y divide-border-soft">
+              {detailRows.map(([k, v]) => (
+                <div key={k} className="flex items-center justify-between px-4 py-3 text-sm">
+                  <span className="text-muted">{k}</span>
+                  <span className="font-medium text-ink text-right truncate ml-4">{v}</span>
+                </div>
+              ))}
+            </div>
+            {canEdit ? (
+              <div className="flex gap-2 pt-1">
+                <Button onClick={() => openAdjust(openItem.id)} fullWidth><TrendingUp size={15} /> {t.actions.adjustStock}</Button>
+                <Button variant="secondary" onClick={() => openEdit(openItem.id)} fullWidth><Pencil size={15} /> {tc.buttons.edit}</Button>
+                <Button variant="secondary" onClick={() => remove(openItem.id)} aria-label={tc.buttons.delete}><Trash2 size={15} className="text-red-500" /></Button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
+
       <Modal open={modal === 'add' || modal === 'edit'} onClose={() => setModal(null)} title={modal === 'add' ? t.modal.addTitle : t.modal.editTitle}>
         <div className="flex flex-col gap-4">
           <Input label={t.modal.nameLabel} placeholder={t.modal.namePlaceholder} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
@@ -326,10 +378,9 @@ export default function InventoryModule() {
       items={screenItems}
       unitLabel={unitLabel}
       onAddItem={canEdit ? openAdd : undefined}
-      onEditItem={canEdit ? openEdit : undefined}
       onAdjustItem={canEdit ? openAdjust : undefined}
-      onDeleteItem={canEdit ? remove : undefined}
-      modalsSlot={canEdit ? modals : undefined}
+      onOpenItem={setOpenId}
+      modalsSlot={modals}
       serverMode
       serverStats={serverStats}
       hasMore={hasMore}

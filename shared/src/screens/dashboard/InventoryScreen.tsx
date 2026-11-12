@@ -7,15 +7,14 @@ import {
   Search,
   Package,
   AlertTriangle,
-  Pencil,
-  Trash2,
   TrendingUp,
+  ScanLine,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
 import { Input } from '../../ui/Input';
-import { Fab } from '../../ui/Fab';
+import { Fab, HeaderAddButton } from '../../ui/Fab';
 import { ScreenTitle } from '../../ui/ScreenTitle';
 
 export interface InventoryItem {
@@ -41,9 +40,15 @@ export interface InventoryScreenProps {
   // Write callbacks are optional: a caller that omits one (e.g. a read-only
   // role gated in the wrapper) hides the matching action button entirely.
   onAddItem?: () => void;
-  onEditItem?: (id: string) => void;
   onAdjustItem?: (id: string) => void;
-  onDeleteItem?: (id: string) => void;
+  /** Tap a row → item details (edit / delete live there). */
+  onOpenItem?: (id: string) => void;
+  /** Split view: highlight the item open in the right pane. */
+  activeId?: string | null;
+  /** Split view: "+" beside the title instead of the floating button. */
+  addInHeader?: boolean;
+  /** Camera barcode / QR button beside the search box (find by SKU). */
+  onScan?: () => void;
   modalsSlot?: ReactNode;
   // ── Server mode (opt-in) — the wrapper does the search/segment/paging in the
   // DB and passes whole-scope stats. On: this screen skips its own filtering,
@@ -66,9 +71,11 @@ export function InventoryScreen({
   items,
   unitLabel,
   onAddItem,
-  onEditItem,
   onAdjustItem,
-  onDeleteItem,
+  onOpenItem,
+  activeId,
+  addInHeader = false,
+  onScan,
   modalsSlot,
   serverMode = false,
   serverStats,
@@ -130,7 +137,10 @@ export function InventoryScreen({
   const header = (
     <>
       <View className="mb-5">
-        <ScreenTitle title={t.title} onBack={onBack} />
+        <View className="flex-row items-center justify-between gap-2">
+          <View className="flex-1 min-w-0"><ScreenTitle title={t.title} onBack={onBack} /></View>
+          {addInHeader && onAddItem ? <HeaderAddButton onPress={onAddItem} label={t.addItem} /> : null}
+        </View>
         <Text className="text-sm text-muted mt-0.5">
           {summaryText}
           {lowStockCount > 0 ? (
@@ -151,14 +161,25 @@ export function InventoryScreen({
         </View>
       ) : null}
 
-      <View className="mb-3">
-        <Input
-          placeholder={t.searchPlaceholder}
-          value={search}
-          onChangeText={setSearch}
-          onClear={() => setSearch('')}
-          leftIcon={<Search size={16} color={c.faint} />}
-        />
+      <View className="mb-3 flex-row items-center gap-2">
+        <View className="flex-1">
+          <Input
+            placeholder={t.searchPlaceholder}
+            value={search}
+            onChangeText={setSearch}
+            onClear={() => setSearch('')}
+            leftIcon={<Search size={16} color={c.faint} />}
+          />
+        </View>
+        {onScan ? (
+          <Pressable
+            onPress={onScan}
+            accessibilityLabel={t.scanFind}
+            className="w-12 h-12 rounded-xl border border-border bg-card items-center justify-center active:bg-surface"
+          >
+            <ScanLine size={20} color={c.primary} />
+          </Pressable>
+        ) : null}
       </View>
 
       <View className="flex-row gap-1 bg-border-soft p-1 rounded-xl self-start mb-4">
@@ -184,7 +205,12 @@ export function InventoryScreen({
       item.sku ? t.itemMeta.skuPrefix.replace('{{sku}}', item.sku) : null,
     ].filter(Boolean).join(' · ');
     return (
-      <View className="bg-card rounded-2xl border border-border-soft p-4">
+      <Pressable
+        onPress={onOpenItem ? () => onOpenItem(item.id) : undefined}
+        disabled={!onOpenItem}
+        className="bg-card rounded-2xl border border-border-soft p-4 active:opacity-80"
+        style={item.id === activeId ? { borderColor: c.primary, backgroundColor: `${c.primary}1F` } : undefined}
+      >
         <View className="flex-row items-start justify-between gap-3">
           <View className="flex-1 min-w-0">
             <View className="flex-row items-center gap-1.5">
@@ -208,25 +234,13 @@ export function InventoryScreen({
           <Text className="text-xs text-muted">
             ${item.unitCost.toFixed(2)} · {t.itemMeta.minPrefix.replace('{{min}}', String(item.lowStockThreshold))}
           </Text>
-          <View className="flex-row items-center gap-1">
-            {onAdjustItem ? (
-              <Pressable onPress={() => onAdjustItem(item.id)} className="p-2 rounded-lg active:bg-primary/10">
-                <TrendingUp size={16} color={c.primary} />
-              </Pressable>
-            ) : null}
-            {onEditItem ? (
-              <Pressable onPress={() => onEditItem(item.id)} className="p-2 rounded-lg active:bg-border-soft">
-                <Pencil size={16} color={c.faint} />
-              </Pressable>
-            ) : null}
-            {onDeleteItem ? (
-              <Pressable onPress={() => onDeleteItem(item.id)} className="p-2 rounded-lg active:bg-red-500/10">
-                <Trash2 size={16} color={c.danger} />
-              </Pressable>
-            ) : null}
-          </View>
+          {onAdjustItem ? (
+            <Pressable onPress={() => onAdjustItem(item.id)} hitSlop={6} className="p-2 rounded-lg active:bg-primary/10">
+              <TrendingUp size={16} color={c.primary} />
+            </Pressable>
+          ) : null}
         </View>
-      </View>
+      </Pressable>
     );
   };
 
@@ -236,6 +250,7 @@ export function InventoryScreen({
         data={filtered}
         keyExtractor={i => i.id}
         renderItem={renderItem}
+        extraData={activeId}
         ListHeaderComponent={header}
         ItemSeparatorComponent={() => <View className="h-3" />}
         ListEmptyComponent={
@@ -255,7 +270,7 @@ export function InventoryScreen({
             </View>
           )
         }
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 176 }}
+        contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 16, paddingBottom: 176 }}
         keyboardShouldPersistTaps="handled"
         initialNumToRender={15}
         windowSize={7}
@@ -271,7 +286,7 @@ export function InventoryScreen({
         }
       />
 
-      {onAddItem ? <Fab onPress={onAddItem} /> : null}
+      {onAddItem && !addInHeader ? <Fab onPress={onAddItem} /> : null}
       {modalsSlot}
     </View>
   );

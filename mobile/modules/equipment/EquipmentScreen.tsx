@@ -32,7 +32,8 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useCameraPermissions } from 'expo-camera';
+import { BarcodeScanner } from '@/components/BarcodeScanner';
 import {
   ChevronLeft,
   ChevronRight,
@@ -1390,25 +1391,13 @@ export default function EquipmentScreen() {
        in-place, not a nested modal which would break inside the sheet
        on iOS). */}
     {scanning ? (
-      <View style={StyleSheet.absoluteFill} className="bg-black">
-        <CameraView
-          style={StyleSheet.absoluteFill}
-          facing="back"
-          barcodeScannerSettings={{ barcodeTypes: ['code39', 'code128', 'code93', 'datamatrix', 'qr', 'pdf417'] }}
-          onBarcodeScanned={onVinScanned}
-        />
-        <View style={StyleSheet.absoluteFill} pointerEvents="none" className="items-center justify-center">
-          <View className="w-72 h-28 border-2 border-white/80 rounded-2xl" />
-          <Text className="text-white text-sm mt-5 px-10 text-center">{t.scanVinHint}</Text>
-        </View>
-        <Pressable
-          onPress={() => setScanning(false)}
-          style={{ top: insets.top + 12 }}
-          className="absolute right-5 w-10 h-10 rounded-full bg-black/50 items-center justify-center"
-        >
-          <X size={22} color="#FFFFFF" />
-        </Pressable>
-      </View>
+      <BarcodeScanner
+        barcodeTypes={['code39', 'code128', 'code93', 'datamatrix', 'qr', 'pdf417']}
+        onScanned={onVinScanned}
+        onClose={() => setScanning(false)}
+        hint={t.scanVinHint}
+        wide
+      />
     ) : null}
     </>
   );

@@ -12,8 +12,6 @@ import {
   Search,
   Package,
   AlertTriangle,
-  Pencil,
-  Trash2,
   TrendingUp,
   X,
 } from 'lucide-react';
@@ -36,10 +34,11 @@ export interface InventoryScreenProps {
   items: InventoryItem[];
   /** Resolve the localized unit label for a stored DB value. */
   unitLabel: (dbValue: string) => string;
-  onAddItem: () => void;
-  onEditItem: (id: string) => void;
-  onAdjustItem: (id: string) => void;
-  onDeleteItem: (id: string) => void;
+  // Optional: omitted for read-only roles (the button is hidden).
+  onAddItem?: () => void;
+  onAdjustItem?: (id: string) => void;
+  /** Click a row → item details (edit / delete live there). */
+  onOpenItem?: (id: string) => void;
   modalsSlot?: ReactNode;
   // ── Server mode (opt-in) — the wrapper does the search/segment/paging in the
   // DB and passes whole-scope stats. On: skip client filtering, use serverStats
@@ -59,9 +58,8 @@ export function InventoryScreen({
   items,
   unitLabel,
   onAddItem,
-  onEditItem,
   onAdjustItem,
-  onDeleteItem,
+  onOpenItem,
   modalsSlot,
   serverMode = false,
   serverStats,
@@ -144,14 +142,16 @@ export function InventoryScreen({
             ) : null}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onAddItem}
-          className="flex items-center gap-1.5 bg-primary px-4 py-2.5 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
-        >
-          <Plus size={15} className="text-white" />
-          {t.addItem}
-        </button>
+        {onAddItem ? (
+          <button
+            type="button"
+            onClick={onAddItem}
+            className="flex items-center gap-1.5 bg-primary px-4 py-2.5 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+          >
+            <Plus size={15} className="text-white" />
+            {t.addItem}
+          </button>
+        ) : null}
       </div>
 
       {/* Low stock banner */}
@@ -237,7 +237,8 @@ export function InventoryScreen({
             return (
               <div
                 key={item.id}
-                className={`[content-visibility:auto] [contain-intrinsic-size:auto_60px] flex items-center px-5 py-3.5 ${i < filtered.length - 1 ? 'border-b border-border-soft' : ''}`}
+                onClick={onOpenItem ? () => onOpenItem(item.id) : undefined}
+                className={`[content-visibility:auto] [contain-intrinsic-size:auto_60px] flex items-center px-5 py-3.5 ${onOpenItem ? 'cursor-pointer hover:bg-surface transition-colors' : ''} ${i < filtered.length - 1 ? 'border-b border-border-soft' : ''}`}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -256,27 +257,16 @@ export function InventoryScreen({
                 <span className="w-16 text-center text-xs text-muted">{unitLabel(item.unit)}</span>
                 <span className="w-24 text-right text-sm text-ink">${item.unitCost.toFixed(2)}</span>
                 <div className="w-28 flex items-center justify-end gap-1">
-                  <button
-                    type="button"
-                    onClick={() => onAdjustItem(item.id)}
-                    className="p-1.5 rounded-lg hover:bg-primary/10 transition-colors"
-                  >
-                    <TrendingUp size={14} className="text-primary" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onEditItem(item.id)}
-                    className="p-1.5 rounded-lg hover:bg-border-soft transition-colors"
-                  >
-                    <Pencil size={14} className="text-faint" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDeleteItem(item.id)}
-                    className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
-                  >
-                    <Trash2 size={14} className="text-red-400" />
-                  </button>
+                  {onAdjustItem ? (
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); onAdjustItem(item.id); }}
+                      title={t.actions.adjustStock}
+                      className="p-1.5 rounded-lg hover:bg-primary/10 transition-colors"
+                    >
+                      <TrendingUp size={14} className="text-primary" />
+                    </button>
+                  ) : null}
                 </div>
               </div>
             );
