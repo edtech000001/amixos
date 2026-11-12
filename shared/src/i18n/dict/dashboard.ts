@@ -2745,6 +2745,7 @@ export type DashboardDict = {
       paidOffBadge: string;
       loanBadge: string;
       plateExpiresSoon: string;
+      splitEmpty: string;
       plateExpired: string;
       mileageUnit: string;
       addTitle: string;
@@ -6225,6 +6226,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           paidOffBadge: 'Pagado',
           loanBadge: 'Préstamo',
           plateExpiresSoon: 'Placa vence en {{days}} días',
+          splitEmpty: 'Selecciona un equipo',
           plateExpired: 'Placa vencida',
           mileageUnit: '{{n}} mi',
           addTitle: 'Nuevo equipo',
@@ -9734,6 +9736,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
           paidOffBadge: 'Paid off',
           loanBadge: 'Loan',
           plateExpiresSoon: 'Plate expires in {{days}} days',
+          splitEmpty: 'Select equipment',
           plateExpired: 'Plate expired',
           mileageUnit: '{{n}} mi',
           addTitle: 'New equipment',

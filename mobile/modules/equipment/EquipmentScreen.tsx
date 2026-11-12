@@ -19,7 +19,6 @@ import {
   TextInput,
   Image,
   Modal as RNModal,
-  KeyboardAvoidingView,
   Platform,
   Alert,
   ActivityIndicator,
@@ -77,6 +76,8 @@ import { queuedInsert, queuedUpdate, queuedDelete, queuedUpload } from '@/lib/of
 import { newUuid } from '@/lib/offline/ids';
 import { isOnlineNow } from '@/lib/offline/network';
 import { Button, Input, DatePicker, Toggle, Fab } from '@amixos/shared/ui';
+import { HeaderAddButton } from '@amixos/shared/ui/Fab';
+import { SplitEmpty, SplitView, useSplitView } from '@/components/SplitView';
 import { FilterSheet, FilterSection, Segmented, FilterChip, ChipWrap, FilterButton, showResultsLabel } from '@amixos/shared/ui/FilterSheet';
 import { cycleSort, sortTapClears } from '@amixos/shared/lib/sortCycle';
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
@@ -409,6 +410,8 @@ export default function EquipmentScreen() {
   const moreBack = useMoreBack('equipment');
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
+  // Wide screens (iPad, Duo unfolded): list left, detail right.
+  const { split, listWidth } = useSplitView();
   const supabase = createSupabaseClient();
   const { business, user, locations, activeLocationId, myHomeLocationId, currentRole } = useApp();
   const equipmentCacheKey = () => `equipment_v2_${business?.id ?? ''}_${activeLocationId ?? 'all'}`;
@@ -783,6 +786,12 @@ export default function EquipmentScreen() {
     setModal('detail');
   };
 
+  // Closing the add/edit sheet: in split view an edit returns to its detail.
+  const closeSheet = () => {
+    if (split && modal === 'edit' && selected) setModal('detail');
+    else { setModal(null); setSelected(null); }
+  };
+
   const openEdit = (e: Equipment) => {
     setSelected(e);
     setForm({
@@ -886,8 +895,15 @@ export default function EquipmentScreen() {
     // Same key the list hydrates from (see load) — so it survives leaving the screen.
     void swrPatch<EquipmentCache>(equipmentCacheKey(), d => ({ ...d, items: apply(d.items), total: d.total + (isAdd ? 1 : 0) }));
     setSaving(false);
-    setModal(null);
-    setSelected(null);
+    if (split) {
+      // Split view: land on the saved item's detail beside the list.
+      setSelected(isAdd ? row : ({ ...selected, ...payload } as Equipment));
+      if (isAdd) void loadPhotosFor(id);
+      setModal('detail');
+    } else {
+      setModal(null);
+      setSelected(null);
+    }
   };
 
   // Opens the bottom-sheet confirmation (one-hand friendly vs a centered Alert).
@@ -1129,44 +1145,320 @@ export default function EquipmentScreen() {
   };
 
   // ── Render ──────────────────────────────────────────────────────────
-  return (
-    <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-      {/* Header */}
-      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
-        {moreBack ? (
-          <Pressable onPress={moreBack} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
-            <ChevronLeft size={22} color={c.ink} />
+  // Add / edit form — a floating sheet on phones; the right pane in split view.
+  const formContent = (
+    <>
+    <View className="flex-row items-center px-3 pt-2 pb-3 border-b border-border-soft bg-card">
+      {split ? null : (
+        <Pressable onPress={closeSheet} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
+          <ChevronLeft size={22} color={c.ink} />
+        </Pressable>
+      )}
+      <Text className={`text-lg font-bold text-ink flex-1 ${split ? 'ml-2' : 'mx-1'}`} numberOfLines={1}>
+        {modal === 'add' ? t.addTitle : t.editTitle}
+      </Text>
+      {split ? (
+        <Pressable onPress={closeSheet} hitSlop={8} className="p-2 rounded-lg active:bg-border-soft">
+          <X size={20} color={c.faint} />
+        </Pressable>
+      ) : null}
+    </View>
+    <ScrollView contentContainerClassName="px-5 py-5 pb-44 gap-4" keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+      {/* Basic info */}
+      <Text className="text-xs font-semibold text-faint uppercase tracking-wide">{t.basicInfoHeading}</Text>
+      <Input
+        label={t.nameLabel}
+        placeholder={t.namePlaceholder}
+        value={form.name}
+        onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
+      />
+      <InlinePicker
+        label={t.typeLabel}
+        value={form.equipment_type}
+        placeholder={t.typePlaceholder}
+        options={TYPE_OPTIONS}
+        onSelect={(v) => setForm((f) => ({ ...f, equipment_type: v }))}
+        noResultsText={t.selectNoResults}
+      />
+      <Input label={t.makeLabel} placeholder={t.makePlaceholder} value={form.make}
+        onChangeText={(v) => setForm((f) => ({ ...f, make: v }))} />
+      <Input label={t.modelLabel} placeholder={t.modelPlaceholder} value={form.model}
+        onChangeText={(v) => setForm((f) => ({ ...f, model: v }))} />
+      <Input label={t.yearLabel} placeholder={t.yearPlaceholder} keyboardType="number-pad"
+        value={form.year} onChangeText={(v) => setForm((f) => ({ ...f, year: v.replace(/[^0-9]/g, '') }))} />
+      <Input label={t.colorLabel} placeholder={t.colorPlaceholder} value={form.color}
+        onChangeText={(v) => setForm((f) => ({ ...f, color: v }))} />
+      <Input label={t.mileageLabel} placeholder={t.mileagePlaceholder} keyboardType="number-pad"
+        value={fmtThousands(form.mileage)}
+        onChangeText={(v) => setForm((f) => ({ ...f, mileage: v.replace(/[^0-9]/g, '') }))} />
+      <Input label={t.vinLabel} placeholder={t.vinPlaceholder} value={form.vin}
+        onChangeText={(v) => setForm((f) => ({ ...f, vin: v }))} autoCapitalize="characters"
+        rightIcon={
+          <Pressable onPress={startVinScan} hitSlop={8} accessibilityLabel={t.scanVinHint}>
+            <ScanLine size={18} color={c.primary} />
           </Pressable>
-        ) : null}
-        <View className="ml-1 flex-1">
-          <Text className="text-lg font-semibold text-ink">{t.title}</Text>
-          <Text className="text-xs text-muted">
-            {t.countTotal.replace('{{count}}', String(viewFiltered ? filtered.length : serverTotal))} · {t.subtitle}
-          </Text>
-        </View>
-        {/* Filters — sort, group, expirations and assignment in one sheet. */}
-        <FilterButton count={filterCount} onPress={() => setFilterOpen(true)} label={tc.filters.button} />
-      </View>
-      <LocationSwitcher />
+        } />
+      <Input label={t.serialNumberLabel} placeholder={t.serialNumberPlaceholder} value={form.serial_number}
+        onChangeText={(v) => setForm((f) => ({ ...f, serial_number: v }))} autoCapitalize="characters" />
 
-      {/* Search */}
-      <View className="px-4 pt-3">
-        <View className="flex-row items-center rounded-2xl border border-border bg-card px-3">
-          <Search size={14} color={c.faint} />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder={t.searchPlaceholder}
-            placeholderTextColor={c.faint}
-            className="flex-1 py-2.5 pl-2 text-ink" style={{ fontSize: 14 }} />
-          {search.length > 0 ? (
-            <Pressable onPress={() => setSearch('')} hitSlop={8} className="pl-1">
-              <X size={16} color={c.faint} />
+      {/* Registration */}
+      <Text className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.registrationHeading}</Text>
+      <Input label={t.plateNumberLabel} placeholder={t.plateNumberPlaceholder} value={form.plate_number}
+        onChangeText={(v) => setForm((f) => ({ ...f, plate_number: v }))} autoCapitalize="characters" />
+      <DatePicker label={t.plateExpirationLabel} value={form.plate_expiration}
+        onChange={(v) => setForm((f) => ({ ...f, plate_expiration: v }))} />
+
+      {/* Insurance */}
+      <Text className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.insuranceHeading}</Text>
+      <Input label={t.insuranceCarrierLabel} placeholder={t.insuranceCarrierPlaceholder} value={form.insurance_carrier}
+        onChangeText={(v) => setForm((f) => ({ ...f, insurance_carrier: v }))} />
+      <Input label={t.insurancePolicyLabel} placeholder={t.insurancePolicyPlaceholder} value={form.insurance_policy_number}
+        onChangeText={(v) => setForm((f) => ({ ...f, insurance_policy_number: v }))} />
+      <Input label={t.insuranceAgentLabel} placeholder={t.insuranceAgentPlaceholder} value={form.insurance_agent}
+        onChangeText={(v) => setForm((f) => ({ ...f, insurance_agent: v }))} />
+      <Input label={t.insuranceAgentPhoneLabel} placeholder={t.insuranceAgentPhonePlaceholder} keyboardType="phone-pad"
+        value={form.insurance_agent_phone} onChangeText={(v) => setForm((f) => ({ ...f, insurance_agent_phone: v }))} />
+      <DatePicker label={t.insuranceExpirationLabel} value={form.insurance_expiration}
+        onChange={(v) => setForm((f) => ({ ...f, insurance_expiration: v }))} />
+
+      {/* Ownership */}
+      <Text className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.ownershipHeading}</Text>
+      {/* Value is always shown; lender + loan amount only when not paid off. */}
+      <Input label={t.valueLabel} placeholder={t.valuePlaceholder} keyboardType="decimal-pad"
+        leftIcon={<Text className="text-base text-muted">$</Text>}
+        value={fmtThousands(form.value)}
+        onChangeText={(v) => setForm((f) => ({ ...f, value: sanitizeMoney(v) }))} />
+      <View className="flex-row items-center justify-between rounded-2xl border border-border bg-card px-4 py-3.5">
+        <Text className="text-base text-ink">{t.paidOffLabel}</Text>
+        <Toggle value={form.paid_off} onValueChange={(v) => setForm((f) => ({ ...f, paid_off: v }))} />
+      </View>
+      {!form.paid_off ? (
+        <>
+          <Input label={t.loanLenderLabel} placeholder={t.loanLenderPlaceholder} value={form.loan_lender}
+            onChangeText={(v) => setForm((f) => ({ ...f, loan_lender: v }))} />
+          <Input label={t.loanAmountLabel} placeholder={t.loanAmountPlaceholder} keyboardType="decimal-pad"
+            leftIcon={<Text className="text-base text-muted">$</Text>}
+            value={fmtThousands(form.loan_amount)}
+            onChangeText={(v) => setForm((f) => ({ ...f, loan_amount: sanitizeMoney(v) }))} />
+        </>
+      ) : null}
+      <DatePicker label={t.purchaseDateLabel} value={form.purchase_date}
+        onChange={(v) => setForm((f) => ({ ...f, purchase_date: v }))} />
+      <DatePicker label={t.warrantyExpirationLabel} value={form.warranty_expiration}
+        onChange={(v) => setForm((f) => ({ ...f, warranty_expiration: v }))} />
+
+      {/* Assignment */}
+      <Text className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.assignmentHeading}</Text>
+      <InlinePicker
+        label={t.assignedToLabel}
+        value={form.assigned_employee_id}
+        placeholder={t.assignedToNone}
+        options={[
+          { value: '', label: t.assignedToNone },
+          ...employees
+            .filter((e) => e.active || e.id === form.assigned_employee_id)
+            .map((e) => ({ value: e.id, label: `${e.first_name} ${e.last_name}` })),
+        ]}
+        onSelect={(v) => setForm((f) => ({ ...f, assigned_employee_id: v }))}
+        searchable
+        searchPlaceholder={t.assignedToSearch}
+        noResultsText={t.selectNoResults}
+      />
+      <Input label={t.locationLabel} placeholder={t.locationPlaceholder} value={form.location}
+        onChangeText={(v) => setForm((f) => ({ ...f, location: v }))} />
+
+      {multiLocation ? (
+        <InlinePicker
+          label={locale === 'en' ? 'Branch' : 'Sucursal'}
+          value={form.location_id}
+          placeholder={locale === 'en' ? 'No branch' : 'Sin sucursal'}
+          options={[
+            { value: '', label: locale === 'en' ? 'No branch' : 'Sin sucursal' },
+            ...(locations ?? []).map((l) => ({ value: l.id, label: l.name })),
+          ]}
+          onSelect={(v) => setForm((f) => ({ ...f, location_id: v }))}
+        />
+      ) : null}
+
+      {/* Notes */}
+      <Input label={t.notesLabel} placeholder={t.notesPlaceholder} value={form.notes}
+        onChangeText={(v) => setForm((f) => ({ ...f, notes: v }))} multiline numberOfLines={3}
+        style={{ minHeight: 70, textAlignVertical: 'top' }} />
+
+      {/* Photos — only after the equipment exists. */}
+      {/* Photos — available while adding (queued locally) and editing
+         (uploaded immediately). */}
+      {(modal === 'add' || (modal === 'edit' && selected)) ? (
+        <>
+          <Text className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.photosHeading}</Text>
+          {(modal === 'add' ? pendingPhotos.length : photos.length) === 0 ? (
+            <View className="py-8 items-center rounded-2xl border-2 border-dashed border-border gap-2">
+              <ImageIcon size={20} color={c.faint} />
+              <Text className="text-sm text-muted">{t.photoEmpty}</Text>
+            </View>
+          ) : modal === 'add' ? (
+            <View className="flex-row flex-wrap gap-2">
+              {pendingPhotos.map((uri) => (
+                <View key={uri} className="relative w-24 h-24 rounded-xl overflow-hidden bg-border-soft">
+                  <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                  <Pressable
+                    onPress={() => removePending(uri)}
+                    hitSlop={6}
+                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 items-center justify-center"
+                  >
+                    <X size={12} color={c.danger} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View className="flex-row flex-wrap gap-2">
+              {photos.map((p) => (
+                <Pressable
+                  key={p.id}
+                  onLongPress={() => removePhoto(p)}
+                  className="relative w-24 h-24 rounded-xl overflow-hidden bg-border-soft active:opacity-80"
+                >
+                  <SkeletonImage
+                    source={{ uri: thumbUrl(photoUrls, p.storage_path) }}
+                    fallbackUri={photoUrls[p.storage_path]}
+                    onFallback={() => healThumb(supabase, EQUIPMENT_BUCKET, p.storage_path, photoUrls[p.storage_path])}
+                    style={{ width: '100%', height: '100%' }}
+                    resizeMode="cover"
+                  />
+                  <Pressable
+                    onPress={() => removePhoto(p)}
+                    hitSlop={6}
+                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 items-center justify-center"
+                  >
+                    <X size={12} color={c.danger} />
+                  </Pressable>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          <View className="flex-row gap-2">
+            <Pressable
+              onPress={() => pickPhoto('camera')}
+              disabled={uploadingPhoto}
+              className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-border-soft active:opacity-70 disabled:opacity-50"
+            >
+              <Camera size={16} color={c.muted} />
+              <Text className="text-sm font-semibold text-ink">{t.photoTakeBtn}</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => pickPhoto('library')}
+              disabled={uploadingPhoto}
+              className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-border-soft active:opacity-70 disabled:opacity-50"
+            >
+              <ImagePlus size={16} color={c.muted} />
+              <Text className="text-sm font-semibold text-ink">{t.photoLibraryBtn}</Text>
+            </Pressable>
+          </View>
+          {canPastePhoto ? (
+            <Pressable
+              onPress={() => pickPhoto('paste')}
+              disabled={uploadingPhoto}
+              className="flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-border-soft active:opacity-70 disabled:opacity-50"
+            >
+              <ClipboardPaste size={16} color={c.muted} />
+              <Text className="text-sm font-semibold text-ink">{tPhotos.pastePhoto}</Text>
             </Pressable>
           ) : null}
-        </View>
-      </View>
+          {uploadingPhoto ? (
+            <View className="flex-row items-center gap-2">
+              <ActivityIndicator size="small" color={c.primary} />
+              <Text className="text-xs text-muted">{t.photoUploading}</Text>
+            </View>
+          ) : null}
+        </>
+      ) : null}
 
+      {error ? <Text className="text-xs text-red-500">{error}</Text> : null}
+
+      {/* Delete lives on the detail page (not here) — opening the
+         confirm sheet from inside this modal would nest modals. */}
+      <View className="pt-3">
+        <Button onPress={save} loading={saving} fullWidth>{tc.buttons.save}</Button>
+      </View>
+    </ScrollView>
+    </>
+  );
+  const vinScanner = (
+    <>
+    {/* VIN barcode scanner — full-screen camera overlay (rendered
+       in-place, not a nested modal which would break inside the sheet
+       on iOS). */}
+    {scanning ? (
+      <View style={StyleSheet.absoluteFill} className="bg-black">
+        <CameraView
+          style={StyleSheet.absoluteFill}
+          facing="back"
+          barcodeScannerSettings={{ barcodeTypes: ['code39', 'code128', 'code93', 'datamatrix', 'qr', 'pdf417'] }}
+          onBarcodeScanned={onVinScanned}
+        />
+        <View style={StyleSheet.absoluteFill} pointerEvents="none" className="items-center justify-center">
+          <View className="w-72 h-28 border-2 border-white/80 rounded-2xl" />
+          <Text className="text-white text-sm mt-5 px-10 text-center">{t.scanVinHint}</Text>
+        </View>
+        <Pressable
+          onPress={() => setScanning(false)}
+          style={{ top: insets.top + 12 }}
+          className="absolute right-5 w-10 h-10 rounded-full bg-black/50 items-center justify-center"
+        >
+          <X size={22} color="#FFFFFF" />
+        </Pressable>
+      </View>
+    ) : null}
+    </>
+  );
+  const formOpen = modal === 'add' || modal === 'edit';
+
+  // Title + search scroll away with the list (same as the other lists), so a
+  // short pane (iPhone Duo) keeps its height for rows. Negative margins undo
+  // the list's content padding — the header has its own.
+  const listHeader = (
+    <View style={{ marginHorizontal: -16, marginTop: -16, marginBottom: 4 }}>
+          {/* Header */}
+          <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
+            {moreBack ? (
+              <Pressable onPress={moreBack} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
+                <ChevronLeft size={22} color={c.ink} />
+              </Pressable>
+            ) : null}
+            <View className="ml-1 flex-1">
+              <Text className="text-lg font-semibold text-ink">{t.title}</Text>
+              <Text className="text-xs text-muted">
+                {t.countTotal.replace('{{count}}', String(viewFiltered ? filtered.length : serverTotal))} · {t.subtitle}
+              </Text>
+            </View>
+            {/* Filters — sort, group, expirations and assignment in one sheet. */}
+            <FilterButton count={filterCount} onPress={() => setFilterOpen(true)} label={tc.filters.button} />
+            {split && canEdit ? <View className="ml-2"><HeaderAddButton onPress={openAdd} /></View> : null}
+          </View>
+
+          {/* Search */}
+          <View className="px-4 pt-3">
+            <View className="flex-row items-center rounded-2xl border border-border bg-card px-3">
+              <Search size={14} color={c.faint} />
+              <TextInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder={t.searchPlaceholder}
+                placeholderTextColor={c.faint}
+                className="flex-1 py-2.5 pl-2 text-ink" style={{ fontSize: 14 }} />
+              {search.length > 0 ? (
+                <Pressable onPress={() => setSearch('')} hitSlop={8} className="pl-1">
+                  <X size={16} color={c.faint} />
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+    </View>
+  );
+
+  const listPane = (
+    <>
       {/* List — SectionList virtualizes rows (+ their images) for large fleets. */}
       <SectionList
         className="flex-1"
@@ -1174,6 +1466,7 @@ export default function EquipmentScreen() {
         sections={filtered.length === 0 ? [] : sections}
         keyExtractor={(item) => item.id}
         stickySectionHeadersEnabled={false}
+        ListHeaderComponent={listHeader}
         renderSectionHeader={({ section }) =>
           section.title ? (
             <Text className="text-xs font-bold text-muted uppercase tracking-wide px-1 pt-5 pb-3">
@@ -1193,6 +1486,7 @@ export default function EquipmentScreen() {
           return (
             <Pressable
               onPress={() => openDetail(e)}
+              style={split && selected?.id === e.id ? { borderColor: c.primary, backgroundColor: `${c.primary}14` } : undefined}
               className="bg-card rounded-2xl border border-border-soft overflow-hidden active:bg-surface"
             >
               {cover ? (
@@ -1269,299 +1563,30 @@ export default function EquipmentScreen() {
       />
 
       {/* Add equipment — floating action, one-handed thumb reach. */}
-      {canEdit ? <Fab onPress={openAdd} /> : null}
+      {canEdit && !split ? <Fab onPress={openAdd} /> : null}
+    </>
+  );
 
-      {/* Add / edit modal — same floating sheet pattern as the empleados
-         modal so the look is consistent. */}
-      <RNModal
-        visible={modal === 'add' || modal === 'edit'}
-        transparent
-        animationType="fade"
-        onRequestClose={() => { setModal(null); setSelected(null); }}
-      >
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <View className="flex-1 justify-end">
-            <Pressable onPress={() => { setModal(null); setSelected(null); }} style={sheetScrim} />
-            <View
-              className="bg-card rounded-3xl pt-3 mx-3 overflow-hidden"
-              style={{ maxHeight: '85%', ...sheetShadow }}
-            >
-              <View className="items-center mb-2">
-                <View className="w-10 h-1 bg-border rounded-full" />
-              </View>
-              <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-border-soft">
-                <Text className="text-lg font-bold text-ink">
-                  {modal === 'add' ? t.addTitle : t.editTitle}
-                </Text>
-                <Pressable onPress={() => { setModal(null); setSelected(null); }} hitSlop={8}>
-                  <X size={20} color={c.faint} />
-                </Pressable>
-              </View>
-              <ScrollView contentContainerClassName="px-5 py-5 pb-10 gap-4" keyboardShouldPersistTaps="handled">
-                {/* Basic info */}
-                <Text className="text-xs font-semibold text-faint uppercase tracking-wide">{t.basicInfoHeading}</Text>
-                <Input
-                  label={t.nameLabel}
-                  placeholder={t.namePlaceholder}
-                  value={form.name}
-                  onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
-                />
-                <InlinePicker
-                  label={t.typeLabel}
-                  value={form.equipment_type}
-                  placeholder={t.typePlaceholder}
-                  options={TYPE_OPTIONS}
-                  onSelect={(v) => setForm((f) => ({ ...f, equipment_type: v }))}
-                  noResultsText={t.selectNoResults}
-                />
-                <Input label={t.makeLabel} placeholder={t.makePlaceholder} value={form.make}
-                  onChangeText={(v) => setForm((f) => ({ ...f, make: v }))} />
-                <Input label={t.modelLabel} placeholder={t.modelPlaceholder} value={form.model}
-                  onChangeText={(v) => setForm((f) => ({ ...f, model: v }))} />
-                <Input label={t.yearLabel} placeholder={t.yearPlaceholder} keyboardType="number-pad"
-                  value={form.year} onChangeText={(v) => setForm((f) => ({ ...f, year: v.replace(/[^0-9]/g, '') }))} />
-                <Input label={t.colorLabel} placeholder={t.colorPlaceholder} value={form.color}
-                  onChangeText={(v) => setForm((f) => ({ ...f, color: v }))} />
-                <Input label={t.mileageLabel} placeholder={t.mileagePlaceholder} keyboardType="number-pad"
-                  value={fmtThousands(form.mileage)}
-                  onChangeText={(v) => setForm((f) => ({ ...f, mileage: v.replace(/[^0-9]/g, '') }))} />
-                <Input label={t.vinLabel} placeholder={t.vinPlaceholder} value={form.vin}
-                  onChangeText={(v) => setForm((f) => ({ ...f, vin: v }))} autoCapitalize="characters"
-                  rightIcon={
-                    <Pressable onPress={startVinScan} hitSlop={8} accessibilityLabel={t.scanVinHint}>
-                      <ScanLine size={18} color={c.primary} />
-                    </Pressable>
-                  } />
-                <Input label={t.serialNumberLabel} placeholder={t.serialNumberPlaceholder} value={form.serial_number}
-                  onChangeText={(v) => setForm((f) => ({ ...f, serial_number: v }))} autoCapitalize="characters" />
-
-                {/* Registration */}
-                <Text className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.registrationHeading}</Text>
-                <Input label={t.plateNumberLabel} placeholder={t.plateNumberPlaceholder} value={form.plate_number}
-                  onChangeText={(v) => setForm((f) => ({ ...f, plate_number: v }))} autoCapitalize="characters" />
-                <DatePicker label={t.plateExpirationLabel} value={form.plate_expiration}
-                  onChange={(v) => setForm((f) => ({ ...f, plate_expiration: v }))} />
-
-                {/* Insurance */}
-                <Text className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.insuranceHeading}</Text>
-                <Input label={t.insuranceCarrierLabel} placeholder={t.insuranceCarrierPlaceholder} value={form.insurance_carrier}
-                  onChangeText={(v) => setForm((f) => ({ ...f, insurance_carrier: v }))} />
-                <Input label={t.insurancePolicyLabel} placeholder={t.insurancePolicyPlaceholder} value={form.insurance_policy_number}
-                  onChangeText={(v) => setForm((f) => ({ ...f, insurance_policy_number: v }))} />
-                <Input label={t.insuranceAgentLabel} placeholder={t.insuranceAgentPlaceholder} value={form.insurance_agent}
-                  onChangeText={(v) => setForm((f) => ({ ...f, insurance_agent: v }))} />
-                <Input label={t.insuranceAgentPhoneLabel} placeholder={t.insuranceAgentPhonePlaceholder} keyboardType="phone-pad"
-                  value={form.insurance_agent_phone} onChangeText={(v) => setForm((f) => ({ ...f, insurance_agent_phone: v }))} />
-                <DatePicker label={t.insuranceExpirationLabel} value={form.insurance_expiration}
-                  onChange={(v) => setForm((f) => ({ ...f, insurance_expiration: v }))} />
-
-                {/* Ownership */}
-                <Text className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.ownershipHeading}</Text>
-                {/* Value is always shown; lender + loan amount only when not paid off. */}
-                <Input label={t.valueLabel} placeholder={t.valuePlaceholder} keyboardType="decimal-pad"
-                  leftIcon={<Text className="text-base text-muted">$</Text>}
-                  value={fmtThousands(form.value)}
-                  onChangeText={(v) => setForm((f) => ({ ...f, value: sanitizeMoney(v) }))} />
-                <View className="flex-row items-center justify-between rounded-2xl border border-border bg-card px-4 py-3.5">
-                  <Text className="text-base text-ink">{t.paidOffLabel}</Text>
-                  <Toggle value={form.paid_off} onValueChange={(v) => setForm((f) => ({ ...f, paid_off: v }))} />
-                </View>
-                {!form.paid_off ? (
-                  <>
-                    <Input label={t.loanLenderLabel} placeholder={t.loanLenderPlaceholder} value={form.loan_lender}
-                      onChangeText={(v) => setForm((f) => ({ ...f, loan_lender: v }))} />
-                    <Input label={t.loanAmountLabel} placeholder={t.loanAmountPlaceholder} keyboardType="decimal-pad"
-                      leftIcon={<Text className="text-base text-muted">$</Text>}
-                      value={fmtThousands(form.loan_amount)}
-                      onChangeText={(v) => setForm((f) => ({ ...f, loan_amount: sanitizeMoney(v) }))} />
-                  </>
-                ) : null}
-                <DatePicker label={t.purchaseDateLabel} value={form.purchase_date}
-                  onChange={(v) => setForm((f) => ({ ...f, purchase_date: v }))} />
-                <DatePicker label={t.warrantyExpirationLabel} value={form.warranty_expiration}
-                  onChange={(v) => setForm((f) => ({ ...f, warranty_expiration: v }))} />
-
-                {/* Assignment */}
-                <Text className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.assignmentHeading}</Text>
-                <InlinePicker
-                  label={t.assignedToLabel}
-                  value={form.assigned_employee_id}
-                  placeholder={t.assignedToNone}
-                  options={[
-                    { value: '', label: t.assignedToNone },
-                    ...employees
-                      .filter((e) => e.active || e.id === form.assigned_employee_id)
-                      .map((e) => ({ value: e.id, label: `${e.first_name} ${e.last_name}` })),
-                  ]}
-                  onSelect={(v) => setForm((f) => ({ ...f, assigned_employee_id: v }))}
-                  searchable
-                  searchPlaceholder={t.assignedToSearch}
-                  noResultsText={t.selectNoResults}
-                />
-                <Input label={t.locationLabel} placeholder={t.locationPlaceholder} value={form.location}
-                  onChangeText={(v) => setForm((f) => ({ ...f, location: v }))} />
-
-                {multiLocation ? (
-                  <InlinePicker
-                    label={locale === 'en' ? 'Branch' : 'Sucursal'}
-                    value={form.location_id}
-                    placeholder={locale === 'en' ? 'No branch' : 'Sin sucursal'}
-                    options={[
-                      { value: '', label: locale === 'en' ? 'No branch' : 'Sin sucursal' },
-                      ...(locations ?? []).map((l) => ({ value: l.id, label: l.name })),
-                    ]}
-                    onSelect={(v) => setForm((f) => ({ ...f, location_id: v }))}
-                  />
-                ) : null}
-
-                {/* Notes */}
-                <Input label={t.notesLabel} placeholder={t.notesPlaceholder} value={form.notes}
-                  onChangeText={(v) => setForm((f) => ({ ...f, notes: v }))} multiline numberOfLines={3}
-                  style={{ minHeight: 70, textAlignVertical: 'top' }} />
-
-                {/* Photos — only after the equipment exists. */}
-                {/* Photos — available while adding (queued locally) and editing
-                   (uploaded immediately). */}
-                {(modal === 'add' || (modal === 'edit' && selected)) ? (
-                  <>
-                    <Text className="text-xs font-semibold text-faint uppercase tracking-wide mt-1">{t.photosHeading}</Text>
-                    {(modal === 'add' ? pendingPhotos.length : photos.length) === 0 ? (
-                      <View className="py-8 items-center rounded-2xl border-2 border-dashed border-border gap-2">
-                        <ImageIcon size={20} color={c.faint} />
-                        <Text className="text-sm text-muted">{t.photoEmpty}</Text>
-                      </View>
-                    ) : modal === 'add' ? (
-                      <View className="flex-row flex-wrap gap-2">
-                        {pendingPhotos.map((uri) => (
-                          <View key={uri} className="relative w-24 h-24 rounded-xl overflow-hidden bg-border-soft">
-                            <Image source={{ uri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                            <Pressable
-                              onPress={() => removePending(uri)}
-                              hitSlop={6}
-                              className="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 items-center justify-center"
-                            >
-                              <X size={12} color={c.danger} />
-                            </Pressable>
-                          </View>
-                        ))}
-                      </View>
-                    ) : (
-                      <View className="flex-row flex-wrap gap-2">
-                        {photos.map((p) => (
-                          <Pressable
-                            key={p.id}
-                            onLongPress={() => removePhoto(p)}
-                            className="relative w-24 h-24 rounded-xl overflow-hidden bg-border-soft active:opacity-80"
-                          >
-                            <SkeletonImage
-                              source={{ uri: thumbUrl(photoUrls, p.storage_path) }}
-                              fallbackUri={photoUrls[p.storage_path]}
-                              onFallback={() => healThumb(supabase, EQUIPMENT_BUCKET, p.storage_path, photoUrls[p.storage_path])}
-                              style={{ width: '100%', height: '100%' }}
-                              resizeMode="cover"
-                            />
-                            <Pressable
-                              onPress={() => removePhoto(p)}
-                              hitSlop={6}
-                              className="absolute top-1 right-1 w-6 h-6 rounded-full bg-white/90 items-center justify-center"
-                            >
-                              <X size={12} color={c.danger} />
-                            </Pressable>
-                          </Pressable>
-                        ))}
-                      </View>
-                    )}
-                    <View className="flex-row gap-2">
-                      <Pressable
-                        onPress={() => pickPhoto('camera')}
-                        disabled={uploadingPhoto}
-                        className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-border-soft active:opacity-70 disabled:opacity-50"
-                      >
-                        <Camera size={16} color={c.muted} />
-                        <Text className="text-sm font-semibold text-ink">{t.photoTakeBtn}</Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => pickPhoto('library')}
-                        disabled={uploadingPhoto}
-                        className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-border-soft active:opacity-70 disabled:opacity-50"
-                      >
-                        <ImagePlus size={16} color={c.muted} />
-                        <Text className="text-sm font-semibold text-ink">{t.photoLibraryBtn}</Text>
-                      </Pressable>
-                    </View>
-                    {canPastePhoto ? (
-                      <Pressable
-                        onPress={() => pickPhoto('paste')}
-                        disabled={uploadingPhoto}
-                        className="flex-row items-center justify-center gap-2 py-3 rounded-2xl bg-border-soft active:opacity-70 disabled:opacity-50"
-                      >
-                        <ClipboardPaste size={16} color={c.muted} />
-                        <Text className="text-sm font-semibold text-ink">{tPhotos.pastePhoto}</Text>
-                      </Pressable>
-                    ) : null}
-                    {uploadingPhoto ? (
-                      <View className="flex-row items-center gap-2">
-                        <ActivityIndicator size="small" color={c.primary} />
-                        <Text className="text-xs text-muted">{t.photoUploading}</Text>
-                      </View>
-                    ) : null}
-                  </>
-                ) : null}
-
-                {error ? <Text className="text-xs text-red-500">{error}</Text> : null}
-
-                {/* Delete lives on the detail page (not here) — opening the
-                   confirm sheet from inside this modal would nest modals. */}
-                <View className="pt-3">
-                  <Button onPress={save} loading={saving} fullWidth>{tc.buttons.save}</Button>
-                </View>
-              </ScrollView>
-            </View>
-
-            {/* VIN barcode scanner — full-screen camera overlay (rendered
-               in-place, not a nested modal which would break inside the sheet
-               on iOS). */}
-            {scanning ? (
-              <View style={StyleSheet.absoluteFill} className="bg-black">
-                <CameraView
-                  style={StyleSheet.absoluteFill}
-                  facing="back"
-                  barcodeScannerSettings={{ barcodeTypes: ['code39', 'code128', 'code93', 'datamatrix', 'qr', 'pdf417'] }}
-                  onBarcodeScanned={onVinScanned}
-                />
-                <View style={StyleSheet.absoluteFill} pointerEvents="none" className="items-center justify-center">
-                  <View className="w-72 h-28 border-2 border-white/80 rounded-2xl" />
-                  <Text className="text-white text-sm mt-5 px-10 text-center">{t.scanVinHint}</Text>
-                </View>
-                <Pressable
-                  onPress={() => setScanning(false)}
-                  style={{ top: insets.top + 12 }}
-                  className="absolute right-5 w-10 h-10 rounded-full bg-black/50 items-center justify-center"
-                >
-                  <X size={22} color="#FFFFFF" />
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
-        </KeyboardAvoidingView>
-      </RNModal>
-
-      {/* Detail view — a full-screen PAGE, not a modal, so the delete sheet
-         and the photo viewer (both RNModals) present cleanly above it. iOS
-         won't reliably stack transparent modals, which is why clicking
-         delete / a photo did nothing when this was a modal. */}
-      {modal === 'detail' && selected ? (
+  // Detail view — a full-screen PAGE on phones (not a modal, so the delete
+  // sheet and photo viewer, both RNModals, present cleanly above it); the
+  // right pane in split view. Kept while the edit sheet is open in split.
+  const detailVisible = !!selected && (modal === 'detail' || (split && modal === 'edit'));
+  const detailView = !selected ? null : (
         <View
-          style={[StyleSheet.absoluteFill, { backgroundColor: c.surface, zIndex: 30, elevation: 30, paddingTop: insets.top }]}
+          style={split
+            ? { flex: 1, backgroundColor: c.surface }
+            : [StyleSheet.absoluteFill, { backgroundColor: c.surface, zIndex: 30, elevation: 30, paddingTop: insets.top }]}
         >
           <View className="flex-row items-center px-3 pt-2 pb-3 border-b border-border-soft bg-card">
-            <Pressable
-              onPress={() => { setModal(null); setSelected(null); }}
-              hitSlop={12}
-              className="p-2 -ml-2 rounded-lg active:bg-border-soft"
-            >
-              <ChevronLeft size={22} color={c.ink} />
-            </Pressable>
+            {split ? null : (
+              <Pressable
+                onPress={() => { setModal(null); setSelected(null); }}
+                hitSlop={12}
+                className="p-2 -ml-2 rounded-lg active:bg-border-soft"
+              >
+                <ChevronLeft size={22} color={c.ink} />
+              </Pressable>
+            )}
             <Text className="text-lg font-bold text-ink flex-1 mx-1" numberOfLines={1}>{selected.name}</Text>
             {canEdit ? (
               <>
@@ -1689,6 +1714,34 @@ export default function EquipmentScreen() {
                   ].filter(Boolean).join('\n')}
                 </Text>
           </ScrollView>
+        </View>
+  );
+
+  return (
+    <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+      {/* Above everything, full width — same spot as the other lists. */}
+      <LocationSwitcher />
+      {split ? (
+        <SplitView
+          listWidth={listWidth}
+          list={listPane}
+          detail={formOpen ? (
+            // key: fresh pane per item, so the form never keeps another's scroll.
+            <View key={`form-${selected?.id ?? 'new'}`} style={{ flex: 1, backgroundColor: c.card }}>
+              {formContent}
+              {vinScanner}
+            </View>
+          ) : detailVisible ? detailView : <SplitEmpty icon={Truck} text={t.splitEmpty} />}
+        />
+      ) : listPane}
+
+
+      {!split && detailVisible ? detailView : null}
+      {/* Phones: add / edit is a full-screen page over the list / detail. */}
+      {!split && formOpen ? (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: c.surface, zIndex: 31, elevation: 31, paddingTop: insets.top }]}>
+          {formContent}
+          {vinScanner}
         </View>
       ) : null}
 
