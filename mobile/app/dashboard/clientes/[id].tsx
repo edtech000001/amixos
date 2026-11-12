@@ -175,7 +175,7 @@ export default function ClienteDetailRoute() {
  * view (wide screens) the clients list renders it beside itself with
  * `embeddedId`, and the back arrow / delete hand control back via `onClose`.
  */
-export function ClientDetail({ embeddedId, onClose }: { embeddedId?: string; onClose?: () => void } = {}) {
+export function ClientDetail({ embeddedId, onClose, onEdit }: { embeddedId?: string; onClose?: () => void; onEdit?: () => void } = {}) {
   const router = useRouter();
   // Section links stay in whichever stack this screen is in (its tab, or
   // the Más stack when opened from the Más menu) — lib/sectionNav.
@@ -820,7 +820,7 @@ export function ClientDetail({ embeddedId, onClose }: { embeddedId?: string; onC
           </Pressable>
           {canEdit ? (
             <Pressable
-              onPress={() => router.push(`${sectionBase}/nuevo?edit=${client.id}` as never)}
+              onPress={() => (onEdit ? onEdit() : router.push(`${sectionBase}/nuevo?edit=${client.id}` as never))}
               hitSlop={8}
               className="p-2 rounded-lg active:bg-border-soft"
             >

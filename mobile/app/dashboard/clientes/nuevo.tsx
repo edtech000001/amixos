@@ -79,13 +79,20 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export default function NuevoClienteRoute() {
+  return <ClientForm />;
+}
+
+/** Split view: edits `embeddedEditId` inside the right pane; save and back
+ *  call `onDone` (back to the detail) instead of navigating. */
+export function ClientForm({ embeddedEditId, onDone }: { embeddedEditId?: string; onDone?: () => void } = {}) {
   const router = useRouter();
   // Section links stay in whichever stack this screen is in (its tab, or
   // the Más stack when opened from the Más menu) — lib/sectionNav.
   const sectionBase = useSectionBase('clientes');
   // Wide screens: back/save returns to the split view with this client open.
-  const showInSplit = useShowInSplit('clientes');
-  const { edit, from } = useLocalSearchParams<{ edit?: string; from?: string }>();
+  const showInSplit = useShowInSplit('clientes', onDone);
+  const routeParams = useLocalSearchParams<{ edit?: string; from?: string }>();
+  const { edit, from } = embeddedEditId ? { edit: embeddedEditId, from: undefined } : routeParams;
   const supabase = createSupabaseClient();
   const { business, locations, currentRole } = useApp();
   const multiLocation = (locations?.length ?? 0) > 1;

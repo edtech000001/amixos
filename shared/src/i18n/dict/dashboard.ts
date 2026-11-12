@@ -1340,6 +1340,7 @@ export type DashboardDict = {
     emptyHourTotals: string;
     deleteHoursConfirm: string;
     teamSearchPlaceholder: string;
+    splitEmpty: string;
     viewActive: string;
     viewInactive: string;
     resultsCount: string;
@@ -4869,6 +4870,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       emptyHourTotals: 'Sin horas en este periodo de pago.',
       deleteHoursConfirm: '¿Eliminar este registro de horas?',
       teamSearchPlaceholder: 'Buscar por nombre, teléfono o campo…',
+      splitEmpty: 'Selecciona un empleado',
       viewActive: 'Activos',
       viewInactive: 'Inactivos',
       resultsCount: '{{count}} resultados',
@@ -8377,6 +8379,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       emptyHourTotals: 'No hours this pay period.',
       deleteHoursConfirm: 'Delete this hours entry?',
       teamSearchPlaceholder: 'Search name, phone or field…',
+      splitEmpty: 'Select an employee',
       viewActive: 'Active',
       viewInactive: 'Inactive',
       resultsCount: '{{count}} results',

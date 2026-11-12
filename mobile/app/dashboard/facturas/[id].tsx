@@ -130,8 +130,8 @@ export default function FacturaDetailRoute() {
  * view (wide screens) the invoices list renders it beside itself with
  * `embeddedId`, and back / delete hand control back via `onClose`.
  */
-export function InvoiceDetailPane({ embeddedId, onClose, onChanged }: {
-  embeddedId?: string; onClose?: () => void; onChanged?: () => void;
+export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEditInPane }: {
+  embeddedId?: string; onClose?: () => void; onChanged?: () => void; onEdit?: () => void;
 } = {}) {
   const routeParams = useLocalSearchParams<{ id: string; from?: string; jobId?: string; clientId?: string }>();
   const embedded = !!embeddedId;
@@ -1332,7 +1332,7 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged }: {
         onUpdateStatus={updateStatus}
         onPrint={invoice ? exportPdf : undefined}
         onShareLink={invoice ? shareLink : undefined}
-        onEdit={invoice && canEdit ? () => (embedded ? router.push : router.replace)(`${sectionBase}/nueva?edit=${id}` as never) : undefined}
+        onEdit={invoice && canEdit ? () => (onEditInPane ? onEditInPane() : (embedded ? router.push : router.replace)(`${sectionBase}/nueva?edit=${id}` as never)) : undefined}
         onDelete={invoice && canDelete ? confirmDelete : undefined}
         onAutoprice={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? runAutoprice : undefined}
         // Delay past the more-actions sheet's dismissal — iOS refuses to

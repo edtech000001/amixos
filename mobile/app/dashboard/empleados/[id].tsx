@@ -125,11 +125,23 @@ const US_STATES = [
 ];
 
 export default function EmpleadoDetailRoute() {
+  return <EmployeeDetail />;
+}
+
+/** Employee detail. `embeddedId` = rendered in the split view's right pane
+ *  (no back arrow; leaving calls `onClose`, list-visible edits `onChanged`). */
+export function EmployeeDetail({ embeddedId, onClose, onChanged }: {
+  embeddedId?: string;
+  onClose?: () => void;
+  onChanged?: () => void;
+} = {}) {
+  const embedded = !!embeddedId;
   const router = useRouter();
   // Section links stay in whichever stack this screen is in (its tab, or
   // the Más stack when opened from the Más menu) — lib/sectionNav.
   const sectionBase = useSectionBase('empleados');
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string }>();
+  const id = embeddedId ?? params.id;
   const supabase = createSupabaseClient();
   const { business, user, currentRole, startImpersonation, locations, refetchBusiness } = useApp();
   // Business overtime defaults — shown in the per-employee boxes, which fall
@@ -705,7 +717,8 @@ export default function EmpleadoDetailRoute() {
       business_id: business.id, action: 'employee.deleted',
       entity_type: 'employee', entity_id: employee.id, details: { name },
     });
-    router.replace(`${sectionBase}` as never);
+    if (embedded) onClose?.();
+    else router.replace(`${sectionBase}` as never);
   };
 
   // Pop back to the existing list screen when there's history (the section
@@ -713,9 +726,21 @@ export default function EmpleadoDetailRoute() {
   // and loaded data intact — replace() would rebuild it from scratch).
   // Deep links with no history still replace to the list route.
   const goBack = useCallback(() => {
-    if (router.canGoBack()) router.back();
+    if (embedded) onClose?.();
+    else if (router.canGoBack()) router.back();
     else router.replace(`${sectionBase}` as never);
-  }, [router]);
+  }, [router, embedded, onClose]);
+
+  // Split view: refresh the list when something its row shows changes.
+  const listSig = employee
+    ? `${employee.first_name}|${employee.last_name}|${employee.active}|${employee.role}|${selAccess?.kind}`
+    : null;
+  const lastSig = useRef<string | null>(null);
+  useEffect(() => {
+    if (!listSig) return;
+    if (lastSig.current && lastSig.current !== listSig) onChanged?.();
+    lastSig.current = listSig;
+  }, [listSig, onChanged]);
 
   // Snapshot the form when entering edit mode so the back guard only fires
   // when something actually changed this session (re-baselined each entry,
@@ -732,7 +757,7 @@ export default function EmpleadoDetailRoute() {
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-        <Header onBack={goBack} />
+        <Header onBack={embedded ? undefined : goBack} />
         <ScrollView className="flex-1" contentContainerStyle={{ padding: 24, gap: 16 }}
         automaticallyAdjustKeyboardInsets
         keyboardDismissMode="interactive"
@@ -747,7 +772,7 @@ export default function EmpleadoDetailRoute() {
   if (notFound || !employee) {
     return (
       <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-        <Header onBack={goBack} />
+        <Header onBack={embedded ? undefined : goBack} />
         <View className="flex-1 items-center justify-center px-6">
           <Text className="text-sm text-faint">—</Text>
         </View>
@@ -761,10 +786,12 @@ export default function EmpleadoDetailRoute() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center px-2 pt-2 pb-3 border-b border-border-soft">
-        <Pressable onPress={confirmBack} hitSlop={12} className="p-2 rounded-lg active:bg-border-soft">
-          <ChevronLeft size={22} color={c.ink} />
-        </Pressable>
-        <Text className="ml-1 flex-1 text-base font-semibold text-ink" numberOfLines={1}>
+        {embedded ? null : (
+          <Pressable onPress={confirmBack} hitSlop={12} className="p-2 rounded-lg active:bg-border-soft">
+            <ChevronLeft size={22} color={c.ink} />
+          </Pressable>
+        )}
+        <Text className={`${embedded ? 'ml-3' : 'ml-1'} flex-1 text-base font-semibold text-ink`} numberOfLines={1}>
           {employee.first_name} {employee.last_name}
         </Text>
         <View className="flex-row items-center gap-1">
@@ -1172,8 +1199,9 @@ export default function EmpleadoDetailRoute() {
   );
 }
 
-function Header({ onBack }: { onBack: () => void }) {
+function Header({ onBack }: { onBack?: () => void }) {
   const c = useThemeColors();
+  if (!onBack) return null;
   return (
     <View className="flex-row items-center px-2 pt-2 pb-3 border-b border-border-soft">
       <Pressable onPress={onBack} hitSlop={12} className="p-2 rounded-lg active:bg-border-soft">

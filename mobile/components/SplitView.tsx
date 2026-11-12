@@ -4,6 +4,7 @@ import { Text, useWindowDimensions, View } from 'react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { OverlayHost } from '@amixos/shared/ui/OverlayPortal';
+import { useLeaveGuardStore } from '@/lib/leaveGuardStore';
 
 /** Window width (pt) from which list screens show list + detail side by side
  *  (iPad, iPhone Duo unfolded). Phones top out around 440pt. */
@@ -58,18 +59,21 @@ export function SplitEmpty({ icon: Icon, text }: { icon: LucideIcon; text: strin
 const pendingOpen: Record<string, string> = {};
 
 /** For forms: show item `id` of `section` — reopened in the split view when
- *  it's on, else via `fallback` (the old replace-to-detail). */
-export function useShowInSplit(section: string): (id: string, fallback: () => void) => void {
+ *  it's on, else via `fallback` (the old replace-to-detail). A form editing
+ *  inside the right pane passes `onDone` instead (back to the detail). */
+export function useShowInSplit(section: string, onDone?: () => void): (id: string, fallback: () => void) => void {
   const { split } = useSplitView();
   const router = useRouter();
   return useCallback((id: string, fallback: () => void) => {
-    if (split && router.canGoBack()) {
+    if (onDone) {
+      onDone();
+    } else if (split && router.canGoBack()) {
       pendingOpen[section] = id;
       router.back();
     } else {
       fallback();
     }
-  }, [split, router, section]);
+  }, [split, router, section, onDone]);
 }
 
 /** For split list screens: open whatever a form handed back, on focus. */
@@ -81,4 +85,12 @@ export function useSplitOpenRequest(section: string, open: (id: string) => void)
       open(id);
     }
   }, [section, open]));
+}
+
+/** Run `fn` (e.g. open another row) once the focused form's unsaved-changes
+ *  guard allows it — an edit form in the right pane prompts first. */
+export function whenLeaveAllowed(fn: () => void): void {
+  const request = useLeaveGuardStore.getState().request;
+  if (request) request(fn);
+  else fn();
 }

@@ -242,8 +242,8 @@ export default function JobDetailRoute() {
  * back / delete hand control back via `onClose`, and switching to another job
  * goes through `onOpen` so the list stays.
  */
-export function JobDetail({ embeddedId, onClose, onOpen, onChanged }: {
-  embeddedId?: string; onClose?: () => void; onOpen?: (id: string) => void; onChanged?: () => void;
+export function JobDetail({ embeddedId, onClose, onOpen, onChanged, onEdit }: {
+  embeddedId?: string; onClose?: () => void; onOpen?: (id: string) => void; onChanged?: () => void; onEdit?: () => void;
 } = {}) {
   const router = useRouter();
   // Section links stay in whichever stack this screen is in (its tab, or
@@ -1585,7 +1585,7 @@ export function JobDetail({ embeddedId, onClose, onOpen, onChanged }: {
           ) : null}
           {canEditDetails ? (
             <Pressable
-              onPress={() => router.push(`${sectionBase}/nuevo?edit=${job.id}` as never)}
+              onPress={() => (onEdit ? onEdit() : router.push(`${sectionBase}/nuevo?edit=${job.id}` as never))}
               hitSlop={8}
               className="p-2 rounded-lg active:bg-border-soft"
             >

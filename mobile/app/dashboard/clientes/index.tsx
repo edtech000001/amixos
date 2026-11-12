@@ -33,7 +33,8 @@ import { fetchClientLocations, clientIdsAtLocation, clientsWithAnyLocation, type
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useMoreBack } from '@/lib/useMoreBack';
 import { useSectionBase } from '@/lib/sectionNav';
-import { SplitEmpty, SplitView, useSplitOpenRequest, useSplitView } from '@/components/SplitView';
+import { SplitEmpty, SplitView, useSplitOpenRequest, useSplitView, whenLeaveAllowed } from '@/components/SplitView';
+import { ClientForm } from './nuevo';
 import { ClientDetail } from './[id]';
 import { Users } from 'lucide-react-native';
 
@@ -379,8 +380,12 @@ export default function ClientesTab() {
   // Wide screens (iPad, iPhone Duo unfolded): detail opens beside the list.
   const { split, listWidth } = useSplitView();
   const [openId, setOpenId] = useState<string | null>(null);
+  // Edit form shown in the right pane instead of the detail (list stays put).
+  const [editing, setEditing] = useState(false);
+  // Row taps go through the pane form's unsaved-changes guard.
+  const openInPane = (id: string) => whenLeaveAllowed(() => { setEditing(false); setOpenId(id); });
   const openDetail = (id: string) => {
-    if (split) setOpenId(id);
+    if (split) openInPane(id);
     else router.push(`${sectionBase}/${id}` as never);
   };
   // Back from the edit / new form → reopen that client beside the list.
@@ -522,7 +527,9 @@ export default function ClientesTab() {
           list={listScreen}
           detail={openId
             // key: a fresh detail per client (its state is per-client).
-            ? <ClientDetail key={openId} embeddedId={openId} onClose={() => { setOpenId(null); reRun(); }} />
+            ? editing
+              ? <ClientForm key={`edit-${openId}`} embeddedEditId={openId} onDone={() => { setEditing(false); reRun(); }} />
+              : <ClientDetail key={openId} embeddedId={openId} onEdit={() => setEditing(true)} onClose={() => { setOpenId(null); reRun(); }} />
             : <SplitEmpty icon={Users} text={t.splitEmpty} />}
         />
       ) : listScreen}

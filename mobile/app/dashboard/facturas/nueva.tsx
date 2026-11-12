@@ -107,15 +107,22 @@ function addDaysISO(iso: string, days: number): string {
 }
 
 export default function NuevaFacturaRoute() {
+  return <InvoiceForm />;
+}
+
+/** Split view: edits `embeddedEditId` inside the right pane; save and back
+ *  call `onDone` (back to the detail) instead of navigating. */
+export function InvoiceForm({ embeddedEditId, onDone }: { embeddedEditId?: string; onDone?: () => void } = {}) {
   const router = useRouter();
   // Section links stay in whichever stack this screen is in (its tab, or
   // the Más stack when opened from the Más menu) — lib/sectionNav.
   const sectionBase = useSectionBase('facturas');
   // Wide screens: back/save returns to the split view with this invoice open.
-  const showInSplit = useShowInSplit('facturas');
+  const showInSplit = useShowInSplit('facturas', onDone);
   // `client` comes from the client detail page's New invoice action, which
   // has always passed it — nothing here read it, so the picker opened empty.
-  const { edit, client: clientParam, from } = useLocalSearchParams<{ edit?: string; client?: string; from?: string }>();
+  const routeParams = useLocalSearchParams<{ edit?: string; client?: string; from?: string }>();
+  const { edit, client: clientParam, from } = embeddedEditId ? { edit: embeddedEditId, client: undefined, from: undefined } : routeParams;
   const supabase = createSupabaseClient();
   const insets = useSafeAreaInsets();
   const { business, currentRole, activeLocationId, myHomeLocationId } = useApp();

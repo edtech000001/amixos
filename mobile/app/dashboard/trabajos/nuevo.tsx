@@ -146,14 +146,21 @@ function hoursFromTimes(start: string, end: string): number | null {
 }
 
 export default function NuevoTrabajoRoute() {
+  return <JobForm />;
+}
+
+/** Split view: edits `embeddedEditId` inside the right pane; save and back
+ *  call `onDone` (back to the detail) instead of navigating. */
+export function JobForm({ embeddedEditId, onDone }: { embeddedEditId?: string; onDone?: () => void } = {}) {
   const router = useRouter();
   // Section links stay in whichever stack this screen is in (its tab, or
   // the Más stack when opened from the Más menu) — lib/sectionNav.
   const sectionBase = useSectionBase('trabajos');
   // Wide screens: saving returns to the split view with the job open.
-  const showInSplit = useShowInSplit('trabajos');
+  const showInSplit = useShowInSplit('trabajos', onDone);
   const insets = useSafeAreaInsets();
-  const { edit, duplicate, modo, client: clientParam, copy, from } = useLocalSearchParams<{ edit?: string; duplicate?: string; modo?: string; client?: string; copy?: string; from?: string }>();
+  const routeParams = useLocalSearchParams<{ edit?: string; duplicate?: string; modo?: string; client?: string; copy?: string; from?: string }>();
+  const { edit, duplicate, modo, client: clientParam, copy, from } = embeddedEditId ? { edit: embeddedEditId } as typeof routeParams : routeParams;
   const supabase = createSupabaseClient();
   const c = useThemeColors();
   const { business, user, currentRole, activeLocationId, myHomeLocationId, locations } = useApp();
@@ -2083,7 +2090,9 @@ export default function NuevoTrabajoRoute() {
       setDriverPickerOpen(false);
       setCrewFinderOpen(false);
 
-      if (jobQueued && optimisticJobRow) {
+      if (onDone) {
+        onDone();
+      } else if (jobQueued && optimisticJobRow) {
         // Offline create: seed caches so the job shows in the list + opens, then
         // go to the list (the detail's joined client data isn't available yet).
         void prependCached(`jobs_list_${business.id}`, optimisticJobRow);
@@ -2119,7 +2128,9 @@ export default function NuevoTrabajoRoute() {
   // from a hidden tab screen often lands on the very first tab (home) rather
   // than the trabajos list. Navigate explicitly to the right destination.
   const goBack = () => {
-    if (sourceId && router.canGoBack()) {
+    if (onDone) {
+      onDone();
+    } else if (sourceId && router.canGoBack()) {
       // Pop back to the detail/screen we came from (it refetches on focus)
       // instead of replacing — replace stacked a duplicate detail, so pressing
       // Back on the detail returned to the detail again instead of the list.

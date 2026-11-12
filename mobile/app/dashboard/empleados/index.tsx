@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ChevronDown, Check, DollarSign, X, Clock, UserX, UserCheck, Pencil, Minus, Plus, Search } from 'lucide-react-native';
+import { ChevronDown, Check, DollarSign, X, Clock, UserX, UserCheck, Pencil, Minus, Plus, Search, Users } from 'lucide-react-native';
 import { createSupabaseClient } from '@/lib/supabase';
 import { queuedInsert } from '@/lib/offline/mutate';
 import { newUuid } from '@/lib/offline/ids';
@@ -49,6 +49,8 @@ import { can, isReadOnly, type Role } from '@amixos/shared/lib/permissions';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useMoreBack } from '@/lib/useMoreBack';
 import { useSectionBase } from '@/lib/sectionNav';
+import { SplitEmpty, SplitView, useSplitView, whenLeaveAllowed } from '@/components/SplitView';
+import { EmployeeDetail } from './[id]';
 
 interface RawEmployee {
   id: string;
@@ -562,6 +564,7 @@ export default function EmpleadosRoute() {
             }
             await loadEmployees();
             await loadPeople();
+            setOpenId(prev => (prev && toDelete.includes(prev) ? null : prev));
             setBulkDeleting(false);
             resolve(true);
           },
@@ -574,7 +577,15 @@ export default function EmpleadosRoute() {
   // FAB → /nuevo (create form), row → /[id] (detail). The list reloads on
   // focus so changes made on those screens show up on return.
   const openAddEmp = () => router.push(`${sectionBase}/nuevo` as never);
-  const openEditEmpById = (id: string) => router.push(`${sectionBase}/${id}` as never);
+  // Split view (iPad / Duo): rows open in the right pane. An open employee
+  // with unsaved edits gets the usual discard prompt first.
+  const { split, listWidth } = useSplitView();
+  const [openId, setOpenId] = useState<string | null>(null);
+  const openEditEmpById = (id: string) => {
+    if (!split) return router.push(`${sectionBase}/${id}` as never);
+    whenLeaveAllowed(() => setOpenId(id));
+  };
+  const reloadFromDetail = () => { void loadEmployees(); void loadPeople(); };
   // Legacy edit-modal seed kept inline as dead code (the RNModal's
   // `visible` is gated on add mode below, so this isn't reached). Will
   // be cleaned up in a follow-up pass.
@@ -1104,10 +1115,10 @@ export default function EmpleadosRoute() {
     </>
   );
 
-  return (
-    <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-      <LocationSwitcher />
+  const listScreen = (
       <EmployeesScreen
+        activeId={split ? openId : null}
+        addInHeader={split}
         refreshControl={pull.control}
         businessId={business?.id}
         onBack={moreBack}
@@ -1134,9 +1145,25 @@ export default function EmpleadosRoute() {
         bulkDeleting={bulkDeleting}
         modalsSlot={modalsSlot}
       />
+  );
+
+  return (
+    <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+      <LocationSwitcher />
+      {split ? (
+        <SplitView
+          listWidth={listWidth}
+          list={listScreen}
+          detail={openId
+            // key: a fresh detail per employee (its state is per-employee).
+            ? <EmployeeDetail key={openId} embeddedId={openId} onChanged={reloadFromDetail} onClose={() => { setOpenId(null); reloadFromDetail(); }} />
+            : <SplitEmpty icon={Users} text={t.splitEmpty} />}
+        />
+      ) : listScreen}
     </SafeAreaView>
   );
 }
+
 
 /**
  * Renders the right input for a given template field type. Values are

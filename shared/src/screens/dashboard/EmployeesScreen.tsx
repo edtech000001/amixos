@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { PullRefreshControl } from '../../ui/usePullRefresh';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, Pressable, ScrollView, TextInput, FlatList } from 'react-native';
@@ -12,7 +12,7 @@ import {
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
-import { Fab } from '../../ui/Fab';
+import { Fab, HeaderAddButton } from '../../ui/Fab';
 import { roleLabel } from '../../lib/permissions';
 import type { AccessStatus } from '../../lib/teamPeople';
 import { splitMultiValue } from '../../lib/fieldTemplates';
@@ -131,6 +131,10 @@ export interface EmployeesScreenProps {
   customFieldDefs?: CustomFieldDef[];
   /** Active business — scopes the saved sort/group per business. */
   businessId?: string;
+  /** Split view: the employee open in the right pane (row highlighted). */
+  activeId?: string | null;
+  /** Split view: the "add" action sits in the header instead of a corner FAB. */
+  addInHeader?: boolean;
 }
 
 /** FlatList rows: optional group headers + employee rows (first/last round
@@ -163,6 +167,8 @@ export function EmployeesScreen({
   modalsSlot,
   loading,
   businessId,
+  activeId,
+  addInHeader,
 }: EmployeesScreenProps) {
   const { t: full, locale } = useLang();
   const c = useThemeColors();
@@ -384,63 +390,88 @@ export function EmployeesScreen({
     </>
   );
 
+  const searchBox = (
+    <View className="flex-1 flex-row items-center rounded-2xl border border-border bg-card px-3.5">
+      <Search size={16} color={c.faint} />
+      <TextInput
+        value={search}
+        onChangeText={setSearch}
+        placeholder={t.teamSearchPlaceholder}
+        placeholderTextColor={c.faint}
+        autoCapitalize="none"
+        autoCorrect={false}
+        className="flex-1 px-2.5 py-2.5 text-ink" style={{ fontSize: 14 }} />
+      {search ? (
+        <Pressable onPress={() => setSearch('')} hitSlop={8}>
+          <X size={16} color={c.faint} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+  const headerButtons = (
+    <>
+      <FilterButton count={filterCount} onPress={() => setFilterOpen(true)} label={full.common.filters.button} />
+      {canBulkDelete && employees.length > 0 ? (
+        <Pressable
+          onPress={() => (selectionMode ? exitSelect() : setSelectMode(true))}
+          className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
+            selectionMode ? 'bg-primary/10 border-primary' : 'bg-card border-border'
+          }`}
+        >
+          <ListChecks size={16} color={selectionMode ? c.primary : c.muted} />
+        </Pressable>
+      ) : null}
+      {addInHeader && onAddEmployee && !selectionMode ? <HeaderAddButton onPress={onAddEmployee} /> : null}
+    </>
+  );
+  const hasInactive = employees.length - activeCount > 0;
+  const statusChips = (
+    <>
+      {(['active', 'inactive'] as const).map(k => {
+        const on = statusView === k;
+        const n = k === 'active' ? activeCount : employees.length - activeCount;
+        return (
+          <Pressable
+            key={k}
+            onPress={() => setStatusView(k)}
+            className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-xl ${on ? 'bg-primary' : 'bg-border-soft'}`}
+          >
+            <Text className={`text-xs font-semibold ${on ? 'text-white' : 'text-muted'}`}>
+              {k === 'active' ? t.viewActive : t.viewInactive}
+            </Text>
+            <Text className={`text-xs font-bold ${on ? 'text-white/80' : 'text-faint'}`}>{n}</Text>
+          </Pressable>
+        );
+      })}
+    </>
+  );
+
   // Team-tab list header (search + filter + selection banner) rides above the
-  // virtualized employee rows.
+  // virtualized employee rows. Split view (narrow pane + an extra "+"): search
+  // gets its own row and the buttons share the Active/Inactive row.
   const teamHeader = (
     <>
       {topBar}
-      <View className="flex-row items-center gap-2 mb-3">
-        <View className="flex-1 flex-row items-center rounded-2xl border border-border bg-card px-3.5">
-          <Search size={16} color={c.faint} />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder={t.teamSearchPlaceholder}
-            placeholderTextColor={c.faint}
-            autoCapitalize="none"
-            autoCorrect={false}
-            className="flex-1 px-2.5 py-2.5 text-ink" style={{ fontSize: 14 }} />
-          {search ? (
-            <Pressable onPress={() => setSearch('')} hitSlop={8}>
-              <X size={16} color={c.faint} />
-            </Pressable>
-          ) : null}
-        </View>
-        <FilterButton count={filterCount} onPress={() => setFilterOpen(true)} label={full.common.filters.button} />
-        {canBulkDelete && employees.length > 0 ? (
-          <Pressable
-            onPress={() => (selectionMode ? exitSelect() : setSelectMode(true))}
-            className={`w-11 h-11 rounded-xl border items-center justify-center active:opacity-80 ${
-              selectionMode ? 'bg-primary/10 border-primary' : 'bg-card border-border'
-            }`}
-          >
-            <ListChecks size={16} color={selectionMode ? c.primary : c.muted} />
-          </Pressable>
-        ) : null}
-      </View>
-
-      {/* Active/Inactive segment — the list shows one group at a time (active
-          by default). Hidden while everyone is active: nothing to switch to. */}
-      {employees.length - activeCount > 0 ? (
-        <View className="flex-row gap-1.5 mb-3">
-          {(['active', 'inactive'] as const).map(k => {
-            const on = statusView === k;
-            const n = k === 'active' ? activeCount : employees.length - activeCount;
-            return (
-              <Pressable
-                key={k}
-                onPress={() => setStatusView(k)}
-                className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-xl ${on ? 'bg-primary' : 'bg-border-soft'}`}
-              >
-                <Text className={`text-xs font-semibold ${on ? 'text-white' : 'text-muted'}`}>
-                  {k === 'active' ? t.viewActive : t.viewInactive}
-                </Text>
-                <Text className={`text-xs font-bold ${on ? 'text-white/80' : 'text-faint'}`}>{n}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      ) : null}
+      {/* Keyed branches: NativeWind must not see className swap on a mounted View. */}
+      {addInHeader ? (
+        <Fragment key="split">
+          <View className="flex-row mb-3">{searchBox}</View>
+          <View className="flex-row items-center gap-2 mb-3">
+            {hasInactive ? <View className="flex-1 flex-row gap-1.5">{statusChips}</View> : <View className="flex-1" />}
+            {headerButtons}
+          </View>
+        </Fragment>
+      ) : (
+        <Fragment key="stack">
+          <View className="flex-row items-center gap-2 mb-3">
+            {searchBox}
+            {headerButtons}
+          </View>
+          {/* Active/Inactive segment — the list shows one group at a time (active
+              by default). Hidden while everyone is active: nothing to switch to. */}
+          {hasInactive ? <View className="flex-row gap-1.5 mb-3">{statusChips}</View> : null}
+        </Fragment>
+      )}
 
       {selectionMode ? (
         <View className="flex-row items-center gap-2 bg-primary/5 border border-primary/20 rounded-xl px-3 py-2.5 mb-3">
@@ -478,6 +509,7 @@ export function EmployeesScreen({
         onPress={() => rowPress(e.id)}
         onLongPress={canBulkDelete ? () => enterSelect(e.id) : undefined}
         delayLongPress={300}
+        style={e.id === activeId && !selected ? { backgroundColor: `${c.primary}1F` } : undefined}
         className={`flex-row items-start gap-3 px-5 py-4 border-x border-border-soft ${isFirst ? 'rounded-t-2xl border-t' : ''} ${isLast ? 'rounded-b-2xl border-b' : 'border-b'} ${
           selected ? 'bg-primary/5' : 'bg-card active:bg-surface'
         }`}
@@ -635,6 +667,7 @@ export function EmployeesScreen({
           data={employees.length === 0 ? [] : empRows}
           keyExtractor={r => r.key}
           renderItem={renderEmployee}
+          extraData={activeId}
           ListHeaderComponent={teamHeader}
           ListEmptyComponent={
             loading ? (
@@ -653,7 +686,7 @@ export function EmployeesScreen({
               </View>
             )
           }
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: selectionMode ? 320 : 176 }}
+          contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 24, paddingBottom: selectionMode ? 320 : 176 }}
           keyboardShouldPersistTaps="handled"
           initialNumToRender={15}
           windowSize={7}
@@ -681,14 +714,14 @@ export function EmployeesScreen({
               </View>
             )
           }
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 176 }}
+          contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 24, paddingBottom: 176 }}
           keyboardShouldPersistTaps="handled"
           initialNumToRender={15}
           windowSize={7}
           maxToRenderPerBatch={12}
         />
       ) : (
-        <ScrollView refreshControl={refreshControl} className="flex-1" contentContainerClassName="px-6 pt-6 pb-44" keyboardShouldPersistTaps="handled">
+        <ScrollView refreshControl={refreshControl} className="flex-1" contentContainerClassName="px-3 pt-6 pb-44" keyboardShouldPersistTaps="handled">
           {topBar}
           {otherTabBody}
           {modalsSlot}
@@ -698,7 +731,7 @@ export function EmployeesScreen({
 
     {/* New employee — floating action, bottom-right thumb reach. The Hours
        logged tab has its own inline "add entry" button. Hidden while selecting. */}
-    {tab === 'empleados' && !selectionMode && onAddEmployee ? <Fab onPress={onAddEmployee} /> : null}
+    {tab === 'empleados' && !selectionMode && onAddEmployee && !addInHeader ? <Fab onPress={onAddEmployee} /> : null}
 
     {/* Bulk-delete pill — floating bottom-left, matching the jobs list. */}
     {tab === 'empleados' && selectionMode ? (

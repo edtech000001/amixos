@@ -693,7 +693,7 @@ export function InvoicesListScreen({
             </View>
           )
         }
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: selectMode ? 256 : 176 }}
+        contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 24, paddingBottom: selectMode ? 256 : 176 }}
         keyboardShouldPersistTaps="handled"
         initialNumToRender={12}
         windowSize={7}

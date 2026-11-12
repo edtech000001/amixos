@@ -31,7 +31,8 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
 import { useMoreBack } from '@/lib/useMoreBack';
 import { useSectionBase } from '@/lib/sectionNav';
-import { SplitEmpty, SplitView, useSplitOpenRequest, useSplitView } from '@/components/SplitView';
+import { SplitEmpty, SplitView, useSplitOpenRequest, useSplitView, whenLeaveAllowed } from '@/components/SplitView';
+import { InvoiceForm } from './nueva';
 import { InvoiceDetailPane } from './[id]';
 import { Receipt } from 'lucide-react-native';
 import { collectFromPartner, businessUsesBillThrough, businessUsesBillThroughCached, type BillThroughLink } from '@amixos/shared/lib/invoiceBillThrough';
@@ -327,8 +328,12 @@ export default function FacturasTab() {
   // Wide screens (iPad, iPhone Duo unfolded): detail opens beside the list.
   const { split, listWidth } = useSplitView();
   const [openId, setOpenId] = useState<string | null>(null);
+  // Edit form shown in the right pane instead of the detail (list stays put).
+  const [editing, setEditing] = useState(false);
+  // Row taps go through the pane form's unsaved-changes guard.
+  const openInPane = (id: string) => whenLeaveAllowed(() => { setEditing(false); setOpenId(id); });
   const openDetail = (id: string) => {
-    if (split) setOpenId(id);
+    if (split) openInPane(id);
     else router.push(`${sectionBase}/${id}` as never);
   };
   // Back from the edit / new form → reopen that invoice beside the list.
@@ -478,7 +483,9 @@ export default function FacturasTab() {
           list={listScreen}
           detail={openId
             // key: a fresh detail per invoice (its state is per-invoice).
-            ? <InvoiceDetailPane key={openId} embeddedId={openId} onChanged={reload} onClose={() => { setOpenId(null); reload(); }} />
+            ? editing
+              ? <InvoiceForm key={`edit-${openId}`} embeddedEditId={openId} onDone={() => { setEditing(false); reload(); }} />
+              : <InvoiceDetailPane key={openId} embeddedId={openId} onEdit={() => setEditing(true)} onChanged={reload} onClose={() => { setOpenId(null); reload(); }} />
             : <SplitEmpty icon={Receipt} text={full.dashboard.invoices.splitEmpty} />}
         />
       ) : listScreen}

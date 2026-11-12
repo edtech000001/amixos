@@ -29,7 +29,8 @@ import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useMoreBack } from '@/lib/useMoreBack';
 import { useSectionBase } from '@/lib/sectionNav';
-import { SplitEmpty, SplitView, useSplitOpenRequest, useSplitView } from '@/components/SplitView';
+import { SplitEmpty, SplitView, useSplitOpenRequest, useSplitView, whenLeaveAllowed } from '@/components/SplitView';
+import { JobForm } from './nuevo';
 import { JobDetail } from './[id]';
 import { ClipboardList } from 'lucide-react-native';
 
@@ -406,6 +407,10 @@ export default function TrabajosTab() {
   // Wide screens (iPad, iPhone Duo unfolded): detail opens beside the list.
   const { split, listWidth } = useSplitView();
   const [openId, setOpenId] = useState<string | null>(null);
+  // Edit form shown in the right pane instead of the detail (list stays put).
+  const [editing, setEditing] = useState(false);
+  // Row taps go through the pane form's unsaved-changes guard.
+  const openInPane = (id: string) => whenLeaveAllowed(() => { setEditing(false); setOpenId(id); });
   // Back from the new / duplicate form → open that job beside the list.
   useSplitOpenRequest('trabajos', useCallback((id: string) => { setOpenId(id); reRun(activeLocationId ?? null); }, [reRun, activeLocationId]));
   const pull = usePullRefresh(reload);
@@ -580,13 +585,13 @@ export default function TrabajosTab() {
         jobs={jobs}
         payPeriod={business ? { frequency: business.payroll_frequency, anchorDate: business.payroll_anchor_date, customDays: business.payroll_custom_days } : undefined}
         onJobPress={(id) => {
-          if (split) { setOpenId(id); return; }
+          if (split) { openInPane(id); return; }
           // Opened from the section's own list — this one belongs here.
           clearSectionVisitor('trabajos');
           router.push(`${sectionBase}/${id}` as never);
         }}
         onUpdateStatus={updateStatus}
-        onGenerateInvoice={(id) => (split ? setOpenId(id) : router.push(`${sectionBase}/${id}` as never))}
+        onGenerateInvoice={(id) => (split ? openInPane(id) : router.push(`${sectionBase}/${id}` as never))}
         onCreateInvoice={async (jobIds) => {
           if (!business) return;
           const jt = full.dashboard.jobs.new;
@@ -694,7 +699,9 @@ export default function TrabajosTab() {
           list={listScreen}
           detail={openId
             // key: a fresh detail per job (its state is per-job).
-            ? <JobDetail key={openId} embeddedId={openId} onOpen={setOpenId} onChanged={reload} onClose={() => { setOpenId(null); reload(); }} />
+            ? editing
+              ? <JobForm key={`edit-${openId}`} embeddedEditId={openId} onDone={() => { setEditing(false); reload(); }} />
+              : <JobDetail key={openId} embeddedId={openId} onOpen={setOpenId} onEdit={() => setEditing(true)} onChanged={reload} onClose={() => { setOpenId(null); reload(); }} />
             : <SplitEmpty icon={ClipboardList} text={full.dashboard.jobs.splitEmpty} />}
         />
       ) : listScreen}
