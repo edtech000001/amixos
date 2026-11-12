@@ -71,6 +71,7 @@ import { JobPhotosSection } from '@/components/JobPhotosSection';
 import { useDirty, useUnsavedGuard } from '@/lib/useUnsavedGuard';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useSectionBase } from '@/lib/sectionNav';
+import { useShowInSplit } from '@/components/SplitView';
 import { AutoGrowTextInput } from '@/components/AutoGrowTextInput';
 
 interface Client {
@@ -149,6 +150,8 @@ export default function NuevoTrabajoRoute() {
   // Section links stay in whichever stack this screen is in (its tab, or
   // the Más stack when opened from the Más menu) — lib/sectionNav.
   const sectionBase = useSectionBase('trabajos');
+  // Wide screens: saving returns to the split view with the job open.
+  const showInSplit = useShowInSplit('trabajos');
   const insets = useSafeAreaInsets();
   const { edit, duplicate, modo, client: clientParam, copy, from } = useLocalSearchParams<{ edit?: string; duplicate?: string; modo?: string; client?: string; copy?: string; from?: string }>();
   const supabase = createSupabaseClient();
@@ -2095,10 +2098,16 @@ export default function NuevoTrabajoRoute() {
       } else if (duplicateId && router.canGoBack()) {
         // Duplicate: pop the form, then the copy REPLACES the original detail,
         // so Back from the copy goes past both instead of landing on the original.
-        router.dismiss();
-        router.replace(`${sectionBase}/${jobId}${from === 'home' ? '?from=home' : ''}` as never);
+        // Split view: the original sits beside the list — pop and open the copy.
+        showInSplit(jobId, () => {
+          router.dismiss();
+          router.replace(`${sectionBase}/${jobId}${from === 'home' ? '?from=home' : ''}` as never);
+        });
       } else {
-        router.replace(`${sectionBase}/${jobId}${from === 'home' ? '?from=home' : ''}` as never);
+        const toDetail = () => router.replace(`${sectionBase}/${jobId}${from === 'home' ? '?from=home' : ''}` as never);
+        // From home the jobs list isn't underneath — keep the detail route.
+        if (from === 'home') toDetail();
+        else showInSplit(jobId, toDetail);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : t.errorSaveGeneric);

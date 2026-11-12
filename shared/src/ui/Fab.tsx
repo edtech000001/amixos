@@ -40,3 +40,17 @@ export function Fab({
     </PressableScale>
   );
 }
+
+/** The Fab's action as a header icon button — for wide (split-view) layouts,
+ *  where a corner FAB lands by the fold and covers rows. */
+export function HeaderAddButton({ onPress, label }: { onPress: () => void; label?: string }) {
+  return (
+    <PressableScale
+      onPress={onPress}
+      accessibilityLabel={label}
+      className="w-11 h-11 rounded-xl bg-primary items-center justify-center"
+    >
+      <Plus size={18} color="#FFFFFF" />
+    </PressableScale>
+  );
+}

@@ -228,7 +228,10 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
 
   // Follows rotation / Split View; more columns on iPad (gridColumns).
   const { width: screenW, height: screenH } = useWindowDimensions();
-  const cols = gridColumns(screenW, COLS);
+  // Grid sizes from its OWN measured width: in the split view the job detail
+  // is a pane, not the whole window (window width made tiles overflow).
+  const [gridW, setGridW] = useState(0);
+  const cols = gridColumns(gridW > 0 ? gridW + 40 : screenW, COLS);
 
   const rotateCurrent = async () => {
     if (viewerIndex === null) return;
@@ -260,7 +263,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
   };
 
   // Section sits inside the detail ScrollView's px-5 (20px) padding.
-  const tileSize = Math.floor((screenW - 40 - GAP * (cols - 1)) / cols);
+  const tileSize = Math.floor(((gridW > 0 ? gridW : screenW - 40) - GAP * (cols - 1)) / cols);
   const atLimit = photos.length + pending.length >= MAX_PHOTOS_PER_JOB;
 
   const viewerPhoto = viewerIndex !== null ? photos[viewerIndex] : null;
@@ -328,7 +331,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
           <Text className="text-sm text-faint mt-2">{t.empty}</Text>
         </View>
       ) : (
-        <View className="flex-row flex-wrap" style={{ gap: GAP }}>
+        <View className="flex-row flex-wrap" style={{ gap: GAP }} onLayout={e => setGridW(Math.floor(e.nativeEvent.layout.width))}>
           {photos.map((p, i) => (
             <Pressable
               key={p.id}

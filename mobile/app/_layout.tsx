@@ -7,7 +7,7 @@ import { LogBox, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { cssInterop } from 'nativewind';
 import * as Lucide from 'lucide-react-native';
 import * as SplashScreen from 'expo-splash-screen';
@@ -87,10 +87,14 @@ function AuthAwareApp() {
   // iPad in a resizable window: keep every screen's title clear of the window
   // controls (lib/useWindowControlsInset). 0 everywhere else.
   const controlsInset = useWindowControlsInset();
+  // Side safe areas: the unfolded iPhone Duo in landscape puts the status bar
+  // (clock, Wi-Fi) in a strip down the side. Screens only handle the top
+  // inset, so keep the whole app clear of the sides here. 0 on other devices.
+  const { left, right } = useSafeAreaInsets();
   const c = useThemeColors();
   return (
     <>
-      <View style={{ flex: 1, paddingTop: controlsInset, backgroundColor: c.surface }}>
+      <View style={{ flex: 1, paddingTop: controlsInset, paddingLeft: left, paddingRight: right, backgroundColor: c.surface }}>
         <Stack screenOptions={{ headerShown: false }} />
       </View>
       {/* Sits above every screen. Renders nothing until an update is actually

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, BackHandler, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, BackHandler, TextInput, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { InOverlayHost } from './OverlayPortal';
 import { haptics } from '../lib/haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check, SlidersHorizontal, ChevronDown, Search } from 'lucide-react-native';
@@ -50,6 +51,10 @@ export function FilterSheet({
   children: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
+  // Wide screens (iPad, iPhone Duo unfolded): a centered card over the whole
+  // split view instead of a bottom sheet squeezed into the list pane.
+  const { width, height } = useWindowDimensions();
+  const wide = width >= 600;
   // Android back closes the sheet instead of leaving the screen.
   useEffect(() => {
     if (!open) return;
@@ -58,16 +63,27 @@ export function FilterSheet({
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <View style={[StyleSheet.absoluteFill, { zIndex: 1000 }]} className="justify-end">
+    <InOverlayHost>
+    <View
+      style={[StyleSheet.absoluteFill, { zIndex: 1000 },
+        // Centered above the floating dock (~96pt) so the card never sits under it.
+        wide ? { alignItems: 'center', justifyContent: 'center', paddingBottom: insets.bottom + 96 } : { justifyContent: 'flex-end' }]}
+    >
       <Pressable onPress={onClose} style={SHEET_BACKDROP} />
+      {/* Two keyed branches, never a className toggle (NativeWind remount rule). */}
       <View
-        className="bg-card rounded-t-3xl"
-        // Clear the floating dock so the footer stays tappable.
-        style={{ maxHeight: '92%', paddingBottom: insets.bottom + 96 }}
+        key={wide ? 'card' : 'sheet'}
+        className={wide ? 'bg-card rounded-3xl pt-5' : 'bg-card rounded-t-3xl'}
+        style={wide
+          ? { width: Math.min(560, width - 48), maxHeight: height - insets.top - insets.bottom - 96 - 48, paddingBottom: 20 }
+          // Clear the floating dock so the footer stays tappable.
+          : { maxHeight: '92%', paddingBottom: insets.bottom + 96 }}
       >
-        <View className="items-center pt-3 mb-2">
-          <View className="w-10 h-1 rounded-full bg-border" />
-        </View>
+        {wide ? null : (
+          <View className="items-center pt-3 mb-2">
+            <View className="w-10 h-1 rounded-full bg-border" />
+          </View>
+        )}
         <View className="flex-row items-center justify-between px-5 mb-1">
           <Text className="text-2xl font-bold text-ink">{title}</Text>
           <Pressable
@@ -93,6 +109,7 @@ export function FilterSheet({
         </View>
       </View>
     </View>
+    </InOverlayHost>
   );
 }
 

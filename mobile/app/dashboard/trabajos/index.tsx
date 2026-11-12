@@ -29,6 +29,9 @@ import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useMoreBack } from '@/lib/useMoreBack';
 import { useSectionBase } from '@/lib/sectionNav';
+import { SplitEmpty, SplitView, useSplitOpenRequest, useSplitView } from '@/components/SplitView';
+import { JobDetail } from './[id]';
+import { ClipboardList } from 'lucide-react-native';
 
 interface RawJob {
   id: string;
@@ -400,6 +403,11 @@ export default function TrabajosTab() {
     return runQuery(p);
   };
   const reload = () => reRun(activeLocationId ?? null);
+  // Wide screens (iPad, iPhone Duo unfolded): detail opens beside the list.
+  const { split, listWidth } = useSplitView();
+  const [openId, setOpenId] = useState<string | null>(null);
+  // Back from the new / duplicate form → open that job beside the list.
+  useSplitOpenRequest('trabajos', useCallback((id: string) => { setOpenId(id); reRun(activeLocationId ?? null); }, [reRun, activeLocationId]));
   const pull = usePullRefresh(reload);
 
   // Bulk "move to client" — search clients + reassign the selected jobs.
@@ -537,10 +545,10 @@ export default function TrabajosTab() {
     [business?.job_alert_thresholds],
   );
 
-  return (
-    <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
-      <LocationSwitcher />
+  const listScreen = (
       <JobsListScreen
+        activeId={split ? openId : null}
+        addInHeader={split}
         refreshControl={pull.control}
         jobCustomFields={jobTemplates}
         onLoadFilterValues={business ? (field) => fetchJobFilterValues(supabase, { businessId: business.id, field, locationId: activeLocationId ?? null }) : undefined}
@@ -572,12 +580,13 @@ export default function TrabajosTab() {
         jobs={jobs}
         payPeriod={business ? { frequency: business.payroll_frequency, anchorDate: business.payroll_anchor_date, customDays: business.payroll_custom_days } : undefined}
         onJobPress={(id) => {
+          if (split) { setOpenId(id); return; }
           // Opened from the section's own list — this one belongs here.
           clearSectionVisitor('trabajos');
           router.push(`${sectionBase}/${id}` as never);
         }}
         onUpdateStatus={updateStatus}
-        onGenerateInvoice={(id) => router.push(`${sectionBase}/${id}` as never)}
+        onGenerateInvoice={(id) => (split ? setOpenId(id) : router.push(`${sectionBase}/${id}` as never))}
         onCreateInvoice={async (jobIds) => {
           if (!business) return;
           const jt = full.dashboard.jobs.new;
@@ -674,6 +683,21 @@ export default function TrabajosTab() {
         onLoadMore={loadMore}
         onFiltersChange={handleFiltersChange}
       />
+  );
+
+  return (
+    <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
+      <LocationSwitcher />
+      {split ? (
+        <SplitView
+          listWidth={listWidth}
+          list={listScreen}
+          detail={openId
+            // key: a fresh detail per job (its state is per-job).
+            ? <JobDetail key={openId} embeddedId={openId} onOpen={setOpenId} onChanged={reload} onClose={() => { setOpenId(null); reload(); }} />
+            : <SplitEmpty icon={ClipboardList} text={full.dashboard.jobs.splitEmpty} />}
+        />
+      ) : listScreen}
 
       {/* Bulk move-to-client picker */}
       <RNModal visible={moveClientIds !== null} transparent animationType="fade" onRequestClose={() => setMoveClientIds(null)}>

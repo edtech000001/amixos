@@ -36,7 +36,7 @@ import { useLang } from '../../i18n';
 import { cycleSort, sortTapClears } from '../../lib/sortCycle';
 import { useThemeColors } from '../../theme';
 import { Input } from '../../ui/Input';
-import { Fab } from '../../ui/Fab';
+import { Fab, HeaderAddButton } from '../../ui/Fab';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { SkeletonList, SkeletonRow } from '../../ui/Skeleton';
 import { clientMatchesSearch, matchingContacts } from '../../lib/clientSearch';
@@ -114,6 +114,10 @@ export interface ClientsListScreenProps {
   onSelectMany?: (ids: string[]) => void;
   onToggleSelectAll: () => void;
   onClientPress: (id: string) => void;
+  /** Client open in the detail pane beside the list (split view) — highlighted. */
+  activeId?: string | null;
+  /** Split view: the "new" action sits in the header instead of a corner FAB. */
+  addInHeader?: boolean;
   /** Omit to hide per-row edit (web) — no edit permission. */
   onEditPress?: (id: string) => void;
   /** Omit to hide per-row delete (web) — no delete permission. */
@@ -182,6 +186,8 @@ export function ClientsListScreen({
   onToggleSelect,
   onToggleSelectAll,
   onClientPress,
+  activeId,
+  addInHeader,
   onEditPress,
   onDeletePress,
   onNewClientPress,
@@ -511,6 +517,7 @@ export function ClientsListScreen({
           {/* Filters — sort, group, date and quick filters in one sheet
               (FilterSheet at the screen root). */}
           <FilterButton count={filterCount} onPress={() => setFilterOpen(true)} label={tf.button} />
+          {addInHeader && onNewClientPress && !selectionMode ? <HeaderAddButton onPress={onNewClientPress} /> : null}
           {onImportPress ? (
             <Pressable
               onPress={onImportPress}
@@ -623,6 +630,7 @@ export function ClientsListScreen({
           search={search}
           selectionMode={selectionMode}
           isChecked={selectedIds.has(item.client.id)}
+          isActive={item.client.id === activeId}
           isLast={item.isLast}
           // Fixed height in alphabetical mode keeps getItemLayout exact; while
           // searching, rows size to content (matched contacts expand them).
@@ -652,6 +660,7 @@ export function ClientsListScreen({
         data={rows}
         keyExtractor={item => item.key}
         renderItem={renderRow}
+        extraData={activeId}
         // Letter headers pin to the top as you scroll past them.
         stickyHeaderIndices={stickyHeaderIndices}
         // Exact section offsets — only in alphabetical mode, where rows are a
@@ -695,7 +704,7 @@ export function ClientsListScreen({
       {/* New client — floating action, bottom-right thumb reach. Hidden while
          selecting so the delete pill owns the bottom edge (jobs pattern), and
          hidden entirely when the caller can't create. */}
-      {selectionMode || !onNewClientPress ? null : <Fab onPress={onNewClientPress} />}
+      {selectionMode || !onNewClientPress || addInHeader ? null : <Fab onPress={onNewClientPress} />}
 
       {/* Bulk-delete pill — bottom-left, same as the jobs list. */}
       {selectionMode && onBulkDeletePress ? (
@@ -935,6 +944,8 @@ interface ClientRowProps {
   onToggleSelect: (id: string) => void;
   onClientPress: (id: string) => void;
   onExitSelect: () => void;
+  /** Open in the split view's detail pane. */
+  isActive?: boolean;
   /** Right-side stat for the active sort/filter ("Owes $1,240"). */
   stat?: { text: string; tone: 'danger' | 'muted' } | null;
 }
@@ -950,6 +961,7 @@ const ClientRow = memo(function ClientRow({
   onToggleSelect,
   onClientPress,
   onExitSelect,
+  isActive,
   stat,
 }: ClientRowProps) {
   const tc = useThemeColors();
@@ -968,7 +980,11 @@ const ClientRow = memo(function ClientRow({
       // was nearly invisible against the white card). With a fixedHeight the
       // content is vertically centered and clipped to keep rows uniform;
       // otherwise py-4 sizes the row to its content (search mode).
-      style={fixedHeight ? { height: fixedHeight, overflow: 'hidden' } : undefined}
+      // Active highlight via style, not a className toggle (NativeWind remount rule).
+      style={[
+        fixedHeight ? { height: fixedHeight, overflow: 'hidden' } : null,
+        isActive ? { backgroundColor: `${tc.primary}1F` } : null, // primary at ~12%
+      ]}
       className={`flex-row items-center px-5 ${fixedHeight ? '' : 'py-4'} bg-card ${
         isLast ? '' : 'border-b border-b-border-soft'
       } ${isChecked ? 'bg-primary/5' : 'active:bg-surface'}`}

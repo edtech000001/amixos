@@ -233,13 +233,29 @@ interface PipelineStep {
 }
 
 export default function JobDetailRoute() {
+  return <JobDetail />;
+}
+
+/**
+ * The job detail. As a route it reads its id from the URL; in the split view
+ * (wide screens) the jobs list renders it beside itself with `embeddedId`:
+ * back / delete hand control back via `onClose`, and switching to another job
+ * goes through `onOpen` so the list stays.
+ */
+export function JobDetail({ embeddedId, onClose, onOpen, onChanged }: {
+  embeddedId?: string; onClose?: () => void; onOpen?: (id: string) => void; onChanged?: () => void;
+} = {}) {
   const router = useRouter();
   // Section links stay in whichever stack this screen is in (its tab, or
   // the Más stack when opened from the Más menu) — lib/sectionNav.
   const sectionBase = useSectionBase('trabajos');
   const appHref = useAppHref();
-  const { id, from, invoice: fromInvoice, worker: fromWorker } =
-    useLocalSearchParams<{ id: string; from?: string; invoice?: string; worker?: string }>();
+  const routeParams = useLocalSearchParams<{ id: string; from?: string; invoice?: string; worker?: string }>();
+  const embedded = !!embeddedId;
+  // Origin params (?from=…) belong to the route; an embedded detail has none.
+  const { id, from, invoice: fromInvoice, worker: fromWorker } = embedded ? { id: embeddedId } as typeof routeParams : routeParams;
+  // Embedded, the current route is the jobs LIST — replace() would swap it out.
+  const goTo = embedded ? router.push : router.replace;
   // Seeing the job clears its unread alerts, however you got here.
   useMarkEntityNotificationsRead(createSupabaseClient(), 'job', id);
   // ?from=map → back returns to the map module; ?from=calendar → back returns
@@ -251,7 +267,9 @@ export default function JobDetailRoute() {
   const leavingRef = useRef(false);
   const goBack = () => {
     leavingRef.current = true;
-    if (from === 'map') {
+    if (embedded) {
+      onClose?.();
+    } else if (from === 'map') {
       router.replace(appHref('map') as never);
     } else if (from === 'calendar') {
       router.replace(appHref('calendario') as never);
@@ -360,6 +378,17 @@ export default function JobDetailRoute() {
   };
 
   const [job, setJob] = useState<Job | null>(null);
+  // Split view: tell the list beside us when what its card shows changed
+  // (status, title, dates, archive, invoice) so it refreshes. Skips the first load.
+  const listSig = job
+    ? [job.status, job.title, job.scheduled_date, job.archived_at, job.invoice_id, job.paused_at].join('|')
+    : null;
+  const lastSig = useRef<string | null>(null);
+  useEffect(() => {
+    if (!listSig) return;
+    if (lastSig.current && lastSig.current !== listSig) onChanged?.();
+    lastSig.current = listSig;
+  }, [listSig, onChanged]);
   const [items, setItems] = useState<JobItem[]>([]);
   const [assignments, setAssignments] = useState<JobAssignment[]>([]);
   // Estimated labor cost for completed/invoiced jobs — Employees-permission
@@ -996,7 +1025,7 @@ export default function JobDetailRoute() {
     // and the invoice's goBack swaps it back. Without the params, back fell
     // through to router.back() and landed on whatever was under the job —
     // the dashboard — because the job itself was no longer in the stack.
-    router.replace(`/dashboard/facturas/${draft.id}?from=job&jobId=${job.id}` as never);
+    goTo(`/dashboard/facturas/${draft.id}?from=job&jobId=${job.id}` as never);
   };
 
   const generateInvoice = async () => {
@@ -1083,7 +1112,7 @@ export default function JobDetailRoute() {
       });
       // See the note on the draft path above — ?from=job is what makes back
       // return to this job instead of the dashboard.
-      router.replace(`/dashboard/facturas/${invoice.id}?from=job&jobId=${job.id}` as never);
+      goTo(`/dashboard/facturas/${invoice.id}?from=job&jobId=${job.id}` as never);
     }
     setUpdatingStatus(false);
   };
@@ -1114,7 +1143,8 @@ export default function JobDetailRoute() {
               text: tw.switchToTarget.replace('{{name}}', targetBiz.name),
               onPress: () => {
                 setActiveBusiness(targetBusinessId);
-                router.replace(`${sectionBase}/${result.newJobId}` as never);
+                if (embedded) onOpen?.(result.newJobId);
+                else router.replace(`${sectionBase}/${result.newJobId}` as never);
               },
             }
           : null,
@@ -1139,7 +1169,10 @@ export default function JobDetailRoute() {
           await supabase.from('job_items').delete().eq('job_id', job.id);
           await supabase.from('job_assignments').delete().eq('job_id', job.id);
           const { error } = await supabase.from('jobs').delete().eq('id', job.id);
-          if (!error) router.replace(`${sectionBase}` as never);
+          if (!error) {
+            if (embedded) onClose?.();
+            else router.replace(`${sectionBase}` as never);
+          }
         },
       },
     ]);
@@ -1483,17 +1516,24 @@ export default function JobDetailRoute() {
   // Crew edit details only on jobs they created (status stays theirs to move).
   const canEditDetails = can.editJobDetails(currentRole, !!job && !!user && job.created_by === user.id);
   const canEditItems = canEditDetails && !['invoiced', 'cancelled', 'declined'].includes(job?.status ?? '');
+  const showCrewShare = ['scheduled', 'in_progress'].includes(job?.status ?? '') && can.seeAllJobs(currentRole);
+  const showArchive = job?.status === 'completed' && can.seeAllJobs(currentRole);
+  // No next step (e.g. completed): the step back becomes a tile, not a full-width bar.
+  const showStepBackTile = canChangeStatus && !nextStatusAction && !!prevStatusAction;
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <View className="flex-row items-center justify-between px-4 pt-2 pb-3 border-b border-border-soft">
-        <Pressable
-          onPress={goBack}
-          hitSlop={12}
-          className="p-2 -ml-2 rounded-lg active:bg-border-soft"
-        >
-          <ChevronLeft size={22} color={c.ink} />
-        </Pressable>
+        {/* Split view: the list beside it is the way back — no arrow. */}
+        {embedded ? <View /> : (
+          <Pressable
+            onPress={goBack}
+            hitSlop={12}
+            className="p-2 -ml-2 rounded-lg active:bg-border-soft"
+          >
+            <ChevronLeft size={22} color={c.ink} />
+          </Pressable>
+        )}
         <View className="flex-row gap-1">
           {isProposal ? (
             <>
@@ -1732,13 +1772,15 @@ export default function JobDetailRoute() {
             </Pressable>
           ) : null}
 
-          {canChangeStatus && (nextStatusAction || prevStatusAction) ? (
+          {/* Step back sits beside the next step; with NO next step (completed)
+             it joins the secondary tiles below instead of a full-width bar. */}
+          {canChangeStatus && nextStatusAction ? (
             <View className="flex-row gap-2">
               {prevStatusAction ? (
                 <Pressable
                   onPress={() => stepBack(prevStatusAction.next)}
                   disabled={updatingStatus}
-                  className={`${nextStatusAction ? '' : 'flex-1 '}flex-row items-center justify-center gap-1.5 py-3.5 px-4 rounded-2xl bg-border-soft border border-border active:opacity-80`}
+                  className="flex-row items-center justify-center gap-1.5 py-3.5 px-4 rounded-2xl bg-border-soft border border-border active:opacity-80"
                 >
                   <Text className="text-sm font-semibold text-muted">← {prevStatusAction.label}</Text>
                 </Pressable>
@@ -1770,18 +1812,6 @@ export default function JobDetailRoute() {
             </Pressable>
           ) : null}
 
-          {/* Crew share only once the work is actually scheduled — before
-             that there's no crew/date to send. */}
-          {['scheduled', 'in_progress'].includes(job.status) && can.seeAllJobs(currentRole) ? (
-            <Pressable
-              onPress={shareJobToCrew}
-              className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-card border border-border active:bg-surface"
-            >
-              <MessageSquare size={16} color={c.muted} />
-              <Text className="text-sm font-semibold text-ink">{td.sendToCrew}</Text>
-            </Pressable>
-          ) : null}
-
           {/* Resume — the primary action while held, so the way out is the
              first thing you see. */}
           {isPaused && canChangeStatus ? (
@@ -1795,36 +1825,56 @@ export default function JobDetailRoute() {
             </PressableScale>
           ) : null}
 
-          {/* Put on hold — sits with the other reversible status actions. */}
-          {canPause ? (
-            <Pressable
-              onPress={openPauseSheet}
-              disabled={updatingStatus}
-              className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-card border border-border active:bg-border-soft"
-            >
-              <PauseCircle size={16} color="#EA580C" />
-              <Text className="text-sm font-semibold text-orange-700">{tp.action}</Text>
-            </Pressable>
-          ) : null}
-
-          {/* Cancel + Archive share one row (side by side) to avoid stacked
-             dead space. Both are confirmed / reversible. */}
-          {canCancel || (job.status === 'completed' && can.seeAllJobs(currentRole)) ? (
+          {/* Secondary actions as one row of tiles (icon over label) under the
+             primary next-step button: send to crew, hold, cancel, archive.
+             Stacked full-width they read as equally important and wasted space. */}
+          {showStepBackTile || showCrewShare || canPause || canCancel || showArchive ? (
             <View className="flex-row gap-2">
+              {showStepBackTile && prevStatusAction ? (
+                <Pressable
+                  onPress={() => stepBack(prevStatusAction.next)}
+                  disabled={updatingStatus}
+                  className="flex-1 items-center justify-center gap-1.5 py-3 px-1 rounded-2xl bg-card border border-border active:bg-surface"
+                >
+                  <RotateCcw size={18} color={c.muted} />
+                  <Text className="text-xs font-semibold text-muted text-center" numberOfLines={2}>← {prevStatusAction.label}</Text>
+                </Pressable>
+              ) : null}
+              {/* Crew share only once the work is actually scheduled — before
+                 that there's no crew/date to send. */}
+              {showCrewShare ? (
+                <Pressable
+                  onPress={shareJobToCrew}
+                  className="flex-1 items-center justify-center gap-1.5 py-3 px-1 rounded-2xl bg-card border border-border active:bg-surface"
+                >
+                  <MessageSquare size={18} color={c.muted} />
+                  <Text className="text-xs font-semibold text-ink text-center" numberOfLines={2}>{td.sendToCrew}</Text>
+                </Pressable>
+              ) : null}
+              {canPause ? (
+                <Pressable
+                  onPress={openPauseSheet}
+                  disabled={updatingStatus}
+                  className="flex-1 items-center justify-center gap-1.5 py-3 px-1 rounded-2xl bg-card border border-border active:bg-border-soft"
+                >
+                  <PauseCircle size={18} color="#EA580C" />
+                  <Text className="text-xs font-semibold text-orange-700 text-center" numberOfLines={2}>{tp.action}</Text>
+                </Pressable>
+              ) : null}
               {canCancel ? (
                 <Pressable
                   onPress={confirmCancelJob}
                   disabled={updatingStatus}
-                  className="flex-1 flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-card border border-border active:bg-red-500/10"
+                  className="flex-1 items-center justify-center gap-1.5 py-3 px-1 rounded-2xl bg-card border border-border active:bg-red-500/10"
                 >
-                  <XCircle size={16} color={c.danger} />
-                  <Text className="text-sm font-semibold text-red-500">{td.cancelJobBtn}</Text>
+                  <XCircle size={18} color={c.danger} />
+                  <Text className="text-xs font-semibold text-red-500 text-center" numberOfLines={2}>{td.cancelJobBtn}</Text>
                 </Pressable>
               ) : null}
 
               {/* Archive — the exit for completed work that will never be
                  invoiced (internal hours etc). Reversible. */}
-              {job.status === 'completed' && can.seeAllJobs(currentRole) ? (
+              {showArchive ? (
                 <Pressable
                   onPress={() => {
                     const archive = !job.archived_at;
@@ -1840,10 +1890,10 @@ export default function JobDetailRoute() {
                       { text: full.dashboard.jobs.bulkArchive, onPress: () => void doIt() },
                     ]);
                   }}
-                  className="flex-1 flex-row items-center justify-center gap-2 py-3.5 rounded-2xl bg-border-soft active:bg-border"
+                  className="flex-1 items-center justify-center gap-1.5 py-3 px-1 rounded-2xl bg-border-soft active:bg-border"
                 >
-                  <Archive size={16} color={c.muted} />
-                  <Text className="text-sm font-semibold text-muted">{job.archived_at ? td.unarchiveBtn : td.archiveBtn}</Text>
+                  <Archive size={18} color={c.muted} />
+                  <Text className="text-xs font-semibold text-muted text-center" numberOfLines={2}>{job.archived_at ? td.unarchiveBtn : td.archiveBtn}</Text>
                 </Pressable>
               ) : null}
             </View>

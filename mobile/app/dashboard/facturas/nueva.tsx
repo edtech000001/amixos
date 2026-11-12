@@ -50,6 +50,7 @@ import {
 } from '@amixos/shared/lib/invoiceFieldSections';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useSectionBase } from '@/lib/sectionNav';
+import { useShowInSplit } from '@/components/SplitView';
 
 interface Client {
   id: string;
@@ -110,6 +111,8 @@ export default function NuevaFacturaRoute() {
   // Section links stay in whichever stack this screen is in (its tab, or
   // the Más stack when opened from the Más menu) — lib/sectionNav.
   const sectionBase = useSectionBase('facturas');
+  // Wide screens: back/save returns to the split view with this invoice open.
+  const showInSplit = useShowInSplit('facturas');
   // `client` comes from the client detail page's New invoice action, which
   // has always passed it — nothing here read it, so the picker opened empty.
   const { edit, client: clientParam, from } = useLocalSearchParams<{ edit?: string; client?: string; from?: string }>();
@@ -570,7 +573,7 @@ export default function NuevaFacturaRoute() {
     setLines((prev) => (prev.length <= 1 ? prev : prev.filter((l) => l.id !== id)));
 
   const goBack = () => {
-    if (editId) router.replace(`${sectionBase}/${editId}` as never);
+    if (editId) showInSplit(editId, () => router.replace(`${sectionBase}/${editId}` as never));
     else if (from === 'home') router.replace('/dashboard' as never);
     else router.replace(`${sectionBase}` as never);
   };
@@ -693,7 +696,10 @@ export default function NuevaFacturaRoute() {
       );
     }
 
-    router.replace(`${sectionBase}/${invoiceId}${from === 'home' ? '?from=home' : ''}` as never);
+    const toDetail = () => router.replace(`${sectionBase}/${invoiceId}${from === 'home' ? '?from=home' : ''}` as never);
+    // From home the invoices list isn't underneath — keep the detail route.
+    if (from === 'home') toDetail();
+    else showInSplit(invoiceId, toDetail);
   };
 
   if (loadingEdit) {

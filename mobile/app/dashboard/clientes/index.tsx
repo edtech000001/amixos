@@ -33,6 +33,9 @@ import { fetchClientLocations, clientIdsAtLocation, clientsWithAnyLocation, type
 import { getApiBaseUrl, getJwt } from '@/lib/apiClient';
 import { useMoreBack } from '@/lib/useMoreBack';
 import { useSectionBase } from '@/lib/sectionNav';
+import { SplitEmpty, SplitView, useSplitOpenRequest, useSplitView } from '@/components/SplitView';
+import { ClientDetail } from './[id]';
+import { Users } from 'lucide-react-native';
 
 interface EmbeddedContact { name: string; role: string | null; is_primary: boolean | null }
 interface Client {
@@ -373,7 +376,15 @@ export default function ClientesTab() {
     else setSelectedIds(new Set(filteredIds));
   };
 
-  const openDetail = (id: string) => router.push(`${sectionBase}/${id}` as never);
+  // Wide screens (iPad, iPhone Duo unfolded): detail opens beside the list.
+  const { split, listWidth } = useSplitView();
+  const [openId, setOpenId] = useState<string | null>(null);
+  const openDetail = (id: string) => {
+    if (split) setOpenId(id);
+    else router.push(`${sectionBase}/${id}` as never);
+  };
+  // Back from the edit / new form → reopen that client beside the list.
+  useSplitOpenRequest('clientes', useCallback((id: string) => { setOpenId(id); reRun(); }, [reRun]));
   const openAdd = () => router.push(`${sectionBase}/nuevo` as never);
   const openEdit = (id: string) =>
     router.push(`${sectionBase}/nuevo?edit=${id}` as never);
@@ -403,6 +414,7 @@ export default function ClientesTab() {
             });
           }
           setRawClients(prev => prev.filter(c => c.id !== id));
+          if (openId === id) setOpenId(null);
           setSelectedIds(prev => {
             const n = new Set(prev);
             n.delete(id);
@@ -457,10 +469,10 @@ export default function ClientesTab() {
     );
   };
 
-  return (
-    <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
-      <LocationSwitcher />
+  const listScreen = (
       <ClientsListScreen
+        activeId={split ? openId : null}
+        addInHeader={split}
         refreshControl={pull.control}
         onBack={moreBack}
         onJumpToLetter={letter => {
@@ -499,6 +511,21 @@ export default function ClientesTab() {
         onLoadMore={() => void loadMore()}
         onFiltersChange={handleFiltersChange}
       />
+  );
+
+  return (
+    <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
+      <LocationSwitcher />
+      {split ? (
+        <SplitView
+          listWidth={listWidth}
+          list={listScreen}
+          detail={openId
+            // key: a fresh detail per client (its state is per-client).
+            ? <ClientDetail key={openId} embeddedId={openId} onClose={() => { setOpenId(null); reRun(); }} />
+            : <SplitEmpty icon={Users} text={t.splitEmpty} />}
+        />
+      ) : listScreen}
     </View>
   );
 }

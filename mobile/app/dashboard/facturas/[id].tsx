@@ -122,7 +122,21 @@ interface InvoiceFieldTemplate {
 }
 
 export default function FacturaDetailRoute() {
-  const params = useLocalSearchParams<{ id: string; from?: string; jobId?: string; clientId?: string }>();
+  return <InvoiceDetailPane />;
+}
+
+/**
+ * The invoice detail. As a route it reads its id from the URL; in the split
+ * view (wide screens) the invoices list renders it beside itself with
+ * `embeddedId`, and back / delete hand control back via `onClose`.
+ */
+export function InvoiceDetailPane({ embeddedId, onClose, onChanged }: {
+  embeddedId?: string; onClose?: () => void; onChanged?: () => void;
+} = {}) {
+  const routeParams = useLocalSearchParams<{ id: string; from?: string; jobId?: string; clientId?: string }>();
+  const embedded = !!embeddedId;
+  // Origin params (?from=…) belong to the route; an embedded detail has none.
+  const params = embedded ? { id: embeddedId } as typeof routeParams : routeParams;
   const id = String(params.id);
   // Seeing the invoice clears its unread alerts, however you got here.
   useMarkEntityNotificationsRead(createSupabaseClient(), 'invoice', id);
@@ -139,7 +153,9 @@ export default function FacturaDetailRoute() {
   const leavingRef = useRef(false);
   const goBack = () => {
     leavingRef.current = true;
-    if (params.from === 'job' && params.jobId) {
+    if (embedded) {
+      onClose?.();
+    } else if (params.from === 'job' && params.jobId) {
       router.replace(`/dashboard/trabajos/${params.jobId}` as never);
     } else if (params.from === 'client' && params.clientId) {
       router.replace(`/dashboard/clientes/${params.clientId}` as never);
@@ -156,6 +172,12 @@ export default function FacturaDetailRoute() {
     } else {
       router.replace(`${sectionBase}` as never);
     }
+  };
+
+  // After deleting: clear the split pane, or leave the gone invoice's route.
+  const leaveAfterDelete = () => {
+    if (embedded) onClose?.();
+    else router.replace(`${sectionBase}` as never);
   };
 
   // An invoice opened from a job or a client is a visitor in the Facturas
@@ -205,6 +227,15 @@ export default function FacturaDetailRoute() {
   const tc = full.common;
   const { confirm, confirmSheet } = useConfirmSheet();
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
+  // Split view: tell the list beside us when what its row shows changed
+  // (status, number, due date, total) so it refreshes. Skips the first load.
+  const listSig = invoice ? `${invoice.status}|${invoice.invoiceNumber}|${invoice.dueDate}|${invoice.totalAmount}` : null;
+  const lastSig = useRef<string | null>(null);
+  useEffect(() => {
+    if (!listSig) return;
+    if (lastSig.current && lastSig.current !== listSig) onChanged?.();
+    lastSig.current = listSig;
+  }, [listSig, onChanged]);
   // user_id → display name, for the "created by / edited by" lines
   // (migration 150 stamps created_by/updated_by at the DB level).
   const [nameById, setNameById] = useState<Record<string, string>>({});
@@ -482,7 +513,7 @@ export default function FacturaDetailRoute() {
               title: tj.detail.unInvoiceDeleteEmpty.replace('{{number}}', inv.invoice_number),
               confirmText: tc.buttons.delete,
               destructive: true,
-              onConfirm: () => void (async () => { await supabase.from('invoices').delete().eq('id', inv.id); router.replace(`${sectionBase}` as never); })(),
+              onConfirm: () => void (async () => { await supabase.from('invoices').delete().eq('id', inv.id); leaveAfterDelete(); })(),
               onCancel: () => void reloadInvoice(),
             });
             return;
@@ -1059,7 +1090,7 @@ export default function FacturaDetailRoute() {
         }
         // Payments cascade with the invoice — clear their photos too.
         removePaymentPhotos(payments.map((p) => p.photoPath));
-        router.replace(`${sectionBase}` as never);
+        leaveAfterDelete();
       })(),
     });
   };
@@ -1297,18 +1328,18 @@ export default function FacturaDetailRoute() {
         canEdit={canEdit}
         canWriteOff={canDelete}
         updating={updating}
-        onBack={goBack}
+        onBack={embedded ? undefined : goBack}
         onUpdateStatus={updateStatus}
         onPrint={invoice ? exportPdf : undefined}
         onShareLink={invoice ? shareLink : undefined}
-        onEdit={invoice && canEdit ? () => router.replace(`${sectionBase}/nueva?edit=${id}` as never) : undefined}
+        onEdit={invoice && canEdit ? () => (embedded ? router.push : router.replace)(`${sectionBase}/nueva?edit=${id}` as never) : undefined}
         onDelete={invoice && canDelete ? confirmDelete : undefined}
         onAutoprice={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? runAutoprice : undefined}
         // Delay past the more-actions sheet's dismissal — iOS refuses to
         // present a modal while another is still animating out.
         onViewPrices={priceItems.some(p => p.active) ? () => setTimeout(() => setPricesOpen(true), 400) : undefined}
         onAutoname={autonameEnabled(business?.id) && canEdit ? runAutoname : undefined}
-        onViewBilledThrough={(bizId, invId) => { setActiveBusiness(bizId); router.replace(`${sectionBase}/${invId}` as never); }}
+        onViewBilledThrough={(bizId, invId) => { setActiveBusiness(bizId); (embedded ? router.push : router.replace)(`${sectionBase}/${invId}` as never); }}
         onClearPrices={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? clearPrices : undefined}
         autopriceVerify={showInvVerify}
         onMoveJob={canEdit ? openMove : undefined}
@@ -1372,7 +1403,7 @@ export default function FacturaDetailRoute() {
           onOpenTarget={(bizId, invId) => {
             setBillThroughOpen(false);
             setActiveBusiness(bizId);
-            router.replace(`${sectionBase}/${invId}` as never);
+            (embedded ? router.push : router.replace)(`${sectionBase}/${invId}` as never);
           }}
         />
       ) : null}

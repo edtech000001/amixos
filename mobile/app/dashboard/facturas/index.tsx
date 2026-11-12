@@ -31,6 +31,9 @@ import { logAudit } from '@amixos/shared/lib/audit';
 import { can } from '@amixos/shared/lib/permissions';
 import { useMoreBack } from '@/lib/useMoreBack';
 import { useSectionBase } from '@/lib/sectionNav';
+import { SplitEmpty, SplitView, useSplitOpenRequest, useSplitView } from '@/components/SplitView';
+import { InvoiceDetailPane } from './[id]';
+import { Receipt } from 'lucide-react-native';
 import { collectFromPartner, businessUsesBillThrough, businessUsesBillThroughCached, type BillThroughLink } from '@amixos/shared/lib/invoiceBillThrough';
 
 import { todayLocalISO } from '@amixos/shared/lib/format';
@@ -321,6 +324,15 @@ export default function FacturasTab() {
     return runQuery(p, loadAllRef.current);
   };
   const reload = () => reRun(activeLocationId ?? null);
+  // Wide screens (iPad, iPhone Duo unfolded): detail opens beside the list.
+  const { split, listWidth } = useSplitView();
+  const [openId, setOpenId] = useState<string | null>(null);
+  const openDetail = (id: string) => {
+    if (split) setOpenId(id);
+    else router.push(`${sectionBase}/${id}` as never);
+  };
+  // Back from the edit / new form → reopen that invoice beside the list.
+  useSplitOpenRequest('facturas', useCallback((id: string) => { setOpenId(id); reRun(activeLocationId ?? null); }, [reRun, activeLocationId]));
   const pull = usePullRefresh(reload);
   useEffect(() => {
     if (!defaultActive) reRun(activeLocationId ?? null); // SWR key covers the default view
@@ -400,10 +412,10 @@ export default function FacturasTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [rawInvoices]);
 
-  return (
-    <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
-      <LocationSwitcher />
+  const listScreen = (
       <InvoicesListScreen
+        activeId={split ? openId : null}
+        addInHeader={split}
         refreshControl={pull.control}
         onBack={moreBack}
         initialStatuses={initialStatuses}
@@ -411,7 +423,7 @@ export default function FacturasTab() {
         payPeriod={business ? { frequency: business.payroll_frequency, anchorDate: business.payroll_anchor_date, customDays: business.payroll_custom_days } : undefined}
         loading={loading}
         invoices={invoices}
-        onInvoicePress={(id) => router.push(`${sectionBase}/${id}` as never)}
+        onInvoicePress={openDetail}
         onNewInvoicePress={can.createInvoice(currentRole) ? () => router.push(`${sectionBase}/nueva` as never) : undefined}
         onPriceSheetPress={() => router.push(`${sectionBase}/precios` as never)}
         onUpdateStatus={updateStatus}
@@ -455,6 +467,21 @@ export default function FacturasTab() {
             : undefined
         }
       />
+  );
+
+  return (
+    <View className="flex-1 bg-surface" style={{ paddingTop: insets.top }}>
+      <LocationSwitcher />
+      {split ? (
+        <SplitView
+          listWidth={listWidth}
+          list={listScreen}
+          detail={openId
+            // key: a fresh detail per invoice (its state is per-invoice).
+            ? <InvoiceDetailPane key={openId} embeddedId={openId} onChanged={reload} onClose={() => { setOpenId(null); reload(); }} />
+            : <SplitEmpty icon={Receipt} text={full.dashboard.invoices.splitEmpty} />}
+        />
+      ) : listScreen}
     </View>
   );
 }

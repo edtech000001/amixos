@@ -95,7 +95,8 @@
           "iosUrlScheme": "com.googleusercontent.apps.314622478971-jpfm8nmg9aidtneg2qjfdq0f9e8lptpl"
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "./plugins/withSceneLifecycle"
     ],
     "experiments": {
       "typedRoutes": true,

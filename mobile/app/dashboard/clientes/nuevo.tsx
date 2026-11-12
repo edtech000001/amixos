@@ -43,6 +43,7 @@ import {
   type ClientFieldSection,
 } from '@amixos/shared/lib/clientFieldSections';
 import { useSectionBase } from '@/lib/sectionNav';
+import { useShowInSplit } from '@/components/SplitView';
 
 interface FieldTemplate {
   id: string;
@@ -82,6 +83,8 @@ export default function NuevoClienteRoute() {
   // Section links stay in whichever stack this screen is in (its tab, or
   // the Más stack when opened from the Más menu) — lib/sectionNav.
   const sectionBase = useSectionBase('clientes');
+  // Wide screens: back/save returns to the split view with this client open.
+  const showInSplit = useShowInSplit('clientes');
   const { edit, from } = useLocalSearchParams<{ edit?: string; from?: string }>();
   const supabase = createSupabaseClient();
   const { business, locations, currentRole } = useApp();
@@ -103,7 +106,7 @@ export default function NuevoClienteRoute() {
     if (!currentRole) return;
     const allowed = editId ? can.editClient(currentRole) : can.createClient(currentRole);
     if (!allowed) {
-      if (editId) router.replace(`${sectionBase}/${editId}` as never);
+      if (editId) showInSplit(editId, () => router.replace(`${sectionBase}/${editId}` as never));
       else router.replace(`${sectionBase}` as never);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -542,7 +545,7 @@ export default function NuevoClienteRoute() {
   };
 
   const goBack = () => {
-    if (editId) router.replace(`${sectionBase}/${editId}` as never);
+    if (editId) showInSplit(editId, () => router.replace(`${sectionBase}/${editId}` as never));
     else if (from === 'home') router.replace('/dashboard' as never);
     else router.replace(`${sectionBase}` as never);
   };
@@ -646,7 +649,7 @@ export default function NuevoClienteRoute() {
         triggerGoogleSyncOrThrow('update', editId, { apiBaseUrl, jwt })
           .catch((e) => syncBanner.reportError(googleSyncErrorMessage(e, 'No se pudo actualizar el contacto en Google Contacts.')));
       })();
-      router.replace(`${sectionBase}/${editId}` as never);
+      showInSplit(editId, () => router.replace(`${sectionBase}/${editId}` as never));
     } else {
       // Client-generated id so creating works offline (and we can navigate /
       // sync to it immediately). queuedInsert writes through online, or parks it
@@ -694,7 +697,10 @@ export default function NuevoClienteRoute() {
           triggerGoogleSyncOrThrow('create', newId, { apiBaseUrl, jwt })
             .catch((e) => syncBanner.reportError(googleSyncErrorMessage(e, 'No se pudo agregar el contacto a Google Contacts.')));
         })();
-        router.replace(`${sectionBase}/${newId}${from === 'home' ? '?from=home' : ''}` as never);
+        const toDetail = () => router.replace(`${sectionBase}/${newId}${from === 'home' ? '?from=home' : ''}` as never);
+        // From home the clients list isn't underneath — keep the detail route.
+        if (from === 'home') toDetail();
+        else showInSplit(newId, toDetail);
       }
     }
   };

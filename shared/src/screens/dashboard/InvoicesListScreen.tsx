@@ -8,7 +8,7 @@ import { cycleSort, sortTapClears } from '../../lib/sortCycle';
 import { Input } from '../../ui/Input';
 import { FilterSheet, FilterSection, Segmented, FilterChip, ChipWrap, DateRangeFields, FilterButton, showResultsLabel } from '../../ui/FilterSheet';
 import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset } from '../../lib/dateRangePresets';
-import { Fab } from '../../ui/Fab';
+import { Fab, HeaderAddButton } from '../../ui/Fab';
 import { formatDateLong, daysOverdue, daysSince } from '../../lib/format';
 import { usStateName } from '../../lib/usStates';
 import { usePersistedSearch } from '../../lib/usePersistedSearch';
@@ -64,6 +64,10 @@ export interface InvoicesListScreenProps {
   loading: boolean;
   invoices: InvoiceListItem[];
   onInvoicePress: (id: string) => void;
+  /** Invoice open in the detail pane beside the list (split view) — highlighted. */
+  activeId?: string | null;
+  /** Split view: the "new" action sits in the header instead of a corner FAB. */
+  addInHeader?: boolean;
   /** Omit to hide the New-invoice FAB + empty-state create link — no create permission. */
   onNewInvoicePress?: () => void;
   /** Opens the price sheet (autopricing catalog). Shows a header button. */
@@ -151,6 +155,8 @@ export function InvoicesListScreen({
   loading,
   invoices,
   onInvoicePress,
+  activeId,
+  addInHeader,
   onNewInvoicePress,
   onPriceSheetPress,
   onUpdateStatus,
@@ -472,6 +478,7 @@ export function InvoicesListScreen({
               <ListChecks size={16} color={selectMode ? c.primary : c.muted} />
             </Pressable>
           ) : null}
+          {addInHeader && onNewInvoicePress ? <HeaderAddButton onPress={onNewInvoicePress} /> : null}
         </View>
       </View>
 
@@ -582,6 +589,7 @@ export function InvoicesListScreen({
         className="flex-1"
         sections={filtered.length === 0 ? [] : sections}
         keyExtractor={(item) => item.id}
+        extraData={activeId}
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={listHeader}
         renderSectionHeader={({ section }) =>
@@ -613,6 +621,8 @@ export function InvoicesListScreen({
           return (
             <Pressable
               onPress={() => (selectMode ? toggleSelect(inv.id) : onInvoicePress(inv.id))}
+              // Split-view highlight via style (NativeWind remount rule).
+              style={inv.id === activeId ? { backgroundColor: `${c.primary}1F` } : undefined}
               className={`flex-row items-center gap-4 px-5 py-4 border-x border-border-soft ${isFirst ? 'rounded-t-2xl border-t' : ''} ${isLast ? 'rounded-b-2xl border-b' : 'border-b'} ${
                 selectMode && selectedIds.has(inv.id) ? 'bg-primary/5' : 'bg-card active:bg-surface'
               }`}
@@ -721,7 +731,7 @@ export function InvoicesListScreen({
 
     {/* New invoice — floating action, bottom-right thumb reach. Hidden when the
        caller can't create invoices. */}
-    {onNewInvoicePress ? <Fab onPress={onNewInvoicePress} /> : null}
+    {onNewInvoicePress && !addInHeader ? <Fab onPress={onNewInvoicePress} /> : null}
 
     <FilterSheet
       open={filterOpen}

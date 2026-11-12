@@ -46,7 +46,7 @@ import { FilterSheet, FilterSection, FilterChip, ChipWrap, DateRangeFields, Filt
 import { jobFilterFields, picksToQuery, picksCount, jobFilterValueLabel, type JobFieldPicks } from '../../lib/jobFieldFilters';
 import type { JobFieldFilters } from '../../lib/jobsQuery';
 import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset } from '../../lib/dateRangePresets';
-import { Fab } from '../../ui/Fab';
+import { Fab, HeaderAddButton } from '../../ui/Fab';
 import { SkeletonList, SkeletonRow } from '../../ui/Skeleton';
 import { ChipScroll } from '../../ui/ChipScroll';
 import { formatDateLong, formatTime12h } from '../../lib/format';
@@ -159,6 +159,10 @@ export interface JobsListScreenProps {
   jobs: JobListItem[];
   initialTab?: TabKey;
   onJobPress: (id: string) => void;
+  /** Job open in the detail pane beside the list (split view) — highlighted. */
+  activeId?: string | null;
+  /** Split view: the "new" action sits in the header instead of a corner FAB. */
+  addInHeader?: boolean;
   onUpdateStatus: (id: string, status: string) => Promise<void> | void;
   onGenerateInvoice: (id: string) => void;
   /** Batch-invoice: one invoice from several completed same-client jobs.
@@ -298,6 +302,8 @@ export function JobsListScreen({
   jobs,
   initialTab = 'all',
   onJobPress,
+  activeId,
+  addInHeader,
   onUpdateStatus,
   onGenerateInvoice,
   onCreateInvoice,
@@ -918,6 +924,8 @@ export function JobsListScreen({
     return (
       <View className={`bg-card rounded-2xl shadow-sm ${selectMode && !selectable ? 'opacity-40' : ''}`}>
       <View
+        // Split-view highlight via style (NativeWind remount rule).
+        style={job.id === activeId ? { borderColor: c.primary, backgroundColor: `${c.primary}14` } : undefined}
         className={`rounded-2xl border overflow-hidden ${
           picked
             ? 'bg-primary/5 border-primary'
@@ -1117,6 +1125,9 @@ export function JobsListScreen({
               )}
             </Pressable>
           ) : null}
+          {addInHeader && canCreate && !selectMode ? (
+            <HeaderAddButton onPress={() => (canCreateEstimates ? setNewMenuOpen(true) : onNewJob())} />
+          ) : null}
         </View>
       </View>
       {/* Money summary on its own full-width line — squeezed next to the
@@ -1276,6 +1287,7 @@ export function JobsListScreen({
         ListHeaderComponent={jobsHeader}
         renderSectionHeader={renderJobSection}
         renderItem={renderJob}
+        extraData={activeId}
         ItemSeparatorComponent={() => <View className="h-3" />}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
@@ -1377,7 +1389,7 @@ export function JobsListScreen({
 
     {/* New job/proposal — floating action, bottom-right thumb reach.
        Hidden for roles that can't create jobs (field crew / viewers). */}
-    {selectMode ? null : canCreate ? <Fab onPress={() => (canCreateEstimates ? setNewMenuOpen(true) : onNewJob())} /> : null}
+    {selectMode || addInHeader ? null : canCreate ? <Fab onPress={() => (canCreateEstimates ? setNewMenuOpen(true) : onNewJob())} /> : null}
 
     {/* Batch-invoice FAB pill — sits above the dock (bottom-32, like Fab) so it
        isn't hidden behind the floating tab bar. Only in select mode. */}

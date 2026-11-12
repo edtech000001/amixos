@@ -167,19 +167,34 @@ const EMPTY_CONTACT = {
 };
 
 export default function ClienteDetailRoute() {
+  return <ClientDetail />;
+}
+
+/**
+ * The client detail. As a route it reads its id from the URL; in the split
+ * view (wide screens) the clients list renders it beside itself with
+ * `embeddedId`, and the back arrow / delete hand control back via `onClose`.
+ */
+export function ClientDetail({ embeddedId, onClose }: { embeddedId?: string; onClose?: () => void } = {}) {
   const router = useRouter();
   // Section links stay in whichever stack this screen is in (its tab, or
   // the Más stack when opened from the Más menu) — lib/sectionNav.
   const sectionBase = useSectionBase('clientes');
   const appHref = useAppHref();
   const c = useThemeColors();
-  const { id, from, jobId, invoice } = useLocalSearchParams<{ id: string; from?: string; jobId?: string; invoice?: string }>();
+  const params = useLocalSearchParams<{ id: string; from?: string; jobId?: string; invoice?: string }>();
+  const embedded = !!embeddedId;
+  const id = embeddedId ?? params.id;
+  // Origin params belong to the route; an embedded detail has none.
+  const { from, jobId, invoice } = embedded ? ({} as typeof params) : params;
   // Honor ?from=map so the back arrow returns to the map module instead of the
   // clientes list. ?from=job&jobId=… returns to that specific job. We navigate
   // explicitly (not router.back()) because clientes/[id] and trabajos/[id] live
   // in the same Tabs navigator, where back() can land on the wrong tab root.
   const goBack = () => {
-    if (from === 'map') {
+    if (embedded) {
+      onClose?.();
+    } else if (from === 'map') {
       router.replace(appHref('map') as never);
     } else if (from === 'job' && jobId) {
       router.replace(`/dashboard/trabajos/${jobId}` as never);
@@ -590,7 +605,8 @@ export default function ClienteDetailRoute() {
             }
           }
           await supabase.from('clients').delete().eq('id', client.id);
-          router.replace(`${sectionBase}` as never);
+          if (embedded) onClose?.();
+          else router.replace(`${sectionBase}` as never);
         },
       },
     ]);
@@ -783,13 +799,16 @@ export default function ClienteDetailRoute() {
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 pt-2 pb-3 border-b border-border-soft">
-        <Pressable
-          onPress={goBack}
-          hitSlop={12}
-          className="p-2 -ml-2 rounded-lg active:bg-border-soft"
-        >
-          <ChevronLeft size={22} color={c.ink} />
-        </Pressable>
+        {/* Split view: the list beside it is the way back — no arrow. */}
+        {embedded ? <View /> : (
+          <Pressable
+            onPress={goBack}
+            hitSlop={12}
+            className="p-2 -ml-2 rounded-lg active:bg-border-soft"
+          >
+            <ChevronLeft size={22} color={c.ink} />
+          </Pressable>
+        )}
         <View className="flex-row gap-1">
           <Pressable
             onPress={onSharePdf}

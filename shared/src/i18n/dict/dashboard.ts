@@ -246,6 +246,7 @@ export type DashboardDict = {
     selectAll: string;
     bulkDelete: string;
     confirmDeleteBulk: string;
+    splitEmpty: string;
     selectedCountSingle: string;
     selectedCountPlural: string;
     newInvoice: string;
@@ -581,6 +582,7 @@ export type DashboardDict = {
     emptyAll: string;
     addFirst: string;
     confirmDeleteSingle: string;
+    splitEmpty: string;
     confirmDeleteBulk: string;
     notFound: string;
     fields: {
@@ -865,6 +867,7 @@ export type DashboardDict = {
     archiveDisabledHint: string;
     archivedBadge: string;
     confirmDeleteBulk: string;
+    splitEmpty: string;
     batchInvoice: {
       selectButton: string;
       cancel: string;
@@ -3811,6 +3814,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       selectAll: 'Todas',
       bulkDelete: 'Eliminar',
       confirmDeleteBulk: '¿Eliminar {{count}} factura(s) permanentemente? Los trabajos enlazados vuelven a Completado y pueden refacturarse.',
+      splitEmpty: 'Selecciona una factura',
       selectedCountSingle: '{{count}} seleccionada',
       selectedCountPlural: '{{count}} seleccionadas',
       newInvoice: 'Nueva factura',
@@ -4132,6 +4136,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       emptyAll: 'Aún no tienes clientes.',
       addFirst: 'Agrega el primero →',
       confirmDeleteSingle: '¿Eliminar este cliente permanentemente?',
+      splitEmpty: 'Selecciona un cliente',
       confirmDeleteBulk: '¿Eliminar {{count}} cliente(s) permanentemente?',
       notFound: 'Cliente no encontrado.',
       fields: {
@@ -4410,6 +4415,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       archiveDisabledHint: 'Solo se archivan trabajos cerrados (completados, facturados, cancelados) que no estén ya archivados. Quita los demás de la selección.',
       archivedBadge: 'Archivado',
       confirmDeleteBulk: '¿Eliminar {{count}} trabajo(s) permanentemente? Se borrarán también sus fotos, líneas y asignaciones.',
+      splitEmpty: 'Selecciona un trabajo',
       batchInvoice: {
         selectButton: 'Facturar',
         cancel: 'Cancelar',
@@ -7319,6 +7325,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       selectAll: 'All',
       bulkDelete: 'Delete',
       confirmDeleteBulk: 'Permanently delete {{count}} invoice(s)? Linked jobs go back to Completed and can be re-invoiced.',
+      splitEmpty: 'Select an invoice',
       selectedCountSingle: '{{count}} selected',
       selectedCountPlural: '{{count}} selected',
       newInvoice: 'New invoice',
@@ -7640,6 +7647,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       emptyAll: "You don't have any clients yet.",
       addFirst: 'Add the first one →',
       confirmDeleteSingle: 'Delete this client permanently?',
+      splitEmpty: 'Select a client',
       confirmDeleteBulk: 'Delete {{count}} client(s) permanently?',
       notFound: 'Client not found.',
       fields: {
@@ -7918,6 +7926,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       archiveDisabledHint: "Only closed jobs (completed, invoiced, cancelled) that aren't already archived can be archived. Unselect the others.",
       archivedBadge: 'Archived',
       confirmDeleteBulk: 'Delete {{count}} job(s) permanently? Their photos, line items, and assignments will be removed too.',
+      splitEmpty: 'Select a job',
       batchInvoice: {
         selectButton: 'Invoice',
         cancel: 'Cancel',

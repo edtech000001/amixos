@@ -150,7 +150,8 @@ export interface InvoiceDetailScreenProps {
   /** Gate the write-off / total-loss / reinstate status buttons. Defaults to true. */
   canWriteOff?: boolean;
   updating: boolean;
-  onBack: () => void;
+  /** Omit to hide the back arrow (split view: the list beside it is the way back). */
+  onBack?: () => void;
   onUpdateStatus: (status: 'sent' | 'paid' | 'draft' | 'total_loss') => Promise<void> | void;
   /** Print / export PDF (mobile: share sheet). Hidden if not provided. */
   onPrint?: () => void;
@@ -377,9 +378,11 @@ export function InvoiceDetailScreen({
       {/* Header — title left, utility actions top-right (jobs/equipment pattern) */}
       <View className="flex-row items-start justify-between mb-4 gap-3">
         <View className="flex-row items-center gap-3 flex-1 min-w-0">
-          <Pressable onPress={onBack} className="p-2 -ml-2 rounded-xl active:bg-border-soft">
-            <ArrowLeft size={18} color={c.muted} />
-          </Pressable>
+          {onBack ? (
+            <Pressable onPress={onBack} className="p-2 -ml-2 rounded-xl active:bg-border-soft">
+              <ArrowLeft size={18} color={c.muted} />
+            </Pressable>
+          ) : null}
           <View className="flex-1 min-w-0">
             <Text className="text-xl font-bold text-ink">{invoice.invoiceNumber}</Text>
             {/* Pills on their own row — inline they collide with the header

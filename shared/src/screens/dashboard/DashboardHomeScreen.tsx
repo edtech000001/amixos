@@ -4,6 +4,7 @@ import { SkeletonBlock, SkeletonStats, SkeletonChart, SkeletonCard } from '../..
 import { useBarScrub } from '../../ui/useBarScrub';
 import { niceCeil, axisTick } from '../../lib/chartAxis';
 import { View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PressableScale } from '../../ui/PressableScale';
 import { haptics } from '../../lib/haptics';
 import Animated, { useAnimatedRef } from 'react-native-reanimated';
@@ -339,7 +340,11 @@ export function DashboardHomeScreen({
   const { t: full } = useLang();
   const c = useThemeColors();
   const t = full.dashboard;
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: windowWidth } = useWindowDimensions();
+  // The app root keeps clear of side safe areas (iPhone Duo's side status
+  // bar), so the usable width is the window minus those.
+  const sideInsets = useSafeAreaInsets();
+  const screenWidth = windowWidth - sideInsets.left - sideInsets.right;
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
 
   const [editing, setEditing] = useState(false);
