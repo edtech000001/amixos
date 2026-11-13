@@ -156,6 +156,17 @@ function NuevaFacturaContent() {
     }
   }, [editId, business, issueDate, dueDate]);
 
+  // Changing the issue date moves the due date with it — but only while the
+  // due date still sits at the default window (or is empty). A due date the
+  // user picked by hand is left alone. Works on edits too.
+  const changeIssueDate = (next: string) => {
+    const days = business?.invoice_due_days ?? 30;
+    if (next && days >= 0 && (!dueDate || (issueDate && dueDate === addDaysISO(issueDate, days)))) {
+      setDueDate(addDaysISO(next, days));
+    }
+    setIssueDate(next);
+  };
+
   // New invoices prefill the default note (Ajustes → Facturas) and start on the
   // "Use default" toggle so it's actually applied. Ref guard = runs once.
   const notesDefaultedRef = useRef(false);
@@ -444,7 +455,7 @@ function NuevaFacturaContent() {
       case 'client':
         return clientPicker;
       case 'issue_date':
-        return <Input key={key} label={t.issueDateLabel} type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} />;
+        return <Input key={key} label={t.issueDateLabel} type="date" value={issueDate} onChange={e => changeIssueDate(e.target.value)} />;
       case 'due_date':
         return <Input key={key} label={t.dueDateLabel} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />;
       default:

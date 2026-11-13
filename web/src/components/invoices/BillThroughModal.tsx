@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Check, Building2, FilePlus2, UserPlus, Search, AlertTriangle, CheckCircle, ExternalLink, Trash2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useLang } from '@/i18n/LangProvider';
-import { formatDateLong } from '@amixos/shared/lib/format';
+import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
 import {
   billInvoiceThrough,
   copyClientToBusiness,
@@ -415,7 +415,7 @@ export function BillThroughModal({
                       </span>
                       <span className="flex-1 min-w-0">
                         <span className={`block text-sm ${l.excluded ? 'text-faint' : 'text-ink'}`}>{l.name}</span>
-                        <span className="block text-xs text-faint">{l.qty} × {fmt(l.rate)}</span>
+                        <span className="block text-xs text-faint">{formatNumberGrouped(l.qty)} × {fmt(l.rate)}</span>
                       </span>
                       <span className="text-sm font-semibold text-ink tabular-nums">{fmt((Number(l.qty) || 0) * (Number(l.rate) || 0))}</span>
                     </button>

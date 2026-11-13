@@ -199,6 +199,17 @@ export function InvoiceForm({ embeddedEditId, onDone }: { embeddedEditId?: strin
     }
   }, [editId, business, issueDate, dueDate]);
 
+  // Changing the issue date moves the due date with it — but only while the
+  // due date still sits at the default window (or is empty). A due date the
+  // user picked by hand is left alone. Works on edits too.
+  const changeIssueDate = (next: string) => {
+    const days = business?.invoice_due_days ?? 30;
+    if (next && days >= 0 && (!dueDate || (issueDate && dueDate === addDaysISO(issueDate, days)))) {
+      setDueDate(addDaysISO(next, days));
+    }
+    setIssueDate(next);
+  };
+
   // New invoices prefill the default note (Ajustes → Facturas) and start on the
   // "Use default" toggle so it's actually applied.
   const notesDefaultedRef = useRef(false);
@@ -552,7 +563,7 @@ export function InvoiceForm({ embeddedEditId, onDone }: { embeddedEditId?: strin
         );
       case 'issue_date':
         return (
-          <DatePicker key={key} label={t.issueDateLabel} value={issueDate} onChange={setIssueDate} />
+          <DatePicker key={key} label={t.issueDateLabel} value={issueDate} onChange={changeIssueDate} />
         );
       case 'due_date':
         return (

@@ -2132,7 +2132,7 @@ export function JobDetail({ embeddedId, onClose, onOpen, onChanged, onEdit }: {
                     ) : null}
                     <Text className="text-sm text-ink">{it.description}</Text>
                     <Text className="text-xs text-muted mt-0.5">
-                      {it.quantity} × {fmt(it.unit_price)}{(it as { original_quantity?: number | null }).original_quantity ? `  ·  ${td.measuredNote.replace('{{qty}}', String((it as { original_quantity?: number | null }).original_quantity))}` : ''}
+                      {formatNumberGrouped(it.quantity)} × {fmt(it.unit_price)}{(it as { original_quantity?: number | null }).original_quantity ? `  ·  ${td.measuredNote.replace('{{qty}}', String((it as { original_quantity?: number | null }).original_quantity))}` : ''}
                     </Text>
                   </View>
                   <Text className="text-sm font-semibold text-ink tabular-nums">{fmt(it.total)}</Text>

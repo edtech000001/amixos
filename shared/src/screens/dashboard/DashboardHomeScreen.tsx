@@ -370,8 +370,13 @@ export function DashboardHomeScreen({
   }, [layoutKey, role]);
 
   const containerWidth = screenWidth - H_PAD * 2;
-  const widthFor = (size: DashboardWidgetSize) =>
-    size === 'sm' ? Math.floor((containerWidth - GAP) / 2) : containerWidth;
+  // Wide screens (iPad, Duo open) get a 4-column grid: sm = a quarter, md / lg
+  // = half — each widget keeps roughly its phone size, just placed side by
+  // side. Phones keep 2 columns (sm = half, md / lg = full width).
+  const wide = containerWidth >= 680;
+  const widthFor = (size: DashboardWidgetSize) => wide
+    ? (size === 'sm' ? Math.floor((containerWidth - GAP * 3) / 4) : Math.floor((containerWidth - GAP) / 2))
+    : (size === 'sm' ? Math.floor((containerWidth - GAP) / 2) : containerWidth);
 
 
   const persist = (

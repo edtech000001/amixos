@@ -34,7 +34,7 @@ import {
   getInvoiceDateLocale,
   type InvoiceLang,
 } from '../../i18n/invoice';
-import { formatDateLong, formatDateTimeLong, daysOverdue, daysSince } from '../../lib/format';
+import { formatDateLong, formatDateTimeLong, daysOverdue, daysSince, formatNumberGrouped } from '../../lib/format';
 import {
   type InvoiceBranding,
   type InvoiceTemplateConfig,
@@ -675,7 +675,7 @@ export function InvoiceDetailScreen({
                       <Text className={isAddon ? 'text-sm text-muted' : 'text-sm text-ink'}>{isAddon ? `+ ${title}` : title}</Text>
                     )}
                     <Text className="text-xs text-faint mt-0.5">
-                      {q} × {fmt(r)}
+                      {formatNumberGrouped(q)} × {fmt(r)}
                       {(() => {
                         const d = li.service_date ?? (jid && !isAddon ? jobDates?.[jid] : null);
                         return d ? ` · ${formatDate(d)}` : '';

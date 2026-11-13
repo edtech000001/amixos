@@ -1,4 +1,5 @@
 'use client';
+import { formatNumberGrouped } from '@amixos/shared/lib/format';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
@@ -277,7 +278,7 @@ export default function ReconcileModal({ open, businessId, locale, onClose }: Pr
               {/* Same client as the job (matched by client) — show it for visual parity. */}
               <p className="text-xs text-muted mt-1">{current.job.clientName}</p>
               <p className="text-xs text-muted mt-1">
-                {currentLine.qty} × {money(currentLine.rate)} = <span className="font-semibold text-ink tabular-nums">{money(currentLine.amount)}</span>
+                {formatNumberGrouped(currentLine.qty)} × {money(currentLine.rate)} = <span className="font-semibold text-ink tabular-nums">{money(currentLine.amount)}</span>
               </p>
               {currentLine.issueDate ? <p className="text-xs text-faint mt-0.5">{fmtDate(currentLine.issueDate)}</p> : null}
             </div>
@@ -293,7 +294,7 @@ export default function ReconcileModal({ open, businessId, locale, onClose }: Pr
                   <button key={lineKey(l)} onClick={() => setPickedLineKey(lineKey(l))}
                     className="text-left px-3 py-2 rounded-xl text-sm hover:bg-surface text-ink border border-transparent hover:border-primary/30">
                     <span className="block truncate">{l.description}</span>
-                    <span className="block text-xs text-faint">#{l.invoiceNumber} · {l.qty} × {money(l.rate)} = {money(l.amount)}{l.issueDate ? ` · ${fmtDate(l.issueDate)}` : ''}</span>
+                    <span className="block text-xs text-faint">#{l.invoiceNumber} · {formatNumberGrouped(l.qty)} × {money(l.rate)} = {money(l.amount)}{l.issueDate ? ` · ${fmtDate(l.issueDate)}` : ''}</span>
                   </button>
                 ))}
               </div>

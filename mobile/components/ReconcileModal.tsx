@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { formatNumberGrouped } from '@amixos/shared/lib/format';
 import { Modal as RNModal, View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { PressableScale } from '@amixos/shared/ui/PressableScale';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -265,7 +266,7 @@ export function ReconcileModal({ open, businessId, onClose }: Props) {
                   <Text className="text-sm font-semibold text-ink">{currentLine.description}</Text>
                   <Text className="text-xs font-mono text-faint mt-0.5">#{currentLine.invoiceNumber}</Text>
                   <Text className="text-xs text-muted mt-1">{current.job.clientName}</Text>
-                  <Text className="text-xs text-muted mt-1">{currentLine.qty} × {money(currentLine.rate)}</Text>
+                  <Text className="text-xs text-muted mt-1">{formatNumberGrouped(currentLine.qty)} × {money(currentLine.rate)}</Text>
                   <Text className="text-xs font-semibold text-ink mt-0.5 tabular-nums">{money(currentLine.amount)}</Text>
                   {currentLine.issueDate ? <Text className="text-xs text-faint mt-0.5">{fmtDate(currentLine.issueDate)}</Text> : null}
                 </Card>
@@ -278,7 +279,7 @@ export function ReconcileModal({ open, businessId, onClose }: Props) {
                   {sortLinesByDateNear([current.line!, ...current.alternatives].filter(l => lineKey(l) !== lineKey(currentLine)), current.job.scheduledDate).map(l => (
                     <Pressable key={lineKey(l)} onPress={() => setPickedLineKey(lineKey(l))} className="px-3 py-2.5 rounded-xl mb-1 border border-border-soft">
                       <Text className="text-sm text-ink" numberOfLines={1}>{l.description}</Text>
-                      <Text className="text-xs text-faint">#{l.invoiceNumber} · {l.qty} × {money(l.rate)} = {money(l.amount)}{l.issueDate ? ` · ${fmtDate(l.issueDate)}` : ''}</Text>
+                      <Text className="text-xs text-faint">#{l.invoiceNumber} · {formatNumberGrouped(l.qty)} × {money(l.rate)} = {money(l.amount)}{l.issueDate ? ` · ${fmtDate(l.issueDate)}` : ''}</Text>
                     </Pressable>
                   ))}
                 </View>

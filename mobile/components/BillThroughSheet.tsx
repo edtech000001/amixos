@@ -4,7 +4,7 @@ import { X, ArrowLeft, Check, Building2, FilePlus2, UserPlus, Search, AlertTrian
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { useLang } from '@/lib/i18n/LangProvider';
-import { formatDateLong } from '@amixos/shared/lib/format';
+import { formatDateLong, formatNumberGrouped } from '@amixos/shared/lib/format';
 import {
   billInvoiceThrough,
   copyClientToBusiness,
@@ -376,7 +376,7 @@ export function BillThroughSheet({
                           </View>
                           <View className="flex-1 min-w-0">
                             <Text className={`text-sm ${l.excluded ? 'text-faint' : 'text-ink'}`} numberOfLines={2}>{l.name}</Text>
-                            <Text className="text-xs text-faint">{l.qty} × {fmt(l.rate)}</Text>
+                            <Text className="text-xs text-faint">{formatNumberGrouped(l.qty)} × {fmt(l.rate)}</Text>
                           </View>
                           <Text className="text-sm font-semibold text-ink tabular-nums">{fmt((Number(l.qty) || 0) * (Number(l.rate) || 0))}</Text>
                         </Pressable>
