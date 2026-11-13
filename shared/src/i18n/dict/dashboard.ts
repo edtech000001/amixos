@@ -1868,6 +1868,7 @@ export type DashboardDict = {
       searchClientPlaceholder: string;
       noClientMatches: string;
       emailBtn: string;
+      viewBtn: string;
       /** Heading of the "who gets this?" sheet, shown when emailing a
        *  state-mode sheet that has no client attached. */
       emailPickTitle: string;
@@ -5389,6 +5390,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         searchClientPlaceholder: 'Buscar cliente por nombre o empresa…',
         noClientMatches: 'Sin resultados.',
         emailBtn: 'Enviar por correo',
+        viewBtn: 'Ver en pantalla',
         emailPickTitle: '¿A quién se lo enviamos?',
         emailSubject: 'Lista de precios – {{business}}',
         emailDraftTitle: '¿Guardaste el PDF?',
@@ -8903,6 +8905,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         searchClientPlaceholder: 'Search client by name or company…',
         noClientMatches: 'No matches.',
         emailBtn: 'Email to client',
+        viewBtn: 'View on screen',
         emailPickTitle: 'Who should receive this?',
         emailSubject: 'Price sheet – {{business}}',
         emailDraftTitle: 'Saved the PDF?',

@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -117,19 +117,44 @@ export default function MasMenu() {
 
   // Card group — matches the Ajustes index layout: 10×10 icon tile in
   // primary tint, bold name, small description, chevron on the right.
-  const renderGroup = (groupItems: MenuItem[]) => (
+  // Wide screens (iPad, Duo open): a tile grid — 3 across, 4 from 1000pt.
+  const { width } = useWindowDimensions();
+  const cols = width >= 1000 ? 4 : width >= 600 ? 3 : 1;
+  // navigate (not push): a double-tap must not stack two copies of the same
+  // screen — same fix family as the dock debounce.
+  const open = (item: MenuItem) => {
+    if (item.path) router.navigate(item.path as any);
+    else item.onPress?.();
+  };
+  const renderGroup = (groupItems: MenuItem[]) => cols > 1 ? (
+    // Cells pad 6pt → 12pt gutters; wrap lines stretch, so a row's tiles match.
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 }}>
+      {groupItems.map(item => {
+        const Icon = item.icon;
+        return (
+          <View key={item.key} style={{ width: `${100 / cols}%`, padding: 6 }}>
+            <Pressable
+              onPress={() => open(item)}
+              className="flex-1 bg-card rounded-2xl border border-border-soft p-4 active:bg-surface"
+            >
+              <View className="w-11 h-11 rounded-xl bg-primary/10 items-center justify-center mb-3">
+                <Icon size={20} color={c.primary} />
+              </View>
+              <Text className="text-base font-semibold text-ink" numberOfLines={1}>{item.label}</Text>
+              <Text className="text-xs text-muted mt-0.5" numberOfLines={2}>{item.description}</Text>
+            </Pressable>
+          </View>
+        );
+      })}
+    </View>
+  ) : (
     <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">
       {groupItems.map((item, i) => {
         const Icon = item.icon;
         return (
           <Pressable
             key={item.key}
-            onPress={() => {
-              // navigate (not push): a double-tap must not stack two copies
-              // of the same screen — same fix family as the dock debounce.
-              if (item.path) router.navigate(item.path as any);
-              else item.onPress?.();
-            }}
+            onPress={() => open(item)}
             className={`flex-row items-center gap-3 px-4 py-4 active:bg-surface ${
               i < groupItems.length - 1 ? 'border-b border-border-soft' : ''
             }`}

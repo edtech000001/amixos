@@ -15,6 +15,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronDown, ChevronLeft, ChevronUp, Printer, Sliders, X, GripVertical, Eye, EyeOff, Mail, Search, Building2 } from 'lucide-react-native';
 import Sortable from 'react-native-sortables';
 import * as Print from 'expo-print';
+import { WebView } from 'react-native-webview';
 import * as Sharing from 'expo-sharing';
 import { createSupabaseClient } from '@/lib/supabase';
 import { useApp } from '@/lib/AppContext';
@@ -22,6 +23,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { can } from '@amixos/shared/lib/permissions';
 import { PriceSheetScreen } from '@amixos/shared/screens/dashboard/PriceSheetScreen';
+import { useSplitView } from '@/components/SplitView';
 import { Select } from '@amixos/shared/ui';
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
 import { formatDateLong } from '@amixos/shared/lib/format';
@@ -62,6 +64,7 @@ const ADDONS = '__additional_charges__';
 
 export default function FacturasPreciosPage() {
   const router = useRouter();
+  const { split } = useSplitView();
   // Deep-link from client detail: ?client=<id> preselects that client and
   // opens the generate sheet right away (mirrors web /precios/generar?client=).
   const { client: clientParam } = useLocalSearchParams<{ client?: string }>();
@@ -80,6 +83,8 @@ export default function FacturasPreciosPage() {
 
   // ── Generate PDF sheet ──────────────────────────────────────────────────────
   const [genOpen, setGenOpen] = useState(false);
+  // On-screen preview of the generated sheet (no PDF / print / email).
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [mode, setMode] = useState<'client' | 'state'>('client');
   const [clientId, setClientId] = useState('');
   const [stateCode, setStateCode] = useState('');
@@ -262,7 +267,7 @@ export default function FacturasPreciosPage() {
 
   /** Renders the sheet to a PDF and returns its file URI. Shared by Print and
    *  Email so the two can never drift into producing different documents. */
-  const renderPdf = async (forClient: ClientLite | null): Promise<string | null> => {
+  const buildHtml = (forClient: ClientLite | null): string | null => {
     if (!business || !biz) return null;
     const ctx = forClient
       ? { state: forClient.state ?? null, clientId: forClient.id }
@@ -302,6 +307,11 @@ export default function FacturasPreciosPage() {
       preparedFor: forClient ? clientName(forClient) : null,
       todayStr: formatDateLong(new Date(), locale),
     });
+    return html;
+  };
+  const renderPdf = async (forClient: ClientLite | null): Promise<string | null> => {
+    const html = buildHtml(forClient);
+    if (!html) return null;
     // Bounded: a PDF render that never resolves left the button spinning for
     // good. 30s is far beyond a normal render.
     const { uri } = await Promise.race([
@@ -317,8 +327,24 @@ export default function FacturasPreciosPage() {
    *  Close it first and wait out the fade before presenting anything. */
   const closeSheetsThenWait = async () => {
     setGenOpen(false);
+    setPreviewHtml(null);
     setEmailPickOpen(false);
     await new Promise((r) => setTimeout(r, 450));
+  };
+
+  /** Same document as the PDF, just shown — for checking a state's (or a
+   *  client's) prices without printing or sending anything. */
+  const viewSheet = async () => {
+    const selClient = mode === 'client' ? (clients.find(x => x.id === clientId) ?? null) : null;
+    const html = buildHtml(selClient);
+    if (!html) return;
+    await closeSheetsThenWait(); // iOS: one RNModal at a time
+    // The HTML is built for print (no viewport) — without this the WebView
+    // lays it out at desktop width and the text comes out tiny.
+    // Print margins (@page) don't apply on screen, so give the page its own
+    // padding and a paper-like width centred on wide screens.
+    setPreviewHtml(html.replace('<head>', '<head><meta name="viewport" content="width=device-width, initial-scale=1">'
+      + '<style>body{box-sizing:border-box;max-width:860px;margin:0 auto !important;padding:24px 20px 48px !important}</style>'));
   };
 
   const generate = async () => {
@@ -448,6 +474,24 @@ export default function FacturasPreciosPage() {
     ]);
   };
 
+  const priceSheet = (
+        <PriceSheetScreen
+          split={split}
+          supabase={supabase}
+          businessId={business.id}
+          canManage={can.manageBusinessSettings(currentRole)}
+          syncedFrom={follows ? { name: nameOf(follows.sourceId), onStop: isAdminHere ? stopSync : undefined } : null}
+          sectionOrder={(business as { price_section_order?: string[] | null }).price_section_order ?? null}
+          onSectionOrderChange={async (next) => {
+            // Written straight to the business row, then refetched so the
+            // invoice "view prices" sheet — which reads the same column via
+            // AppContext — picks the new order up without a reload.
+            await supabase.from('businesses').update({ price_section_order: next }).eq('id', business.id);
+            await refetchBusiness();
+          }}
+        />
+  );
+
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
       <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
@@ -464,22 +508,13 @@ export default function FacturasPreciosPage() {
           <Printer size={20} color={c.muted} />
         </Pressable>
       </View>
-      <ScrollView className="flex-1" contentContainerClassName="px-6 pt-5 pb-44">
-        <PriceSheetScreen
-          supabase={supabase}
-          businessId={business.id}
-          canManage={can.manageBusinessSettings(currentRole)}
-          syncedFrom={follows ? { name: nameOf(follows.sourceId), onStop: isAdminHere ? stopSync : undefined } : null}
-          sectionOrder={(business as { price_section_order?: string[] | null }).price_section_order ?? null}
-          onSectionOrderChange={async (next) => {
-            // Written straight to the business row, then refetched so the
-            // invoice "view prices" sheet — which reads the same column via
-            // AppContext — picks the new order up without a reload.
-            await supabase.from('businesses').update({ price_section_order: next }).eq('id', business.id);
-            await refetchBusiness();
-          }}
-        />
-      </ScrollView>
+      {/* Wide screens: the price screen splits into two panes that scroll on
+         their own, so no outer ScrollView. */}
+      {split ? priceSheet : (
+        <ScrollView className="flex-1" contentContainerClassName="px-6 pt-5 pb-44">
+          {priceSheet}
+        </ScrollView>
+      )}
 
       {/* Generate sheet — pick client/state, render PDF, OS share sheet. */}
       <RNModal visible={genOpen} transparent animationType="fade" onRequestClose={() => setGenOpen(false)}>
@@ -645,8 +680,15 @@ export default function FacturasPreciosPage() {
               {/* Explicit muted styling rather than `disabled:opacity-50` —
                   that variant does not reliably reach a Pressable under
                   NativeWind, so a dead button looked tappable. */}
+              <Pressable onPress={() => void viewSheet()} disabled={busy}
+                className="mt-4 py-3.5 rounded-2xl border border-border bg-card items-center active:opacity-80">
+                <View className="flex-row items-center gap-2">
+                  <Eye size={16} color={c.primary} />
+                  <Text className="text-sm font-semibold text-primary">{t.viewBtn}</Text>
+                </View>
+              </Pressable>
               <Pressable onPress={onEmailPress} disabled={busy || !emailableClients.length}
-                className={`mt-4 py-3.5 rounded-2xl border items-center ${
+                className={`mt-2 py-3.5 rounded-2xl border items-center ${
                   emailableClients.length && !busy
                     ? 'border-border bg-card active:opacity-80'
                     : 'border-border-soft bg-card opacity-50'
@@ -740,6 +782,25 @@ export default function FacturasPreciosPage() {
         onLinksChanged={loadLinks}
         businessName={nameOf}
       />
+      {/* Price sheet preview — view only. X top-LEFT (Duo side strip). */}
+      <RNModal visible={!!previewHtml} animationType="slide" onRequestClose={() => setPreviewHtml(null)}>
+        <SafeAreaView className="flex-1 bg-surface" edges={['top', 'bottom', 'left', 'right']}>
+          <View className="flex-row items-center px-3 pt-2 pb-3 border-b border-border-soft">
+            <Pressable onPress={() => setPreviewHtml(null)} hitSlop={12} className="p-2 rounded-lg active:bg-border-soft" accessibilityLabel={full.common.buttons.close}>
+              <X size={22} color={c.ink} />
+            </Pressable>
+            <Text className="ml-1 flex-1 text-lg font-bold text-ink" numberOfLines={1}>{t.sheetTitle}</Text>
+            <Pressable onPress={() => void generate()} disabled={busy} hitSlop={8}
+              className="flex-row items-center gap-1.5 px-3 py-2 rounded-xl bg-primary active:opacity-80">
+              {busy ? <ActivityIndicator color="#fff" size="small" /> : <Printer size={16} color="#fff" />}
+              <Text className="text-sm font-semibold text-white">{t.printBtn}</Text>
+            </Pressable>
+          </View>
+          {previewHtml ? (
+            <WebView originWhitelist={['*']} source={{ html: previewHtml }} style={{ flex: 1, backgroundColor: '#fff' }} />
+          ) : null}
+        </SafeAreaView>
+      </RNModal>
     </SafeAreaView>
   );
 }

@@ -6,11 +6,12 @@
 // CLAUDE.md.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { loadCachedThenFresh, writeCacheAndStamp } from '../../lib/swrCache';
 import { useDataFingerprint } from '../../lib/dataFingerprint';
 import { SkeletonList } from '../../ui/Skeleton';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
-import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Modal as RNModal, KeyboardAvoidingView, Keyboard, Platform } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Modal as RNModal, KeyboardAvoidingView, Keyboard, Platform, useWindowDimensions } from 'react-native';
 import { haptics } from '../../lib/haptics';
 import { PressableScale } from '../../ui/PressableScale';
 import { Plus, X, Trash2, Pencil, Copy, DollarSign, Search, ChevronDown, Check, ArrowUpDown, GripVertical, History } from 'lucide-react-native';
@@ -58,6 +59,9 @@ export interface PriceSheetScreenProps {
    *  migration 259): show a banner and make the sheet read-only — edits here
    *  would be overwritten. `onStop` (admins) disconnects it. */
   syncedFrom?: { name: string; onStop?: () => void } | null;
+  /** iPad / Duo open: list left, the picked item's details right (the
+   *  caller drops its outer ScrollView — each pane scrolls itself). */
+  split?: boolean;
 }
 
 const US_STATES = [
@@ -89,11 +93,15 @@ const emptyDraft = (): Draft => ({
   id: null, name: '', category: '', pricingMode: 'per_unit', unitLabel: '', rate: '', stateRates: [], clientRates: [], matchTerms: '', isAddon: false, addonInline: false,
 });
 
-export function PriceSheetScreen({ supabase, businessId, canManage: canManageProp, sectionOrder, onSectionOrderChange, syncedFrom }: PriceSheetScreenProps) {
+export function PriceSheetScreen({ supabase, businessId, canManage: canManageProp, sectionOrder, onSectionOrderChange, syncedFrom, split = false }: PriceSheetScreenProps) {
   // A mirrored sheet is read-only: the next sync from the source would undo edits.
   const canManage = canManageProp && !syncedFrom;
   const { t: full, locale } = useLang();
   const c = useThemeColors();
+  // Bottom sheets span the window; keep them clear of side safe areas (the
+  // iPhone Duo's side status strip hid the sheet's X).
+  const insets = useSafeAreaInsets();
+  const sheetSides = { marginLeft: insets.left, marginRight: insets.right };
   const t = full.dashboard.settings.priceSheet;
 
   const [items, setItems] = useState<PriceSheetItem[]>([]);
@@ -105,6 +113,8 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
   const [history, setHistory] = useState<PriceItemHistory | null>(null);
   // Price history shows the 5 most recent entries until expanded.
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  // Price history starts collapsed — tap its header to open it.
+  const [historyOpen, setHistoryOpen] = useState(false);
   const viewingIdRef = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
   // Client roster for the per-client price picker (names only).
@@ -281,11 +291,12 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
     setViewing(i);
     setHistory(null);
     setHistoryExpanded(false);
+    setHistoryOpen(false);
     void fetchPriceItemHistory(supabase, i.id)
       .catch(() => ({ createdAt: null, entries: [] }))
       .then(h => { if (viewingIdRef.current === i.id) setHistory(h); });
   };
-  const closeSheet = () => { setDraft(null); setViewing(null); viewingIdRef.current = null; };
+  const closeSheet = () => { setDraft(null); if (split) return; setViewing(null); viewingIdRef.current = null; };
   const clientName = (id: string) => clients.find(cl => cl.id === id)?.name ?? '—';
   const duplicate = (i: PriceSheetItem) => setDraft(draftFromItem(i, null));
 
@@ -369,18 +380,19 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
   const renderPriceRow = (i: PriceSheetItem, idx: number, total: number) => (
     // The whole row opens the item's details (pricing + history); Edit lives
     // there. The action buttons are their own Pressables, so they win the tap.
-    <Pressable key={i.id} onPress={() => openDetail(i)} className={`px-4 py-4 flex-row items-center gap-3 bg-card active:bg-surface ${idx < total - 1 ? 'border-b border-border-soft' : ''} ${!i.active ? 'opacity-50' : ''}`}>
+    <Pressable key={i.id} onPress={() => openDetail(i)} className={`px-4 py-4 flex-row items-center gap-3 bg-card active:bg-surface ${idx < total - 1 ? 'border-b border-border-soft' : ''} ${!i.active ? 'opacity-50' : ''}`}
+      style={split && i.id === viewing?.id ? { backgroundColor: `${c.primary}1F` } : undefined}>
       <View className="flex-1 min-w-0">
         <View className="flex-row items-center gap-2">
           <Text className="text-sm font-semibold text-ink flex-shrink" numberOfLines={1}>{i.name}</Text>
           {i.isAddon ? <View className="px-1.5 py-0.5 rounded-full bg-amber-100"><Text className="text-[10px] font-semibold text-amber-700">{t.addonBadge}</Text></View> : null}
         </View>
+        {/* Default price only — per-state and per-client rates are in the details. */}
         <Text className="text-xs text-muted mt-1">
           {i.isAddon ? '+' : ''}{priceItemLabel(i, t.flatWord)}
-          {i.stateRates ? ` · ${Object.entries(i.stateRates).map(([st, r]) => `${usStateName(st, locale)} $${r}`).join(' · ')}` : ''}
         </Text>
       </View>
-      {canManage ? (
+      {canManage && !split ? (
         <View className="flex-row items-center gap-1">
           <Pressable onPress={() => toggleActive(i)} className="px-2 py-1 rounded-lg active:bg-border-soft">
             <Text className="text-xs font-semibold text-muted">{i.active ? t.deactivate : t.activate}</Text>
@@ -411,9 +423,20 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
               {!v.active ? <View className="px-1.5 py-0.5 rounded-full bg-border-soft"><Text className="text-[10px] text-faint">{t.inactiveBadge}</Text></View> : null}
             </View>
           </View>
-          <Pressable onPress={closeSheet} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft"><X size={20} color={c.faint} /></Pressable>
+          {split ? (
+            // Split: the row actions live here, beside the item's name.
+            canManage ? (
+              <View className="flex-row items-center gap-1">
+                <Pressable onPress={() => toggleActive(v)} className="px-3 py-2 rounded-lg border border-border active:bg-border-soft">
+                  <Text className="text-xs font-semibold text-muted">{v.active ? t.deactivate : t.activate}</Text>
+                </Pressable>
+                <Pressable onPress={() => duplicate(v)} accessibilityLabel={locale === 'en' ? 'Duplicate' : 'Duplicar'} className="p-2 rounded-lg active:bg-primary/5"><Copy size={16} color={c.muted} /></Pressable>
+                <Pressable onPress={() => remove(v)} accessibilityLabel={full.common.buttons.delete} className="p-2 rounded-lg active:bg-red-500/10"><Trash2 size={16} color={c.danger} /></Pressable>
+              </View>
+            ) : null
+          ) : <Pressable onPress={closeSheet} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft"><X size={20} color={c.faint} /></Pressable>}
         </View>
-        <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
+        <ScrollView contentContainerStyle={{ paddingBottom: split ? 176 : 8 }}>
           <Text className="text-2xl font-bold text-primary mt-2">{v.isAddon ? '+' : ''}{priceItemLabel(v, t.flatWord)}</Text>
           {history ? (
             <Text className="text-xs text-muted mt-1">
@@ -460,11 +483,17 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
           ) : null}
 
           <View className="mt-5">
-            <View className="flex-row items-center gap-1.5 mb-2">
+            <Pressable onPress={() => setHistoryOpen(o => !o)} hitSlop={8}
+              accessibilityRole="button" accessibilityState={{ expanded: historyOpen }}
+              className="flex-row items-center gap-1.5 py-1 self-start active:opacity-60">
               <History size={13} color={c.ink} />
-              <Text className="text-xs font-semibold text-ink">{td.historyTitle}</Text>
-            </View>
-            {!history ? (
+              <Text className="text-xs font-semibold text-ink">
+                {td.historyTitle}{history ? ` · ${history.entries.length}` : ''}
+              </Text>
+              {/* style transform, not a className swap (NativeWind toggle rule) */}
+              <ChevronDown size={14} color={c.faint} style={{ transform: [{ rotate: historyOpen ? '180deg' : '0deg' }] }} />
+            </Pressable>
+            {!historyOpen ? null : !history ? (
               <Text className="text-xs text-faint">{td.historyLoading}</Text>
             ) : (historyExpanded ? history.entries : history.entries.slice(0, HISTORY_PREVIEW)).map((e, k, shown) => {
               const lines = describePriceEntry(e, { labels: { flatWord: t.flatWord, none: td.none }, locale, clientName });
@@ -480,7 +509,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
                 </View>
               );
             })}
-            {history && history.entries.length > HISTORY_PREVIEW ? (
+            {historyOpen && history && history.entries.length > HISTORY_PREVIEW ? (
               <Pressable onPress={() => setHistoryExpanded(x => !x)} hitSlop={8} className="self-start mt-2">
                 <Text className="text-xs font-semibold text-primary">
                   {historyExpanded ? td.showLess : td.showAll.replace('{{count}}', String(history.entries.length))}
@@ -491,7 +520,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
 
           {canManage ? (
             // Swaps this sheet's content to the edit form — same RNModal.
-            <Pressable onPress={() => { setViewing(null); viewingIdRef.current = null; openEdit(v); }}
+            <Pressable onPress={() => { if (!split) { setViewing(null); viewingIdRef.current = null; } openEdit(v); }}
               className="mt-5 flex-row items-center justify-center gap-1.5 py-3.5 rounded-2xl bg-primary active:opacity-90">
               <Pencil size={15} color="#fff" />
               <Text className="text-sm font-semibold text-white">{td.editBtn}</Text>
@@ -502,8 +531,20 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
     );
   };
 
-  return (
-    <View className="flex-1">
+  const { width: winW } = useWindowDimensions();
+  const listPaneW = Math.round(Math.min(400, Math.max(300, winW * 0.36)));
+  // Split: show the first price until another is picked (and again after the
+  // open one is deleted), so the right pane is never blank.
+  const firstShown = groups[0]?.[1][0] ?? null;
+  useEffect(() => {
+    if (!split || loading || !firstShown) return;
+    if (viewing && items.some(i => i.id === viewing.id)) return;
+    openDetail(firstShown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [split, loading, firstShown?.id, items]);
+
+  const listContent = (
+    <>
       <View className="flex-row items-start justify-between gap-3 mb-4">
         <View className="flex-1">
           <Text className="text-base font-semibold text-ink">{t.title}</Text>
@@ -594,6 +635,23 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
           ))}
         </View>
       )}
+    </>
+  );
+  // Split: the open item, read fresh from the list so an edit shows at once.
+  const paneItem = split && viewing ? (items.find(i => i.id === viewing.id) ?? null) : null;
+
+  return (
+    <View className="flex-1">
+      {split ? (
+        <View style={{ flex: 1, flexDirection: 'row' }}>
+          <ScrollView style={{ width: listPaneW, flexGrow: 0, borderRightWidth: 1, borderRightColor: c.border }} contentContainerClassName="px-5 pt-5 pb-44" keyboardShouldPersistTaps="handled">
+            {listContent}
+          </ScrollView>
+          <View style={{ flex: 1 }} className="px-5 pt-5">
+            {paneItem ? renderDetail(paneItem) : null}
+          </View>
+        </View>
+      ) : listContent}
       {/* Section order. A separate sheet rather than dragging headers inline:
           nesting one sortable list inside another is unreliable, and a flat
           list of names is easier to reason about than dragging a whole block
@@ -604,7 +662,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
             onPress={() => setSectionSheetOpen(false)}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
           />
-          <View className="bg-card rounded-t-3xl px-5 pt-4 pb-10 max-h-[80%]">
+          <View className="bg-card rounded-t-3xl px-5 pt-4 pb-10 max-h-[80%]" style={sheetSides}>
             <View className="flex-row items-center justify-between mb-1">
               <Text className="text-lg font-bold text-ink">{t.reorderSections}</Text>
               <Pressable onPress={() => setSectionSheetOpen(false)} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft">
@@ -632,7 +690,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
       </RNModal>
 
       {/* Add/edit sheet — absolute backdrop BEHIND a plain-View card (scrolls). */}
-      <RNModal visible={!!draft || !!viewing} transparent animationType="fade" onRequestClose={closeSheet}>
+      <RNModal visible={!!draft || (!!viewing && !split)} transparent animationType="fade" onRequestClose={closeSheet}>
         {/* KeyboardAvoidingView: this sheet is anchored to the bottom, exactly
             where the keyboard opens, so the lower fields (price, terms) were
             underneath it. Padding behaviour shrinks the container, and the
@@ -643,14 +701,14 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
           className="flex-1 justify-end"
         >
           <Pressable onPress={closeSheet} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
-          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[90%]">
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[90%]" style={sheetSides}>
             {draft ? (
               <View className="flex-row items-center justify-between mb-4">
                 <Text className="text-lg font-bold text-ink">{t.title}</Text>
                 <Pressable onPress={closeSheet} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft"><X size={20} color={c.faint} /></Pressable>
               </View>
             ) : null}
-            {!draft && viewing ? renderDetail(viewing) : null}
+            {!draft && viewing && !split ? renderDetail(viewing) : null}
             {draft ? (
               <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }}>
                 {/* Tap on blank space = unfocus the field, which closes an open
