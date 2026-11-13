@@ -278,7 +278,9 @@ export default function ImportClientsModal({ open, businessId, templates, locati
       const full = [b.entry.first_name, b.entry.last_name].filter(Boolean).join(' ');
       const m = matchExistingClient(clientIndex, full, b.entry.company);
       b.existingId = m?.id ?? null;
-      (m?.possible ? maybe : sure).push(b);
+      // No match = a new client: it must not land in `sure`, or every brand-new
+      // row triggered "already exist" (mobile filters on existingId the same way).
+      if (m) (m.possible ? maybe : sure).push(b);
     }
     // Sure matches first, then the maybes (file missing name or company).
     for (const [group, possible] of [[sure, false], [maybe, true]] as const) {
