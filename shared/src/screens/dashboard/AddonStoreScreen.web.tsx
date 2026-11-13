@@ -152,7 +152,7 @@ export function AddonStoreScreen({
               {g.label ? (
                 <p className="text-xs font-bold text-faint uppercase tracking-wider mb-2 ml-1">{g.label}</p>
               ) : null}
-              <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {g.items.map(m => {
             const Icon = m.icon;
             const dbEnabled = enabledIds.has(m.id);

@@ -38,6 +38,9 @@ export default function NotificacionesScreen() {
   // Opened from Ajustes → straight to the preference switches.
   const { prefs: prefsParam, from } = useLocalSearchParams<{ prefs?: string; from?: string }>();
   const [showPrefs, setShowPrefs] = useState(prefsParam === '1');
+  // This tab stays mounted between visits — reset the panel on every open so
+  // the bell always lands on the list (and Ajustes on the switches).
+  useFocusEffect(useCallback(() => { setShowPrefs(prefsParam === '1'); }, [prefsParam]));
 
   // Explicit destination, not router.back(): this is its own tab, and tab
   // history still holds the job/invoice just viewed from here — back() landed

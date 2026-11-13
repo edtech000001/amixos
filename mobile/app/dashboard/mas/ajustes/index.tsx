@@ -1,3 +1,4 @@
+import { useState, type ComponentType } from 'react';
 import { View, Text, Pressable, ScrollView, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -26,6 +27,35 @@ import { useApp } from '@/lib/AppContext';
 import { useAppUpdate } from '@/lib/updates/useAppUpdate';
 import { can } from '@amixos/shared/lib/permissions';
 import { useBackToMore } from '@/lib/sectionNav';
+import { SplitView, useSplitView, whenLeaveAllowed } from '@/components/SplitView';
+import { SettingsEmbedContext } from '@/components/SettingsPageWrapper';
+import NegocioPage from './negocio';
+import TrabajosPage from './trabajos';
+import ClientesPage from './clientes';
+import EmpleadosSettingsPage from './empleados';
+import FacturasPage from './facturas';
+import ImportarDatosPage from './importar';
+import NavegacionSettings from './navegacion';
+import ConexionesPage from './conexiones';
+import ActividadPage from './actividad';
+import CuentaPage from './cuenta';
+import SoportePage from './soporte';
+
+// Pages that open in the right pane on wide screens (iPad, Duo open). A row
+// without one (Notificaciones, a route outside Ajustes) still pushes.
+const PANE_PAGES: Record<string, ComponentType> = {
+  negocio: NegocioPage,
+  trabajos: TrabajosPage,
+  clientes: ClientesPage,
+  empleados: EmpleadosSettingsPage,
+  facturas: FacturasPage,
+  importar: ImportarDatosPage,
+  navegacion: NavegacionSettings,
+  conexiones: ConexionesPage,
+  actividad: ActividadPage,
+  cuenta: CuentaPage,
+  soporte: SoportePage,
+};
 
 // Build identifier for the footer — app version (app.json) + native build
 // number, PLUS the running OTA update's identity. The app version can't
@@ -74,6 +104,8 @@ export default function AjustesIndex() {
   const { currentRole, user, business } = useApp();
   const t = full.dashboard.settings;
   const es = locale === 'es';
+  const { split, listWidth } = useSplitView();
+  const [openKey, setOpenKey] = useState<string | null>(null);
 
 
   // Business-config sections are admin-only (managers+ down can't change
@@ -174,9 +206,17 @@ export default function AjustesIndex() {
     },
   ];
 
-  return (
-    <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-      <ScrollView contentContainerClassName="px-6 pt-6 pb-36">
+  // Split: like iOS Settings, the first page shows until another is picked.
+  const paneKey = openKey ?? items.find(i => PANE_PAGES[i.key])?.key ?? null;
+  const PanePage = paneKey ? PANE_PAGES[paneKey] : null;
+  const openRow = (item: SettingsItem) => {
+    if (item.action) return item.action();
+    if (split && PANE_PAGES[item.key]) return whenLeaveAllowed(() => setOpenKey(item.key));
+    router.push(item.path as never);
+  };
+
+  const list = (
+      <ScrollView contentContainerClassName={split ? 'px-3 pt-6 pb-36' : 'px-6 pt-6 pb-36'}>
         {/* Back to the Más menu — a native pop (Ajustes lives in the Más stack). */}
         <View className="flex-row items-center mb-5 -ml-2">
           <Pressable
@@ -224,10 +264,11 @@ export default function AjustesIndex() {
             return (
               <Pressable
                 key={item.key}
-                onPress={() => (item.action ? item.action() : router.push(item.path as never))}
+                onPress={() => openRow(item)}
                 className={`flex-row items-center gap-3 px-4 py-4 active:bg-surface ${
                   i < items.length - 1 ? 'border-b border-border-soft' : ''
                 }`}
+                style={split && item.key === paneKey ? { backgroundColor: `${c.primary}1F` } : undefined}
               >
                 <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">
                   <Icon size={18} color={c.primary} />
@@ -250,6 +291,21 @@ export default function AjustesIndex() {
             something to point at: "tap this and tell me what it says". */}
         <UpdateCheckRow />
       </ScrollView>
+  );
+
+  return (
+    <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+      {split ? (
+        <SplitView
+          listWidth={listWidth}
+          list={list}
+          detail={PanePage ? (
+            <SettingsEmbedContext.Provider value>
+              <PanePage key={paneKey} />
+            </SettingsEmbedContext.Provider>
+          ) : null}
+        />
+      ) : list}
     </SafeAreaView>
   );
 }

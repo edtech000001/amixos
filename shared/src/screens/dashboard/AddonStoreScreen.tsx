@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, Pressable, TextInput } from 'react-native';
+import { View, Text, ScrollView, Pressable, TextInput, useWindowDimensions } from 'react-native';
 import { SkeletonCard } from '../../ui/Skeleton';
 import { FilteredEmpty } from '../../ui/FilteredEmpty';
 import { useMemo, useState } from 'react';
@@ -118,6 +118,10 @@ export function AddonStoreScreen({
         ].filter(g => g.items.length > 0)
       : [{ key: category, label: null, items: filtered }];
 
+  // Grid on wide screens (iPad, Duo open): 2 columns from 600pt, 3 from 1000.
+  const { width } = useWindowDimensions();
+  const cols = width >= 1000 ? 3 : width >= 600 ? 2 : 1;
+
   return (
     <ScrollView contentContainerClassName="px-5 pt-5 pb-32"
       automaticallyAdjustKeyboardInsets
@@ -180,14 +184,16 @@ export function AddonStoreScreen({
             <Text className="text-sm text-muted">{t.noResults}</Text>
           </View>
         ) : (
-        // Single column — one card per row (w-full) so each module's name +
-        // description has room to read instead of being cramped two-up.
+        // One column on phones (room for name + description); a grid when
+        // wide. Cells pad 6pt each side → 12pt gutters; the row's -6 margin
+        // keeps the outer edges flush with the search bar.
         <View className="gap-5">
           {groups.map(g => (
             <View key={g.key}>
               {g.label ? (
                 <Text className="text-xs font-bold text-faint uppercase tracking-wider mb-2 ml-1">{g.label}</Text>
               ) : null}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 }}>
               {g.items.map(m => {
             const Icon = m.icon;
             const dbEnabled = enabledIds.has(m.id);
@@ -220,15 +226,16 @@ export function AddonStoreScreen({
                 : 'text-white';
 
             return (
+              <View key={m.id} style={{ width: `${100 / cols}%`, padding: 6 }}>
               <View
-                key={m.id}
-                className={`w-full bg-card rounded-2xl ${enabled ? 'border-2' : 'border'} border-border-soft p-4 mb-3`}
+                className={`flex-1 bg-card rounded-2xl ${enabled ? 'border-2' : 'border'} border-border-soft p-4`}
                 style={enabled ? { borderColor: '#4ADE80' } : undefined}
               >
+                {/* flex-1: buttons line up at the bottom across a grid row. */}
                 <Pressable
                   onPress={canOpen ? () => onOpen?.(m.id) : undefined}
                   disabled={!canOpen}
-                  className="mb-3"
+                  className="mb-3 flex-1"
                 >
                   <View className="flex-row items-start justify-between mb-3">
                     <View
@@ -275,8 +282,10 @@ export function AddonStoreScreen({
                   <Text className={`text-xs font-semibold ${buttonText}`}>{buttonLabel}</Text>
                 </Pressable>
               </View>
+              </View>
             );
               })}
+              </View>
             </View>
           ))}
 

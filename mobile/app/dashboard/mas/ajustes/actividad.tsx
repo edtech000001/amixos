@@ -12,6 +12,7 @@ import { AUDIT_ACTION_LABEL, describePriceSheetAudit, type AuditAction } from '@
 import { getModuleById } from '@amixos/shared/modules/registry';
 import { formatDateTimeLong } from '@amixos/shared/lib/format';
 import { useThemeColors } from '@/lib/ThemeProvider';
+import { useSettingsEmbedded } from '@/components/SettingsPageWrapper';
 
 interface AuditRow {
   id: string;
@@ -41,6 +42,7 @@ const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,
 
 export default function ActividadPage() {
   const router = useRouter();
+  const embedded = useSettingsEmbedded();
   const supabase = createSupabaseClient();
   const { business } = useApp();
   const { t: full, locale } = useLang();
@@ -119,12 +121,14 @@ export default function ActividadPage() {
     : rows;
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
-        <Pressable onPress={() => router.back()} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
-          <ChevronLeft size={22} color={c.ink} />
-        </Pressable>
-        <Text className="ml-1 text-lg font-semibold text-ink">{t.heading}</Text>
+    <SafeAreaView className="flex-1 bg-surface" edges={embedded ? [] : ['top']}>
+      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft" style={embedded ? { minHeight: 52 } : undefined}>
+        {embedded ? null : (
+          <Pressable onPress={() => router.back()} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
+            <ChevronLeft size={22} color={c.ink} />
+          </Pressable>
+        )}
+        <Text className={`${embedded ? 'ml-2' : 'ml-1'} text-lg font-semibold text-ink`}>{t.heading}</Text>
       </View>
       {/* Pinned header + search — stay fixed while the list scrolls below. The
           gap + divider live HERE, not in the scroll content, so scrolled rows

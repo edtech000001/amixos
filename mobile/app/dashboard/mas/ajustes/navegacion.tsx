@@ -16,9 +16,11 @@ import {
   type DockApp,
 } from '@/lib/dockApps';
 import { useDockApps } from '@/lib/useDockApps';
+import { useSettingsEmbedded } from '@/components/SettingsPageWrapper';
 
 export default function NavegacionSettings() {
   const router = useRouter();
+  const embedded = useSettingsEmbedded();
   const { t: full } = useLang();
   const sb = full.dashboard.sidebar;
   const t = full.dashboard.settings.navigation;
@@ -89,12 +91,14 @@ export default function NavegacionSettings() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-      <View className="flex-row items-center px-4 pt-2 pb-1">
-        <Pressable onPress={() => router.back()} hitSlop={10} className="p-2 -ml-2">
-          <ChevronLeft size={24} color={c.ink} />
-        </Pressable>
-      </View>
+    <SafeAreaView className="flex-1 bg-surface" edges={embedded ? [] : ['top']}>
+      {embedded ? null : (
+        <View className="flex-row items-center px-4 pt-2 pb-1">
+          <Pressable onPress={() => router.back()} hitSlop={10} className="p-2 -ml-2">
+            <ChevronLeft size={24} color={c.ink} />
+          </Pressable>
+        </View>
+      )}
       <ScrollView contentContainerClassName="px-6 pt-2 pb-36">
         <Text className="text-2xl font-bold text-ink mb-1">{t.title}</Text>
         <Text className="text-sm text-muted mb-2">{t.intro.replace('{{max}}', maxLabel)}</Text>

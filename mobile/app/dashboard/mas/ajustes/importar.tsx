@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useApp } from '@/lib/AppContext';
+import { useThemeColors } from '@/lib/ThemeProvider';
 import { createSupabaseClient } from '@/lib/supabase';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { SettingsPageWrapper } from '@/components/SettingsPageWrapper';
@@ -22,6 +23,7 @@ export default function ImportarDatosPage() {
   const { t: full, locale } = useLang();
   const t = full.dashboard.settings;
   const { business, locations } = useApp();
+  const c = useThemeColors();
   const supabase = createSupabaseClient();
 
   const [openStep, setOpenStep] = useState<StepKey | null>(null);
@@ -57,8 +59,9 @@ export default function ImportarDatosPage() {
   return (
     <SettingsPageWrapper title={t.tabs.importar}>
       <Text className="text-xs text-muted mb-3">{t.importHub.subtitle}</Text>
-      <View className="bg-blue-500/10 border border-blue-100 rounded-xl px-4 py-3 mb-4">
-        <Text className="text-xs text-blue-800 leading-5">{t.importHub.orderHint}</Text>
+      {/* Theme colors — the old text-blue-800 / border-blue-100 vanished in dark mode. */}
+      <View className="rounded-xl px-4 py-3 mb-4" style={{ backgroundColor: `${c.primary}1A`, borderWidth: 1, borderColor: `${c.primary}55` }}>
+        <Text className="text-xs text-ink leading-5">{t.importHub.orderHint}</Text>
       </View>
 
       <View className="bg-card rounded-2xl border border-border-soft overflow-hidden">

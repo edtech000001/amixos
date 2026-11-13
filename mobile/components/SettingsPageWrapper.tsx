@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useLeaveGuardStore } from '@/lib/leaveGuardStore';
 import { useThemeColors } from '@/lib/ThemeProvider';
 
 interface SettingsPageProps {
@@ -25,6 +26,12 @@ interface SaveState {
   // shows — the section renders its own Save button (e.g. at the bottom).
   hideHeaderButton?: boolean;
 }
+
+/** True when a settings page renders in the Ajustes split view's right pane
+ *  (iPad / Duo open): no back arrow, no top inset (the list's SafeAreaView
+ *  already has it), and unsaved changes guard switching to another page. */
+export const SettingsEmbedContext = createContext(false);
+export const useSettingsEmbedded = () => useContext(SettingsEmbedContext);
 
 export interface SettingsStatus { text: string; isError: boolean }
 
@@ -95,6 +102,7 @@ export function SettingsPageWrapper({ title, children }: SettingsPageProps) {
   const [saveState, setSaveState] = useState<SaveState | null>(null);
   const [status, setStatus] = useState<SettingsStatus | null>(null);
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
+  const embedded = useSettingsEmbedded();
 
   const registerSaveState = useCallback((s: SaveState | null) => setSaveState(s), []);
   const reportStatus = useCallback((s: SettingsStatus | null) => setStatus(s), []);
@@ -123,18 +131,33 @@ export function SettingsPageWrapper({ title, children }: SettingsPageProps) {
     router.back();
   };
 
+  // In the split pane, picking another settings row (or a dock tab) goes
+  // through whenLeaveAllowed, which asks here while there are unsaved changes.
+  const dirty = !!saveState?.dirty;
+  useEffect(() => {
+    if (!embedded || !dirty) return;
+    const { setRequest } = useLeaveGuardStore.getState();
+    setRequest((proceed) => Alert.alert(ts.unsavedChangesTitle, ts.unsavedChangesMessage, [
+      { text: tc.cancel, style: 'cancel' },
+      { text: ts.discardBtn, style: 'destructive', onPress: proceed },
+    ]));
+    return () => setRequest(null);
+  }, [embedded, dirty, ts, tc]);
+
   return (
     <SettingsPageContext.Provider value={{ registerSaveState, scrollRef, reportStatus }}>
-      <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-        <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
-          <Pressable
-            onPress={goBack}
-            hitSlop={12}
-            className="p-2 -ml-2 rounded-lg active:bg-border-soft"
-          >
-            <ChevronLeft size={22} color={c.ink} />
-          </Pressable>
-          <Text className="ml-1 flex-1 text-lg font-semibold text-ink">{title}</Text>
+      <SafeAreaView className="flex-1 bg-surface" edges={embedded ? [] : ['top']}>
+        <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft" style={embedded ? { minHeight: 52 } : undefined}>
+          {embedded ? null : (
+            <Pressable
+              onPress={goBack}
+              hitSlop={12}
+              className="p-2 -ml-2 rounded-lg active:bg-border-soft"
+            >
+              <ChevronLeft size={22} color={c.ink} />
+            </Pressable>
+          )}
+          <Text className={`${embedded ? 'ml-2' : 'ml-1'} flex-1 text-lg font-semibold text-ink`}>{title}</Text>
 
           {saveState && saveState.dirty && !saveState.hideHeaderButton ? (
             <Pressable

@@ -311,10 +311,13 @@ export function ImportClientsModal({
         const existing = fullExisting.get(id) ?? {};
         const patch = clientFieldPatch(existing as Record<string, unknown>, b.entry, strategy as 'merge' | 'replace');
         if (Object.keys(patch).length) await supabase.from('clients').update(patch).eq('id', id);
-        if (b.contacts?.length) {
+        // Replace = the file's contact list IS the list, so a blank cell
+        // (or no contacts column) removes the client's contacts — same rule
+        // as the fields (REPLACE_CLEARS). Merge only ever adds.
+        if (strategy === 'replace' || b.contacts?.length) {
           const { data: have } = await supabase
             .from('client_contacts').select('id, name, email').eq('client_id', id);
-          const plan = mergeContacts((have ?? []) as ContactLite[], b.contacts, strategy as 'merge' | 'replace');
+          const plan = mergeContacts((have ?? []) as ContactLite[], b.contacts ?? [], strategy as 'merge' | 'replace');
           if (strategy === 'replace' && (have ?? []).length) {
             await supabase.from('client_contacts').delete().eq('client_id', id);
           }
