@@ -339,6 +339,11 @@ export function PayrollScreen({
   // the screen is wide enough (tablets / large phones in landscape).
   const { width: screenWidth } = useWindowDimensions();
   const gridTwoCol = screenWidth >= 700;
+  // iPad / iPhone Duo open: workers on the left, the picked worker's
+  // breakdown on the right (same 600pt breakpoint + pane width as the
+  // mobile SplitView, which shared code can't import).
+  const split = screenWidth >= 600;
+  const listPaneW = Math.round(Math.min(400, Math.max(300, screenWidth * 0.36)));
 
   // List/grid view for the worker rows — persisted so it sticks.
   const [view, setView] = useState<'list' | 'grid'>('list');
@@ -390,6 +395,10 @@ export function PayrollScreen({
   const paidCount = rows.filter(isFullyPaid).length;
   // Unpaid first, paid sink to the bottom (stable — keeps pay-desc within group).
   const sortedRows = [...rows].sort((a, b) => (isFullyPaid(a) ? 1 : 0) - (isFullyPaid(b) ? 1 : 0));
+  // Worker-name search over the list (accent-insensitive).
+  const [search, setSearch] = useState('');
+  const fold = (x: string) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const shownRows = search.trim() ? sortedRows.filter(r => fold(r.name).includes(fold(search.trim()))) : sortedRows;
 
   // The pay sheet is a mini-ledger: it lists this period's payments and
   // adds one check for EVERYTHING currently owed (computed pay − already
@@ -572,44 +581,130 @@ export function PayrollScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows]);
 
+
+  // Worker breakdown — the bottom sheet on phones, the right pane in split.
+  const breakdownView = (row: PayrollScreenRow, inPane: boolean) => (
+          <>
+            <View className="flex-row items-start justify-between mb-4">
+              <View className="flex-1 pr-3">
+                <Text className="text-lg font-bold text-ink">{row.name}</Text>
+                <Text className="text-sm text-muted">
+                  {fmt(row.pay ?? 0)} · {Math.round((row.hours ?? 0) * 100) / 100} h
+                </Text>
+                {true && paidTotal(row) > 0 ? (
+                  <Text className={`text-xs font-semibold mt-0.5 ${isFullyPaid(row) ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {t.paidSoFarLabel}: {fmt(paidTotal(row))}{paidHours(row) > 0 ? ` · ${Math.round(paidHours(row) * 100) / 100} h` : ''}
+                  </Text>
+                ) : null}
+              </View>
+              {inPane ? (
+                // Pane: the pay action sits beside the name (no extra row).
+                canManage ? (
+                  <Pressable
+                    onPress={() => openPay(row)}
+                    disabled={busy}
+                    className={`px-5 py-2.5 rounded-xl active:opacity-80 ${(row.payments?.length ?? 0) > 0 ? 'bg-card border border-border' : 'bg-primary'}`}
+                  >
+                    <Text className={`text-sm font-semibold ${(row.payments?.length ?? 0) > 0 ? 'text-ink' : 'text-white'}`}>
+                      {(row.payments?.length ?? 0) > 0
+                        ? (isPartial(row) ? `${t.partialLabel} ${fmt(paidTotal(row))}` : row.payments!.length === 1 ? paymentBadgeLabel(row.payments![0]) : fmt(paidTotal(row)))
+                        : t.markPaid}
+                    </Text>
+                  </Pressable>
+                ) : null
+              ) : (
+                <Pressable onPress={() => setDetailRow(null)} hitSlop={10} className="p-1">
+                  <X size={20} color={c.faint} />
+                </Pressable>
+              )}
+            </View>
+            {/* Worked vs driven vs logged */}
+            <View className="flex-row gap-2 mb-4">
+              {([[Wrench, t.hoursWorked, row.breakdown?.workedHours ?? 0], [Truck, t.hoursDriven, row.breakdown?.drivenHours ?? 0], [Clock, t.hoursLogged, row.breakdown?.loggedHours ?? 0]] as const).map(([Icon, label, val], i) => (
+                inPane ? (
+                  <View key={i} className="flex-1 flex-row items-center gap-2 rounded-xl border border-border-soft bg-surface px-3 py-2">
+                    <Icon size={14} color={c.faint} />
+                    <Text className="text-base font-bold text-ink">{val}</Text>
+                    <Text className="text-xs text-faint" numberOfLines={1}>{label}</Text>
+                  </View>
+                ) : (
+                  <View key={i} className="flex-1 rounded-2xl border border-border-soft bg-surface p-3 items-center">
+                    <Icon size={15} color={c.faint} />
+                    <Text className="text-base font-bold text-ink mt-1">{val}</Text>
+                    <Text className="text-[11px] text-faint">{label}</Text>
+                  </View>
+                )
+              ))}
+            </View>
+
+            <Text className="text-sm font-bold text-muted uppercase tracking-wide mb-2">
+              {t.projectsHeading}
+              {row.breakdown?.jobs.length ? (
+                <Text className="text-ink"> · {row.breakdown.jobs.length}</Text>
+              ) : null}
+            </Text>
+            {row.breakdown && row.breakdown.jobs.length > 0 ? (
+              // shrink (not a fixed max-h): the list takes all the height the
+              // 90% sheet allows, so long periods show far more jobs at once.
+              <ScrollView className="shrink">
+                <View className="gap-2">
+                  {row.breakdown.jobs.map((j, i) => (
+                    <View key={j.jobId ?? i} className="flex-row items-center gap-3 rounded-2xl border border-border-soft px-3 py-2.5">
+                      <Pressable
+                        disabled={!j.jobId || !onJobPress}
+                        onPress={() => { if (j.jobId && onJobPress) { if (!inPane) setDetailRow(null); onJobPress(j.jobId, row.employeeId); } }}
+                        className="flex-1 min-w-0 active:opacity-60"
+                      >
+                        <Text className="text-sm font-semibold text-ink" numberOfLines={1}>{j.title || t.untitledJob}</Text>
+                        {j.date || j.lead ? (
+                          <Text className="text-[11px] text-faint" numberOfLines={1}>
+                            {[j.date ? fmtDay(j.date) : null, j.lead].filter(Boolean).join(' · ')}
+                          </Text>
+                        ) : null}
+                      </Pressable>
+                      <View className="items-end">
+                        {j.workedHours > 0 ? (
+                          <View className="flex-row items-center gap-1">
+                            <Wrench size={11} color={c.faint} />
+                            <Text className="text-xs text-muted">{j.workedHours} h</Text>
+                          </View>
+                        ) : null}
+                        {j.drivenHours > 0 ? (
+                          <View className="flex-row items-center gap-1">
+                            <Truck size={11} color={c.faint} />
+                            <Text className="text-xs text-muted">{j.drivenHours} h</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+            ) : (
+              <Text className="text-sm text-faint py-4 text-center">{t.noBreakdown}</Text>
+            )}
+          </>
+  );
+
   const paymentBadgeLabel = (payment: PayrollPaymentEntry) =>
     payment.method === 'check' && payment.checkNumber
       ? `${t.checkPrefix}${payment.checkNumber}`
       : methodLabel[payment.method];
 
-  return (
-    <View className="flex-1 bg-surface">
-      {/* Header */}
-      <View className="flex-row items-center px-2 pt-2 pb-3 border-b border-border-soft">
-        <Pressable onPress={onBack} hitSlop={12} className="p-2 rounded-lg active:bg-border-soft">
-          <ChevronLeft size={22} color={c.ink} />
-        </Pressable>
-        <View className="ml-1 flex-1">
-          <Text className="text-base font-semibold text-ink">{t.title}</Text>
-          <Text className="text-xs text-faint">{t.subtitle}</Text>
-        </View>
-        {onHistoryPress ? (
-          <Pressable
-            onPress={onHistoryPress}
-            hitSlop={8}
-            className="flex-row items-center gap-1.5 bg-card border border-border px-3 py-1.5 rounded-xl mr-1 active:bg-surface"
-          >
-            <History size={15} color={c.muted} />
-            <Text className="text-xs font-semibold text-ink">{t.historyTitle}</Text>
-          </Pressable>
-        ) : null}
-        {canManage ? (
-          <Pressable onPress={openSettings} hitSlop={8} className="p-2 rounded-lg active:bg-border-soft">
-            <Settings size={20} color={c.muted} />
-          </Pressable>
-        ) : null}
-      </View>
-
-      <ScrollView refreshControl={refreshControl} contentContainerClassName="px-5 py-5 pb-32 gap-4">
+  // Split: the open worker, kept fresh across reloads; the first one by default.
+  const paneRow = split ? (sortedRows.find(r => r.employeeId === detailRow?.employeeId) ?? sortedRows[0] ?? null) : null;
+  // Period, totals and pay actions — on top of the list on phones; a
+  // full-width band above both panes in split.
+  const locationEl = (
+    <>
         {/* Branch switcher (multi-location) — self-wraps; renders nothing for
            single-location businesses or roles locked to their home branch. */}
         {locationSwitcher ? <View className="-mx-5 -mt-1">{locationSwitcher}</View> : null}
 
+    </>
+  );
+  const periodEl = (
+    <>
         {/* Period navigator */}
         <View className="flex-row items-center justify-between bg-card rounded-2xl border border-border-soft shadow-sm px-2 py-2">
           <Pressable onPress={onPrevPeriod} hitSlop={8} className="p-2 rounded-xl active:bg-border-soft">
@@ -621,22 +716,30 @@ export function PayrollScreen({
           </Pressable>
         </View>
 
+    </>
+  );
+  const summaryEl = (
+    <>
         {/* Summary */}
         <View className="flex-row gap-3">
-          <View className="flex-1 bg-card rounded-2xl border border-border-soft shadow-sm p-3">
-            <Text className="text-[11px] text-faint" numberOfLines={1}>{t.totalHours}</Text>
-            <Text className="text-lg font-bold text-ink" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{Math.round(totalHours * 100) / 100}</Text>
+          <View className="flex-1 bg-card rounded-2xl border border-border-soft shadow-sm p-3" style={split ? { paddingHorizontal: 16, paddingVertical: 10 } : undefined}>
+            <Text className={`${split ? 'text-xs' : 'text-[11px]'} text-faint`} numberOfLines={1}>{t.totalHours}</Text>
+            <Text className={`${split ? 'text-xl' : 'text-lg'} font-bold text-ink`} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{Math.round(totalHours * 100) / 100}</Text>
           </View>
-          <View className="flex-1 bg-card rounded-2xl border border-border-soft shadow-sm p-3">
-            <Text className="text-[11px] text-faint" numberOfLines={1}>{t.totalPay}</Text>
-            <Text className="text-lg font-bold text-primary" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{fmt(totalPay)}</Text>
+          <View className="flex-1 bg-card rounded-2xl border border-border-soft shadow-sm p-3" style={split ? { paddingHorizontal: 16, paddingVertical: 10 } : undefined}>
+            <Text className={`${split ? 'text-xs' : 'text-[11px]'} text-faint`} numberOfLines={1}>{t.totalPay}</Text>
+            <Text className={`${split ? 'text-xl' : 'text-lg'} font-bold text-primary`} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{fmt(totalPay)}</Text>
           </View>
-          <View className="flex-1 bg-card rounded-2xl border border-border-soft shadow-sm p-3">
-            <Text className="text-[11px] text-faint" numberOfLines={1}>{t.totalPending}</Text>
-            <Text className={`text-lg font-bold ${totalPending > 0 ? 'text-amber-600' : 'text-emerald-600'}`} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{fmt(totalPending)}</Text>
+          <View className="flex-1 bg-card rounded-2xl border border-border-soft shadow-sm p-3" style={split ? { paddingHorizontal: 16, paddingVertical: 10 } : undefined}>
+            <Text className={`${split ? 'text-xs' : 'text-[11px]'} text-faint`} numberOfLines={1}>{t.totalPending}</Text>
+            <Text className={`${split ? 'text-xl' : 'text-lg'} font-bold ${totalPending > 0 ? 'text-amber-600' : 'text-emerald-600'}`} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{fmt(totalPending)}</Text>
           </View>
         </View>
 
+    </>
+  );
+  const actionsEl = (
+    <>
         {/* Manual payment + loans — full-width so the list toolbar stays clean;
            always available (even in an empty period, to reach ex-workers). */}
         {canManage && ((allWorkers && allWorkers.length > 0) || onAddLoan) ? (
@@ -658,12 +761,29 @@ export function PayrollScreen({
           </View>
         ) : null}
 
+    </>
+  );
+  const topBlocks = <>{locationEl}{periodEl}{summaryEl}{actionsEl}</>;
+  const searchBox = rows.length > 0 ? (
+    <View className="flex-row items-center gap-2 rounded-xl border border-border bg-card px-3 py-2">
+      <Search size={16} color={c.faint} />
+      <TextInput value={search} onChangeText={setSearch} placeholder={t.loanSearchPlaceholder} placeholderTextColor={c.faint}
+        className="flex-1 text-ink p-0" style={{ fontSize: 16 }} />
+      {search ? (
+        <Pressable onPress={() => setSearch('')} hitSlop={8}><X size={16} color={c.faint} /></Pressable>
+      ) : null}
+    </View>
+  ) : null;
+  const listScroll = (
+      <ScrollView refreshControl={refreshControl} contentContainerClassName="px-5 py-5 pb-32 gap-4" keyboardShouldPersistTaps="handled">
+        {split ? null : topBlocks}
+        {searchBox}
         {rows.length > 0 ? (
           <View className="flex-row items-center justify-between -mt-1">
             <Text className="text-xs text-faint">
               {t.paidSummary.replace('{{paid}}', String(paidCount)).replace('{{total}}', String(rows.length))}
             </Text>
-            <View className="flex-row gap-1 bg-border-soft p-1 rounded-lg">
+            {split ? null : <View className="flex-row gap-1 bg-border-soft p-1 rounded-lg">
               {([['list', List], ['grid', LayoutGrid]] as const).map(([v, Icon]) => (
                 // Selected look via `style`, not a toggled className — adding
                 // shadow-sm to a mounted component forces a NativeWind remount.
@@ -676,7 +796,7 @@ export function PayrollScreen({
                   <Icon size={15} color={view === v ? c.ink : c.faint} />
                 </Pressable>
               ))}
-            </View>
+            </View>}
           </View>
         ) : null}
 
@@ -685,14 +805,16 @@ export function PayrollScreen({
           <SkeletonList rows={6} />
         ) : rows.length === 0 ? (
           <Text className="text-sm text-faint text-center py-10">{t.empty}</Text>
-        ) : view === 'grid' ? (
+        ) : shownRows.length === 0 ? (
+          <Text className="text-sm text-faint text-center py-10">{t.loanNoWorkerFound}</Text>
+        ) : view === 'grid' && !split ? (
           // Distinct keys on the grid / list containers: in the same slot,
           // React reused the list rows as grid cards and only swapped their
           // classNames — adding shadow-sm to a mounted component triggers a
           // NativeWind "upgrade" whose dev warning crashed the screen
           // ("Couldn't find a navigation context"). Fresh mounts never upgrade.
           <View key="grid" className="flex-row flex-wrap justify-between">
-            {sortedRows.map(r => {
+            {shownRows.map(r => {
               // The status badge / "Mark paid" action. On single-column cards it
               // sits on the RIGHT (bigger, more tappable); on 2-up it stacks below.
               const action = (r.payments?.length ?? 0) > 0 ? (
@@ -750,13 +872,14 @@ export function PayrollScreen({
           </View>
         ) : (
           <View key="list" className="bg-card rounded-2xl border border-border-soft shadow-sm overflow-hidden">
-            {sortedRows.map((r, i) => (
+            {shownRows.map((r, i) => (
               // The WHOLE row opens the hours breakdown — the payment badge
               // below nests its own Pressable, so its taps don't fall through.
               <Pressable
                 key={r.employeeId}
                 onPress={() => setDetailRow(r)}
-                className={`px-4 py-3.5 flex-row items-center gap-3 active:bg-surface ${i < sortedRows.length - 1 ? 'border-b border-border-soft' : ''}`}
+                className={`px-4 py-3.5 flex-row items-center gap-3 active:bg-surface ${i < shownRows.length - 1 ? 'border-b border-border-soft' : ''}`}
+                style={r.employeeId === paneRow?.employeeId ? { backgroundColor: `${c.primary}1F` } : undefined}
               >
                 <View className="flex-1 min-w-0 flex-row items-center gap-1.5">
                   <View className="flex-1 min-w-0">
@@ -807,6 +930,59 @@ export function PayrollScreen({
           </View>
         )}
       </ScrollView>
+  );
+
+  return (
+    <View className="flex-1 bg-surface">
+      {/* Header */}
+      <View className="flex-row items-center px-2 pt-2 pb-3 border-b border-border-soft">
+        <Pressable onPress={onBack} hitSlop={12} className="p-2 rounded-lg active:bg-border-soft">
+          <ChevronLeft size={22} color={c.ink} />
+        </Pressable>
+        <View className="ml-1 flex-1">
+          <Text className="text-base font-semibold text-ink">{t.title}</Text>
+          <Text className="text-xs text-faint">{t.subtitle}</Text>
+        </View>
+        {onHistoryPress ? (
+          <Pressable
+            onPress={onHistoryPress}
+            hitSlop={8}
+            className="flex-row items-center gap-1.5 bg-card border border-border px-3 py-1.5 rounded-xl mr-1 active:bg-surface"
+          >
+            <History size={15} color={c.muted} />
+            <Text className="text-xs font-semibold text-ink">{t.historyTitle}</Text>
+          </Pressable>
+        ) : null}
+        {canManage ? (
+          <Pressable onPress={openSettings} hitSlop={8} className="p-2 rounded-lg active:bg-border-soft">
+            <Settings size={20} color={c.muted} />
+          </Pressable>
+        ) : null}
+      </View>
+
+      {split ? (
+        <View className="px-5 pt-3 pb-3 gap-3 border-b border-border-soft">
+          <View className="flex-row items-center gap-3">
+            {/* LocationSwitcher pads itself (px-5 pt-3) — cancel it inside the row. */}
+            {locationSwitcher ? <View style={{ marginLeft: -20, marginRight: -8, marginTop: -12 }}>{locationSwitcher}</View> : null}
+            <View className="flex-1">{periodEl}</View>
+            <View style={{ flex: 1 }}>{actionsEl}</View>
+          </View>
+          {summaryEl}
+        </View>
+      ) : null}
+      {split ? (
+        <View style={{ flex: 1, flexDirection: 'row' }}>
+          <View style={{ width: listPaneW, borderRightWidth: 1, borderRightColor: c.border }}>{listScroll}</View>
+          <View style={{ flex: 1 }}>
+            {paneRow ? (
+              <ScrollView contentContainerClassName="px-5 py-5 pb-32">{breakdownView(paneRow, true)}</ScrollView>
+            ) : (
+              <Text className="text-sm text-faint text-center py-10">{t.empty}</Text>
+            )}
+          </View>
+        </View>
+      ) : listScroll}
 
       {/* Manual payment sheet */}
       <RNModal visible={manualOpen} transparent animationType="fade" onRequestClose={() => setManualOpen(false)}>
@@ -1458,7 +1634,7 @@ export function PayrollScreen({
       </RNModal>
 
       {/* Worker hours breakdown sheet */}
-      <RNModal visible={!!detailRow} transparent animationType="fade" onRequestClose={() => setDetailRow(null)}>
+      <RNModal visible={!!detailRow && !split} transparent animationType="fade" onRequestClose={() => setDetailRow(null)}>
         <View className="flex-1 justify-end">
                   <Pressable
                     onPress={() => setDetailRow(null)}
@@ -1468,80 +1644,7 @@ export function PayrollScreen({
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>
-            <View className="flex-row items-start justify-between mb-4">
-              <View className="flex-1 pr-3">
-                <Text className="text-lg font-bold text-ink">{detailRow?.name}</Text>
-                <Text className="text-sm text-muted">
-                  {fmt(detailRow?.pay ?? 0)} · {Math.round((detailRow?.hours ?? 0) * 100) / 100} h
-                </Text>
-                {detailRow && paidTotal(detailRow) > 0 ? (
-                  <Text className={`text-xs font-semibold mt-0.5 ${isFullyPaid(detailRow) ? 'text-emerald-600' : 'text-amber-600'}`}>
-                    {t.paidSoFarLabel}: {fmt(paidTotal(detailRow))}{paidHours(detailRow) > 0 ? ` · ${Math.round(paidHours(detailRow) * 100) / 100} h` : ''}
-                  </Text>
-                ) : null}
-              </View>
-              <Pressable onPress={() => setDetailRow(null)} hitSlop={10} className="p-1">
-                <X size={20} color={c.faint} />
-              </Pressable>
-            </View>
-
-            {/* Worked vs driven vs logged */}
-            <View className="flex-row gap-2 mb-4">
-              {([[Wrench, t.hoursWorked, detailRow?.breakdown?.workedHours ?? 0], [Truck, t.hoursDriven, detailRow?.breakdown?.drivenHours ?? 0], [Clock, t.hoursLogged, detailRow?.breakdown?.loggedHours ?? 0]] as const).map(([Icon, label, val], i) => (
-                <View key={i} className="flex-1 rounded-2xl border border-border-soft bg-surface p-3 items-center">
-                  <Icon size={15} color={c.faint} />
-                  <Text className="text-base font-bold text-ink mt-1">{val}</Text>
-                  <Text className="text-[11px] text-faint">{label}</Text>
-                </View>
-              ))}
-            </View>
-
-            <Text className="text-sm font-bold text-muted uppercase tracking-wide mb-2">
-              {t.projectsHeading}
-              {detailRow?.breakdown?.jobs.length ? (
-                <Text className="text-ink"> · {detailRow.breakdown.jobs.length}</Text>
-              ) : null}
-            </Text>
-            {detailRow?.breakdown && detailRow.breakdown.jobs.length > 0 ? (
-              // shrink (not a fixed max-h): the list takes all the height the
-              // 90% sheet allows, so long periods show far more jobs at once.
-              <ScrollView className="shrink">
-                <View className="gap-2">
-                  {detailRow.breakdown.jobs.map((j, i) => (
-                    <View key={j.jobId ?? i} className="flex-row items-center gap-3 rounded-2xl border border-border-soft px-3 py-2.5">
-                      <Pressable
-                        disabled={!j.jobId || !onJobPress}
-                        onPress={() => { if (j.jobId && onJobPress) { setDetailRow(null); onJobPress(j.jobId, detailRow.employeeId); } }}
-                        className="flex-1 min-w-0 active:opacity-60"
-                      >
-                        <Text className="text-sm font-semibold text-ink" numberOfLines={1}>{j.title || t.untitledJob}</Text>
-                        {j.date || j.lead ? (
-                          <Text className="text-[11px] text-faint" numberOfLines={1}>
-                            {[j.date ? fmtDay(j.date) : null, j.lead].filter(Boolean).join(' · ')}
-                          </Text>
-                        ) : null}
-                      </Pressable>
-                      <View className="items-end">
-                        {j.workedHours > 0 ? (
-                          <View className="flex-row items-center gap-1">
-                            <Wrench size={11} color={c.faint} />
-                            <Text className="text-xs text-muted">{j.workedHours} h</Text>
-                          </View>
-                        ) : null}
-                        {j.drivenHours > 0 ? (
-                          <View className="flex-row items-center gap-1">
-                            <Truck size={11} color={c.faint} />
-                            <Text className="text-xs text-muted">{j.drivenHours} h</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </ScrollView>
-            ) : (
-              <Text className="text-sm text-faint py-4 text-center">{t.noBreakdown}</Text>
-            )}
+            {detailRow ? breakdownView(detailRow, false) : null}
           </View>
         </View>
       </RNModal>

@@ -3,7 +3,7 @@ import type { PullRefreshControl } from '../../ui/usePullRefresh';
 import { SkeletonBlock, SkeletonStats, SkeletonChart } from '../../ui/Skeleton';
 import { useBarScrub } from '../../ui/useBarScrub';
 import { niceCeil, axisTick } from '../../lib/chartAxis';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import { DollarSign, FileText, ClipboardList, Clock, BarChart3, CalendarRange, ChevronRight, MapPin, Wallet, PiggyBank } from 'lucide-react-native';
 import { ChipScroll } from '../../ui/ChipScroll';
 import { useLang } from '../../i18n';
@@ -65,9 +65,13 @@ const KPI_COLOR: Record<string, string> = {
 // and remount every section's subtree on each state change — which tore down
 // the revenue chart's gesture overlay mid-scrub and made the hold-and-drag
 // readout drop out constantly.
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+/** iPad / iPhone Duo open: KPIs 3-up, sections 2-up. */
+const useWide = () => useWindowDimensions().width >= 700;
+
+function Section({ title, children, half = false }: { title: string; children: React.ReactNode; half?: boolean }) {
+  const wide = useWide();
   return (
-    <View className="bg-card rounded-2xl border border-border-soft p-5 mb-4">
+    <View className="bg-card rounded-2xl border border-border-soft p-5 mb-4" style={wide && half ? { width: '49%' } : undefined}>
       <Text className="text-sm font-bold text-ink mb-4">{title}</Text>
       {children}
     </View>
@@ -75,8 +79,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Kpi({ icon, label, value, sub, color }: { icon: React.ReactNode; label: string; value: string; sub?: string; color: string }) {
+  const wide = useWide();
   return (
-    <View className="bg-card rounded-2xl border border-border-soft p-4" style={{ width: '48%' }}>
+    <View className="bg-card rounded-2xl border border-border-soft p-4" style={{ width: wide ? '32%' : '48%' }}>
       <View className={`w-9 h-9 rounded-xl items-center justify-center mb-2 ${KPI_BG[color]}`}>{icon}</View>
       <Text className="text-xl font-black text-ink">{value}</Text>
       <Text className="text-xs text-muted mt-0.5">{label}</Text>
@@ -97,6 +102,7 @@ export function ReportsScreen({ refreshControl, loading, range, onRangeChange, m
   // so the default gap of 0 maps x → bar directly.
   const scrub = useBarScrub({ count: metrics?.monthlyRevenue.length ?? 0 });
   const customActive = !!customFrom || !!customTo;
+  const wide = useWide();
 
   if (loading || !metrics) {
     // Range chips, KPI tiles, then the chart cards.
@@ -302,8 +308,11 @@ export function ReportsScreen({ refreshControl, loading, range, onRangeChange, m
         )}
       </Section>
 
+      {/* Everything below the chart: 2-up on wide screens. Wrap lines stretch,
+         so side-by-side sections match heights. */}
+      <View style={wide ? { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' } : undefined}>
       {/* Invoice status */}
-      <Section title={t.sections.invoiceStatus}>
+      <Section half title={t.sections.invoiceStatus}>
         {m.invoiceStatus.length === 0 ? (
           <View className="items-center py-8">
             <FileText size={32} color={c.faint} />
@@ -335,7 +344,7 @@ export function ReportsScreen({ refreshControl, loading, range, onRangeChange, m
       </Section>
 
       {/* Jobs by status */}
-      <Section title={t.sections.jobsByStatus}>
+      <Section half title={t.sections.jobsByStatus}>
         {m.jobsTotal === 0 ? (
           <View className="items-center py-8">
             <ClipboardList size={32} color={c.faint} />
@@ -373,7 +382,7 @@ export function ReportsScreen({ refreshControl, loading, range, onRangeChange, m
 
       {/* Per-branch breakdown — multi-location businesses only. */}
       {m.byLocation.length > 0 ? (
-        <Section title={t.byLocation.title}>
+        <Section half title={t.byLocation.title}>
           <View className="gap-1">
             {m.byLocation.map(loc => (
               <View key={loc.locationId ?? 'none'} className="flex-row items-center justify-between py-2.5 border-b border-border-soft">
@@ -392,7 +401,7 @@ export function ReportsScreen({ refreshControl, loading, range, onRangeChange, m
       ) : null}
 
       {/* New clients */}
-      <Section title={t.sections.newClients}>
+      <Section half title={t.sections.newClients}>
         <View className="items-center py-4">
           <Text className="text-5xl font-black text-primary">{m.newClientsCount}</Text>
           <Text className="text-sm text-muted mt-1">{t.newClientsBlock.newCount}</Text>
@@ -401,7 +410,7 @@ export function ReportsScreen({ refreshControl, loading, range, onRangeChange, m
       </Section>
 
       {/* Financial summary — gross-margin headline + payroll-vs-margin bar. */}
-      <Section title={t.sections.financialSummary}>
+      <Section half title={t.sections.financialSummary}>
         <View className="gap-4">
           <View>
             <View className="flex-row items-center gap-2">
@@ -445,7 +454,7 @@ export function ReportsScreen({ refreshControl, loading, range, onRangeChange, m
 
       {/* Inventory (module-gated) */}
       {inventoryEnabled ? (
-        <Section title={t.sections.inventory}>
+        <Section half title={t.sections.inventory}>
           <View className="items-center py-2 mb-3">
             <Text className="text-3xl font-black text-ink tabular-nums">{fmt(m.inventoryValue)}</Text>
             <Text className="text-sm text-muted mt-1">{t.inventoryBlock.totalValueLabel}</Text>
@@ -466,6 +475,7 @@ export function ReportsScreen({ refreshControl, loading, range, onRangeChange, m
           </View>
         </Section>
       ) : null}
+      </View>
     </ScrollView>
 
     <DateRangeSheet
