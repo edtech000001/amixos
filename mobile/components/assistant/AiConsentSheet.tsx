@@ -4,6 +4,7 @@ import { Sparkles, Check } from 'lucide-react-native';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { useLang } from '@/lib/i18n/LangProvider';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 /**
  * Explicit permission before Ami shares anything with third-party AI
@@ -21,6 +22,7 @@ export function AiConsentSheet({
   onAllow: () => Promise<boolean>;
   onClose: () => void;
 }) {
+  const sheetSides = useSheetSides();
   const c = useThemeColors();
   const { t: full } = useLang();
   const t = full.dashboard.assistant.consent;
@@ -44,7 +46,7 @@ export function AiConsentSheet({
     <RNModal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <View className="flex-1 justify-end">
         <Pressable onPress={saving ? undefined : onClose} style={SHEET_BACKDROP} />
-        <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10">
+        <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10" style={sheetSides}>
           <View className="items-center mb-4"><View className="w-10 h-1 bg-border rounded-full" /></View>
           <View className="flex-row items-center gap-3 mb-3">
             <View className="w-10 h-10 rounded-xl bg-primary/10 items-center justify-center">

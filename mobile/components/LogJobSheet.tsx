@@ -16,6 +16,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import type { FieldClient, FieldJobLocation } from '@amixos/shared/lib/fieldHome';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 // expo-location is loaded lazily + guarded. Importing it eagerly triggers a
 // native-module lookup (`requireNativeModule('ExpoLocation')`) at module load,
@@ -46,6 +47,7 @@ export interface LogJobSheetProps {
 type LocState = 'idle' | 'capturing' | 'done' | 'unavailable';
 
 export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmit }: LogJobSheetProps) {
+  const sheetSides = useSheetSides();
   const { t: full } = useLang();
   const c = useThemeColors();
   const f = full.dashboard.fieldHome;
@@ -136,7 +138,7 @@ export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmi
           onPress={close}
           style={SHEET_BACKDROP}
         />
-        <View className="bg-card rounded-t-3xl px-5 pb-10 pt-4 max-h-[88%]">
+        <View className="bg-card rounded-t-3xl px-5 pb-10 pt-4 max-h-[88%]" style={sheetSides}>
           <View className="items-center mb-3">
             <View className="w-10 h-1 bg-border rounded-full" />
           </View>

@@ -13,6 +13,7 @@ import { useThemeColors } from '../../theme';
 import { jobRefLabel } from '../../lib/jobRef';
 import { formatDateLong, formatTime12h, formatNumberGrouped } from '../../lib/format';
 import { localizeTemplates } from '../../lib/fieldTemplates';
+import { useSheetSides } from '../../ui/useSheetSides';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SupabaseLike = any;
@@ -53,6 +54,7 @@ function fmtMoney(n: number) {
 }
 
 export function JobPreviewSheet({ supabase, jobId, onClose, onOpenFull }: JobPreviewSheetProps) {
+  const sheetSides = useSheetSides();
   const { t: full, locale } = useLang();
   const c = useThemeColors();
   const t = full.dashboard.invoices.jobsSection;
@@ -110,7 +112,7 @@ export function JobPreviewSheet({ supabase, jobId, onClose, onOpenFull }: JobPre
     <RNModal visible={!!jobId} transparent animationType="fade" onRequestClose={onClose}>
       <View className="flex-1 justify-end">
         <Pressable onPress={onClose} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
-        <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
+        <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]" style={sheetSides}>
           <View className="flex-row items-start justify-between gap-3 mb-3">
             <View className="flex-1 min-w-0">
               {job ? <Text className="text-xs font-mono text-faint">{jobRefLabel({ estimateNumber: job.estimate_number, externalRef: job.external_ref, id: job.id })}</Text> : null}

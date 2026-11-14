@@ -80,6 +80,7 @@ import {
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useSectionBase } from '@/lib/sectionNav';
 import { normalizePayrollConfig } from '@amixos/shared/lib/payroll';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 interface RawEmployee {
   id: string;
@@ -135,6 +136,7 @@ export function EmployeeDetail({ embeddedId, onClose, onChanged }: {
   onClose?: () => void;
   onChanged?: () => void;
 } = {}) {
+  const sheetSides = useSheetSides();
   const embedded = !!embeddedId;
   const router = useRouter();
   // Section links stay in whichever stack this screen is in (its tab, or
@@ -1175,7 +1177,7 @@ export function EmployeeDetail({ embeddedId, onClose, onChanged }: {
             onPress={() => setHistoryOpen(false)}
             style={SHEET_BACKDROP}
           />
-          <View className="bg-card rounded-t-3xl pt-3" style={{ maxHeight: '85%' }}>
+          <View className="bg-card rounded-t-3xl pt-3" style={[{ maxHeight: '85%' }, sheetSides]}>
             <View className="items-center mb-2">
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>

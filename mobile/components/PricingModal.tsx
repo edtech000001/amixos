@@ -31,6 +31,7 @@ import {
 } from '@amixos/shared/lib/plans';
 import { activePlanKey } from '@amixos/shared/lib/subscription';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 // Pricing / plans bottom sheet (UI only — no billing/Stripe yet). One-handed:
 // a slide-up sheet, not a centered dialog. Mirrors the LogJobSheet structure
@@ -46,6 +47,7 @@ export interface PricingModalProps {
 }
 
 export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalProps) {
+  const sheetSides = useSheetSides();
   const { locale } = useLang();
   const en = locale === 'en';
   const insets = useSafeAreaInsets();
@@ -153,7 +155,7 @@ export function PricingModal({ visible, onClose, onSelectPlan }: PricingModalPro
         <Pressable onPress={onClose} style={SHEET_BACKDROP} />
         <View
           className="bg-card rounded-t-3xl px-5 pt-4"
-          style={{ maxHeight: height * 0.9, paddingBottom: Math.max(insets.bottom, 16) + 8 }}
+          style={[{ maxHeight: height * 0.9, paddingBottom: Math.max(insets.bottom, 16) + 8 }, sheetSides]}
         >
           <View className="items-center mb-3">
             <View className="w-10 h-1 bg-border rounded-full" />

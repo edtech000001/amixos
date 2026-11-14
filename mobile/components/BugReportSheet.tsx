@@ -21,6 +21,7 @@ import { useThemeColors } from '@/lib/ThemeProvider';
 import { useApp } from '@/lib/AppContext';
 import { createSupabaseClient } from '@/lib/supabase';
 import { submitBugReport, BUG_REPORT_MAX } from '@amixos/shared/lib/bugReport';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 export function BugReportSheet({
   visible,
@@ -32,6 +33,7 @@ export function BugReportSheet({
   /** Screen the user was on when they shook. The single most useful field. */
   route?: string | null;
 }) {
+  const sheetSides = useSheetSides();
   const { t: full, locale } = useLang();
   const t = full.common.bugReport;
   const c = useThemeColors();
@@ -104,7 +106,7 @@ export function BugReportSheet({
           style={[SHEET_BACKDROP, { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }]}
           onPress={close}
         />
-        <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10" style={{ maxHeight: '85%' }}>
+        <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10" style={[{ maxHeight: '85%' }, sheetSides]}>
           <View className="flex-row items-start justify-between mb-1">
             <Text className="text-lg font-bold text-ink flex-1 pr-3">{t.title}</Text>
             <Pressable onPress={close} hitSlop={8} className="p-1 -mr-1 active:opacity-60">

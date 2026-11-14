@@ -82,6 +82,7 @@ import { fetchClientOwnEmails, resolveClientRecipients, mailtoHref } from '@amix
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { AutocompleteInput } from '@amixos/shared/ui/AutocompleteInput';
 import { useAppHref, useSectionBase } from '@/lib/sectionNav';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 // Local-date helpers for the schedule sheet (avoid UTC parsing shifting the
 // picked day across midnight).
@@ -245,6 +246,7 @@ export default function JobDetailRoute() {
 export function JobDetail({ embeddedId, onClose, onOpen, onChanged, onEdit }: {
   embeddedId?: string; onClose?: () => void; onOpen?: (id: string) => void; onChanged?: () => void; onEdit?: () => void;
 } = {}) {
+  const sheetSides = useSheetSides();
   const router = useRouter();
   // Section links stay in whichever stack this screen is in (its tab, or
   // the Más stack when opened from the Más menu) — lib/sectionNav.
@@ -1248,7 +1250,7 @@ export function JobDetail({ embeddedId, onClose, onOpen, onChanged, onEdit }: {
               onPress={goBack}
               style={SHEET_BACKDROP}
             />
-            <View className="bg-card rounded-t-3xl px-5 pt-6 pb-10">
+            <View className="bg-card rounded-t-3xl px-5 pt-6 pb-10" style={sheetSides}>
               <View className="flex-row items-center justify-between mb-4">
                 <Text className="text-xl font-bold text-ink">{t.notFound}</Text>
                 <Pressable onPress={goBack} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
@@ -2237,7 +2239,7 @@ export function JobDetail({ embeddedId, onClose, onOpen, onChanged, onEdit }: {
             display-only (outside taps never closed this editor — unsaved rows). */}
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end">
           <View pointerEvents="none" style={SHEET_BACKDROP} />
-          <View className="bg-card rounded-t-3xl pt-3" style={{ maxHeight: '88%' }}>
+          <View className="bg-card rounded-t-3xl pt-3" style={[{ maxHeight: '88%' }, sheetSides]}>
             <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">
               <Text className="text-lg font-bold text-ink">{isProposal ? td.itemsHeadingProposal : td.itemsHeadingJob}</Text>
@@ -2327,7 +2329,7 @@ export function JobDetail({ embeddedId, onClose, onOpen, onChanged, onEdit }: {
             onPress={() => setDelegateOpen(false)}
             style={SHEET_BACKDROP}
           />
-          <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
+          <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4" style={sheetSides}>
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>
@@ -2395,7 +2397,7 @@ export function JobDetail({ embeddedId, onClose, onOpen, onChanged, onEdit }: {
       <RNModal visible={pauseOpen} transparent animationType="fade" onRequestClose={() => setPauseOpen(false)}>
         <View className="flex-1 justify-end">
           <Pressable onPress={() => setPauseOpen(false)} style={SHEET_BACKDROP} />
-          <View className="bg-card rounded-t-3xl px-5 pt-6 pb-10">
+          <View className="bg-card rounded-t-3xl px-5 pt-6 pb-10" style={sheetSides}>
             <View className="flex-row items-center justify-between mb-1">
               <Text className="text-xl font-bold text-ink">{tp.sheetTitle}</Text>
               <Pressable onPress={() => setPauseOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
@@ -2461,7 +2463,7 @@ export function JobDetail({ embeddedId, onClose, onOpen, onChanged, onEdit }: {
           />
           <View
             className="bg-card rounded-t-3xl pt-3"
-            style={{ maxHeight: '85%' }}
+            style={[{ maxHeight: '85%' }, sheetSides]}
           >
             <View className="items-center mb-2">
               <View className="w-10 h-1 bg-border rounded-full" />
@@ -2526,7 +2528,7 @@ export function JobDetail({ embeddedId, onClose, onOpen, onChanged, onEdit }: {
       <RNModal visible={signSheetOpen} transparent animationType="fade" onRequestClose={() => setSignSheetOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end">
           <Pressable onPress={() => setSignSheetOpen(false)} style={SHEET_BACKDROP} />
-          <View className="bg-card rounded-t-3xl pt-3 pb-8">
+          <View className="bg-card rounded-t-3xl pt-3 pb-8" style={sheetSides}>
             <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">
               <Text className="text-lg font-bold text-ink">{td.signOnSite}</Text>
@@ -2563,7 +2565,7 @@ export function JobDetail({ embeddedId, onClose, onOpen, onChanged, onEdit }: {
       <RNModal visible={schedSheetOpen} transparent animationType="fade" onRequestClose={() => setSchedSheetOpen(false)}>
         <View className="flex-1 justify-end">
           <Pressable onPress={() => setSchedSheetOpen(false)} style={SHEET_BACKDROP} />
-          <View className="bg-card rounded-t-3xl pt-3 pb-8">
+          <View className="bg-card rounded-t-3xl pt-3 pb-8" style={sheetSides}>
             <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">
               <Text className="text-lg font-bold text-ink">{td.scheduleWork}</Text>
@@ -2608,7 +2610,7 @@ export function JobDetail({ embeddedId, onClose, onOpen, onChanged, onEdit }: {
             onPress={() => setDraftChoices([])}
             style={SHEET_BACKDROP}
           />
-          <View className="bg-card rounded-t-3xl pt-3 pb-8" style={{ maxHeight: '85%' }}>
+          <View className="bg-card rounded-t-3xl pt-3 pb-8" style={[{ maxHeight: '85%' }, sheetSides]}>
             <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <View className="flex-row items-start justify-between px-5 pb-3 border-b border-border-soft">
               <View className="flex-1 pr-3">

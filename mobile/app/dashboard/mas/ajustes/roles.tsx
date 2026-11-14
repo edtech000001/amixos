@@ -37,6 +37,7 @@ import {
   deleteCustomRole,
 } from '@amixos/shared/lib/roleEditor';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 // Owner is deliberately absent: it always has full control and can't be
 // edited, so a tab for it only invites confusion.
@@ -56,6 +57,7 @@ function CheckBox({ checked, disabled, onPress }: { checked: boolean; disabled?:
 }
 
 export default function RolesScreen() {
+  const sheetSides = useSheetSides();
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { business, currentRole, roleOverrides, reloadPermissions, locations } = useApp();
@@ -358,7 +360,7 @@ export default function RolesScreen() {
       <RNModal visible={sheetMode !== null} transparent animationType="fade" onRequestClose={() => setSheetMode(null)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end">
           <Pressable onPress={() => setSheetMode(null)} style={SHEET_BACKDROP} />
-          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-8">
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-8" style={sheetSides}>
             <Text className="text-base font-bold text-ink mb-4">
               {sheetMode === 'rename' ? t.renameRoleTitle : t.newRoleTitle}
             </Text>

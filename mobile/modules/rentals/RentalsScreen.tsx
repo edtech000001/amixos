@@ -116,6 +116,7 @@ import {
   type RentalPropertyCursor, fetchChargesForLeases, fetchAllCharges, fetchAllPayments } from '@amixos/shared/lib/rentalsQuery';
 import { gridColumns } from '@/lib/gridColumns';
 import { useMoreBack } from '@/lib/useMoreBack';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 type TabKey = 'overview' | 'properties' | 'tenants';
 type DetailTab = 'overview' | 'leases' | 'ledger' | 'expenses' | 'maintenance' | 'photos';
@@ -166,6 +167,7 @@ const EMPTY_MAINT_FORM = {
 };
 
 export default function RentalsScreen() {
+  const sheetSides = useSheetSides();
   const router = useRouter();
   // ← back to Más when opened from there; hidden when this module is pinned
   // to the dock and opened from it (same rule as the core apps).
@@ -1644,7 +1646,7 @@ export default function RentalsScreen() {
     open ? (
       <View className="justify-end" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
         <Pressable onPress={onClose} style={sheetScrim} />
-        <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
+        <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4" style={sheetSides}>
           <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
           <View className="bg-surface rounded-2xl overflow-hidden">
             <Pressable onPress={() => onPick('camera')} className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft border-b border-border-soft">
@@ -2373,7 +2375,7 @@ export default function RentalsScreen() {
         <RNModal visible={photoChooserOpen} transparent animationType="fade" onRequestClose={() => setPhotoChooserOpen(false)}>
           <View className="flex-1 justify-end">
             <Pressable onPress={() => setPhotoChooserOpen(false)} style={sheetScrim} />
-            <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
+            <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4" style={sheetSides}>
               <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
               <View className="bg-surface rounded-2xl overflow-hidden">
                 <Pressable onPress={() => addPropertyPhoto('camera')} className="flex-row items-center gap-4 px-5 py-5 active:bg-border-soft border-b border-border-soft">
@@ -2937,7 +2939,7 @@ export default function RentalsScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
           <View className="flex-1 justify-end">
             <Pressable onPress={onClose} style={sheetScrim} />
-            <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10" style={{ maxHeight: '88%' }}>
+            <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10" style={[{ maxHeight: '88%' }, sheetSides]}>
               <View className="flex-row items-center justify-between mb-3">
                 <Text className="text-lg font-bold text-ink">{title}</Text>
                 <Pressable onPress={onClose} hitSlop={8} className="p-1 -mr-1 active:opacity-60">

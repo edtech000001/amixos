@@ -6,6 +6,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { can } from '@amixos/shared/lib/permissions';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 // Branch switcher (mobile). A compact pill that opens a bottom sheet to scope
 // day-to-day lists to one location or "All" — much lighter than a full-width
@@ -22,6 +23,7 @@ export function LocationSwitcher({
    *  where the two stack). Default 'pill' = compact bar on list screens. */
   variant = 'pill',
 }: { className?: string; align?: 'start' | 'center'; variant?: 'pill' | 'box' }) {
+  const sheetSides = useSheetSides();
   const { locations, activeLocationId, setActiveLocation, currentRole } = useApp();
   const { locale } = useLang();
   const c = useThemeColors();
@@ -89,7 +91,7 @@ export function LocationSwitcher({
             onPress={() => setOpen(false)}
             style={SHEET_BACKDROP}
           />
-          <View className="bg-card rounded-t-3xl pb-8 pt-2 max-h-[70%]">
+          <View className="bg-card rounded-t-3xl pb-8 pt-2 max-h-[70%]" style={sheetSides}>
             <View className="items-center pb-2">
               <View className="w-10 h-1 rounded-full bg-border" />
             </View>

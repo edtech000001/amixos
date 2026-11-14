@@ -33,6 +33,7 @@ import { SplitEmpty, SplitView, useSplitOpenRequest, useSplitView, whenLeaveAllo
 import { JobForm } from './nuevo';
 import { JobDetail } from './[id]';
 import { ClipboardList } from 'lucide-react-native';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 interface RawJob {
   id: string;
@@ -77,6 +78,7 @@ function assignmentName(a: { worker_name: string | null }): string | null {
 }
 
 export default function TrabajosTab() {
+  const sheetSides = useSheetSides();
   // ← back to Más when opened from there (hidden when pinned to the dock).
   const moreBack = useMoreBack('trabajos');
   const insets = useSafeAreaInsets();
@@ -721,7 +723,7 @@ export default function TrabajosTab() {
             onPress={() => setMoveClientIds(null)}
             style={SHEET_BACKDROP}
           />
-          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-8">
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-8" style={sheetSides}>
             <Text className="text-lg font-bold text-ink mb-3">
               {locale === 'es' ? `Mover ${moveClientIds?.length ?? 0} trabajo(s) a…` : `Move ${moveClientIds?.length ?? 0} job(s) to…`}
             </Text>

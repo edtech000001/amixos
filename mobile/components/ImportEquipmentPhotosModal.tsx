@@ -17,6 +17,7 @@ import {
   type PendingPhotoJob,
   type PhotoMatch,
 } from '@amixos/shared/lib/importPhotos';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 // "Import equipment photos" — the mobile mirror of ImportEquipmentPhotosModal
 // (web). Equipment CSV's "Photos (file names)" column left pending names on
@@ -27,6 +28,7 @@ interface Props { open: boolean; businessId: string; onClose: () => void }
 interface Picked { uri: string; name: string; match: PhotoMatch | null; status: 'pending' | 'uploaded' | 'failed' | 'limit' | 'skipped' }
 
 export function ImportEquipmentPhotosModal({ open, businessId, onClose }: Props) {
+  const sheetSides = useSheetSides();
   const supabase = createSupabaseClient();
   const { user } = useApp();
   const { locale } = useLang();
@@ -164,7 +166,7 @@ export function ImportEquipmentPhotosModal({ open, businessId, onClose }: Props)
           onPress={phase === 'uploading' ? undefined : onClose}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
         />
-        <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]">
+        <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]" style={sheetSides}>
           <Text className="text-lg font-bold text-ink mb-2">{tr('Importar fotos de equipo', 'Import equipment photos')}</Text>
           {phase === 'uploading' ? (
             <View className="flex-row items-center gap-3 mb-3">

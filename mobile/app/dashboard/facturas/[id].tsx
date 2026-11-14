@@ -57,6 +57,7 @@ import {
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useSectionBase } from '@/lib/sectionNav';
 import { LinkExistingSheet } from '@/components/LinkExistingSheet';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 // Check first — the default and most common method for these businesses.
 const PAY_METHODS = ['check', 'cash', 'card', 'transfer', 'zelle', 'cashapp', 'venmo', 'paypal', 'moneyOrder', 'other'] as const;
@@ -133,6 +134,7 @@ export default function FacturaDetailRoute() {
 export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEditInPane }: {
   embeddedId?: string; onClose?: () => void; onChanged?: () => void; onEdit?: () => void;
 } = {}) {
+  const sheetSides = useSheetSides();
   const routeParams = useLocalSearchParams<{ id: string; from?: string; jobId?: string; clientId?: string }>();
   const embedded = !!embeddedId;
   // Origin params (?from=…) belong to the route; an embedded detail has none.
@@ -1425,7 +1427,7 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
             onPress={() => setMoveJobId(null)}
             style={SHEET_BACKDROP}
           />
-          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10">
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10" style={sheetSides}>
             <View className="flex-row items-center justify-between mb-3">
               <Text className="text-lg font-bold text-ink">{jobsT.moveTitle}</Text>
               <Pressable onPress={() => setMoveJobId(null)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
@@ -1459,7 +1461,7 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
               item name field (first in the scroll) went out of sight. */}
           <View
             className="bg-card rounded-t-3xl px-5 pt-5 pb-10"
-            style={{ maxHeight: photoScreenH - insets.top - 24, flexShrink: 1 }}
+            style={[{ maxHeight: photoScreenH - insets.top - 24, flexShrink: 1 }, sheetSides]}
           >
             <View className="flex-row items-center justify-between mb-3">
               <Text className="text-lg font-bold text-ink">{linkIndex !== null ? jobsT.linkTitle : jobsT.addTitle}</Text>
@@ -1577,7 +1579,7 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
             onPress={() => setEditOpen(false)}
             style={SHEET_BACKDROP}
           />
-          <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-10" onPress={Keyboard.dismiss}>
+          <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-10" onPress={Keyboard.dismiss} style={sheetSides}>
             <View className="flex-row items-center justify-between mb-3">
               <Text className="text-lg font-bold text-ink">{jobsT.editItemTitle}</Text>
               <Pressable onPress={() => setEditOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
@@ -1637,7 +1639,7 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
             the card renders on top, so its ScrollView drags natively. */}
         <View className="flex-1 justify-end">
           <Pressable onPress={() => setPayOpen(false)} style={SHEET_BACKDROP} />
-          <View className="bg-card rounded-t-3xl pt-3 pb-10" style={{ maxHeight: '92%' }}>
+          <View className="bg-card rounded-t-3xl pt-3 pb-10" style={[{ maxHeight: '92%' }, sheetSides]}>
             <View className="items-center pb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">
               <Text className="text-xl font-bold text-ink">{payEditId ? tInv.payments.editTitle : tInv.payments.recordTitle}</Text>
@@ -1775,7 +1777,7 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
         {payPhotoChooserOpen ? (
           <View className="justify-end" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
             <Pressable onPress={() => setPayPhotoChooserOpen(false)} style={SHEET_BACKDROP} />
-            <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
+            <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4" style={sheetSides}>
               <View className="items-center mb-3">
                 <View className="w-10 h-1 bg-border rounded-full" />
               </View>
@@ -1820,7 +1822,7 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
       <RNModal visible={pricesOpen} transparent animationType="fade" onRequestClose={() => setPricesOpen(false)}>
         <View className="flex-1 justify-end">
           <Pressable onPress={() => setPricesOpen(false)} style={SHEET_BACKDROP} />
-          <View className="bg-card rounded-t-3xl pt-3 pb-8" style={{ maxHeight: '80%' }}>
+          <View className="bg-card rounded-t-3xl pt-3 pb-8" style={[{ maxHeight: '80%' }, sheetSides]}>
             <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">
               <Text className="text-lg font-bold text-ink">{tInv.clientPrices.title}</Text>

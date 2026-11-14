@@ -41,6 +41,7 @@ import {
   resolveLineDescriptions,
 } from '../../lib/invoiceTemplate';
 import { SHEET_BACKDROP } from '../../ui/sheetBackdrop';
+import { useSheetSides } from '../../ui/useSheetSides';
 
 export interface InvoiceDetailClient {
   /** clients.id — enables the name → client detail link. */
@@ -310,6 +311,7 @@ export function InvoiceDetailScreen({
   onLinkExisting,
   onViewBilledThrough,
 }: InvoiceDetailScreenProps) {
+  const sheetSides = useSheetSides();
   const { t: ui, locale } = useLang();
   const c = useThemeColors();
   const tInv = ui.dashboard.invoices;
@@ -871,7 +873,7 @@ export function InvoiceDetailScreen({
             onPress={() => setMoreOpen(false)}
             style={SHEET_BACKDROP}
           />
-          <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10">
+          <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10" style={sheetSides}>
             <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <View className="flex-row items-center justify-between mb-2">
               <Text className="text-base font-bold text-ink">{tInv.moreActionsTitle}</Text>

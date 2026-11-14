@@ -21,6 +21,7 @@ import {
   validateFormula,
 } from '../../lib/payrollFormula';
 import { SHEET_BACKDROP } from '../../ui/sheetBackdrop';
+import { useSheetSides } from '../../ui/useSheetSides';
 
 export type PayMethod = 'cash' | 'check' | 'wire';
 
@@ -178,6 +179,7 @@ export function PayrollScreen({
   onDeleteLoan,
   onEditLoan,
 }: PayrollScreenProps) {
+  const sheetSides = useSheetSides();
   const { t: full } = useLang();
   const t = full.dashboard.reports.payroll;
   const c = useThemeColors();
@@ -992,7 +994,7 @@ export function PayrollScreen({
                     onPress={() => setManualOpen(false)}
                     style={SHEET_BACKDROP}
                   />
-          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]" style={sheetSides}>
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>
@@ -1210,7 +1212,7 @@ export function PayrollScreen({
                     onPress={closeSettings}
                     style={SHEET_BACKDROP}
                   />
-          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]" style={sheetSides}>
             <View className="flex-row items-center justify-between mb-4">
               <Text className="text-lg font-bold text-ink">{t.settingsTitle}</Text>
               <Pressable onPress={closeSettings} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft">
@@ -1423,7 +1425,7 @@ export function PayrollScreen({
                     onPress={() => setPayRow(null)}
                     style={SHEET_BACKDROP}
                   />
-          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]" style={sheetSides}>
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
             {/* Tap any blank part of the sheet to close the keyboard — the
@@ -1566,7 +1568,7 @@ export function PayrollScreen({
             <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} className="justify-end">
               <Pressable onPress={() => setShowLoans(false)}
                 style={SHEET_BACKDROP} />
-              <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]">
+              <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]" style={sheetSides}>
                 <View className="flex-row items-center justify-between mb-3">
                   <View>
                     <Text className="text-lg font-bold text-ink">{t.loanHistoryTitle}</Text>
@@ -1640,7 +1642,7 @@ export function PayrollScreen({
                     onPress={() => setDetailRow(null)}
                     style={SHEET_BACKDROP}
                   />
-          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[90%]">
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[90%]" style={sheetSides}>
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>
@@ -1660,7 +1662,7 @@ export function PayrollScreen({
         >
           <Pressable onPress={() => setLoansOpen(false)}
             style={SHEET_BACKDROP} />
-          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 h-[85%]">
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 h-[85%]" style={sheetSides}>
             <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
 
             {loanWorkerId ? (

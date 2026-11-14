@@ -6,6 +6,7 @@ import { useThemeColors } from '../theme';
 import { useLang } from '../i18n/context';
 import { formatTime12h } from '../lib/format';
 import { SHEET_BACKDROP } from './sheetBackdrop';
+import { useSheetSides } from './useSheetSides';
 
 type Mode = 'date' | 'time' | 'datetime-local';
 
@@ -92,6 +93,7 @@ function NativePicker({
   variant?: 'default' | 'ghost';
   max?: string;
 }) {
+  const sheetSides = useSheetSides();
   const maximumDate = max ? parseValueToDate(max, 'date') : undefined;
   // Dynamic import keeps the native module out of the web bundle.
   // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
@@ -187,7 +189,7 @@ function NativePicker({
               onPress={() => setIosOpen(false)}
               style={SHEET_BACKDROP}
             />
-            <View className="bg-card rounded-t-3xl pt-3">
+            <View className="bg-card rounded-t-3xl pt-3" style={sheetSides}>
               {/* Drag-handle */}
               <View className="items-center mb-1">
                 <View className="w-10 h-1 bg-border rounded-full" />

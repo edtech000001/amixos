@@ -8,6 +8,7 @@ import { DatePicker } from './DatePicker';
 import { SHEET_BACKDROP } from './sheetBackdrop';
 import { useThemeColors } from '../theme';
 import type { DateRangePreset } from '../lib/dateRangePresets';
+import { useSheetSides } from './useSheetSides';
 
 type Icon = typeof Check;
 
@@ -50,6 +51,7 @@ export function FilterSheet({
   showLabel: string;
   children: ReactNode;
 }) {
+  const sheetSides = useSheetSides();
   const insets = useSafeAreaInsets();
   // Wide screens (iPad, iPhone Duo unfolded): a centered card over the whole
   // split view instead of a bottom sheet squeezed into the list pane.
@@ -74,10 +76,10 @@ export function FilterSheet({
       <View
         key={wide ? 'card' : 'sheet'}
         className={wide ? 'bg-card rounded-3xl pt-5' : 'bg-card rounded-t-3xl'}
-        style={wide
+        style={[wide
           ? { width: Math.min(560, width - 48), maxHeight: height - insets.top - insets.bottom - 96 - 48, paddingBottom: 20 }
           // Clear the floating dock so the footer stays tappable.
-          : { maxHeight: '92%', paddingBottom: insets.bottom + 96 }}
+          : { maxHeight: '92%', paddingBottom: insets.bottom + 96 }, sheetSides]}
       >
         {wide ? null : (
           <View className="items-center pt-3 mb-2">

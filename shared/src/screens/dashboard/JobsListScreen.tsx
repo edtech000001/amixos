@@ -79,6 +79,7 @@ import {
 } from '../../lib/jobsFilters';
 import { SHEET_BACKDROP } from '../../ui/sheetBackdrop';
 import { ScreenTitle } from '../../ui/ScreenTitle';
+import { useSheetSides } from '../../ui/useSheetSides';
 
 export interface JobListItem {
   id: string;
@@ -335,6 +336,7 @@ export function JobsListScreen({
   cachedAt = null,
   onRequestSummary,
 }: JobsListScreenProps) {
+  const sheetSides = useSheetSides();
   const { t: full, locale } = useLang();
   const c = useThemeColors();
   const t = full.dashboard.jobs;
@@ -1345,7 +1347,7 @@ export function JobsListScreen({
             onPress={() => setNewMenuOpen(false)}
             style={SHEET_BACKDROP}
           />
-          <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
+          <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4" style={sheetSides}>
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>

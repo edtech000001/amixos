@@ -14,6 +14,7 @@ import {
   type LinkableInvoice,
   type LinkCandidateLine,
 } from '@amixos/shared/lib/invoiceBillThrough';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 const money = (n: number) =>
   `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -39,6 +40,7 @@ export function LinkExistingSheet({
   targets: BillThroughTarget[];
   onLinked: () => void;
 }) {
+  const sheetSides = useSheetSides();
   const c = useThemeColors();
   const { t: full, locale } = useLang();
   const t = full.dashboard.invoices.billThrough;
@@ -103,7 +105,7 @@ export function LinkExistingSheet({
     <RNModal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end">
         <Pressable onPress={busy ? undefined : onClose} style={SHEET_BACKDROP} />
-        <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10" style={{ maxHeight: '88%' }}>
+        <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10" style={[{ maxHeight: '88%' }, sheetSides]}>
           <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
           <View className="flex-row items-center gap-2 mb-2">
             {step !== 'company' && !(step === 'invoice' && targets.length === 1) ? (

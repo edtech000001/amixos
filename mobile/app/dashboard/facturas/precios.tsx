@@ -42,6 +42,7 @@ import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { priceSyncTargets, fetchAutosyncLinks, setPriceAutosync, type PriceAutosyncLink } from '@amixos/shared/lib/priceSheetSync';
 import { useAuthStore } from '@/lib/auth/store';
 import { PriceSyncSheet } from '@/components/PriceSyncSheet';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 interface ClientLite {
   id: string;
@@ -63,6 +64,7 @@ const UNCAT = '__uncategorized__';
 const ADDONS = '__additional_charges__';
 
 export default function FacturasPreciosPage() {
+  const sheetSides = useSheetSides();
   const router = useRouter();
   const { split } = useSplitView();
   // Deep-link from client detail: ?client=<id> preselects that client and
@@ -526,7 +528,7 @@ export default function FacturasPreciosPage() {
               onPress={() => setGenOpen(false)}
               style={SHEET_BACKDROP}
             />
-            <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10" style={{ maxHeight: '88%' }}>
+            <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10" style={[{ maxHeight: '88%' }, sheetSides]}>
               <View className="flex-row items-center justify-between mb-4">
                 <Text className="text-lg font-bold text-ink">{t.generateTitle}</Text>
                 <Pressable onPress={() => setGenOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">

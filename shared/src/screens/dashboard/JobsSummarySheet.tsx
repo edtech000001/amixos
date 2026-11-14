@@ -11,6 +11,7 @@ import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import type { JobsSummaryTotals } from '../../lib/jobsSummary';
 import { SHEET_BACKDROP } from '../../ui/sheetBackdrop';
+import { useSheetSides } from '../../ui/useSheetSides';
 
 export interface JobsSummarySheetProps {
   open: boolean;
@@ -42,6 +43,7 @@ function Row({ label, value, muted }: { label: string; value: string; muted?: bo
 export function JobsSummarySheet({
   open, onClose, loading, totals, filtered, statusLabels, formatMoney, scope,
 }: JobsSummarySheetProps) {
+  const sheetSides = useSheetSides();
   const { t: full } = useLang();
   const c = useThemeColors();
   const t = full.dashboard.jobs.summary;
@@ -57,7 +59,7 @@ export function JobsSummarySheet({
           onPress={onClose}
           style={SHEET_BACKDROP}
         />
-        <View className="bg-card rounded-t-3xl pt-3 pb-10" style={{ maxHeight: '85%' }}>
+        <View className="bg-card rounded-t-3xl pt-3 pb-10" style={[{ maxHeight: '85%' }, sheetSides]}>
           <View className="items-center pb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
 
           <View className="flex-row items-start justify-between px-5 pb-3 border-b border-border-soft">

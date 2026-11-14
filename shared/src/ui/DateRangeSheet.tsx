@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DatePicker } from './DatePicker';
 import type { DateRangePreset } from '../lib/dateRangePresets';
 import { SHEET_BACKDROP } from './sheetBackdrop';
+import { useSheetSides } from './useSheetSides';
 
 interface Props {
   open: boolean;
@@ -49,6 +50,7 @@ export function DateRangeSheet({
   applyLabel,
   presets,
 }: Props) {
+  const sheetSides = useSheetSides();
   const insets = useSafeAreaInsets();
   if (!open) return null;
   const active = !!from || !!to;
@@ -58,7 +60,7 @@ export function DateRangeSheet({
       <View
         className="bg-card rounded-t-3xl px-5 pt-3"
         // Clear the floating dock so the buttons stay tappable.
-        style={{ paddingBottom: insets.bottom + 96 }}
+        style={[{ paddingBottom: insets.bottom + 96 }, sheetSides]}
       >
         <View className="items-center mb-3">
           <View className="w-10 h-1 rounded-full bg-border" />

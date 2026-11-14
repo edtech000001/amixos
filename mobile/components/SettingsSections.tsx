@@ -144,6 +144,7 @@ import { useRouter } from 'expo-router';
 import { ChevronUp, ChevronDown, ChevronRight, Palette, Sparkles, GripVertical, FolderInput, CreditCard, ExternalLink, Send } from 'lucide-react-native';
 
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 type FieldType = 'text' | 'note' | 'number' | 'date' | 'boolean' | 'select';
 
 interface FieldTemplate {
@@ -3529,6 +3530,7 @@ export function LanguageSection() {
  *  plain sibling AFTER <AccountSection /> would land below "Cerrar sesión", which
  *  is the wrong place for an ordinary setting. */
 export function AccountSection({ children }: { children?: ReactNode }) {
+  const sheetSides = useSheetSides();
   const supabase = createSupabaseClient();
   const router = useRouter();
   const { user, currentRole } = useApp();
@@ -4022,7 +4024,7 @@ export function AccountSection({ children }: { children?: ReactNode }) {
             onPress={() => setLogoutOpen(false)}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
           />
-          <View className="bg-card rounded-t-3xl px-5 pb-10 pt-4">
+          <View className="bg-card rounded-t-3xl px-5 pb-10 pt-4" style={sheetSides}>
             <View className="items-center mb-4">
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>

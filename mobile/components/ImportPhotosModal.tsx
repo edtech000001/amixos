@@ -23,6 +23,7 @@ import {
   type PendingPhotoJob,
   type PhotoMatch,
 } from '@amixos/shared/lib/importPhotos';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 // Step 4 of the import hub: bulk photo upload (see the web
 // ImportPhotosModal for the full design notes). Files are matched to jobs
@@ -43,6 +44,7 @@ interface Picked {
 }
 
 export function ImportPhotosModal({ open, businessId, onClose }: Props) {
+  const sheetSides = useSheetSides();
   const supabase = createSupabaseClient();
   const { user } = useApp();
   const { t: full, locale } = useLang();
@@ -243,7 +245,7 @@ export function ImportPhotosModal({ open, businessId, onClose }: Props) {
           onPress={phase === 'uploading' ? undefined : onClose}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
         />
-        <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]">
+        <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[85%]" style={sheetSides}>
           <Text className="text-lg font-bold text-ink mb-2">{t.title}</Text>
           {phase === 'uploading' ? (
             <View className="flex-row items-center gap-3 mb-3">

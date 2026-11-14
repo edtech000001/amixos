@@ -63,6 +63,7 @@ import { useAppHref, useSectionBase } from '@/lib/sectionNav';
 import { ccContactEmails, mailtoHref } from '@amixos/shared/lib/clientRecipients';
 
 import { fetchAllById } from '@amixos/shared/lib/supabaseFetch';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 interface FieldTemplate {
   id: string;
   field_key: string;
@@ -176,6 +177,7 @@ export default function ClienteDetailRoute() {
  * `embeddedId`, and the back arrow / delete hand control back via `onClose`.
  */
 export function ClientDetail({ embeddedId, onClose, onEdit }: { embeddedId?: string; onClose?: () => void; onEdit?: () => void } = {}) {
+  const sheetSides = useSheetSides();
   const router = useRouter();
   // Section links stay in whichever stack this screen is in (its tab, or
   // the Más stack when opened from the Más menu) — lib/sectionNav.
@@ -856,7 +858,7 @@ export function ClientDetail({ embeddedId, onClose, onEdit }: { embeddedId?: str
             onPress={() => setEmailPickOpen(false)}
             style={SHEET_BACKDROP}
           />
-          <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10">
+          <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10" style={sheetSides}>
             <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <View className="flex-row items-center justify-between mb-2">
               <Text className="text-base font-bold text-ink">{t.detail.emailPickTitle}</Text>
@@ -900,7 +902,7 @@ export function ClientDetail({ embeddedId, onClose, onEdit }: { embeddedId?: str
             onPress={() => setMoreOpen(false)}
             style={SHEET_BACKDROP}
           />
-          <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10">
+          <View className="bg-card rounded-t-3xl px-5 pt-3 pb-10" style={sheetSides}>
             <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <View className="flex-row items-center justify-between mb-2">
               <Text className="text-base font-bold text-ink">{full.dashboard.invoices.moreActionsTitle}</Text>

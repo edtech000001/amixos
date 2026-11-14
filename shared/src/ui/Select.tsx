@@ -4,6 +4,7 @@ import { ChevronDown, Check, Search, X } from 'lucide-react-native';
 import { clsx } from 'clsx';
 import { useThemeColors } from '../theme';
 import { SHEET_BACKDROP } from './sheetBackdrop';
+import { useSheetSides } from './useSheetSides';
 
 export interface SelectOption {
   value: string;
@@ -48,6 +49,7 @@ export function Select({
   searchEmptyText,
   containerClassName,
 }: SelectProps) {
+  const sheetSides = useSheetSides();
   const c = useThemeColors();
   const borderClass = error
     ? 'border-red-300'
@@ -133,11 +135,13 @@ export function Select({
               <Pressable onPress={() => setOpen(false)} style={SHEET_BACKDROP} />
               <View
                 className={clsx(
-                  'bg-card rounded-t-3xl w-full overflow-hidden pb-6',
+                  // No w-full: it fights the side margins (the column stretches it).
+                  'bg-card rounded-t-3xl overflow-hidden pb-6',
                   // Fixed height when searchable so the sheet doesn't shrink /
                   // jump as results are filtered; otherwise size to content.
                   searchable ? 'h-[75%]' : 'max-h-[75%]',
                 )}
+                style={sheetSides}
               >
                 {/* Grab handle — one-hand bottom-sheet affordance. */}
                 <View className="items-center pt-3 pb-1">

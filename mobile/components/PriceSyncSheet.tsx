@@ -14,6 +14,7 @@ import {
   type PriceSyncReport,
   type PriceSyncTarget,
 } from '@amixos/shared/lib/priceSheetSync';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 type Supa = Parameters<typeof syncPriceSheet>[0];
 
@@ -43,6 +44,7 @@ const fmtRate = (r: number | null) =>
  * the confirmation is inline — iOS won't present a second modal over this.
  */
 export function PriceSyncSheet({ open, onClose, supabase, sourceBusinessId, targets, links, onLinksChanged, businessName }: Props) {
+  const sheetSides = useSheetSides();
   const c = useThemeColors();
   const { t: full } = useLang();
   const t = full.dashboard.settings.priceSheet.sync;
@@ -133,7 +135,7 @@ export function PriceSyncSheet({ open, onClose, supabase, sourceBusinessId, targ
     <RNModal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <View className="flex-1 justify-end">
         <Pressable onPress={busy ? undefined : onClose} style={SHEET_BACKDROP} />
-        <View className="bg-card rounded-t-3xl px-5 pt-3 pb-8" style={{ maxHeight: '88%' }}>
+        <View className="bg-card rounded-t-3xl px-5 pt-3 pb-8" style={[{ maxHeight: '88%' }, sheetSides]}>
           <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
           <View className="flex-row items-center gap-2 mb-2">
             {step === 'preview' && !busy ? (

@@ -39,6 +39,7 @@ import { useOutboxStore } from '@/lib/offline/outbox';
 import { isOnlineNow } from '@/lib/offline/network';
 import { newUuid } from '@/lib/offline/ids';
 import { gridColumns } from '@/lib/gridColumns';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 interface Props {
   jobId: string;
@@ -52,6 +53,7 @@ const GAP = 8;
 const COLS = 3;
 
 export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
+  const sheetSides = useSheetSides();
   const supabase = createSupabaseClient();
   const { user } = useApp();
   const { t: full } = useLang();
@@ -397,7 +399,7 @@ export function JobPhotosSection({ jobId, businessId, canWrite }: Props) {
             onPress={() => setPickerOpen(false)}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
           />
-          <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
+          <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4" style={sheetSides}>
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>

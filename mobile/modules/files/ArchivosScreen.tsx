@@ -64,6 +64,7 @@ const FILES_VIEW_KEY = 'amixos_files_view_mode';
 import { storageLimitBytes, storagePercent, formatBytes, wouldExceedStorage } from '@amixos/shared/lib/storageLimits';
 import { gridColumns } from '@/lib/gridColumns';
 import { useMoreBack } from '@/lib/useMoreBack';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 interface Crumb { categoryId: string | null; folderId: string | null; label: string }
 
@@ -731,6 +732,7 @@ function FileSheets({
   /** Returns true if uploading `fileBytes` would exceed the storage limit. */
   onCheckStorage: (fileBytes: number) => Promise<boolean>;
 }) {
+  const sheetSides = useSheetSides();
   const { t: full, locale } = useLang();
   const es = locale === 'es';
   const t = full.dashboard.files;
@@ -1060,7 +1062,7 @@ function FileSheets({
           onPress={onClose}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }}
         />
-        <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
+        <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4" style={sheetSides}>
           <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
 
           {/* Actions chooser */}
@@ -1286,7 +1288,7 @@ function FileSheets({
               onPress={() => setCoverPickerFor(null)}
               style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)' }}
             />
-            <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4">
+            <View className="bg-card rounded-t-3xl px-4 pb-8 pt-4" style={sheetSides}>
               <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
               <View className="bg-surface rounded-2xl overflow-hidden">
                 <Pressable

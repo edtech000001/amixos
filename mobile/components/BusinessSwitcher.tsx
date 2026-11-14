@@ -10,6 +10,7 @@ import { useNetworkStore } from '@/lib/offline/network';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { unreadBadgeLabel, useUnreadByBusiness } from '@amixos/shared/lib/notifications';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 /**
  * Tap the active business name to open a bottom sheet listing every business
@@ -21,6 +22,7 @@ import { unreadBadgeLabel, useUnreadByBusiness } from '@amixos/shared/lib/notifi
  * switch to).
  */
 export function BusinessSwitcher() {
+  const sheetSides = useSheetSides();
   const businesses = useAuthStore((s) => s.businesses);
   const activeId = useAuthStore((s) => s.activeBusinessId);
   const setActiveBusiness = useAuthStore((s) => s.setActiveBusiness);
@@ -165,7 +167,7 @@ export function BusinessSwitcher() {
           />
           <View
             className="bg-card rounded-t-3xl px-4 pb-8 pt-4"
-          >
+           style={sheetSides}>
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>

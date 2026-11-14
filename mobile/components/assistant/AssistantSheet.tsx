@@ -30,6 +30,7 @@ import type { useAssistant } from './useAssistant';
 import { useVoiceCall } from './useVoiceCall';
 import { MessageBubble } from './MessageBubble';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
+import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 // Show the END of a long in-progress utterance, not the start.
 const liveTail = (s: string, max = 90) => (s.length > max ? `…${s.slice(-max)}` : s);
@@ -92,6 +93,7 @@ interface Props {
 // (app convention — see shared/src/ui/DateRangeSheet.tsx), at zIndex 1001 so
 // it also covers the top-banner overlay (zIndex 1000 in dashboard/_layout).
 export function AssistantSheet({ assistant, businessId, onClose, mini, onMinimize, onExpand, callActiveRef }: Props) {
+  const sheetSides = useSheetSides();
   const { t: full, locale } = useLang();
   const a = full.dashboard.assistant;
   const insets = useSafeAreaInsets();
@@ -214,7 +216,7 @@ export function AssistantSheet({ assistant, businessId, onClose, mini, onMinimiz
         pointerEvents="box-none"
         style={{ flex: 1, justifyContent: 'flex-end' }}
       >
-        <View className="bg-card rounded-t-3xl" style={{ height: '88%', maxHeight: '88%' }}>
+        <View className="bg-card rounded-t-3xl" style={[{ height: '88%', maxHeight: '88%' }, sheetSides]}>
           <View className="items-center pt-3">
             <View className="w-10 h-1 rounded-full bg-border" />
           </View>
