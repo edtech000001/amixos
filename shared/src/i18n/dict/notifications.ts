@@ -12,6 +12,7 @@ export type NotificationsDict = {
   filterAll: string;
   filterUnread: string;
   emptyUnread: string;
+  splitEmpty: string;
   groups: { today: string; yesterday: string; week: string; earlier: string };
   justNow: string;
   minutesAgo: string;   // {{n}}
@@ -54,6 +55,7 @@ export const notifications: Record<Locale, NotificationsDict> = {
     filterAll: 'Todas',
     filterUnread: 'No leídas',
     emptyUnread: 'Estás al día. No hay notificaciones sin leer.',
+    splitEmpty: 'Toca una notificación de un trabajo o factura para verla aquí',
     groups: { today: 'Hoy', yesterday: 'Ayer', week: 'Esta semana', earlier: 'Antes' },
     justNow: 'Ahora',
     minutesAgo: 'Hace {{n}} min',
@@ -94,6 +96,7 @@ export const notifications: Record<Locale, NotificationsDict> = {
     filterAll: 'All',
     filterUnread: 'Unread',
     emptyUnread: "You're all caught up. No unread notifications.",
+    splitEmpty: 'Tap a job or invoice notification to see it here',
     groups: { today: 'Today', yesterday: 'Yesterday', week: 'This week', earlier: 'Earlier' },
     justNow: 'Now',
     minutesAgo: '{{n}} min ago',

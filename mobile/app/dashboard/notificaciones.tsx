@@ -13,6 +13,11 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { haptics } from '@amixos/shared/lib/haptics';
+import { SplitEmpty, SplitView, useSplitView, whenLeaveAllowed } from '@/components/SplitView';
+import { JobDetail } from './trabajos/[id]';
+import { JobForm } from './trabajos/nuevo';
+import { InvoiceDetailPane } from './facturas/[id]';
+import { InvoiceForm } from './facturas/nueva';
 import {
   visibleNotificationCategories, fetchNotifications, groupNotificationsByDay, loadNotificationPrefs,
   markAllNotificationsRead, markNotificationRead, markNotificationUnread, notificationAge, notificationHref,
@@ -38,6 +43,11 @@ export default function NotificacionesScreen() {
   // Opened from Ajustes → straight to the preference switches.
   const { prefs: prefsParam, from } = useLocalSearchParams<{ prefs?: string; from?: string }>();
   const [showPrefs, setShowPrefs] = useState(prefsParam === '1');
+  // iPad / Duo open: a job or invoice notification opens its full page on
+  // the right (the same embedded panes the Jobs / Invoices splits use).
+  const { split, listWidth } = useSplitView();
+  const [pane, setPane] = useState<{ notifId: string; kind: 'job' | 'invoice'; id: string } | null>(null);
+  const [editing, setEditing] = useState(false);
   // This tab stays mounted between visits — reset the panel on every open so
   // the bell always lands on the list (and Ajustes on the switches).
   useFocusEffect(useCallback(() => { setShowPrefs(prefsParam === '1'); }, [prefsParam]));
@@ -82,6 +92,11 @@ export default function NotificacionesScreen() {
     if (!n.read_at) {
       setRows(prev => prev.map(r => (r.id === n.id ? { ...r, read_at: new Date().toISOString() } : r)));
       void markNotificationRead(supabase, n.id).then(unreadNotificationsChanged);
+    }
+    if (split && n.entity_id && (n.entity_type === 'job' || n.entity_type === 'invoice')) {
+      const next = { notifId: n.id, kind: n.entity_type, id: n.entity_id } as const;
+      whenLeaveAllowed(() => { setEditing(false); setPane(next); });
+      return;
     }
     const href = notificationHref(n, 'native');
     if (href) router.push(href as never);
@@ -150,24 +165,7 @@ export default function NotificacionesScreen() {
     </View>
   ) : null;
 
-  return (
-    <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
-      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
-        <Pressable onPress={goBack} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
-          <ChevronLeft size={22} color={c.ink} />
-        </Pressable>
-        <Text className="flex-1 text-xl font-bold text-ink ml-1">{t.title}</Text>
-        {/* Gear → the on/off switches (same as web's bell gear); ✕ closes them. */}
-        <Pressable
-          onPress={() => setShowPrefs(v => !v)}
-          hitSlop={10}
-          accessibilityLabel={showPrefs ? full.common.buttons.close : t.prefsTitle}
-          className="p-2 -mr-2 rounded-lg active:bg-border-soft"
-        >
-          {showPrefs ? <X size={20} color={c.ink} /> : <Settings size={20} color={c.ink} />}
-        </Pressable>
-      </View>
-
+  const list = (
       <SectionList
         sections={groupNotificationsByDay(filter === 'unread' ? rows.filter(r => !r.read_at) : rows)
           .map(g => ({ key: g.key, data: g.rows }))}
@@ -216,6 +214,7 @@ export default function NotificacionesScreen() {
             className={`flex-row items-start gap-3 px-4 py-4 bg-card border-x border-border-soft ${
               index === 0 ? 'rounded-t-2xl border-t' : ''
             } ${index === section.data.length - 1 ? 'rounded-b-2xl border-b' : 'border-b'} active:bg-surface`}
+            style={split && pane?.notifId === n.id ? { backgroundColor: `${c.primary}1F` } : undefined}
           >
             <View
               className="mt-1.5 w-2 h-2 rounded-full"
@@ -242,6 +241,40 @@ export default function NotificacionesScreen() {
           )
         }
       />
+  );
+
+  return (
+    <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
+      <View className="flex-row items-center px-4 pt-2 pb-3 border-b border-border-soft">
+        <Pressable onPress={goBack} hitSlop={12} className="p-2 -ml-2 rounded-lg active:bg-border-soft">
+          <ChevronLeft size={22} color={c.ink} />
+        </Pressable>
+        <Text className="flex-1 text-xl font-bold text-ink ml-1">{t.title}</Text>
+        {/* Gear → the on/off switches (same as web's bell gear); ✕ closes them. */}
+        <Pressable
+          onPress={() => setShowPrefs(v => !v)}
+          hitSlop={10}
+          accessibilityLabel={showPrefs ? full.common.buttons.close : t.prefsTitle}
+          className="p-2 -mr-2 rounded-lg active:bg-border-soft"
+        >
+          {showPrefs ? <X size={20} color={c.ink} /> : <Settings size={20} color={c.ink} />}
+        </Pressable>
+      </View>
+
+      {split ? (
+        <SplitView
+          listWidth={listWidth}
+          list={list}
+          detail={!pane ? <SplitEmpty icon={Bell} text={t.splitEmpty} />
+            : pane.kind === 'job'
+              ? (editing
+                ? <JobForm key={`edit-${pane.id}`} embeddedEditId={pane.id} onDone={() => setEditing(false)} />
+                : <JobDetail key={pane.id} embeddedId={pane.id} onOpen={id => setPane(p => (p ? { ...p, id } : p))} onEdit={() => setEditing(true)} onClose={() => setPane(null)} />)
+              : (editing
+                ? <InvoiceForm key={`edit-${pane.id}`} embeddedEditId={pane.id} onDone={() => setEditing(false)} />
+                : <InvoiceDetailPane key={pane.id} embeddedId={pane.id} onEdit={() => setEditing(true)} onClose={() => setPane(null)} />)}
+        />
+      ) : list}
     </SafeAreaView>
   );
 }
