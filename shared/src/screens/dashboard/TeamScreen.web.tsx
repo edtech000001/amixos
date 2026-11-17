@@ -237,7 +237,7 @@ export function TeamScreen({
       {/* Invite modal */}
       {inviteOpen ? (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setInviteOpen(false)} />
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
           <div className="relative bg-card rounded-2xl w-full max-w-md p-5">
             <h2 className="text-lg font-bold text-ink mb-1">{t.inviteModalTitle}</h2>
             <p className="text-sm text-muted mb-5">{t.subtitle}</p>

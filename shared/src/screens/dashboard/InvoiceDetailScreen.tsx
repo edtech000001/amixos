@@ -167,6 +167,8 @@ export interface InvoiceDetailScreenProps {
   onAutoprice?: () => void;
   /** Opens the read-only "prices for this client" sheet (platform-owned). */
   onViewPrices?: () => void;
+  /** Web only (docked prices panel open) — native shows prices in a sheet. */
+  pricesPanelOpen?: boolean;
   /** Autoname (gated pilot): normalize the linked jobs' titles. */
   onAutoname?: () => void;
   /** Reset all lines to unpriced ($0) so Autoprice can re-run clean. */

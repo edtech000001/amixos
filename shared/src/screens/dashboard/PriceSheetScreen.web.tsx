@@ -703,7 +703,8 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
               <label className="block text-sm font-semibold text-ink">{t.clientRatesLabel}</label>
               <p className="text-[11px] text-faint mt-0.5 mb-2">{t.clientRatesHint}</p>
               {draft.clientRates.map((cr, idx) => (
-                <div key={idx} className="flex items-center gap-2 mb-2">
+                // relative: the client dropdown spans this whole row, not just the name box.
+                <div key={idx} className="relative flex items-center gap-2 mb-2">
                   <div className="flex-1 min-w-0">
                     <ClientPicker value={cr.clientId} placeholder={t.clientPickPlaceholder}
                       options={clients.filter(c => c.id === cr.clientId || !draft.clientRates.some(x => x.clientId === c.id))}
@@ -788,8 +789,11 @@ function ClientPicker({ value, onChange, placeholder, options }: {
 
   const pick = (id: string) => { onChange(id); setOpen(false); setQuery(''); setActive(-1); };
 
+  // No `relative` on the root: the list positions against the caller's row so
+  // it can be wider than the input. The inner div only anchors the icon.
   return (
-    <div className="relative">
+    <div>
+      <div className="relative">
       <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
       <input
         value={open ? query : selectedName}
@@ -810,8 +814,9 @@ function ClientPicker({ value, onChange, placeholder, options }: {
         aria-autocomplete="list"
         className="w-full rounded-xl border border-border bg-card pl-8 pr-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
       />
+      </div>
       {open ? (
-        <ul role="listbox" className="absolute z-10 mt-1 w-full max-h-60 overflow-y-auto rounded-xl border border-border bg-card py-1 shadow-lg">
+        <ul role="listbox" className="absolute z-20 left-0 right-0 top-full mt-1 max-h-72 overflow-y-auto rounded-xl border border-border bg-card py-1 shadow-lg">
           {shown.length === 0 ? <li className="px-3 py-2 text-sm text-faint">—</li> : null}
           {shown.map((o, i) => (
             <li key={o.id} role="option" aria-selected={o.id === value}>

@@ -1125,6 +1125,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         onDelete={invoice && canDelete ? () => setDeleteOpen(true) : undefined}
         onAutoprice={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? runAutoprice : undefined}
         onViewPrices={priceItems.some(p => p.active) ? () => setPricesOpen(true) : undefined}
+        pricesPanelOpen={pricesOpen}
         onAutoname={autonameEnabled(business?.id) && canEdit ? runAutoname : undefined}
         onClearPrices={invoice && canEdit && invoice.status === 'draft' && priceItems.length > 0 ? clearPrices : undefined}
         autopriceVerify={showInvVerify}
@@ -1359,23 +1360,27 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       </Modal>
 
       {/* Edit a manual line item */}
-      <Modal open={editIndex !== null} onClose={() => setEditIndex(null)} title={tInv.jobsSection.editItemTitle} size="sm">
+      <Modal open={editIndex !== null} onClose={() => setEditIndex(null)} title={tInv.jobsSection.editItemTitle} size="lg">
         <div className="flex flex-col gap-3">
-          <input
+          {/* Textarea so long names wrap instead of scrolling out of view;
+              Enter is blocked — a line description stays one line. */}
+          <textarea
             value={editDesc}
-            onChange={e => setEditDesc(e.target.value)}
+            rows={2}
+            onChange={e => setEditDesc(e.target.value.replace(/\n/g, ' '))}
+            onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
             placeholder={tInv.jobsSection.manualDescPlaceholder}
-            className="rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+            className="resize-none rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
           />
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <input
               value={formatNumberGrouped(editQty)}
               inputMode="decimal"
               onChange={e => setEditQty(e.target.value.replace(/[^0-9.]/g, ''))}
               placeholder={tj.new.colQty}
-              className="w-20 rounded-xl border border-border bg-card px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+              className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
             />
-            <div className="relative flex-1">
+            <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint text-sm">$</span>
               <input
                 value={formatMoneyInput(editRate)}

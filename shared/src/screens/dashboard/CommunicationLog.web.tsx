@@ -297,7 +297,6 @@ export function CommunicationLog({
       {formOpen ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
-          onClick={() => setFormOpen(false)}
         >
           <div
             className="bg-card rounded-2xl shadow-xl w-full max-w-sm p-5 max-h-[85vh] overflow-y-auto"

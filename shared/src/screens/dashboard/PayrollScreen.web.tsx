@@ -801,7 +801,7 @@ export function PayrollScreen({
 
       {/* Manual payment dialog */}
       {manualOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setManualOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="bg-card rounded-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto overscroll-contain" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
               <p className="text-lg font-bold text-ink">{t.manualPayBtn}</p>
@@ -1143,7 +1143,7 @@ export function PayrollScreen({
 
       {/* Mark-paid modal */}
       {payRow && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setPayRow(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="bg-card rounded-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto overscroll-contain" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-end gap-2 mb-1">
               {adjustButtons}

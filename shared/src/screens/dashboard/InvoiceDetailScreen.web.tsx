@@ -163,6 +163,9 @@ export interface InvoiceDetailScreenProps {
   onAutoprice?: () => void;
   /** Opens the read-only "prices for this client" sheet (platform-owned). */
   onViewPrices?: () => void;
+  /** The docked prices panel is open (wide screens): hide the summary column
+   *  and the View prices button so the line items get the room. */
+  pricesPanelOpen?: boolean;
   /** Autoname (gated pilot): normalize the linked jobs' titles. */
   onAutoname?: () => void;
   /** Reset all lines to unpriced ($0) so Autoprice can re-run clean (e.g. after
@@ -276,6 +279,7 @@ export function InvoiceDetailScreen({
   sortLinesDir,
   onAutoprice,
   onViewPrices,
+  pricesPanelOpen = false,
   onAutoname,
   onClearPrices,
   autopriceVerify,
@@ -383,6 +387,13 @@ export function InvoiceDetailScreen({
                   {tInv.payments.partialPill}
                 </span>
               ) : null}
+              {/* Summary column is hidden while pricing; the total stays in
+                  view here so each price you set still shows its effect. */}
+              {pricesPanelOpen ? (
+                <span className="hidden lg:inline ml-2 text-xl font-bold text-ink tabular-nums">
+                  {fmt(invoice.totalAmount - (invoice.passthroughAmount ?? 0))}
+                </span>
+              ) : null}
             </div>
             <p className="text-xs text-faint mt-0.5">
               {tInv.createdLabel}: {formatDateTimeLong(invoice.createdAt, dateLoc)}
@@ -396,7 +407,7 @@ export function InvoiceDetailScreen({
         <div className="flex items-center gap-1 flex-nowrap whitespace-nowrap">
           {/* Icons match the mobile more-actions sheet exactly (DollarSign for
              prices, Pencil for autoname) so the two platforms read the same. */}
-          {onViewPrices ? (
+          {onViewPrices && !pricesPanelOpen ? (
             <button type="button" onClick={onViewPrices} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-surface text-sm font-semibold text-muted transition-colors mr-1">
               <DollarSign size={15} /> {tInv.clientPrices.viewBtn}
             </button>
@@ -511,7 +522,7 @@ export function InvoiceDetailScreen({
       {/* Two-column grid on wide screens: summary cards left, line items +
          actions right — mirrors the job detail layout. Stacks on small. */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-        <div className="flex flex-col gap-4">
+        <div className={`flex flex-col gap-4 ${pricesPanelOpen ? 'lg:hidden' : ''}`}>
         {/* Quick total */}
         <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -720,7 +731,7 @@ export function InvoiceDetailScreen({
 
         </div>
 
-        <div className="lg:col-span-2 flex flex-col gap-4">
+        <div className={`${pricesPanelOpen ? 'lg:col-span-3' : 'lg:col-span-2'} flex flex-col gap-4`}>
         {/* Line items / jobs (inline manage) + totals below. The styled FACTURA
            document is only built for print / share (PDF). */}
         <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
