@@ -189,7 +189,7 @@ export function priceBasisLabel(b: PriceBasis): string {
 }
 
 /** "$0.50 / ft" style summary for one applied add-on. */
-function addonLabel(a: PriceSheetItem, rate: number): string {
+export function addonLabel(a: PriceSheetItem, rate: number): string {
   const money = `$${rate.toLocaleString('en-US', { minimumFractionDigits: rate % 1 ? 2 : 0, maximumFractionDigits: 2 })}`;
   return a.pricingMode === 'flat'
     ? `+${a.name} ${money}`

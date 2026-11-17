@@ -17,8 +17,21 @@ export interface ClientRecipients {
   /** Addressed TO. Empty means there is nobody to send to — callers should not
    *  open a blank mail composer, they should say so. */
   to: string[];
-  /** Copied — contacts flagged "CC on all emails" (cc_on_invoices). */
+  /** Copied — contacts flagged CC (cc_on_invoices), minus "invoices only"
+   *  ones (cc_invoices_only, migration 284) when the email isn't an invoice. */
   cc: string[];
+}
+
+/** Which kind of email is being sent — decides whether "invoices only" CC
+ *  contacts are copied. */
+export type EmailKind = 'invoice' | 'other';
+
+/** Is this contact copied on an email of this kind? */
+export function contactGetsCc(
+  c: { cc_on_invoices?: boolean | null; cc_invoices_only?: boolean | null },
+  kind: EmailKind,
+): boolean {
+  return !!c.cc_on_invoices && (kind === 'invoice' || !c.cc_invoices_only);
 }
 
 /** Trim, drop blanks, and de-duplicate case-insensitively while keeping the
@@ -131,20 +144,22 @@ export async function resolveClientRecipients(
   supabase: Supa,
   clientId: string | null | undefined,
   clientEmail: string | string[] | null | undefined,
-  opts?: { includeCc?: boolean; includeInvoiceCc?: boolean },
+  opts?: { includeCc?: boolean; includeInvoiceCc?: boolean; kind?: EmailKind },
 ): Promise<ClientRecipients> {
   const own = Array.isArray(clientEmail) ? clientEmail : [clientEmail];
   const fallback: ClientRecipients = { to: cleanEmails(own), cc: [] };
   if (!clientId) return fallback;
 
-  const { data, error } = await supabase
-    .from('client_contacts')
-    .select('email, receives_email, cc_on_invoices')
-    .eq('client_id', clientId)
-    .not('email', 'is', null);
+  const query = (cols: string) => (supabase.from('client_contacts') as any)
+    .select(cols).eq('client_id', clientId).not('email', 'is', null);
+  let { data, error } = await query('email, receives_email, cc_on_invoices, cc_invoices_only');
+  // Before migration 284 the column doesn't exist — retry without it (every
+  // CC contact then counts as "All emails", as it did before).
+  if (isUndefinedColumn(error)) ({ data, error } = await query('email, receives_email, cc_on_invoices'));
   if (error || !data) return fallback;
 
-  const rows = data as { email: string | null; receives_email: boolean | null; cc_on_invoices: boolean | null }[];
+  const rows = data as { email: string | null; receives_email: boolean | null; cc_on_invoices: boolean | null; cc_invoices_only?: boolean | null }[];
+  const kind: EmailKind = opts?.kind ?? 'other';
 
   // A flagged contact with no usable address is ignored rather than counted —
   // otherwise a half-filled contact would make the client unreachable by
@@ -155,7 +170,7 @@ export async function resolveClientRecipients(
   if (opts?.includeCc === false) return { to: resolvedTo, cc: [] };
 
   const toKeys = new Set(resolvedTo.map(e => e.toLowerCase()));
-  const cc = cleanEmails(rows.filter(r => r.cc_on_invoices).map(r => r.email))
+  const cc = cleanEmails(rows.filter(r => contactGetsCc(r, kind)).map(r => r.email))
     .filter(e => !toKeys.has(e.toLowerCase()));
   return { to: resolvedTo, cc };
 }
@@ -165,14 +180,15 @@ export function joinRecipients(list: string[]): string {
   return list.join(',');
 }
 
-/** Emails of contacts flagged "CC on all emails", minus any addresses already
- *  being written to (`exclude`). For screens that hold the contacts list. */
+/** Emails of contacts CC'd on a general (non-invoice) email, minus any
+ *  addresses already being written to (`exclude`). For screens that hold the
+ *  contacts list — the client "Email" button. */
 export function ccContactEmails(
-  contacts: { email?: string | null; cc_on_invoices?: boolean | null }[] | null | undefined,
+  contacts: { email?: string | null; cc_on_invoices?: boolean | null; cc_invoices_only?: boolean | null }[] | null | undefined,
   exclude: string[] = [],
 ): string[] {
   const ex = new Set(exclude.map(e => e.trim().toLowerCase()));
-  return cleanEmails((contacts ?? []).filter(c => c.cc_on_invoices).map(c => c.email))
+  return cleanEmails((contacts ?? []).filter(c => contactGetsCc(c, 'other')).map(c => c.email))
     .filter(e => !ex.has(e.toLowerCase()));
 }
 

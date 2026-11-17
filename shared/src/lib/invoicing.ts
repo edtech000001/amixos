@@ -19,7 +19,7 @@ import { US_STATE_NAME_TO_ABBR } from './usStates';
 import { todayLocalISO } from './format';
 /** Normalize a state to its 2-letter code ("Kansas" → "KS", "ks" → "KS") so it
  *  matches how per-state price overrides are keyed. Null/blank → null. */
-function normStateCode(s: string | null | undefined): string | null {
+export function normStateCode(s: string | null | undefined): string | null {
   if (!s) return null;
   const t = s.trim();
   if (!t) return null;
@@ -688,7 +688,16 @@ export async function setLineItemExcluded(
  *  though this is only used for manual lines. */
 export async function updateLineItemAt(
   supabase: Supa,
-  opts: { invoiceId: string; index: number; description: string; qty: number; rate: number; serviceDate?: string | null },
+  opts: {
+    invoiceId: string; index: number; description: string; qty: number; rate: number; serviceDate?: string | null;
+    /** Per-unit add-ons now folded into `rate` ("+VRI $0.5/ft"); omitted → cleared. */
+    addonNote?: string | null;
+    /** "1,299 × $3.25" kept on a line billed 1 × total (inline flat add-on); omitted → cleared. */
+    priceBasis?: { qty: number; rate: number } | null;
+    /** Flat add-on lines toggled in Edit item (job lines only): every add-on
+     *  line of this job named in `managed` is replaced by `chosen`. */
+    flatAddons?: { managed: string[]; chosen: { description: string; rate: number }[] };
+  },
 ): Promise<void> {
   const at = pinLine(opts.index);
   let target: InvoiceLineItem | undefined;
@@ -698,13 +707,16 @@ export async function updateLineItemAt(
     if (idx < 0) return null;
     items = cur;
     target = cur[idx];
-    return cur.map((li, i) =>
+    const mapped = cur.map((li, i) =>
     i === idx
       // A hand-set rate no longer matches the auto-priced add-on breakdown, so
-      // drop the stale "+add-on" note.
-      ? { ...li, description: opts.description, qty: opts.qty, rate: opts.rate, addonNote: null, priceBasis: null, ...(opts.serviceDate !== undefined ? { service_date: opts.serviceDate } : {}), ...(li.job_id ? { edited: true } : {}) }
+      // drop the stale "+add-on" note (unless the caller rebuilt it).
+      ? { ...li, description: opts.description, qty: opts.qty, rate: opts.rate, addonNote: opts.addonNote ?? null, priceBasis: opts.priceBasis ?? null, ...(opts.serviceDate !== undefined ? { service_date: opts.serviceDate } : {}), ...(li.job_id ? { edited: true } : {}) }
       : li,
     );
+    const jid = mapped[idx].job_id;
+    if (!opts.flatAddons || !jid) return mapped;
+    return replaceJobAddonLines(mapped, idx, opts.flatAddons.managed, opts.flatAddons.chosen);
   });
   if (!res?.saved) return;
 
@@ -721,6 +733,26 @@ export async function updateLineItemAt(
       await supabase.from('jobs').update({ title: newTitle }).eq('id', target.job_id);
     }
   }
+}
+
+/** Swap a job's toggleable flat add-on lines: drops this job's add-on lines
+ *  named in `managed`, then inserts `chosen` right after the base line's
+ *  remaining add-on lines — the same shape autoprice produces. Pure. */
+export function replaceJobAddonLines(
+  lines: InvoiceLineItem[],
+  baseIndex: number,
+  managed: string[],
+  chosen: { description: string; rate: number }[],
+): InvoiceLineItem[] {
+  const base = lines[baseIndex];
+  const jid = base?.job_id;
+  if (!jid) return lines;
+  const names = new Set(managed.map(n => n.trim().toLowerCase()));
+  const kept = lines.filter(li => !(li.addon && li.job_id === jid && names.has((li.description ?? '').trim().toLowerCase())));
+  let at = kept.indexOf(base) + 1;
+  while (at < kept.length && kept[at].addon && kept[at].job_id === jid) at++;
+  const added: InvoiceLineItem[] = chosen.map(c => ({ description: c.description, qty: 1, rate: c.rate, addon: true, job_id: jid, edited: true }));
+  return [...kept.slice(0, at), ...added, ...kept.slice(at)];
 }
 
 /** Remove a single line item by index (used for hand-entered/manual lines) and

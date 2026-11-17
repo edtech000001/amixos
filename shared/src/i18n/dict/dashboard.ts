@@ -491,6 +491,8 @@ export type DashboardDict = {
       removeItemConfirm: string;
       editItemTitle: string;
       itemsCountOne: string;
+      addonsLabel: string;
+      addonsHint: string;
       itemsCountMany: string;
       viewProject: string;
       previewDescription: string;
@@ -699,6 +701,10 @@ export type DashboardDict = {
         primaryLabel: string;
         ccLabel: string;
         ccBadge: string;
+        ccOff: string;
+        ccInvoicesOnly: string;
+        ccAllEmails: string;
+        ccBadgeInvoices: string;
         recipientLabel: string;
         recipientHint: string;
         recipientBadge: string;
@@ -4057,6 +4063,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         removeItemConfirm: '¿Quitar este concepto de la factura?',
         editItemTitle: 'Editar concepto',
         itemsCountOne: '1 concepto',
+        addonsLabel: 'Recargos',
+        addonsHint: 'Se agregan a esta línea sin cambiar su precio base.',
         itemsCountMany: '{{count}} conceptos',
         viewProject: 'Ir al trabajo',
         previewDescription: 'Descripción',
@@ -4267,8 +4275,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
           notesLabel: 'Notas',
           notesPlaceholder: 'Ej. Disponible solo por las mañanas...',
           primaryLabel: 'Contacto principal',
-          ccLabel: 'Copiar (CC) en todos los correos',
+          ccLabel: 'Copiar (CC) en',
           ccBadge: 'CC',
+          ccOff: 'No',
+          ccInvoicesOnly: 'Solo facturas',
+          ccAllEmails: 'Todos los correos',
+          ccBadgeInvoices: 'CC facturas',
           recipientLabel: 'Enviar correos aquí',
           recipientHint: 'Los correos van a esta persona en vez del cliente.',
           recipientBadge: 'Correo',
@@ -7586,6 +7598,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         removeItemConfirm: 'Remove this item from the invoice?',
         editItemTitle: 'Edit item',
         itemsCountOne: '1 item',
+        addonsLabel: 'Add-ons',
+        addonsHint: 'Added to this line without changing its base price.',
         itemsCountMany: '{{count}} items',
         viewProject: 'Go to job',
         previewDescription: 'Description',
@@ -7796,8 +7810,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
           notesLabel: 'Notes',
           notesPlaceholder: 'E.g. Only available in the mornings...',
           primaryLabel: 'Primary contact',
-          ccLabel: 'CC on all emails',
+          ccLabel: 'CC this person on',
           ccBadge: 'CC',
+          ccOff: 'Off',
+          ccInvoicesOnly: 'Invoices only',
+          ccAllEmails: 'All emails',
+          ccBadgeInvoices: 'CC invoices',
           recipientLabel: 'Send emails here',
           recipientHint: 'Email goes to this person instead of the client.',
           recipientBadge: 'Email',

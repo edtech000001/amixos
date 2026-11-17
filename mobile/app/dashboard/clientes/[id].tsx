@@ -108,6 +108,8 @@ interface ClientContact {
   notes: string | null;
   is_primary: boolean;
   cc_on_invoices: boolean;
+  /** Migration 284 — absent before it runs. */
+  cc_invoices_only?: boolean;
   receives_email: boolean;
   created_at: string;
 }
@@ -164,6 +166,8 @@ const EMPTY_CONTACT = {
   notes: '',
   is_primary: false,
   cc_on_invoices: false,
+  cc_invoices_only: false,
+  cc_only_was: false,
   receives_email: false,
 };
 
@@ -630,6 +634,8 @@ export function ClientDetail({ embeddedId, onClose, onEdit }: { embeddedId?: str
       notes: ct.notes ?? '',
       is_primary: ct.is_primary,
       cc_on_invoices: ct.cc_on_invoices,
+      cc_invoices_only: !!ct.cc_invoices_only,
+      cc_only_was: !!ct.cc_invoices_only,
       receives_email: ct.receives_email,
     });
     setContactModalOpen(true);
@@ -646,6 +652,11 @@ export function ClientDetail({ embeddedId, onClose, onEdit }: { embeddedId?: str
       notes: contactForm.notes.trim() || null,
       is_primary: contactForm.is_primary,
       cc_on_invoices: contactForm.cc_on_invoices && !!contactForm.email.trim(),
+      // Written only when "Invoices only" is (or was) chosen, so saving works
+      // before migration 284 for everyone else.
+      ...(contactForm.cc_invoices_only || contactForm.cc_only_was
+        ? { cc_invoices_only: contactForm.cc_invoices_only && contactForm.cc_on_invoices && !!contactForm.email.trim() }
+        : {}),
       // Both flags need an address to mean anything — storing them without one
       // would suppress the client's email and supply nothing in its place.
       receives_email: contactForm.receives_email && !!contactForm.email.trim(),
@@ -1192,7 +1203,7 @@ export function ClientDetail({ embeddedId, onClose, onEdit }: { embeddedId?: str
                         ) : null}
                         {ct.cc_on_invoices ? (
                           <View className="px-1.5 py-0.5 rounded-full bg-primary/10">
-                            <Text className="text-[10px] font-semibold text-primary">{td.contactModal.ccBadge}</Text>
+                            <Text className="text-[10px] font-semibold text-primary">{ct.cc_invoices_only ? td.contactModal.ccBadgeInvoices : td.contactModal.ccBadge}</Text>
                           </View>
                         ) : null}
                         {ct.receives_email ? (
@@ -1546,14 +1557,22 @@ export function ClientDetail({ embeddedId, onClose, onEdit }: { embeddedId?: str
                   <Star size={12} color={c.primary} fill="#4F46E5" />
                 </View>
               </View>
-              {/* Auto-CC this contact on invoices sent to the client (needs an email). */}
-              <View className="flex-row items-center gap-3 mt-1">
-                <Toggle
-                  value={contactForm.cc_on_invoices}
-                  onValueChange={v => setContactForm(f => ({ ...f, cc_on_invoices: v }))}
-                  disabled={!contactForm.email.trim()}
-                />
+              {/* CC this contact: Off · Invoices only · All emails (needs an email). */}
+              <View className="mt-1 gap-1.5">
                 <Text className={`text-sm ${contactForm.email.trim() ? 'text-ink' : 'text-faint'}`}>{td.contactModal.ccLabel}</Text>
+                <View className="flex-row self-start rounded-xl border border-border p-0.5" style={{ opacity: contactForm.email.trim() ? 1 : 0.5 }}>
+                  {([['off', td.contactModal.ccOff], ['invoices', td.contactModal.ccInvoicesOnly], ['all', td.contactModal.ccAllEmails]] as const).map(([mode, label]) => {
+                    const on = (!contactForm.cc_on_invoices ? 'off' : contactForm.cc_invoices_only ? 'invoices' : 'all') === mode;
+                    return (
+                      // Highlight via style, not swapped classNames (NativeWind toggle rule).
+                      <Pressable key={mode} disabled={!contactForm.email.trim()} accessibilityRole="radio" accessibilityState={{ selected: on }}
+                        onPress={() => setContactForm(f => ({ ...f, cc_on_invoices: mode !== 'off', cc_invoices_only: mode === 'invoices' }))}
+                        className="px-3 py-2 rounded-lg" style={{ backgroundColor: on ? c.primary : 'transparent' }}>
+                        <Text className="text-sm" style={{ color: on ? '#fff' : c.muted, fontWeight: on ? '600' : '400' }}>{label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
               {/* Addressed TO instead of the client (migration 220). Applies to
                   every send — invoices, proposals, the ad-hoc Email button —

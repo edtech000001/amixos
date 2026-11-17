@@ -10,7 +10,7 @@ import { createSupabaseClient } from '@/lib/supabase';
 import { useMarkEntityNotificationsRead } from '@amixos/shared/lib/notifications';
 import { useApp } from '@/lib/AppContext';
 import { swrRead, swrWrite } from '@amixos/shared/lib/swrCache';
-import { Camera, RotateCw, X } from 'lucide-react';
+import { Camera, Check, Plus, RotateCw, X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useLang } from '@/i18n/LangProvider';
@@ -34,8 +34,9 @@ import { resolveConfig, type InvoiceBranding } from '@amixos/shared/lib/invoiceT
 import { signedUrl } from '@amixos/shared/lib/storageUrls';
 import { INVOICE_PAYMENT_BUCKET, paymentPhotoPath } from '@amixos/shared/lib/invoicePayments';
 import { autonameEnabled, autonameJobTitle, detectAutonameType } from '@amixos/shared/lib/autoname';
-import { sortInvoiceLinesByDate, detectLineSortDirection, setLineItemExcluded, removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, AUTOPRICE_SKIP, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
-import { applicableRate, rowToPriceSheetItem, groupPriceItemsByCategory, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
+import { sortInvoiceLinesByDate, detectLineSortDirection, setLineItemExcluded, removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, AUTOPRICE_SKIP, normStateCode, type AutopriceAmbiguous, type InvoiceLineItem } from '@amixos/shared/lib/invoicing';
+import { addonChoices, currentAddonIds, toggledRate, toggleInlineFlat, foldedFlat, addonSave } from '@amixos/shared/lib/lineAddons';
+import { applicableRate, priceItemLabel, rowToPriceSheetItem, groupPriceItemsByCategory, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { fetchClientOwnEmails, resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { InvoiceRemindersCard } from '@amixos/shared/screens/dashboard/InvoiceRemindersCard';
@@ -246,6 +247,10 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   // Only MANUAL lines carry their own date — a linked job's date belongs to
   // the job (shown read-only on the line, edited on the job itself).
   const [editIsManual, setEditIsManual] = useState(false);
+  // Add-on toggles (price-sheet add-ons) for the line being edited.
+  const [editAddonIds, setEditAddonIds] = useState<string[]>([]);
+  // "1,299 × $3.25" behind a line billed 1 × total (a fee folded into it).
+  const [editBasis, setEditBasis] = useState<{ qty: number; rate: number } | null>(null);
 
   const removeManual = async (index: number) => {
     if (!(await confirm({ message: tInv.jobsSection.removeItemConfirm, destructive: true }))) return;
@@ -264,6 +269,31 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     setEditRate(li.rate != null ? padMoney(String(li.rate)) : '');
     setEditDate(li.service_date ?? '');
     setEditIsManual(!li.job_id);
+    const lines = invoice.lineItems as InvoiceLineItem[];
+    setEditAddonIds(currentAddonIds(lines, index, addonChoices(priceItems, lines[index])));
+    setEditBasis(lines[index].priceBasis ?? null);
+  };
+
+  // Rates for the add-ons follow the job's state (else the client's) and the
+  // client's own prices — the same context autoprice uses.
+  const editLine = editIndex !== null ? (invoice?.lineItems[editIndex] as InvoiceLineItem | undefined) : undefined;
+  const editChoices = addonChoices(priceItems, editLine);
+  const editCtx = {
+    state: normStateCode(attachedJobs.find(j => j.id === editLine?.job_id)?.job_state) ?? normStateCode(clientState),
+    clientId: invClientId,
+  };
+  const toggleEditAddon = (a: PriceSheetItem) => {
+    const on = !editAddonIds.includes(a.id);
+    setEditAddonIds(ids => (on ? [...ids, a.id] : ids.filter(x => x !== a.id)));
+    if (a.pricingMode !== 'flat') setEditRate(r => padMoney(toggledRate(r, a, on, editCtx)));
+    else if (foldedFlat(a, editLine)) {
+      // Fee inside the line's price: re-bundle / unbundle like autoprice does.
+      const otherOn = editChoices.some(o => o.id !== a.id && foldedFlat(o, editLine) && editAddonIds.includes(o.id));
+      const next = toggleInlineFlat({ qty: parseFloat(editQty) || 1, rate: parseFloat(editRate) || 0, basis: editBasis }, a, on, editCtx, otherOn);
+      setEditQty(String(next.qty));
+      setEditRate(padMoney(String(next.rate)));
+      setEditBasis(next.basis);
+    }
   };
 
   const doEditSave = async () => {
@@ -278,6 +308,9 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       qty: parseFloat(editQty) || 1,
       rate: parseFloat(editRate) || 0,
       serviceDate: editIsManual ? (editDate || null) : undefined,
+      // Keep the bundle basis unless the user re-typed qty/price by hand.
+      priceBasis: editBasis && (parseFloat(editQty) || 1) === 1 ? editBasis : null,
+      ...(editChoices.length ? addonSave(editChoices, editAddonIds, editCtx, editLine) : {}),
     });
     setEditIndex(null);
     await reloadInvoice();
@@ -1019,7 +1052,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     // — which is what made an invoice go only to purchasing@.
     const fetched = await fetchClientOwnEmails(supabase, clientId);
     const clientEmails = fetched.length ? fetched : [email, invoice.clients[0]?.emailHome ?? null];
-    const recipients = await resolveClientRecipients(supabase, clientId, clientEmails, { includeInvoiceCc: true });
+    const recipients = await resolveClientRecipients(supabase, clientId, clientEmails, { kind: 'invoice' });
     if (!recipients.to.length) { void alertMessage({ message: tInv.sendNoEmail, destructive: true }); return; }
     const toParam = joinRecipients(recipients.to);
     const ccParam = recipients.cc.length ? `&cc=${encodeURIComponent(joinRecipients(recipients.cc))}` : '';
@@ -1413,6 +1446,24 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                 onChange={e => setEditDate(e.target.value)}
                 className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
               />
+            </div>
+          ) : null}
+          {editChoices.length ? (
+            <div>
+              <p className="text-xs font-medium text-muted">{tInv.jobsSection.addonsLabel}</p>
+              <p className="text-[11px] text-faint mb-1.5">{tInv.jobsSection.addonsHint}</p>
+              <div className="flex flex-wrap gap-2">
+                {editChoices.map(a => {
+                  const on = editAddonIds.includes(a.id);
+                  return (
+                    <button key={a.id} type="button" onClick={() => toggleEditAddon(a)} aria-pressed={on}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-sm transition-colors ${on ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-border text-muted hover:bg-surface'}`}>
+                      {on ? <Check size={14} /> : <Plus size={14} />}
+                      {a.name} · {priceItemLabel({ ...a, rate: applicableRate(a, editCtx) }, tInv.clientPrices.flatWord)}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           ) : null}
           <Button onClick={doEditSave} loading={jobBusy} disabled={!editDesc.trim()} fullWidth>{tc.buttons.save}</Button>

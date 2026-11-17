@@ -3,7 +3,7 @@ import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { Alert, Share, View, Text, Pressable, ScrollView, Modal as RNModal, Linking, TextInput, KeyboardAvoidingView, Keyboard, Platform, Image, useWindowDimensions } from 'react-native';
 import { haptics } from '@amixos/shared/lib/haptics';
 import { PressableScale } from '@amixos/shared/ui/PressableScale';
-import { X, Camera, ImagePlus, ClipboardPaste, RotateCw } from 'lucide-react-native';
+import { X, Camera, ImagePlus, ClipboardPaste, RotateCw, Check, Plus } from 'lucide-react-native';
 import { hasClipboardImage, readClipboardImageToFile } from '@/lib/clipboardPhoto';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -36,8 +36,9 @@ import { DatePicker } from '@amixos/shared/ui';
 import type { InvoiceLang } from '@amixos/shared';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { renderInvoiceEmail } from '@amixos/shared/lib/invoiceEmail';
-import { sortInvoiceLinesByDate, detectLineSortDirection, setLineItemExcluded, removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, AUTOPRICE_SKIP, type AutopriceAmbiguous } from '@amixos/shared/lib/invoicing';
-import { applicableRate, rowToPriceSheetItem, groupPriceItemsByCategory, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
+import { sortInvoiceLinesByDate, detectLineSortDirection, setLineItemExcluded, removeJobFromInvoice, moveJobToInvoice, addJobsToInvoice, rebuildInvoiceLineItems, addManualLineItem, removeLineItemAt, updateLineItemAt, linkLineToJob, autopriceInvoice, AUTOPRICE_SKIP, normStateCode, type AutopriceAmbiguous, type InvoiceLineItem } from '@amixos/shared/lib/invoicing';
+import { addonChoices, currentAddonIds, toggledRate, toggleInlineFlat, foldedFlat, addonSave } from '@amixos/shared/lib/lineAddons';
+import { applicableRate, priceItemLabel, rowToPriceSheetItem, groupPriceItemsByCategory, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { fetchClientOwnEmails, resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { InvoiceRemindersCard } from '@amixos/shared/screens/dashboard/InvoiceRemindersCard';
@@ -301,6 +302,10 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
   // Only MANUAL lines carry their own date — a linked job's date belongs to
   // the job (shown read-only on the line, edited on the job itself).
   const [editIsManual, setEditIsManual] = useState(false);
+  // Add-on toggles (price-sheet add-ons) for the line being edited.
+  const [editAddonIds, setEditAddonIds] = useState<string[]>([]);
+  // "1,299 × $3.25" behind a line billed 1 × total (a fee folded into it).
+  const [editBasis, setEditBasis] = useState<{ qty: number; rate: number } | null>(null);
 
   const editManual = (index: number) => {
     const li = invoice?.lineItems[index];
@@ -311,7 +316,32 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
     setEditRate(li.rate != null ? padMoney(String(li.rate)) : '');
     setEditDate(li.service_date ?? '');
     setEditIsManual(!li.job_id);
+    const lines = invoice.lineItems as InvoiceLineItem[];
+    setEditAddonIds(currentAddonIds(lines, index, addonChoices(priceItems, lines[index])));
+    setEditBasis(lines[index].priceBasis ?? null);
     setEditOpen(true);
+  };
+
+  // Rates for the add-ons follow the job's state (else the client's) and the
+  // client's own prices — the same context autoprice uses.
+  const editLine = editIndex !== null ? (invoice?.lineItems[editIndex] as InvoiceLineItem | undefined) : undefined;
+  const editChoices = addonChoices(priceItems, editLine);
+  const editCtx = {
+    state: normStateCode(attachedJobs.find(j => j.id === editLine?.job_id)?.job_state) ?? normStateCode(clientState),
+    clientId: invClientId,
+  };
+  const toggleEditAddon = (a: PriceSheetItem) => {
+    const on = !editAddonIds.includes(a.id);
+    setEditAddonIds(ids => (on ? [...ids, a.id] : ids.filter(x => x !== a.id)));
+    if (a.pricingMode !== 'flat') setEditRate(r => padMoney(toggledRate(r, a, on, editCtx)));
+    else if (foldedFlat(a, editLine)) {
+      // Fee inside the line's price: re-bundle / unbundle like autoprice does.
+      const otherOn = editChoices.some(o => o.id !== a.id && foldedFlat(o, editLine) && editAddonIds.includes(o.id));
+      const next = toggleInlineFlat({ qty: parseFloat(editQty) || 1, rate: parseFloat(editRate) || 0, basis: editBasis }, a, on, editCtx, otherOn);
+      setEditQty(String(next.qty));
+      setEditRate(padMoney(String(next.rate)));
+      setEditBasis(next.basis);
+    }
   };
 
   const doEditSave = async () => {
@@ -326,6 +356,9 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
       qty: parseFloat(editQty) || 1,
       rate: parseFloat(editRate) || 0,
       serviceDate: editIsManual ? (editDate || null) : undefined,
+      // Keep the bundle basis unless the user re-typed qty/price by hand.
+      priceBasis: editBasis && (parseFloat(editQty) || 1) === 1 ? editBasis : null,
+      ...(editChoices.length ? addonSave(editChoices, editAddonIds, editCtx, editLine) : {}),
     });
     setEditOpen(false);
     setEditIndex(null);
@@ -1216,7 +1249,7 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
     // — which is what made an invoice go only to purchasing@.
     const fetched = await fetchClientOwnEmails(supabase, clientId);
     const clientEmails = fetched.length ? fetched : [email, invoice.clients[0]?.emailHome ?? null];
-    const recipients = await resolveClientRecipients(supabase, clientId, clientEmails, { includeInvoiceCc: true });
+    const recipients = await resolveClientRecipients(supabase, clientId, clientEmails, { kind: 'invoice' });
     const toList = recipients.to;
     const ccList = recipients.cc;
     if (!toList.length) { Alert.alert('', tInv.sendNoEmail); return; }
@@ -1451,10 +1484,7 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
       <RNModal visible={addOpen} transparent animationType="fade" onRequestClose={closeAdd}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         <View className="flex-1 justify-end">
-          <Pressable
-            onPress={closeAdd}
-            style={SHEET_BACKDROP}
-          />
+          <View pointerEvents="none" style={SHEET_BACKDROP} />
           {/* flexShrink: when the keyboard opens, the avoider pads the
               bottom by its height — without shrinking, a sheet full of
               completed jobs overflowed the TOP of the screen and the line
@@ -1575,10 +1605,7 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
       <RNModal visible={editOpen} transparent animationType="fade" onRequestClose={() => setEditOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         <View className="flex-1 justify-end">
-          <Pressable
-            onPress={() => setEditOpen(false)}
-            style={SHEET_BACKDROP}
-          />
+          <View pointerEvents="none" style={SHEET_BACKDROP} />
           <Pressable className="bg-card rounded-t-3xl px-5 pt-5 pb-10" onPress={Keyboard.dismiss} style={sheetSides}>
             <View className="flex-row items-center justify-between mb-3">
               <Text className="text-lg font-bold text-ink">{jobsT.editItemTitle}</Text>
@@ -1588,10 +1615,13 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
             </View>
             <TextInput
               value={editDesc}
-              onChangeText={setEditDesc}
+              onChangeText={v => setEditDesc(v.replace(/\n/g, ' '))}
               placeholder={jobsT.manualDescPlaceholder}
               placeholderTextColor={c.faint}
-              className="bg-card border border-border rounded-xl px-3 py-2.5 text-ink mb-2" style={{ fontSize: 14 }} />
+              // Wraps long names and grows to ~6 lines, then scrolls (web parity).
+              multiline
+              blurOnSubmit
+              className="bg-card border border-border rounded-xl px-3 py-2.5 text-ink mb-2" style={{ fontSize: 14, maxHeight: 130, textAlignVertical: 'top' }} />
             <View className="flex-row gap-2 mb-4">
               <TextInput
                 value={formatNumberGrouped(editQty)}
@@ -1613,6 +1643,7 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
                 <TextInput
                   value={formatMoneyInput(editRate)}
                   onChangeText={v => setEditRate(cleanAmount(v))}
+                  onBlur={() => setEditRate(r => padMoney(r))}
                   keyboardType="decimal-pad"
                   placeholder={tj.detail.colUnitPriceShort}
                   placeholderTextColor={c.faint}
@@ -1622,6 +1653,28 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
             {editIsManual ? (
               <View className="mb-4">
                 <DatePicker label={jobsT.serviceDateLabel} value={editDate} onChange={setEditDate} />
+              </View>
+            ) : null}
+            {editChoices.length ? (
+              <View className="mb-4">
+                <Text className="text-xs font-medium text-muted">{jobsT.addonsLabel}</Text>
+                <Text className="text-[11px] text-faint mb-1.5">{jobsT.addonsHint}</Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {editChoices.map(a => {
+                    const on = editAddonIds.includes(a.id);
+                    return (
+                      // Highlight via style, not swapped classNames (NativeWind toggle rule).
+                      <Pressable key={a.id} onPress={() => toggleEditAddon(a)} accessibilityRole="checkbox" accessibilityState={{ checked: on }}
+                        className="flex-row items-center gap-1.5 px-3 py-2 rounded-xl border active:opacity-70"
+                        style={{ borderColor: on ? c.primary : c.border, backgroundColor: on ? `${c.primary}1A` : 'transparent' }}>
+                        {on ? <Check size={14} color={c.primary} /> : <Plus size={14} color={c.muted} />}
+                        <Text className="text-sm" style={{ color: on ? c.primary : c.muted, fontWeight: on ? '600' : '400' }}>
+                          {a.name} · {priceItemLabel({ ...a, rate: applicableRate(a, editCtx) }, tInv.clientPrices.flatWord)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
             ) : null}
             <PressableScale scaleTo={0.97} onPress={doEditSave} disabled={jobBusy || !editDesc.trim()} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
@@ -1638,7 +1691,7 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
         {/* Backdrop is an absolute FIRST child and the card a plain sibling —
             the card renders on top, so its ScrollView drags natively. */}
         <View className="flex-1 justify-end">
-          <Pressable onPress={() => setPayOpen(false)} style={SHEET_BACKDROP} />
+          <View pointerEvents="none" style={SHEET_BACKDROP} />
           <View className="bg-card rounded-t-3xl pt-3 pb-10" style={[{ maxHeight: '92%' }, sheetSides]}>
             <View className="items-center pb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">

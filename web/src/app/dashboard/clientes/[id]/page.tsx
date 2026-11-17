@@ -62,6 +62,8 @@ interface ClientContact {
   notes: string | null;
   is_primary: boolean;
   cc_on_invoices: boolean;
+  /** Migration 284 — absent before it runs. */
+  cc_invoices_only?: boolean;
   receives_email: boolean;
   created_at: string;
 }
@@ -84,7 +86,7 @@ const US_STATES = [
   'OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
 ];
 
-const EMPTY_CONTACT = { name: '', role: '', phone: '', email: '', notes: '', is_primary: false, cc_on_invoices: false, receives_email: false };
+const EMPTY_CONTACT = { name: '', role: '', phone: '', email: '', notes: '', is_primary: false, cc_on_invoices: false, cc_invoices_only: false, cc_only_was: false, receives_email: false };
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
@@ -441,7 +443,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
 
   const openEditContact = (ct: ClientContact) => {
     setEditingContact(ct);
-    setContactForm({ name: ct.name, role: ct.role ?? '', phone: ct.phone ?? '', email: ct.email ?? '', notes: ct.notes ?? '', is_primary: ct.is_primary, cc_on_invoices: ct.cc_on_invoices, receives_email: ct.receives_email });
+    setContactForm({ name: ct.name, role: ct.role ?? '', phone: ct.phone ?? '', email: ct.email ?? '', notes: ct.notes ?? '', is_primary: ct.is_primary, cc_on_invoices: ct.cc_on_invoices, cc_invoices_only: !!ct.cc_invoices_only, cc_only_was: !!ct.cc_invoices_only, receives_email: ct.receives_email });
     setContactError('');
     setContactModal(true);
   };
@@ -463,6 +465,11 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
       is_primary: contactForm.is_primary,
       // Only meaningful with an email — CC needs an address to copy.
       cc_on_invoices: contactForm.cc_on_invoices && !!contactForm.email.trim(),
+      // Written only when "Invoices only" is (or was) chosen, so saving works
+      // before migration 284 for everyone else.
+      ...(contactForm.cc_invoices_only || contactForm.cc_only_was
+        ? { cc_invoices_only: contactForm.cc_invoices_only && contactForm.cc_on_invoices && !!contactForm.email.trim() }
+        : {}),
       // Both flags need an address to mean anything — storing them without one
       // would suppress the client's email and supply nothing in its place.
       receives_email: contactForm.receives_email && !!contactForm.email.trim(),
@@ -692,7 +699,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
                         <div className="flex items-center gap-1.5">
                           <p className="text-sm font-semibold text-ink truncate">{ct.name}</p>
                           {ct.is_primary && <Star size={11} className="text-amber-400 fill-amber-400 shrink-0"/>}
-                          {ct.cc_on_invoices && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">{td.contactModal.ccBadge}</span>}
+                          {ct.cc_on_invoices && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">{ct.cc_invoices_only ? td.contactModal.ccBadgeInvoices : td.contactModal.ccBadge}</span>}
                           {ct.receives_email && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 shrink-0">{td.contactModal.recipientBadge}</span>}
                         </div>
                         {ct.role && <p className="text-xs text-faint">{ct.role}</p>}
@@ -1042,14 +1049,21 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
             <Toggle checked={contactForm.is_primary} onChange={(v) => setContactForm(f => ({ ...f, is_primary: v }))} />
             <span className="text-sm text-ink select-none">{td.contactModal.primaryLabel} <Star size={12} className="inline text-primary fill-primary mb-0.5"/></span>
           </div>
-          {/* Auto-CC this contact on invoices sent to the client (needs an email). */}
-          <div className="flex items-center gap-3">
-            <Toggle
-              checked={contactForm.cc_on_invoices}
-              onChange={(v) => setContactForm(f => ({ ...f, cc_on_invoices: v }))}
-              disabled={!contactForm.email.trim()}
-            />
+          {/* CC this contact: Off · Invoices only · All emails (needs an email). */}
+          <div className="flex flex-col gap-1.5">
             <span className={`text-sm select-none ${contactForm.email.trim() ? 'text-ink' : 'text-faint'}`}>{td.contactModal.ccLabel}</span>
+            <div className="inline-flex self-start rounded-xl border border-border p-0.5">
+              {([['off', td.contactModal.ccOff], ['invoices', td.contactModal.ccInvoicesOnly], ['all', td.contactModal.ccAllEmails]] as const).map(([mode, label]) => {
+                const cur = !contactForm.cc_on_invoices ? 'off' : contactForm.cc_invoices_only ? 'invoices' : 'all';
+                return (
+                  <button key={mode} type="button" disabled={!contactForm.email.trim()}
+                    onClick={() => setContactForm(f => ({ ...f, cc_on_invoices: mode !== 'off', cc_invoices_only: mode === 'invoices' }))}
+                    className={`px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50 ${cur === mode ? 'bg-primary text-white font-semibold' : 'text-muted hover:text-ink'}`}>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           {/* Addressed TO instead of the client (migration 220). Applies to
               every send — invoices, proposals, the ad-hoc Email button — not
