@@ -141,6 +141,7 @@ export function ClientFormModal({
       onClose={onClose}
       title={mode === 'add' ? t.modal.addTitle : t.modal.editTitle}
       size="lg"
+      dismissOnBackdrop={false}
     >
       <View className="gap-5 pb-2">
         {/* Basic info */}

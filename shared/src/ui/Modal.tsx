@@ -13,6 +13,9 @@ interface ModalProps {
   title: string;
   children: ReactNode;
   size?: Size;
+  /** false for forms: a stray tap outside must not lose half-entered work —
+   *  only the X / Cancel closes. Read-only dialogs keep tap-outside. */
+  dismissOnBackdrop?: boolean;
 }
 
 const SIZE_STYLES: Record<Size, string> = {
@@ -23,7 +26,7 @@ const SIZE_STYLES: Record<Size, string> = {
 
 // Universal Modal — uses React Native's <Modal> primitive which works on both
 // native (full-screen overlay) and web (via react-native-web → fixed div).
-export function Modal({ open, onClose, title, children, size = 'md' }: ModalProps) {
+export function Modal({ open, onClose, title, children, size = 'md', dismissOnBackdrop = true }: ModalProps) {
   const c = useThemeColors();
   return (
     <RNModal
@@ -42,7 +45,9 @@ export function Modal({ open, onClose, title, children, size = 'md' }: ModalProp
               and only outside-card taps hit this Pressable. Wrapping the
               card in a Pressable competed with ScrollView's pan gesture and
               broke scrolling unless an input was focused. */}
-          <Pressable onPress={onClose} style={SHEET_BACKDROP} />
+          {dismissOnBackdrop
+            ? <Pressable onPress={onClose} style={SHEET_BACKDROP} />
+            : <View pointerEvents="none" style={SHEET_BACKDROP} />}
 
           <View
             className={clsx(

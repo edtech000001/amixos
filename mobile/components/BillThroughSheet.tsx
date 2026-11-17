@@ -238,7 +238,7 @@ export function BillThroughSheet({
   return (
     <RNModal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end">
-        <Pressable onPress={onClose} style={SHEET_BACKDROP} />
+        <View pointerEvents="none" style={SHEET_BACKDROP} />
         <View className="bg-card rounded-t-3xl px-5 pt-3 pb-8" style={[{ maxHeight: '88%' }, sheetSides]}>
           <View className="items-center mb-3"><View className="w-10 h-1 bg-border rounded-full" /></View>
           <View className="flex-row items-center gap-2 mb-1">

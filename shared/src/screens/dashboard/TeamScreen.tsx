@@ -255,7 +255,7 @@ export function TeamScreen({
         onRequestClose={() => setInviteOpen(false)}
       >
         <View className="flex-1 items-center justify-end web:justify-center px-6 pb-10">
-          <Pressable onPress={() => setInviteOpen(false)} style={SHEET_BACKDROP} />
+          <View pointerEvents="none" style={SHEET_BACKDROP} />
           <View className="bg-card rounded-2xl w-full max-w-md p-5">
             <Text className="text-lg font-bold text-ink mb-1">{t.inviteModalTitle}</Text>
             <Text className="text-sm text-muted mb-5">{t.subtitle}</Text>

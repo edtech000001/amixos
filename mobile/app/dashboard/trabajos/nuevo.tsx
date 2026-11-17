@@ -2647,10 +2647,7 @@ export function JobForm({ embeddedEditId, onDone }: { embeddedEditId?: string; o
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1, justifyContent: 'flex-end' }}
         >
-          <Pressable
-            onPress={() => setQuickAddOpen(false)}
-            style={SHEET_BACKDROP}
-          />
+          <View pointerEvents="none" style={SHEET_BACKDROP} />
           <View
             className="bg-card rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
             style={{

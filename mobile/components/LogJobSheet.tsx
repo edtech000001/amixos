@@ -134,10 +134,7 @@ export function LogJobSheet({ visible, onClose, clients, clientsLoading, onSubmi
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1 justify-end"
       >
-        <Pressable
-          onPress={close}
-          style={SHEET_BACKDROP}
-        />
+        <View pointerEvents="none" style={SHEET_BACKDROP} />
         <View className="bg-card rounded-t-3xl px-5 pb-10 pt-4 max-h-[88%]" style={sheetSides}>
           <View className="items-center mb-3">
             <View className="w-10 h-1 bg-border rounded-full" />

@@ -359,7 +359,7 @@ export default function RolesScreen() {
          absolute first child; card as plain sibling so its inputs work). */}
       <RNModal visible={sheetMode !== null} transparent animationType="fade" onRequestClose={() => setSheetMode(null)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end">
-          <Pressable onPress={() => setSheetMode(null)} style={SHEET_BACKDROP} />
+          <View pointerEvents="none" style={SHEET_BACKDROP} />
           <View className="bg-card rounded-t-3xl px-5 pt-5 pb-8" style={sheetSides}>
             <Text className="text-base font-bold text-ink mb-4">
               {sheetMode === 'rename' ? t.renameRoleTitle : t.newRoleTitle}

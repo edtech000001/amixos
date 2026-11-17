@@ -700,7 +700,8 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           className="flex-1 justify-end"
         >
-          <Pressable onPress={closeSheet} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
+          {/* Details close on an outside tap; the edit form (draft) doesn't — unsaved work. */}
+          <Pressable onPress={draft ? undefined : closeSheet} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' }} />
           <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[90%]" style={sheetSides}>
             {draft ? (
               <View className="flex-row items-center justify-between mb-4">

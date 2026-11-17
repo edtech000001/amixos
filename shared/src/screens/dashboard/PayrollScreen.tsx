@@ -1030,10 +1030,7 @@ export function PayrollScreen({
       <RNModal visible={manualOpen} transparent animationType="fade" onRequestClose={() => setManualOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         <View className="flex-1 justify-end">
-                  <Pressable
-                    onPress={() => setManualOpen(false)}
-                    style={SHEET_BACKDROP}
-                  />
+                  <View pointerEvents="none" style={SHEET_BACKDROP} />
           <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]" style={sheetSides}>
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-border rounded-full" />
@@ -1512,10 +1509,7 @@ export function PayrollScreen({
       {/* Mark-paid sheet */}
       <RNModal visible={!!payRow} transparent animationType="fade" onRequestClose={() => setPayRow(null)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end">
-                  <Pressable
-                    onPress={() => setPayRow(null)}
-                    style={SHEET_BACKDROP}
-                  />
+                  <View pointerEvents="none" style={SHEET_BACKDROP} />
           <View className="bg-card rounded-t-3xl px-5 pt-5 pb-10 max-h-[88%]" style={sheetSides}>
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 

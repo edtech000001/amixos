@@ -329,6 +329,7 @@ export function CommunicationLog({
         onClose={() => setFormOpen(false)}
         title={editing ? t.form.editTitle : t.form.addTitle}
         size="sm"
+        dismissOnBackdrop={false}
       >
         <View className="gap-4">
           {/* Inline pills instead of Select (a Select opens a nested RNModal,

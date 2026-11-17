@@ -2396,7 +2396,7 @@ export function JobDetail({ embeddedId, onClose, onOpen, onChanged, onEdit }: {
          inside the backdrop stops its inputs receiving taps and drags. */}
       <RNModal visible={pauseOpen} transparent animationType="fade" onRequestClose={() => setPauseOpen(false)}>
         <View className="flex-1 justify-end">
-          <Pressable onPress={() => setPauseOpen(false)} style={SHEET_BACKDROP} />
+          <View pointerEvents="none" style={SHEET_BACKDROP} />
           <View className="bg-card rounded-t-3xl px-5 pt-6 pb-10" style={sheetSides}>
             <View className="flex-row items-center justify-between mb-1">
               <Text className="text-xl font-bold text-ink">{tp.sheetTitle}</Text>
@@ -2527,7 +2527,7 @@ export function JobDetail({ embeddedId, onClose, onOpen, onChanged, onEdit }: {
          wrapping the card inside the backdrop breaks its touch handling). */}
       <RNModal visible={signSheetOpen} transparent animationType="fade" onRequestClose={() => setSignSheetOpen(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end">
-          <Pressable onPress={() => setSignSheetOpen(false)} style={SHEET_BACKDROP} />
+          <View pointerEvents="none" style={SHEET_BACKDROP} />
           <View className="bg-card rounded-t-3xl pt-3 pb-8" style={sheetSides}>
             <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">
@@ -2564,7 +2564,7 @@ export function JobDetail({ embeddedId, onClose, onOpen, onChanged, onEdit }: {
          silently lacks one. */}
       <RNModal visible={schedSheetOpen} transparent animationType="fade" onRequestClose={() => setSchedSheetOpen(false)}>
         <View className="flex-1 justify-end">
-          <Pressable onPress={() => setSchedSheetOpen(false)} style={SHEET_BACKDROP} />
+          <View pointerEvents="none" style={SHEET_BACKDROP} />
           <View className="bg-card rounded-t-3xl pt-3 pb-8" style={sheetSides}>
             <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
             <View className="flex-row items-center justify-between px-5 pb-3 border-b border-border-soft">

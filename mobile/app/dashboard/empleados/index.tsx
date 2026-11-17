@@ -912,10 +912,7 @@ export default function EmpleadosRoute() {
           style={{ flex: 1 }}
         >
           <View className="flex-1 justify-end">
-            <Pressable
-              onPress={() => setTsModalOpen(false)}
-              style={SHEET_BACKDROP}
-            />
+            <View pointerEvents="none" style={SHEET_BACKDROP} />
             <View
               className="bg-card rounded-3xl pt-3 mx-3 overflow-hidden"
               style={{ maxHeight: '90%', ...sheetShadow }}
