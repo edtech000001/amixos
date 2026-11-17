@@ -14,6 +14,9 @@ import {
 } from '@amixos/shared/screens/dashboard/PayrollScreen';
 import { fetchPreferredPayMethod, type PreferredPayMethod } from '@amixos/shared/lib/payMethod';
 import {
+  checkAdjustmentFields,
+  loanRepaymentRow,
+  type PayAdjustments,
   getPayrollPeriod,
   computePayrollRowsFromAggregates,
   normalizePayrollConfig,
@@ -27,6 +30,7 @@ import {
 import { formulaJobFieldRefs, type FormulaFieldDef } from '@amixos/shared/lib/payrollFormula';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
 import { logAudit } from '@amixos/shared/lib/audit';
+import { todayLocalISO } from '@amixos/shared/lib/format';
 import { confirm as confirmDialog, alertMessage } from '@amixos/shared/ui/confirmBus';
 import { fetchEmployeeLocations, employeeIdsAtLocation, type EmployeeLocation } from '@amixos/shared/lib/locations';
 import { LocationSwitcher } from '@/components/dashboard/LocationSwitcher';
@@ -326,7 +330,7 @@ export default function NominaPage() {
 
   // Each confirm ADDS a payment record (ledger) — partial checks stack up
   // within the period. Requires migration 126 (drops the one-per-period key).
-  const onMarkPaid = async (employeeId: string, method: 'cash' | 'check', checkNumber: string, bonus: number, amount: number, hoursCovered: number, components: Record<string, number> | null, periodStart?: string): Promise<boolean> => {
+  const onMarkPaid = async (employeeId: string, method: 'cash' | 'check', checkNumber: string, bonus: number, amount: number, hoursCovered: number, components: Record<string, number> | null, periodStart?: string, adjustments?: PayAdjustments): Promise<boolean> => {
     if (!business) return false;
     const row = rows.find(r => r.employeeId === employeeId);
     setBusy(true);
@@ -334,7 +338,7 @@ export default function NominaPage() {
     const target = periodStart && periodStart !== period.startStr
       ? getPayrollPeriod(frequency, new Date(`${periodStart}T00:00:00`), 0, parsePayrollAnchor(anchorDate), customDays)
       : period;
-    const { error } = await supabase.from('payroll_payments').insert({
+    const { data: paid, error } = await supabase.from('payroll_payments').insert({
       business_id: business.id,
       employee_id: employeeId,
       period_start: target.startStr,
@@ -356,15 +360,26 @@ export default function NominaPage() {
             p_start: target.startStr, p_end: target.endStr,
           })).data ?? null,
       created_by: user?.id ?? null,
-    });
+      // Quick deduct / add + loan repayment — why the check differs from gross.
+      ...(adjustments ? checkAdjustmentFields(adjustments) : {}),
+    }).select('id').single();
     // A failed insert must not look paid (or trigger the loan deduction).
     if (error) { setBusy(false); await alertMessage({ message: error.message }); return false; }
+    // A loan repayment also goes in the loan ledger, linked to this check.
+    const loanRow = adjustments && paid
+      ? loanRepaymentRow({ businessId: business.id, employeeId, paymentId: paid.id, entryDate: todayLocalISO(), createdBy: user?.id ?? null, adjustments })
+      : null;
+    if (loanRow) {
+      const { error: loanErr } = await supabase.from('employee_loans').insert(loanRow);
+      if (loanErr) await alertMessage({ message: loanErr.message });
+    }
     const emp = employees.find(e => e.id === employeeId);
     void logAudit(supabase, business.id, 'payroll.paid', 'payroll', employeeId, {
       name: emp ? `${emp.first_name} ${emp.last_name}` : undefined,
       amount: Math.round((amount + (bonus || 0)) * 100) / 100,
       method,
       period_start: target.startStr,
+      ...(adjustments ? checkAdjustmentFields(adjustments) : {}),
     });
     await load();
     setBusy(false);
@@ -376,6 +391,9 @@ export default function NominaPage() {
     setBusy(true);
     const pmt = payments.find(x => x.id === paymentId);
     const pmtEmp = pmt?.employee_id ? employees.find(e => e.id === pmt.employee_id) : null;
+    // Its deductions (loan repayment / advance) go with it — before the check,
+    // whose delete would only null their link (FK on delete set null).
+    await supabase.from('employee_loans').delete().eq('payroll_payment_id', paymentId).eq('business_id', business.id);
     await supabase.from('payroll_payments').delete().eq('id', paymentId).eq('business_id', business.id);
     void logAudit(supabase, business.id, 'payroll.payment_deleted', 'payroll', pmt?.employee_id ?? null, {
       name: pmtEmp ? `${pmtEmp.first_name} ${pmtEmp.last_name}` : undefined,
@@ -391,6 +409,10 @@ export default function NominaPage() {
     setBusy(true);
     // Clear whatever payment the current-period view counts as "paid" (overlap
     // match, so it still targets the right snapshot after an anchor change).
+    const clearedIds = payments.filter(x => x.employee_id === employeeId).map(x => x.id);
+    if (clearedIds.length) {
+      await supabase.from('employee_loans').delete().in('payroll_payment_id', clearedIds).eq('business_id', business.id);
+    }
     await supabase.from('payroll_payments').delete()
       .eq('business_id', business.id).eq('employee_id', employeeId)
       .lte('period_start', period.endStr).gte('period_end', period.startStr);

@@ -34,6 +34,11 @@ export interface PayrollHistoryEntry {
   components?: Record<string, number> | null;
   /** Pay-time hours-breakdown snapshot (136). Null on old records/imports. */
   breakdown?: PayrollBreakdown | null;
+  /** Taken out of / added to this check (migration 277); grossPay stays the
+   *  full pay for the period. Check amount = grossPay - deducted + added. */
+  deducted?: number;
+  added?: number;
+  adjustNote?: string | null;
 }
 
 export interface PayrollHistoryScreenProps {
@@ -191,6 +196,16 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
                   {' · '}
                   {d.entry.method === 'check' && d.entry.checkNumber ? `${t.checkPrefix}${d.entry.checkNumber}` : (methodLabel[d.entry.method ?? ''] ?? d.entry.method)}
                 </Text>
+                {d.entry.deducted || d.entry.added ? (
+                  <Text className="text-xs font-semibold text-amber-600 mt-0.5">
+                    {[
+                      d.entry.deducted ? t.adjustDeducted.replace('{{amount}}', fmt(d.entry.deducted)) : '',
+                      d.entry.added ? t.adjustAdded.replace('{{amount}}', fmt(d.entry.added)) : '',
+                      `${t.loanNetToPay} ${fmt(d.entry.grossPay - (d.entry.deducted ?? 0) + (d.entry.added ?? 0))}`,
+                      d.entry.adjustNote ?? '',
+                    ].filter(Boolean).join(' · ')}
+                  </Text>
+                ) : null}
                 <Text className="text-xs text-faint mt-0.5">
                   {true ? `${fmtDay(d.entry.periodStart)} – ${fmtDay(d.entry.periodEnd)}` : ''}
                   {true && componentsText(d.entry.components) ? ` · ${componentsText(d.entry.components)}` : ''}
@@ -382,6 +397,8 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
                         {Math.round(h.hours * 100) / 100} h
                         {h.driverHours > 0 ? ` · ${Math.round(h.driverHours * 100) / 100} h ${t.driveShort}` : ''}
                         {h.bonus ? ` · ${t.historyBonus} ${fmt(h.bonus)}` : ''}
+                        {h.deducted ? ` · ${t.adjustDeducted.replace('{{amount}}', fmt(h.deducted))}` : ''}
+                        {h.added ? ` · ${t.adjustAdded.replace('{{amount}}', fmt(h.added))}` : ''}
                         {' · '}
                         {h.method === 'check' && h.checkNumber ? `${t.checkPrefix}${h.checkNumber}` : (methodLabel[h.method] ?? h.method)}
                         {h.paidAt ? ` · ${fmtDay(h.paidAt)}` : ''}

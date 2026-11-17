@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
 import { DatePicker } from '../../ui';
-import type { PayrollFrequency, PayrollBreakdown, PayrollConfig, DriverPayMode } from '../../lib/payroll';
+import type { PayrollFrequency, PayrollBreakdown, PayrollConfig, DriverPayMode, PayAdjustments } from '../../lib/payroll';
 import { getPayrollPeriod, parsePayrollAnchor } from '../../lib/payroll';
 import { formatMoneyInput } from '../../lib/format';
 import {
@@ -95,7 +95,7 @@ export interface PayrollScreenProps {
   config: PayrollConfig;
   onConfigChange: (c: PayrollConfig) => void;
   /** Per-worker overtime (settings sheet list). Changes save instantly. */
-  onMarkPaid: (employeeId: string, method: PayMethod, checkNumber: string, bonus: number, amount: number, hoursCovered: number, components: Record<string, number> | null, periodStart?: string) => Promise<boolean> | void;
+  onMarkPaid: (employeeId: string, method: PayMethod, checkNumber: string, bonus: number, amount: number, hoursCovered: number, components: Record<string, number> | null, periodStart?: string, adjustments?: PayAdjustments) => Promise<boolean> | void;
   onDeletePayment: (paymentId: string) => void;
   /** Opens a job from the hours-breakdown list. */
   onJobPress?: (jobId: string, employeeId: string) => void;
@@ -300,6 +300,8 @@ export function PayrollScreen({
   const openManual = () => {
     setManualWorker('');
     setManualLoanDeduct('');
+    setAdvance(''); setAdvanceReason(''); setAdvanceOpen(false);
+    setAddAmount(''); setAddReason(''); setAddOpen(false);
     setManualAmount('');
     setManualHours('');
     setManualMethod(defaultPayMethod);
@@ -324,16 +326,27 @@ export function PayrollScreen({
   const sortedWorkers = (allWorkers ?? []).slice()
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   const manualLoanOwed = manualWorker ? (loanBalances?.[manualWorker] ?? 0) : 0;
-  const manualNet = (parseFloat(manualAmount) || 0) - (parseFloat(manualLoanDeduct) || 0);
+  // Quick deduct (cash advance etc.) — shared by Mark paid and Record payment,
+  // which are never open together. Reset when either opens.
+  const [advance, setAdvance] = useState('');
+  const [advanceReason, setAdvanceReason] = useState('');
+  const [advanceOpen, setAdvanceOpen] = useState(false);
+  const advanceAmt = Math.max(parseFloat(advance) || 0, 0);
+  // Quick add (e.g. owner reimbursed on his own check) — same sharing.
+  const [addAmount, setAddAmount] = useState('');
+  const [addReason, setAddReason] = useState('');
+  const [addOpen, setAddOpen] = useState(false);
+  const addAmt = Math.max(parseFloat(addAmount) || 0, 0);
+  const manualNet = (parseFloat(manualAmount) || 0) - (parseFloat(manualLoanDeduct) || 0) - advanceAmt + addAmt;
+  const manualDeducted = (parseFloat(manualLoanDeduct) || 0) + advanceAmt;
   const confirmManual = () => {
     const amt = parseFloat(manualAmount) || 0;
     if (!manualWorker || amt <= 0) return;
     // Never deduct more than the worker owes; only after the payment saved.
     const deduct = Math.min(parseFloat(manualLoanDeduct) || 0, Math.max(manualLoanOwed, 0));
     const worker = manualWorker;
-    const note = loanNoteFor(manualMethod, manualCheck);
-    void Promise.resolve(onMarkPaid(worker, manualMethod, manualMethod === 'check' ? manualCheck.trim() : '', 0, amt, parseFloat(manualHours) || 0, null, manualPeriod || undefined))
-      .then(ok => { if (ok !== false && deduct > 0 && onLoanRepayment) onLoanRepayment(worker, deduct, note); });
+    void onMarkPaid(worker, manualMethod, manualMethod === 'check' ? manualCheck.trim() : '', 0, amt, parseFloat(manualHours) || 0, null, manualPeriod || undefined,
+      { loan: deduct, deduct: advanceAmt, deductReason: advanceReason || t.deductReasonDefault, add: addAmt, addReason, methodNote: loanNoteFor(manualMethod, manualCheck) });
     setManualOpen(false);
   };
 
@@ -346,6 +359,9 @@ export function PayrollScreen({
   // mobile SplitView, which shared code can't import).
   const split = screenWidth >= 600;
   const listPaneW = Math.round(Math.min(400, Math.max(300, screenWidth * 0.36)));
+  // Pay sheets on wide screens: related fields side by side (phones stack).
+  const pairRow = split ? { flexDirection: 'row' as const, gap: 12, alignItems: 'flex-start' as const } : undefined;
+  const pairCell = split ? { flex: 1 } : undefined;
 
   // List/grid view for the worker rows — persisted so it sticks.
   const [view, setView] = useState<'list' | 'grid'>('list');
@@ -473,6 +489,8 @@ export function PayrollScreen({
     setCheckNumber('');
     setBonus('');
     setLoanDeduct('');
+    setAdvance(''); setAdvanceReason(''); setAdvanceOpen(false);
+    setAddAmount(''); setAddReason(''); setAddOpen(false);
     setShowLoans(false);
     setShowAddLoan(false);
     setShowAddPayment(false);
@@ -485,7 +503,6 @@ export function PayrollScreen({
     // Never deduct more than the worker owes; only after the payment saved.
     const deduct = Math.min(parseFloat(loanDeduct) || 0, Math.max(loanBalances?.[payRow.employeeId] ?? 0, 0));
     const empId = payRow.employeeId;
-    const note = loanNoteFor(method, checkNumber);
     void Promise.resolve(onMarkPaid(
       empId,
       method,
@@ -494,7 +511,10 @@ export function PayrollScreen({
       checkBaseOf(payRow),
       checkHoursOf(payRow),
       checkComponentsOf(payRow),
-    )).then(ok => { if (ok !== false && deduct > 0 && onLoanRepayment) onLoanRepayment(empId, deduct, note); });
+      undefined,
+      // Saved with the check (linked to it) — the payment stays at full gross.
+      { loan: deduct, deduct: advanceAmt, deductReason: advanceReason || t.deductReasonDefault, add: addAmt, addReason, methodNote: loanNoteFor(method, checkNumber) },
+    ));
     setPayRow(null);
   };
   const resetLoanForms = () => { setShowAddLoan(false); setShowAddPayment(false); setEditingEntry(null); setLoanAmount(''); setLoanNote(''); setLoanDate(todayStr()); };
@@ -553,7 +573,27 @@ export function PayrollScreen({
   const loanFormOpen = showAddLoan || showAddPayment || !!editingEntry;
   // Live total shown big at the top of the sheet: what's owed + bonus.
   const modalTotal = payRow ? checkBaseOf(payRow) + (parseFloat(bonus) || 0) : 0;
-  const netToPay = modalTotal - (parseFloat(loanDeduct) || 0);
+  const payDeducted = (parseFloat(loanDeduct) || 0) + advanceAmt;
+  const netToPay = modalTotal - payDeducted + addAmt;
+  // − Deduct / + Add live top-right, beside the sheet's X. Highlight via
+  // style (NativeWind toggle rule), not a swapped className.
+  const adjustButtons = (
+    <>
+      {([[t.deductBtn, '−', advanceOpen, () => setAdvanceOpen(o => !o)], [t.addBtn, '+', addOpen, () => setAddOpen(o => !o)]] as const).map(([label, sign, on, toggle]) => (
+        <Pressable key={sign} onPress={toggle} hitSlop={4}
+          className="px-3 py-1.5 rounded-lg border active:opacity-70"
+          style={on ? { borderColor: c.primary, backgroundColor: `${c.primary}1A` } : { borderColor: c.border, backgroundColor: c.card }}>
+          <Text className="text-xs font-semibold" style={{ color: on ? c.primary : c.ink }}>{sign} {label}</Text>
+        </Pressable>
+      ))}
+    </>
+  );
+  /** "$6,000.00 −$100.00 deducted +$200.00 added" under the big check total. */
+  const adjustLine = (gross: number, deducted: number, added: number) =>
+    [fmt(gross),
+      deducted > 0 ? t.adjustDeducted.replace('{{amount}}', fmt(deducted)) : '',
+      added > 0 ? t.adjustAdded.replace('{{amount}}', fmt(added)) : '',
+    ].filter(Boolean).join(' ');
 
   // Coming back from a job / arriving from Payment history: open that
   // worker's breakdown once their row exists (the prop may arrive after the
@@ -999,10 +1039,13 @@ export function PayrollScreen({
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>
             <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-lg font-bold text-ink">{t.manualPayBtn}</Text>
-              <Pressable onPress={() => setManualOpen(false)} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft">
-                <X size={20} color={c.faint} />
-              </Pressable>
+              <Text className="text-lg font-bold text-ink flex-1">{t.manualPayBtn}</Text>
+              <View className="flex-row items-center gap-2">
+                {adjustButtons}
+                <Pressable onPress={() => setManualOpen(false)} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft">
+                  <X size={20} color={c.faint} />
+                </Pressable>
+              </View>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled">
 
@@ -1010,6 +1053,8 @@ export function PayrollScreen({
                 number pad has no return key. Inside the ScrollView so drags
                 still scroll (see CLAUDE.md bottom-sheet rule). */}
             <Pressable onPress={Keyboard.dismiss} accessible={false}>
+              <View style={pairRow}>
+              <View style={pairCell}>
               <Text className="text-sm font-semibold text-ink mb-2">{t.manualPeriodLabel}</Text>
               <Pressable
                 onPress={() => setManualPeriodPickerOpen(true)}
@@ -1020,6 +1065,8 @@ export function PayrollScreen({
                 </Text>
                 <ChevronDown size={16} color={c.faint} />
               </Pressable>
+              </View>
+              <View style={pairCell}>
 
               <Text className="text-sm font-semibold text-ink mb-2">{t.manualWorkerLabel}</Text>
               <Pressable
@@ -1031,6 +1078,8 @@ export function PayrollScreen({
                 </Text>
                 <ChevronDown size={16} color={c.faint} />
               </Pressable>
+              </View>
+              </View>
 
               <Text className="text-xs font-semibold text-faint uppercase tracking-wide mb-2">{t.methodHeading}</Text>
               <View className="flex-row gap-2 mb-4">
@@ -1046,8 +1095,9 @@ export function PayrollScreen({
                 })}
               </View>
 
+              <View style={pairRow}>
               {manualMethod === 'check' ? (
-                <View className="mb-4">
+                <View className="mb-4" style={pairCell}>
                   <Text className="text-sm font-semibold text-ink mb-2">{t.checkNumberLabel}</Text>
                   <TextInput value={manualCheck} onChangeText={setManualCheck} placeholder={t.checkNumberPlaceholder}
                     placeholderTextColor={c.faint} keyboardType="number-pad"
@@ -1055,23 +1105,25 @@ export function PayrollScreen({
                 </View>
               ) : null}
 
-              <View className="mb-4">
+              <View className="mb-4" style={pairCell}>
                 <Text className="text-sm font-semibold text-ink mb-2">{t.amountLabel}</Text>
                 <TextInput value={formatMoneyInput(manualAmount)} onChangeText={v => setManualAmount(v.replace(/,/g, '').replace(/[^0-9.]/g, ''))} placeholder="0.00"
                   placeholderTextColor={c.faint} keyboardType="decimal-pad"
                   className="rounded-2xl border border-border bg-card px-4 py-3 text-ink" style={{ fontSize: 16 }} />
               </View>
 
-              <View className="mb-4">
+              <View className="mb-4" style={pairCell}>
                 <Text className="text-sm font-semibold text-ink mb-2">{t.hoursCoveredLabel}</Text>
                 <TextInput value={manualHours} onChangeText={v => setManualHours(v.replace(/[^0-9.]/g, ''))} placeholder="0"
                   placeholderTextColor={c.faint} keyboardType="decimal-pad"
                   className="rounded-2xl border border-border bg-card px-4 py-3 text-ink" style={{ fontSize: 16 }} />
               </View>
+              </View>
 
               {/* Loan — only when the selected worker owes something. */}
+              <View style={pairRow}>
               {manualWorker && onAddLoan && manualLoanOwed > 0 ? (
-                <View className="mb-4 rounded-2xl border border-border-soft bg-surface p-3">
+                <View className="mb-4 rounded-2xl border border-border-soft bg-surface p-3" style={pairCell}>
                   <View className="flex-row items-center justify-between">
                     <Text className="text-sm font-semibold text-ink">{t.loanTitle}</Text>
                     <Text className="text-sm font-bold text-amber-600 tabular-nums">{fmt(manualLoanOwed)} {t.loanOwed}</Text>
@@ -1086,7 +1138,46 @@ export function PayrollScreen({
                 </View>
               ) : null}
 
-              <Pressable onPress={confirmManual} disabled={busy || !manualWorker || !(parseFloat(manualAmount) > 0)}
+              {/* Quick deduct — e.g. a cash advance never logged as a loan. The
+                 check shrinks; the payment is still recorded at full gross. */}
+              {advanceOpen ? (
+                <View className="mb-4 rounded-2xl border border-border-soft bg-surface p-3" style={pairCell}>
+                  <View className="flex-row items-center justify-between mb-1">
+                    <Text className="text-xs text-muted">{t.deductAmountLabel}</Text>
+                    <Pressable onPress={() => { setAdvance(''); setAdvanceReason(''); setAdvanceOpen(false); }} hitSlop={8}>
+                      <X size={14} color={c.faint} />
+                    </Pressable>
+                  </View>
+                  <TextInput value={formatMoneyInput(advance)} onChangeText={v => setAdvance(v.replace(/,/g, '').replace(/[^0-9.]/g, ''))}
+                    placeholder="0.00" placeholderTextColor={c.faint} keyboardType="decimal-pad" autoFocus
+                    className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={{ fontSize: 16 }} />
+                  <TextInput value={advanceReason} onChangeText={setAdvanceReason}
+                    placeholder={t.deductReasonPlaceholder} placeholderTextColor={c.faint}
+                    className="mt-2 rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={{ fontSize: 16 }} />
+                </View>
+              ) : null}
+              {addOpen ? (
+                <View className="mb-4 rounded-2xl border border-border-soft bg-surface p-3" style={pairCell}>
+                  <View className="flex-row items-center justify-between mb-1">
+                    <Text className="text-xs text-muted">{t.addAmountLabel}</Text>
+                    <Pressable onPress={() => { setAddAmount(''); setAddReason(''); setAddOpen(false); }} hitSlop={8}>
+                      <X size={14} color={c.faint} />
+                    </Pressable>
+                  </View>
+                  <TextInput value={formatMoneyInput(addAmount)} onChangeText={v => setAddAmount(v.replace(/,/g, '').replace(/[^0-9.]/g, ''))}
+                    placeholder="0.00" placeholderTextColor={c.faint} keyboardType="decimal-pad" autoFocus
+                    className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={{ fontSize: 16 }} />
+                  <TextInput value={addReason} onChangeText={setAddReason}
+                    placeholder={t.addReasonPlaceholder} placeholderTextColor={c.faint}
+                    className="mt-2 rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={{ fontSize: 16 }} />
+                </View>
+              ) : null}
+              </View>
+
+              {advanceAmt > 0 || addAmt > 0 ? (
+                <Text className="text-sm text-muted mb-3">{t.loanNetToPay}: <Text className="font-bold text-ink tabular-nums">{fmt(manualNet)}</Text></Text>
+              ) : null}
+              <Pressable onPress={confirmManual} disabled={busy || !manualWorker || !(parseFloat(manualAmount) > 0) || manualNet < 0}
                 className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
                 <Text className="text-sm font-semibold text-white">{t.confirmBtn}</Text>
               </Pressable>
@@ -1435,12 +1526,18 @@ export function PayrollScreen({
             <View className="items-center mb-3">
               <View className="w-10 h-1 bg-border rounded-full" />
             </View>
-            <View className="items-center mb-4">
-              <Pressable onPress={() => setPayRow(null)} hitSlop={10} className="absolute right-0 top-0 p-1 rounded-lg active:bg-border-soft">
+            <View className="flex-row items-center justify-end gap-2 mb-1">
+              {adjustButtons}
+              <Pressable onPress={() => setPayRow(null)} hitSlop={10} className="p-1 rounded-lg active:bg-border-soft">
                 <X size={20} color={c.faint} />
               </Pressable>
+            </View>
+            <View className="items-center mb-4">
               <Text className="text-base font-semibold text-ink">{payRow?.name}</Text>
-              <Text className="text-3xl font-bold text-primary mt-1 tabular-nums">{fmt(modalTotal)}</Text>
+              <Text className="text-3xl font-bold text-primary mt-1 tabular-nums">{fmt(netToPay)}</Text>
+              {payDeducted > 0 || addAmt > 0 ? (
+                <Text className="text-xs text-muted mt-0.5 tabular-nums">{adjustLine(modalTotal, payDeducted, addAmt)}</Text>
+              ) : null}
               <Text className="text-sm text-faint mt-0.5">{payRow ? checkHoursOf(payRow) : 0} h</Text>
               {payRow && componentsText(checkComponentsOf(payRow)) ? (
                 <Text className="text-xs text-faint mt-0.5">{componentsText(checkComponentsOf(payRow))}</Text>
@@ -1505,8 +1602,9 @@ export function PayrollScreen({
               })}
             </View>
 
+            <View style={pairRow}>
             {method === 'check' ? (
-              <View className="mb-4">
+              <View className="mb-4" style={pairCell}>
                 <Text className="text-sm font-semibold text-ink mb-2">{t.checkNumberLabel}</Text>
                 <TextInput
                   value={checkNumber}
@@ -1519,7 +1617,7 @@ export function PayrollScreen({
             ) : null}
 
 
-            <View className="mb-4">
+            <View className="mb-4" style={pairCell}>
               <Text className="text-sm font-semibold text-ink mb-2">{t.bonusLabel}</Text>
               <TextInput
                 value={formatMoneyInput(bonus)}
@@ -1529,11 +1627,13 @@ export function PayrollScreen({
                 keyboardType="decimal-pad"
                 className="rounded-2xl border border-border bg-card px-4 py-3 text-ink" style={{ fontSize: 16 }} />
             </View>
+            </View>
 
             {/* Loan tracker — outstanding balance + deduct from this check.
                Full history / add / delete lives in the loans overlay. */}
+            <View style={pairRow}>
             {payRow && onAddLoan ? (
-              <View className="mb-4 rounded-2xl border border-border-soft bg-surface p-3">
+              <View className="mb-4 rounded-2xl border border-border-soft bg-surface p-3" style={pairCell}>
                 <View className="flex-row items-center justify-between">
                   <Text className="text-sm font-semibold text-ink">{t.loanTitle}</Text>
                   <Text className={`text-sm font-bold ${loanBalanceOf(payRow.employeeId) > 0 ? 'text-amber-600' : 'text-faint'}`}>
@@ -1555,7 +1655,43 @@ export function PayrollScreen({
               </View>
             ) : null}
 
-            <PressableScale scaleTo={0.97} onPress={confirmPay} disabled={busy || modalTotal <= 0} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
+            {/* Quick deduct — e.g. a cash advance never logged as a loan. The
+               check shrinks; the payment is still recorded at full gross. */}
+            {advanceOpen ? (
+              <View className="mb-4 rounded-2xl border border-border-soft bg-surface p-3" style={pairCell}>
+                <View className="flex-row items-center justify-between mb-1">
+                  <Text className="text-xs text-muted">{t.deductAmountLabel}</Text>
+                  <Pressable onPress={() => { setAdvance(''); setAdvanceReason(''); setAdvanceOpen(false); }} hitSlop={8}>
+                    <X size={14} color={c.faint} />
+                  </Pressable>
+                </View>
+                <TextInput value={formatMoneyInput(advance)} onChangeText={v => setAdvance(v.replace(/,/g, '').replace(/[^0-9.]/g, ''))}
+                  placeholder="0.00" placeholderTextColor={c.faint} keyboardType="decimal-pad" autoFocus
+                  className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={{ fontSize: 16 }} />
+                <TextInput value={advanceReason} onChangeText={setAdvanceReason}
+                  placeholder={t.deductReasonPlaceholder} placeholderTextColor={c.faint}
+                  className="mt-2 rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={{ fontSize: 16 }} />
+              </View>
+            ) : null}
+            {addOpen ? (
+              <View className="mb-4 rounded-2xl border border-border-soft bg-surface p-3" style={pairCell}>
+                <View className="flex-row items-center justify-between mb-1">
+                  <Text className="text-xs text-muted">{t.addAmountLabel}</Text>
+                  <Pressable onPress={() => { setAddAmount(''); setAddReason(''); setAddOpen(false); }} hitSlop={8}>
+                    <X size={14} color={c.faint} />
+                  </Pressable>
+                </View>
+                <TextInput value={formatMoneyInput(addAmount)} onChangeText={v => setAddAmount(v.replace(/,/g, '').replace(/[^0-9.]/g, ''))}
+                  placeholder="0.00" placeholderTextColor={c.faint} keyboardType="decimal-pad" autoFocus
+                  className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={{ fontSize: 16 }} />
+                <TextInput value={addReason} onChangeText={setAddReason}
+                  placeholder={t.addReasonPlaceholder} placeholderTextColor={c.faint}
+                  className="mt-2 rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={{ fontSize: 16 }} />
+              </View>
+            ) : null}
+            </View>
+
+            <PressableScale scaleTo={0.97} onPress={confirmPay} disabled={busy || modalTotal <= 0 || netToPay < 0} className="py-3.5 rounded-2xl bg-primary items-center active:opacity-90 disabled:opacity-50">
               <Text className="text-sm font-semibold text-white">{t.confirmBtn}</Text>
             </PressableScale>
             </Pressable>

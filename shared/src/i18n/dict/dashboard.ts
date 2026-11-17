@@ -3404,6 +3404,15 @@ export type DashboardDict = {
       loanOwed: string;
       loanDeductLabel: string;
       loanNetToPay: string;
+      deductBtn: string;
+      deductAmountLabel: string;
+      deductReasonPlaceholder: string;
+      deductReasonDefault: string;
+      addBtn: string;
+      addAmountLabel: string;
+      addReasonPlaceholder: string;
+      adjustDeducted: string;
+      adjustAdded: string;
       loanNoteFromCheckNum: string;
       loanNoteFromCheck: string;
       loanNoteFromWire: string;
@@ -6888,6 +6897,15 @@ export const dashboard: Record<Locale, DashboardDict> = {
         loanOwed: 'debe',
         loanDeductLabel: 'Descontar de este cheque',
         loanNetToPay: 'Neto a pagar',
+        deductBtn: 'Descontar',
+        deductAmountLabel: 'Monto a descontar',
+        deductReasonPlaceholder: 'Motivo (ej. adelanto en efectivo)',
+        deductReasonDefault: 'Adelanto en efectivo',
+        addBtn: 'Agregar',
+        addAmountLabel: 'Monto a agregar',
+        addReasonPlaceholder: 'Motivo (ej. pagó $200 a un trabajador)',
+        adjustDeducted: '−{{amount}} descontado',
+        adjustAdded: '+{{amount}} agregado',
         loanNoteFromCheckNum: 'Descontado del cheque #{{n}}',
         loanNoteFromCheck: 'Descontado del cheque',
         loanNoteFromWire: 'Descontado de la transferencia',
@@ -10403,6 +10421,15 @@ export const dashboard: Record<Locale, DashboardDict> = {
         loanOwed: 'owed',
         loanDeductLabel: 'Deduct from this check',
         loanNetToPay: 'Net to pay',
+        deductBtn: 'Deduct',
+        deductAmountLabel: 'Amount to deduct',
+        deductReasonPlaceholder: 'Reason (e.g. cash advance)',
+        deductReasonDefault: 'Cash advance',
+        addBtn: 'Add',
+        addAmountLabel: 'Amount to add',
+        addReasonPlaceholder: 'Reason (e.g. paid a worker $200 cash)',
+        adjustDeducted: '−{{amount}} deducted',
+        adjustAdded: '+{{amount}} added',
         loanNoteFromCheckNum: 'Deducted from check #{{n}}',
         loanNoteFromCheck: 'Deducted from check',
         loanNoteFromWire: 'Deducted from wire',

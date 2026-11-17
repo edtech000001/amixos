@@ -10,7 +10,7 @@ import { useLang } from '../../i18n';
 // screen that pulled the barrel.
 import { DatePicker } from '../../ui/DatePicker';
 import { confirm } from '../../ui/confirmBus';
-import type { PayrollFrequency, PayrollBreakdown, PayrollConfig, DriverPayMode } from '../../lib/payroll';
+import type { PayrollFrequency, PayrollBreakdown, PayrollConfig, DriverPayMode, PayAdjustments } from '../../lib/payroll';
 import { getPayrollPeriod, parsePayrollAnchor } from '../../lib/payroll';
 import { formatMoneyInput } from '../../lib/format';
 import { Tooltip } from '../../ui/Tooltip';
@@ -93,7 +93,7 @@ export interface PayrollScreenProps {
   config: PayrollConfig;
   onConfigChange: (c: PayrollConfig) => void;
   /** Per-worker overtime (settings modal list). Changes save instantly. */
-  onMarkPaid: (employeeId: string, method: PayMethod, checkNumber: string, bonus: number, amount: number, hoursCovered: number, components: Record<string, number> | null, periodStart?: string) => Promise<boolean> | void;
+  onMarkPaid: (employeeId: string, method: PayMethod, checkNumber: string, bonus: number, amount: number, hoursCovered: number, components: Record<string, number> | null, periodStart?: string, adjustments?: PayAdjustments) => Promise<boolean> | void;
   onDeletePayment: (paymentId: string) => void;
   /** Opens a job from the hours-breakdown list. */
   onJobPress?: (jobId: string, employeeId: string) => void;
@@ -287,6 +287,8 @@ export function PayrollScreen({
   const openManual = () => {
     setManualWorker('');
     setManualLoanDeduct('');
+    setAdvance(''); setAdvanceReason(''); setAdvanceOpen(false);
+    setAddAmount(''); setAddReason(''); setAddOpen(false);
     setManualAmount('');
     setManualHours('');
     setManualMethod(defaultPayMethod);
@@ -308,16 +310,27 @@ export function PayrollScreen({
   const sortedWorkers = (allWorkers ?? []).slice()
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   const manualLoanOwed = manualWorker ? (loanBalances?.[manualWorker] ?? 0) : 0;
-  const manualNet = (parseFloat(manualAmount) || 0) - (parseFloat(manualLoanDeduct) || 0);
+  // Quick deduct (cash advance etc.) — shared by Mark paid and Record payment,
+  // which are never open together. Reset when either opens.
+  const [advance, setAdvance] = useState('');
+  const [advanceReason, setAdvanceReason] = useState('');
+  const [advanceOpen, setAdvanceOpen] = useState(false);
+  const advanceAmt = Math.max(parseFloat(advance) || 0, 0);
+  // Quick add (e.g. owner reimbursed on his own check) — same sharing.
+  const [addAmount, setAddAmount] = useState('');
+  const [addReason, setAddReason] = useState('');
+  const [addOpen, setAddOpen] = useState(false);
+  const addAmt = Math.max(parseFloat(addAmount) || 0, 0);
+  const manualNet = (parseFloat(manualAmount) || 0) - (parseFloat(manualLoanDeduct) || 0) - advanceAmt + addAmt;
+  const manualDeducted = (parseFloat(manualLoanDeduct) || 0) + advanceAmt;
   const confirmManual = () => {
     const amt = parseFloat(manualAmount) || 0;
     if (!manualWorker || amt <= 0) return;
     // Never deduct more than the worker owes; only after the payment saved.
     const deduct = Math.min(parseFloat(manualLoanDeduct) || 0, Math.max(manualLoanOwed, 0));
     const worker = manualWorker;
-    const note = loanNoteFor(manualMethod, manualCheck);
-    void Promise.resolve(onMarkPaid(worker, manualMethod, manualMethod === 'check' ? manualCheck.trim() : '', 0, amt, parseFloat(manualHours) || 0, null, manualPeriod || undefined))
-      .then(ok => { if (ok !== false && deduct > 0 && onLoanRepayment) onLoanRepayment(worker, deduct, note); });
+    void onMarkPaid(worker, manualMethod, manualMethod === 'check' ? manualCheck.trim() : '', 0, amt, parseFloat(manualHours) || 0, null, manualPeriod || undefined,
+      { loan: deduct, deduct: advanceAmt, deductReason: advanceReason || t.deductReasonDefault, add: addAmt, addReason, methodNote: loanNoteFor(manualMethod, manualCheck) });
     setManualOpen(false);
   };
 
@@ -440,6 +453,8 @@ export function PayrollScreen({
     setCheckNumber('');
     setBonus('');
     setLoanDeduct('');
+    setAdvance(''); setAdvanceReason(''); setAdvanceOpen(false);
+    setAddAmount(''); setAddReason(''); setAddOpen(false);
     setShowLoans(false);
     setShowAddLoan(false);
     setShowAddPayment(false);
@@ -452,7 +467,6 @@ export function PayrollScreen({
     // Never deduct more than the worker owes; only after the payment saved.
     const deduct = Math.min(parseFloat(loanDeduct) || 0, Math.max(loanBalances?.[payRow.employeeId] ?? 0, 0));
     const empId = payRow.employeeId;
-    const note = loanNoteFor(method, checkNumber);
     void Promise.resolve(onMarkPaid(
       empId,
       method,
@@ -461,7 +475,10 @@ export function PayrollScreen({
       checkBaseOf(payRow),
       checkHoursOf(payRow),
       checkComponentsOf(payRow),
-    )).then(ok => { if (ok !== false && deduct > 0 && onLoanRepayment) onLoanRepayment(empId, deduct, note); });
+      undefined,
+      // Saved with the check (linked to it) — the payment stays at full gross.
+      { loan: deduct, deduct: advanceAmt, deductReason: advanceReason || t.deductReasonDefault, add: addAmt, addReason, methodNote: loanNoteFor(method, checkNumber) },
+    ));
     setPayRow(null);
   };
   const resetLoanForms = () => { setShowAddLoan(false); setShowAddPayment(false); setEditingEntry(null); setLoanAmount(''); setLoanNote(''); setLoanDate(todayStr()); };
@@ -518,7 +535,25 @@ export function PayrollScreen({
   const loanFormOpen = showAddLoan || showAddPayment || !!editingEntry;
   // Live total shown big at the top of the modal: what's owed + bonus.
   const modalTotal = payRow ? checkBaseOf(payRow) + (parseFloat(bonus) || 0) : 0;
-  const netToPay = modalTotal - (parseFloat(loanDeduct) || 0);
+  const payDeducted = (parseFloat(loanDeduct) || 0) + advanceAmt;
+  const netToPay = modalTotal - payDeducted + addAmt;
+  // − Deduct / + Add live top-right, beside the dialog's X.
+  const adjustButtons = (
+    <>
+      {([[t.deductBtn, '−', advanceOpen, () => setAdvanceOpen(o => !o)], [t.addBtn, '+', addOpen, () => setAddOpen(o => !o)]] as const).map(([label, sign, on, toggle]) => (
+        <button key={sign} type="button" onClick={toggle}
+          className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${on ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card text-ink hover:bg-surface'}`}>
+          {sign} {label}
+        </button>
+      ))}
+    </>
+  );
+  /** "$6,000.00 −$100.00 deducted +$200.00 added" under the big check total. */
+  const adjustLine = (gross: number, deducted: number, added: number) =>
+    [fmt(gross),
+      deducted > 0 ? t.adjustDeducted.replace('{{amount}}', fmt(deducted)) : '',
+      added > 0 ? t.adjustAdded.replace('{{amount}}', fmt(added)) : '',
+    ].filter(Boolean).join(' ');
 
   // Coming back from a job / arriving from Payment history: open that
   // worker's breakdown once their row exists (the prop may arrive after the
@@ -767,32 +802,41 @@ export function PayrollScreen({
       {/* Manual payment dialog */}
       {manualOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setManualOpen(false)}>
-          <div className="bg-card rounded-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+          <div className="bg-card rounded-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto overscroll-contain" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
               <p className="text-lg font-bold text-ink">{t.manualPayBtn}</p>
-              <button type="button" onClick={() => setManualOpen(false)} className="p-1.5 rounded-lg hover:bg-border-soft">
-                <X size={18} className="text-faint" />
-              </button>
+              <div className="flex items-center gap-2">
+                {adjustButtons}
+                <button type="button" onClick={() => setManualOpen(false)} className="p-1.5 rounded-lg hover:bg-border-soft">
+                  <X size={18} className="text-faint" />
+                </button>
+              </div>
             </div>
 
+            <div className="grid sm:grid-cols-2 gap-3 mb-4">
+            <div>
             <label className="block text-sm font-semibold text-ink mb-2">{t.manualPeriodLabel}</label>
             <select
               value={manualPeriod}
               onChange={e => setManualPeriod(e.target.value)}
-              className="w-full mb-4 rounded-2xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full rounded-2xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
             >
               {manualPeriods.map(pr => <option key={pr.start} value={pr.start}>{pr.label}</option>)}
             </select>
+            </div>
+            <div>
 
             <label className="block text-sm font-semibold text-ink mb-2">{t.manualWorkerLabel}</label>
             <select
               value={manualWorker}
               onChange={e => { setManualWorker(e.target.value); setManualLoanDeduct(''); }}
-              className="w-full mb-4 rounded-2xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full rounded-2xl border border-border bg-card px-4 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="">{t.manualSelectWorker}</option>
               {sortedWorkers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
+            </div>
+            </div>
 
             <p className="text-[11px] font-semibold text-faint uppercase tracking-wide mb-2">{t.methodHeading}</p>
             <div className="flex gap-2 mb-4">
@@ -808,29 +852,32 @@ export function PayrollScreen({
               })}
             </div>
 
+            <div className={`grid gap-3 mb-4 ${manualMethod === 'check' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
             {manualMethod === 'check' && (
-              <div className="mb-4">
+              <div>
                 <label className="block text-sm font-semibold text-ink mb-2">{t.checkNumberLabel}</label>
                 <input value={manualCheck} onChange={e => setManualCheck(e.target.value)} placeholder={t.checkNumberPlaceholder} inputMode="numeric"
                   className="w-full rounded-2xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
               </div>
             )}
 
-            <div className="mb-4">
+            <div>
               <label className="block text-sm font-semibold text-ink mb-2">{t.amountLabel}</label>
               <input value={formatMoneyInput(manualAmount)} onChange={e => setManualAmount(e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal"
                 className="w-full rounded-2xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
             </div>
 
-            <div className="mb-4">
+            <div>
               <label className="block text-sm font-semibold text-ink mb-2">{t.hoursCoveredLabel}</label>
               <input value={manualHours} onChange={e => setManualHours(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0" inputMode="decimal"
                 className="w-full rounded-2xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
             </div>
+            </div>
 
             {/* Loan — only when the selected worker owes something. */}
+            <div className="grid sm:grid-cols-2 gap-3 mb-4 items-start">
             {manualWorker && onAddLoan && manualLoanOwed > 0 ? (
-              <div className="mb-4 rounded-2xl border border-border-soft bg-surface p-3">
+              <div className="rounded-2xl border border-border-soft bg-surface p-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-ink">{t.loanTitle}</span>
                   <span className="text-sm font-bold text-amber-600 tabular-nums">{fmt(manualLoanOwed)} {t.loanOwed}</span>
@@ -844,7 +891,42 @@ export function PayrollScreen({
               </div>
             ) : null}
 
-            <button type="button" onClick={confirmManual} disabled={busy || !manualWorker || !(parseFloat(manualAmount) > 0)}
+            {/* Quick deduct — e.g. a cash advance never logged as a loan. The
+               check shrinks; the payment is still recorded at full gross. */}
+            {advanceOpen ? (
+              <div className="rounded-2xl border border-border-soft bg-surface p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-muted">{t.deductAmountLabel}</label>
+                  <button type="button" onClick={() => { setAdvance(''); setAdvanceReason(''); setAdvanceOpen(false); }} className="text-faint hover:text-muted" aria-label={t.deductBtn}>
+                    <X size={14} />
+                  </button>
+                </div>
+                <input value={formatMoneyInput(advance)} onChange={e => setAdvance(e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal" autoFocus
+                  className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary" />
+                <input value={advanceReason} onChange={e => setAdvanceReason(e.target.value)} placeholder={t.deductReasonPlaceholder}
+                  className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary" />
+              </div>
+            ) : null}
+            {addOpen ? (
+              <div className="rounded-2xl border border-border-soft bg-surface p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-muted">{t.addAmountLabel}</label>
+                  <button type="button" onClick={() => { setAddAmount(''); setAddReason(''); setAddOpen(false); }} className="text-faint hover:text-muted" aria-label={t.addBtn}>
+                    <X size={14} />
+                  </button>
+                </div>
+                <input value={formatMoneyInput(addAmount)} onChange={e => setAddAmount(e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal" autoFocus
+                  className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary" />
+                <input value={addReason} onChange={e => setAddReason(e.target.value)} placeholder={t.addReasonPlaceholder}
+                  className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary" />
+              </div>
+            ) : null}
+            </div>
+
+            {advanceAmt > 0 || addAmt > 0 ? (
+              <p className="text-sm text-muted mb-3">{t.loanNetToPay}: <span className="font-bold text-ink tabular-nums">{fmt(manualNet)}</span></p>
+            ) : null}
+            <button type="button" onClick={confirmManual} disabled={busy || !manualWorker || !(parseFloat(manualAmount) > 0) || manualNet < 0}
               className="w-full py-3 rounded-2xl bg-primary text-white font-semibold hover:opacity-90 disabled:opacity-50">
               {t.confirmBtn}
             </button>
@@ -1062,14 +1144,20 @@ export function PayrollScreen({
       {/* Mark-paid modal */}
       {payRow && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setPayRow(null)}>
-          <div className="bg-card rounded-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
-            <div className="relative mb-4">
-              <button type="button" onClick={() => setPayRow(null)} className="absolute right-0 top-0 p-1.5 rounded-lg hover:bg-border-soft">
+          <div className="bg-card rounded-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto overscroll-contain" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-end gap-2 mb-1">
+              {adjustButtons}
+              <button type="button" onClick={() => setPayRow(null)} className="p-1.5 rounded-lg hover:bg-border-soft">
                 <X size={18} className="text-faint" />
               </button>
-              <div className="text-center pt-1">
+            </div>
+            <div className="mb-4">
+              <div className="text-center">
                 <p className="text-base font-semibold text-ink">{payRow.name}</p>
-                <p className="text-3xl font-bold text-primary mt-1 tabular-nums">{fmt(modalTotal)}</p>
+                <p className="text-3xl font-bold text-primary mt-1 tabular-nums">{fmt(netToPay)}</p>
+                {payDeducted > 0 || addAmt > 0 ? (
+                  <p className="text-xs text-muted mt-0.5 tabular-nums">{adjustLine(modalTotal, payDeducted, addAmt)}</p>
+                ) : null}
                 <p className="text-sm text-faint mt-0.5">{checkHoursOf(payRow)} h</p>
                 {componentsText(checkComponentsOf(payRow)) ? (
                   <p className="text-xs text-faint mt-0.5">{componentsText(checkComponentsOf(payRow))}</p>
@@ -1135,8 +1223,9 @@ export function PayrollScreen({
               })}
             </div>
 
+            <div className="grid sm:grid-cols-2 gap-3 mb-4">
             {method === 'check' && (
-              <div className="mb-4">
+              <div>
                 <label className="block text-sm font-semibold text-ink mb-2">{t.checkNumberLabel}</label>
                 <input
                   value={checkNumber}
@@ -1149,7 +1238,7 @@ export function PayrollScreen({
             )}
 
 
-            <div className="mb-4">
+            <div>
               <label className="block text-sm font-semibold text-ink mb-2">{t.bonusLabel}</label>
               <input
                 value={formatMoneyInput(bonus)}
@@ -1159,11 +1248,13 @@ export function PayrollScreen({
                 className="w-full rounded-2xl border border-border px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
+            </div>
 
             {/* Loan tracker — balance + deduct from this check. Full history /
                add / delete lives in the loans dialog. */}
+            <div className="grid sm:grid-cols-2 gap-3 mb-4 items-start">
             {payRow && onAddLoan ? (
-              <div className="mb-4 rounded-2xl border border-border-soft bg-surface p-3">
+              <div className="rounded-2xl border border-border-soft bg-surface p-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-ink">{t.loanTitle}</span>
                   <span className={`text-sm font-bold ${loanBalanceOf(payRow.employeeId) > 0 ? 'text-amber-600' : 'text-faint'}`}>
@@ -1184,7 +1275,39 @@ export function PayrollScreen({
               </div>
             ) : null}
 
-            <button type="button" onClick={confirmPay} disabled={busy || modalTotal <= 0} className="w-full py-3 rounded-2xl bg-primary text-white font-semibold hover:opacity-90 disabled:opacity-50">
+            {/* Quick deduct — e.g. a cash advance never logged as a loan. The
+               check shrinks; the payment is still recorded at full gross. */}
+            {advanceOpen ? (
+              <div className="rounded-2xl border border-border-soft bg-surface p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-muted">{t.deductAmountLabel}</label>
+                  <button type="button" onClick={() => { setAdvance(''); setAdvanceReason(''); setAdvanceOpen(false); }} className="text-faint hover:text-muted" aria-label={t.deductBtn}>
+                    <X size={14} />
+                  </button>
+                </div>
+                <input value={formatMoneyInput(advance)} onChange={e => setAdvance(e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal" autoFocus
+                  className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary" />
+                <input value={advanceReason} onChange={e => setAdvanceReason(e.target.value)} placeholder={t.deductReasonPlaceholder}
+                  className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary" />
+              </div>
+            ) : null}
+            {addOpen ? (
+              <div className="rounded-2xl border border-border-soft bg-surface p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-muted">{t.addAmountLabel}</label>
+                  <button type="button" onClick={() => { setAddAmount(''); setAddReason(''); setAddOpen(false); }} className="text-faint hover:text-muted" aria-label={t.addBtn}>
+                    <X size={14} />
+                  </button>
+                </div>
+                <input value={formatMoneyInput(addAmount)} onChange={e => setAddAmount(e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal" autoFocus
+                  className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary" />
+                <input value={addReason} onChange={e => setAddReason(e.target.value)} placeholder={t.addReasonPlaceholder}
+                  className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary" />
+              </div>
+            ) : null}
+            </div>
+
+            <button type="button" onClick={confirmPay} disabled={busy || modalTotal <= 0 || netToPay < 0} className="w-full py-3 rounded-2xl bg-primary text-white font-semibold hover:opacity-90 disabled:opacity-50">
               {t.confirmBtn}
             </button>
           </div>

@@ -33,6 +33,11 @@ export interface PayrollHistoryEntry {
   components?: Record<string, number> | null;
   /** Pay-time hours-breakdown snapshot (136). Null on old records/imports. */
   breakdown?: PayrollBreakdown | null;
+  /** Taken out of / added to this check (migration 277); grossPay stays the
+   *  full pay for the period. Check amount = grossPay - deducted + added. */
+  deducted?: number;
+  added?: number;
+  adjustNote?: string | null;
 }
 
 export interface PayrollHistoryScreenProps {
@@ -326,6 +331,8 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
                         {Math.round(h.hours * 100) / 100} h
                         {h.driverHours > 0 ? ` · ${Math.round(h.driverHours * 100) / 100} h ${t.driveShort}` : ''}
                         {h.bonus ? ` · ${t.historyBonus} ${fmt(h.bonus)}` : ''}
+                        {h.deducted ? ` · ${t.adjustDeducted.replace('{{amount}}', fmt(h.deducted))}` : ''}
+                        {h.added ? ` · ${t.adjustAdded.replace('{{amount}}', fmt(h.added))}` : ''}
                         {' · '}
                         {h.method === 'check' && h.checkNumber ? `${t.checkPrefix}${h.checkNumber}` : (methodLabel[h.method] ?? h.method)}
                         {h.paidAt ? ` · ${fmtDay(h.paidAt)}` : ''}
@@ -353,6 +360,12 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
                   {' · '}
                   {detail.entry.method === 'check' && detail.entry.checkNumber ? `${t.checkPrefix}${detail.entry.checkNumber}` : (methodLabel[detail.entry.method] ?? detail.entry.method)}
                   {detail.entry.paidAt ? ` · ${fmtDay(detail.entry.paidAt)}` : ''}
+                  {detail.entry.deducted || detail.entry.added ? ` · ${[
+                    detail.entry.deducted ? t.adjustDeducted.replace('{{amount}}', fmt(detail.entry.deducted)) : '',
+                    detail.entry.added ? t.adjustAdded.replace('{{amount}}', fmt(detail.entry.added)) : '',
+                    `${t.loanNetToPay} ${fmt(detail.entry.grossPay - (detail.entry.deducted ?? 0) + (detail.entry.added ?? 0))}`,
+                    detail.entry.adjustNote ?? '',
+                  ].filter(Boolean).join(' · ')}` : ''}
                 </p>
                 <p className="text-xs text-faint mt-0.5">
                   {fmtDay(detail.entry.periodStart)} – {fmtDay(detail.entry.periodEnd)}

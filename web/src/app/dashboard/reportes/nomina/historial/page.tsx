@@ -35,12 +35,14 @@ export default function NominaHistorialPage() {
         bonus: number | null; gross_pay: number | null; method: string; check_number: string | null;
         created_at: string | null;
         components: Record<string, number> | null;
+        // Migration 277 — absent until it runs (hence select *).
+        check_deducted?: number | null; check_added?: number | null; check_adjust_note?: string | null;
       breakdown: import('@amixos/shared/lib/payroll').PayrollBreakdown | null;
         // Typed clients infer to-one joins as arrays — accept both shapes.
         employees: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null;
       }>((from, to) =>
         supabase.from('payroll_payments')
-          .select('id, employee_id, period_start, period_end, hours, driver_hours, bonus, gross_pay, method, check_number, created_at, components, breakdown, employees(first_name, last_name)')
+          .select('*, employees(first_name, last_name)')
           .eq('business_id', bid)
           .order('period_start', { ascending: false })
           .range(from, to));
@@ -61,6 +63,9 @@ export default function NominaHistorialPage() {
           paidAt: r.created_at,
           components: r.components ?? null,
           breakdown: r.breakdown ?? null,
+          deducted: Number(r.check_deducted ?? 0),
+            added: Number(r.check_added ?? 0),
+            adjustNote: r.check_adjust_note ?? null,
         };
       }));
       setLoading(false);

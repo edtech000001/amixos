@@ -741,3 +741,56 @@ export function estimateJobLaborCost(opts: {
   rows.sort((a, b) => b.cost - a.cost || a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
   return { total: Math.round(total * 100) / 100, rows, salariedCount };
 }
+
+/**
+ * Money taken out of / added to ONE check at pay time. The payment is always
+ * recorded at full gross (what the worker earned for the period); these only
+ * explain why the check itself differs:
+ *  - loan:   repays an outstanding loan → also a − entry in the loan ledger
+ *            (linked via employee_loans.payroll_payment_id).
+ *  - deduct: quick deduct, e.g. a cash advance never logged as a loan.
+ *  - add:    quick add, e.g. the owner paid a worker cash out of pocket and is
+ *            reimbursed on his own check.
+ * deduct / add (and the loan) are saved on the payment row (migration 277).
+ */
+export interface PayAdjustments {
+  loan: number;
+  deduct: number;
+  deductReason: string;
+  add: number;
+  addReason: string;
+  /** How the loan came out, e.g. "Deducted from check #1123". */
+  methodNote: string;
+}
+
+const cents = (n: number) => Math.round(n * 100) / 100;
+
+/** payroll_payments columns for a check's adjustments. Keys are omitted when
+ *  zero, so a plain payment never needs the migration-277 columns. */
+export function checkAdjustmentFields(a: PayAdjustments): { check_deducted?: number; check_added?: number; check_adjust_note?: string } {
+  const out: { check_deducted?: number; check_added?: number; check_adjust_note?: string } = {};
+  const deducted = cents(Math.max(a.loan, 0) + Math.max(a.deduct, 0));
+  const added = cents(Math.max(a.add, 0));
+  if (deducted > 0) out.check_deducted = deducted;
+  if (added > 0) out.check_added = added;
+  const notes = [a.deduct > 0 ? a.deductReason.trim() : '', a.add > 0 ? a.addReason.trim() : ''].filter(Boolean);
+  if (notes.length) out.check_adjust_note = notes.join(' · ');
+  return out;
+}
+
+/** The loan-ledger repayment row for a check (null when no loan was repaid). */
+export function loanRepaymentRow(opts: {
+  businessId: string;
+  employeeId: string;
+  paymentId: string;
+  entryDate: string;
+  createdBy: string | null;
+  adjustments: PayAdjustments;
+}): { business_id: string; employee_id: string; payroll_payment_id: string; amount: number; note: string | null; entry_date: string; created_by: string | null } | null {
+  const { adjustments: a } = opts;
+  if (!(a.loan > 0)) return null;
+  return {
+    business_id: opts.businessId, employee_id: opts.employeeId, payroll_payment_id: opts.paymentId,
+    entry_date: opts.entryDate, created_by: opts.createdBy, amount: -cents(a.loan), note: a.methodNote || null,
+  };
+}
