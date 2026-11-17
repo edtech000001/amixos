@@ -36,6 +36,7 @@ export interface ContactLite {
   email?: string | null;
   receives_email?: boolean;
   cc_on_invoices?: boolean;
+  cc_invoices_only?: boolean;
   is_primary?: boolean;
 }
 

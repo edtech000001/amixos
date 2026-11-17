@@ -288,7 +288,7 @@ export default function ClienteDetailPage({ params }: { params: { id: string } }
               name: ct.name, role: ct.role, phone: ct.phone, email: ct.email,
               // Behaviour flags travel too, or a client who asked not to be
               // emailed starts receiving mail again in the destination business.
-              receives_email: ct.receives_email, cc_on_invoices: ct.cc_on_invoices, is_primary: ct.is_primary,
+              receives_email: ct.receives_email, cc_on_invoices: ct.cc_on_invoices, cc_invoices_only: ct.cc_invoices_only, is_primary: ct.is_primary,
             })), label: td.contactPeople }
         : undefined,
     );

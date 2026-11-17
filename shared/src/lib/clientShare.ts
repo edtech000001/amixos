@@ -35,8 +35,10 @@ export interface ClientShareContact {
   email: string | null;
   /** Addressed instead of the client (migration 220). */
   receives_email?: boolean;
-  /** Copied on invoices. */
+  /** CC'd ("CC this person on"). */
   cc_on_invoices?: boolean;
+  /** …on invoices only (migration 284). */
+  cc_invoices_only?: boolean;
   /** The client's main point of contact. */
   is_primary?: boolean;
 }
@@ -87,7 +89,7 @@ export function serializeClientContacts(contacts: ClientShareContact[]): string 
   return contacts
     .map(c => [
       c.name, c.role ?? '', c.phone ?? '', c.email ?? '',
-      flag(c.receives_email), flag(c.cc_on_invoices), flag(c.is_primary),
+      flag(c.receives_email), flag(c.cc_on_invoices), flag(c.is_primary), flag(c.cc_invoices_only),
     ].map(x => x.replace(/\|/g, '/').replace(/;;/g, ';')).join('|'))
     .join(';;');
 }
@@ -98,7 +100,7 @@ export function parseClientContactsCell(raw: string | null | undefined): ClientS
     .map(part => {
       // Flags are optional: a file written before they existed has only four
       // fields, and must still import rather than error.
-      const [name = '', role = '', phone = '', email = '', rec = '', cc = '', prim = ''] =
+      const [name = '', role = '', phone = '', email = '', rec = '', cc = '', prim = '', ccInv = ''] =
         part.split('|').map(x => x.trim());
       const on = (v: string) => v === '1' || v.toLowerCase() === 'true';
       return {
@@ -110,6 +112,9 @@ export function parseClientContactsCell(raw: string | null | undefined): ClientS
         // supply nothing, making them unreachable — so it needs one to count.
         receives_email: on(rec) && !!email,
         cc_on_invoices: on(cc) && !!email,
+        // Field 8 (284). Only emitted when on: a destination that hasn't run
+        // 284 then still imports every other contact.
+        ...(on(ccInv) && on(cc) && email ? { cc_invoices_only: true } : {}),
         is_primary: on(prim),
       };
     })
