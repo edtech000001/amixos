@@ -42,7 +42,7 @@ import { fetchClientOwnEmails, resolveClientRecipients, joinRecipients } from '@
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { InvoiceRemindersCard } from '@amixos/shared/screens/dashboard/InvoiceRemindersCard';
 import { addInvoiceReminder } from '@amixos/shared/lib/invoiceReminders';
-import { formatDateLong, formatMoneyInput, formatNumberGrouped, todayLocalISO } from '@amixos/shared/lib/format';
+import { formatDateLong, formatMoneyInput, padMoney, formatNumberGrouped, todayLocalISO } from '@amixos/shared/lib/format';
 import { can } from '@amixos/shared/lib/permissions';
 import { activeBillThrough, billThroughTargets } from '@amixos/shared/lib/invoiceBillThrough';
 import { resolveLineDescriptions } from '@amixos/shared/lib/invoiceTemplate';
@@ -308,7 +308,7 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
     setEditIndex(index);
     setEditDesc(li.description ?? '');
     setEditQty(String(li.qty ?? 1));
-    setEditRate(li.rate != null ? String(li.rate) : '');
+    setEditRate(li.rate != null ? padMoney(String(li.rate)) : '');
     setEditDate(li.service_date ?? '');
     setEditIsManual(!li.job_id);
     setEditOpen(true);

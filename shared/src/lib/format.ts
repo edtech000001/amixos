@@ -45,6 +45,16 @@ export function formatNumberGrouped(value: string | number | null | undefined): 
  * "10000" and parseFloat still works. Preserves an in-progress decimal
  * ("1,234." while typing) and caps to 2 decimal places.
  */
+/** Pad a money input to 2 decimals for display ("5" → "5.00", "5.5" → "5.50").
+ *  Never rounds: a stored rate with more decimals is returned unchanged. */
+export function padMoney(raw: string): string {
+  if (!raw || !/^-?\d*(\.\d*)?$/.test(raw)) return raw;
+  const dot = raw.indexOf('.');
+  if (dot === -1) return `${raw}.00`;
+  const decs = raw.length - dot - 1;
+  return decs >= 2 ? raw : raw + '0'.repeat(2 - decs);
+}
+
 export function formatMoneyInput(raw: string | null | undefined): string {
   if (raw === null || raw === undefined || raw === '') return '';
   const cleaned = String(raw).replace(/,/g, '');

@@ -735,6 +735,15 @@ export function InvoiceDetailScreen({
         {/* Line items / jobs (inline manage) + totals below. The styled FACTURA
            document is only built for print / share (PDF). */}
         <div className="bg-card rounded-2xl border border-border-soft shadow-sm p-5">
+          {/* Item count — add-on lines (e.g. a loading fee) ride on their job, so they don't count. */}
+          {(() => {
+            const n = invoice.lineItems.filter(li => !li.addon).length;
+            return n > 0 ? (
+              <p className="text-xs font-semibold uppercase tracking-wide text-faint mb-1">
+                {n === 1 ? tInv.jobsSection.itemsCountOne : tInv.jobsSection.itemsCountMany.replace('{{count}}', formatNumberGrouped(n))}
+              </p>
+            ) : null;
+          })()}
           {(() => {
             const seen = new Set<string>();
             // Display names — the SAME rule the printed document uses, so the

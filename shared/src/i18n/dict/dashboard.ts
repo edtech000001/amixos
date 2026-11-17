@@ -490,6 +490,8 @@ export type DashboardDict = {
       jobsHeading: string;
       removeItemConfirm: string;
       editItemTitle: string;
+      itemsCountOne: string;
+      itemsCountMany: string;
       viewProject: string;
       previewDescription: string;
       previewNoDescription: string;
@@ -4054,6 +4056,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         jobsHeading: 'Trabajos completados',
         removeItemConfirm: '¿Quitar este concepto de la factura?',
         editItemTitle: 'Editar concepto',
+        itemsCountOne: '1 concepto',
+        itemsCountMany: '{{count}} conceptos',
         viewProject: 'Ir al trabajo',
         previewDescription: 'Descripción',
         previewNoDescription: 'Sin descripción',
@@ -7581,6 +7585,8 @@ export const dashboard: Record<Locale, DashboardDict> = {
         jobsHeading: 'Completed jobs',
         removeItemConfirm: 'Remove this item from the invoice?',
         editItemTitle: 'Edit item',
+        itemsCountOne: '1 item',
+        itemsCountMany: '{{count}} items',
         viewProject: 'Go to job',
         previewDescription: 'Description',
         previewNoDescription: 'No description',

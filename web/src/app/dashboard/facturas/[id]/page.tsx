@@ -40,7 +40,7 @@ import { fetchClientOwnEmails, resolveClientRecipients, joinRecipients } from '@
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { InvoiceRemindersCard } from '@amixos/shared/screens/dashboard/InvoiceRemindersCard';
 import { addInvoiceReminder } from '@amixos/shared/lib/invoiceReminders';
-import { formatDateLong, formatNumberGrouped, formatMoneyInput, todayLocalISO } from '@amixos/shared/lib/format';
+import { formatDateLong, formatNumberGrouped, formatMoneyInput, padMoney, todayLocalISO } from '@amixos/shared/lib/format';
 import { usePasteImage } from '@/lib/usePasteImage';
 import { PasteHint } from '@/components/ui/PasteHint';
 import { secureShareToken } from '@amixos/shared/lib/shareToken';
@@ -203,6 +203,15 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   const [clientState, setClientState] = useState<string | null>(null);
   // Read-only "prices for this client" sheet (tier + state resolved rates).
   const [pricesOpen, setPricesOpen] = useState(false);
+  // lg breakpoint: prices dock beside the invoice instead of a modal.
+  const [pricesDocked, setPricesDocked] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const sync = () => setPricesDocked(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
   const [showInvVerify, setShowInvVerify] = useState(false);
   // Autoprice tie picker: lines that matched 2+ prices, + the user's choices.
   const [ambiguous, setAmbiguous] = useState<AutopriceAmbiguous[] | null>(null);
@@ -252,7 +261,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     setEditIndex(index);
     setEditDesc(li.description ?? '');
     setEditQty(String(li.qty ?? 1));
-    setEditRate(li.rate != null ? String(li.rate) : '');
+    setEditRate(li.rate != null ? padMoney(String(li.rate)) : '');
     setEditDate(li.service_date ?? '');
     setEditIsManual(!li.job_id);
   };
@@ -1367,10 +1376,13 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
           <textarea
             value={editDesc}
             rows={2}
+            // Grows with the text up to ~8 lines (max-h below), then scrolls.
+            ref={el => { if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight + 2}px`; } }}
+            onInput={e => { const el = e.currentTarget; el.style.height = 'auto'; el.style.height = `${el.scrollHeight + 2}px`; }}
             onChange={e => setEditDesc(e.target.value.replace(/\n/g, ' '))}
             onKeyDown={e => { if (e.key === 'Enter') e.preventDefault(); }}
             placeholder={tInv.jobsSection.manualDescPlaceholder}
-            className="resize-none rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+            className="resize-none max-h-48 overflow-y-auto rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
           />
           <div className="grid grid-cols-2 gap-2">
             <input
@@ -1386,6 +1398,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                 value={formatMoneyInput(editRate)}
                 inputMode="decimal"
                 onChange={e => setEditRate(cleanAmount(e.target.value))}
+                onBlur={() => setEditRate(r => padMoney(r))}
                 placeholder={tj.detail.colUnitPriceShort}
                 className="w-full rounded-xl border border-border bg-card pl-6 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
               />
@@ -1619,7 +1632,9 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
       {/* Read-only price list resolved for THIS client (tier > state > base). */}
       {/* Small screens: prices as a modal. */}
       <div className="lg:hidden">
-        <Modal open={pricesOpen} onClose={() => setPricesOpen(false)} title={tInv.clientPrices.title}>
+        {/* Only on narrow screens: a Modal locks page scroll even when CSS
+            hides it, which froze the invoice behind the docked panel. */}
+        <Modal open={pricesOpen && !pricesDocked} onClose={() => setPricesOpen(false)} title={tInv.clientPrices.title}>
           {clientPricesBody}
         </Modal>
       </div>

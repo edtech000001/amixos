@@ -28,6 +28,7 @@ interface JobPreview {
   status: string;
   description: string | null;
   worker_notes: string | null;
+  internal_notes: string | null;
   scheduled_date: string | null;
   end_date: string | null;
   time_start: string | null;
@@ -140,6 +141,7 @@ export function JobPreviewSheet({ supabase, jobId, onClose, onOpenFull }: JobPre
               <Text className={`text-sm mb-3 ${job.description?.trim() ? 'text-ink' : 'text-faint'}`}>{job.description?.trim() || t.previewNoDescription}</Text>
 
               {job.worker_notes?.trim() ? <Row label={t.previewNotes} value={job.worker_notes} /> : null}
+            {job.internal_notes?.trim() ? <Row label={tNew.internalNoteLabelJob} value={job.internal_notes} /> : null}
 
               {templates.map(tpl => {
                 const v = customValue(tpl);
