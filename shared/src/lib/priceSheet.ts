@@ -63,7 +63,7 @@ export function rowToPriceSheetItem(r: PriceSheetRow): PriceSheetItem {
     unitLabel: r.unit_label,
     rate: Number(r.rate) || 0,
     stateRates: normalizeStateRates(r.state_rates),
-    clientRates: normalizeStateRates(r.client_rates ?? null),
+    clientRates: normalizeClientRates(r.client_rates ?? null),
     matchTerms: splitMatchTerms(r.match_terms),
     isAddon: r.is_addon === true,
     addonInline: r.addon_inline === true,
@@ -91,6 +91,20 @@ export function normalizeStateRates(raw: unknown): Record<string, number> | null
     if (key && Number.isFinite(n)) out[key] = n;
   }
   return Object.keys(out).length ? out : null;
+}
+
+/**
+ * Client prices are keyed by client id (a lowercase uuid). Must NOT go through
+ * normalizeStateRates: uppercasing the ids broke the name lookup and the
+ * client-price match in applicableRate. Lowercasing also repairs keys that an
+ * earlier save stored uppercased.
+ */
+export function normalizeClientRates(raw: unknown): Record<string, number> | null {
+  const upper = normalizeStateRates(raw);
+  if (!upper) return null;
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(upper)) out[k.toLowerCase()] = v;
+  return out;
 }
 
 /**

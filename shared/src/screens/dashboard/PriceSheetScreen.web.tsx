@@ -98,6 +98,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
   const [history, setHistory] = useState<PriceItemHistory | null>(null);
   // Price history shows the 5 most recent entries until expanded.
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   // Client roster for the per-client price picker (names only).
   const [clients, setClients] = useState<Array<{ id: string; name: string }>>([]);
@@ -267,6 +268,7 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
     setViewing(i);
     setHistory(null);
     setHistoryExpanded(false);
+    setHistoryOpen(false);
     void fetchPriceItemHistory(supabase, i.id)
       .catch(() => ({ createdAt: null, entries: [] }))
       .then(h => { if (viewingIdRef.current === i.id) setHistory(h); });
@@ -366,9 +368,9 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
           {i.isAddon ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">{t.addonBadge}</span> : null}
           {!i.active ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-border-soft text-faint">{t.inactiveBadge}</span> : null}
         </div>
+        {/* Default price only — per-state and per-client rates are in the details. */}
         <p className="text-xs text-muted mt-1">
           {i.isAddon ? '+' : ''}{priceItemLabel(i, t.flatWord)}
-          {i.stateRates ? ` · ${Object.entries(i.stateRates).map(([st, r]) => `${usStateName(st, locale)} $${r}`).join(' · ')}` : ''}
         </p>
       </div>
       {canManage ? (
@@ -583,8 +585,13 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
               ) : null}
 
               <div className="mt-5">
-                <p className="flex items-center gap-1.5 text-xs font-semibold text-ink mb-2"><History size={13} /> {td.historyTitle}</p>
-                {!history ? (
+                {/* Collapsed until clicked (matches mobile). */}
+                <button type="button" onClick={() => setHistoryOpen(o => !o)} aria-expanded={historyOpen}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-ink mb-2 hover:opacity-70">
+                  <History size={13} /> {td.historyTitle}{history ? ` · ${history.entries.length}` : ''}
+                  <ChevronDown size={14} className={`text-faint transition-transform ${historyOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {!historyOpen ? null : !history ? (
                   <p className="text-xs text-faint">{td.historyLoading}</p>
                 ) : (
                   <div className="flex flex-col">
@@ -697,17 +704,11 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
               <p className="text-[11px] text-faint mt-0.5 mb-2">{t.clientRatesHint}</p>
               {draft.clientRates.map((cr, idx) => (
                 <div key={idx} className="flex items-center gap-2 mb-2">
-                  <select value={cr.clientId}
-                    onChange={e => setDraft({ ...draft, clientRates: draft.clientRates.map((x, j) => j === idx ? { ...x, clientId: e.target.value } : x) })}
-                    className="flex-1 min-w-0 rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                    <option value="">{t.clientPickPlaceholder}</option>
-                    {clients.map(c => (
-                      <option key={c.id} value={c.id}
-                        disabled={c.id !== cr.clientId && draft.clientRates.some(x => x.clientId === c.id)}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex-1 min-w-0">
+                    <ClientPicker value={cr.clientId} placeholder={t.clientPickPlaceholder}
+                      options={clients.filter(c => c.id === cr.clientId || !draft.clientRates.some(x => x.clientId === c.id))}
+                      onChange={id => setDraft({ ...draft, clientRates: draft.clientRates.map((x, j) => j === idx ? { ...x, clientId: id } : x) })} />
+                  </div>
                   <div className="w-32 flex items-center rounded-xl border border-border px-3 focus-within:ring-2 focus-within:ring-primary">
                     <span className="text-faint text-sm">$</span>
                     <input value={cr.rate}
@@ -764,6 +765,69 @@ export function PriceSheetScreen({ supabase, businessId, canManage: canManagePro
               className="w-full py-3 rounded-2xl bg-primary text-white font-semibold hover:opacity-90 disabled:opacity-50">{t.saveBtn}</button>
           </div>
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+// Searchable client picker: shows the picked client's name; typing filters the
+// list (name or company). Unlike ComboInput the value is an id, so free text
+// is never kept — leaving the box restores the picked name.
+function ClientPicker({ value, onChange, placeholder, options }: {
+  value: string;
+  onChange: (id: string) => void;
+  placeholder?: string;
+  options: Array<{ id: string; name: string }>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [active, setActive] = useState(-1);
+  const selectedName = options.find(o => o.id === value)?.name ?? '';
+  const q = query.trim().toLowerCase();
+  const shown = q ? options.filter(o => o.name.toLowerCase().includes(q)) : options;
+
+  const pick = (id: string) => { onChange(id); setOpen(false); setQuery(''); setActive(-1); };
+
+  return (
+    <div className="relative">
+      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
+      <input
+        value={open ? query : selectedName}
+        placeholder={open && selectedName ? selectedName : placeholder}
+        onChange={e => { setQuery(e.target.value); setOpen(true); setActive(e.target.value.trim() ? 0 : -1); }}
+        onFocus={() => { setQuery(''); setOpen(true); }}
+        // Delay so a click on an option lands before the list unmounts.
+        onBlur={() => setTimeout(() => { setOpen(false); setQuery(''); }, 120)}
+        onKeyDown={e => {
+          if (!open) return;
+          if (e.key === 'ArrowDown') { e.preventDefault(); setActive(a => Math.min(shown.length - 1, a + 1)); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(a => Math.max(0, a - 1)); }
+          else if (e.key === 'Enter' && shown[active]) { e.preventDefault(); pick(shown[active].id); }
+          else if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); }
+        }}
+        role="combobox"
+        aria-expanded={open}
+        aria-autocomplete="list"
+        className="w-full rounded-xl border border-border bg-card pl-8 pr-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary"
+      />
+      {open ? (
+        <ul role="listbox" className="absolute z-10 mt-1 w-full max-h-60 overflow-y-auto rounded-xl border border-border bg-card py-1 shadow-lg">
+          {shown.length === 0 ? <li className="px-3 py-2 text-sm text-faint">—</li> : null}
+          {shown.map((o, i) => (
+            <li key={o.id} role="option" aria-selected={o.id === value}>
+              <button
+                type="button"
+                tabIndex={-1}
+                onMouseDown={e => { e.preventDefault(); pick(o.id); }}
+                onMouseEnter={() => setActive(i)}
+                className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${i === active ? 'bg-surface' : ''} ${o.id === value ? 'font-semibold text-primary' : 'text-ink'}`}
+              >
+                <span className="truncate">{o.name}</span>
+                {o.id === value ? <Check size={14} className="shrink-0" /> : null}
+              </button>
+            </li>
+          ))}
+        </ul>
       ) : null}
     </div>
   );
