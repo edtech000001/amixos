@@ -117,9 +117,10 @@ export function NotificationBell({ onNavigate }: { onNavigate?: () => void }) {
 
       {open && pos ? createPortal(
         <>
-        {/* Same dim + blur layer as the business switcher; click closes. */}
+        {/* Dim layer; click closes. No backdrop-blur: Chrome re-rendered the
+            blur on every scroll frame of the list above it, flashing the page. */}
         <div aria-hidden onMouseDown={() => setOpen(false)}
-          className="fixed inset-0 bg-black/40 backdrop-blur-[2px]" style={{ zIndex: 9998 }} />
+          className="fixed inset-0 bg-black/40" style={{ zIndex: 9998 }} />
         <div
           style={{ position: 'fixed', top: pos.top, left: Math.max(16, Math.min(pos.left, window.innerWidth - 376)), zIndex: 9999 }}
           className="w-[360px] max-w-[calc(100vw-2rem)] bg-elevated border border-border rounded-2xl shadow-2xl overflow-hidden">
