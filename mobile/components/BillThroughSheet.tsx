@@ -20,6 +20,7 @@ import {
   type BillThroughLink,
 } from '@amixos/shared/lib/invoiceBillThrough';
 import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
+import { offerIssueDateToday } from '@amixos/shared/lib/invoiceIssueDate';
 
 type Supa = Parameters<typeof billInvoiceThrough>[0];
 
@@ -190,7 +191,12 @@ export function BillThroughSheet({
       allowDuplicate,
     });
     setBusy(false);
-    if (res.ok === true) { setResult(res); setStep('done'); return; }
+    if (res.ok === true) {
+      // Added to an existing invoice whose issue date isn't today → offer to
+      // move it before it goes to the client (new invoices are dated today).
+      if (invoice !== 'new') await offerIssueDateToday(supabase, res.invoiceId, full.dashboard.invoices, full.dashboard.dateLocale);
+      setResult(res); setStep('done'); return;
+    }
     // Explicit narrow — strict is off, so `res.ok` alone doesn't discriminate.
     const fail = res as Extract<BillThroughResult, { ok: false }>;
     if (fail.error === 'duplicate') { setDuplicate(true); return; }

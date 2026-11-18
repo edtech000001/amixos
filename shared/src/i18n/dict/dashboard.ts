@@ -360,6 +360,12 @@ export type DashboardDict = {
     emailSubject: string;
     emailBody: string;
     sendNoEmail: string;
+    issueDateStaleTitle: string;
+    issueDateStalePast: string;
+    issueDateStaleFuture: string;
+    issueDateDueMoves: string;
+    issueDateUseToday: string;
+    issueDateKeep: string;
     createdLabel: string;
     moreActionsTitle: string;
     shareLinkAction: string;
@@ -3946,6 +3952,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
       emailSubject: 'Factura {{number}}',
       emailBody: 'Hola,\n\nAdjunto encontrarás tu factura.\nPuedes verla aquí: {{link}}\n\nGracias por tu preferencia.',
       sendNoEmail: 'Este cliente no tiene un correo guardado.',
+      issueDateStaleTitle: '¿Usar la fecha de hoy?',
+      issueDateStalePast: 'La fecha de emisión de esta factura es {{date}} (hace {{days}} días).',
+      issueDateStaleFuture: 'La fecha de emisión de esta factura es {{date}} (en {{days}} días).',
+      issueDateDueMoves: 'Cambiarla a hoy ({{today}}) mueve el vencimiento al {{due}}.',
+      issueDateUseToday: 'Usar hoy',
+      issueDateKeep: 'Dejar {{date}}',
       createdLabel: 'Creada',
       moreActionsTitle: 'Más acciones',
       shareLinkAction: 'Compartir enlace',
@@ -7481,6 +7493,12 @@ export const dashboard: Record<Locale, DashboardDict> = {
       emailSubject: 'Invoice {{number}}',
       emailBody: 'Hi,\n\nPlease find your invoice attached.\nYou can view it here: {{link}}\n\nThank you for your business.',
       sendNoEmail: 'This client has no email on file.',
+      issueDateStaleTitle: 'Use today’s date?',
+      issueDateStalePast: 'This invoice’s issue date is {{date}} ({{days}} days ago).',
+      issueDateStaleFuture: 'This invoice’s issue date is {{date}} ({{days}} days from now).',
+      issueDateDueMoves: 'Changing it to today ({{today}}) moves the due date to {{due}}.',
+      issueDateUseToday: 'Use today',
+      issueDateKeep: 'Keep {{date}}',
       createdLabel: 'Created',
       moreActionsTitle: 'More actions',
       shareLinkAction: 'Share link',

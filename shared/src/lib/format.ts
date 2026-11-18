@@ -164,6 +164,13 @@ export function todayLocalISO(addDays = 0): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** "YYYY-MM-DD" + n days, in local calendar terms (no UTC shift). */
+export function addDaysISO(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + days);
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+}
+
 export function formatDateLong(
   input: string | Date | null | undefined,
   locale?: string,

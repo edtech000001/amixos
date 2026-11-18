@@ -40,6 +40,7 @@ import { sortInvoiceLinesByDate, detectLineSortDirection, setLineItemExcluded, r
 import { addonChoices, currentAddonIds, toggledRate, toggleInlineFlat, foldedFlat, addonSave } from '@amixos/shared/lib/lineAddons';
 import { applicableRate, priceItemLabel, rowToPriceSheetItem, groupPriceItemsByCategory, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { fetchClientOwnEmails, resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
+import { offerIssueDateToday } from '@amixos/shared/lib/invoiceIssueDate';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { InvoiceRemindersCard } from '@amixos/shared/screens/dashboard/InvoiceRemindersCard';
 import { addInvoiceReminder } from '@amixos/shared/lib/invoiceReminders';
@@ -1234,6 +1235,13 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
   // wipes sent_at); instead the resend is logged as an email reminder.
   const sendInvoice = async (opts?: { resend?: boolean }) => {
     if (!invoice) return;
+    // Issue date isn't today → offer to move it (and the due date) before the
+    // client sees it. Not on a resend: the invoice already went out.
+    const moved = opts?.resend ? null : await offerIssueDateToday(supabase, id, tInv, full.dashboard.dateLocale);
+    // The attached PDF and the email's {{dueDate}} must show the new dates.
+    const datesNow = moved ? { issueDate: moved.issue_date, dueDate: moved.due_date } : {};
+    // Refresh now — the dates already changed even if the mail is then cancelled.
+    if (moved) void reloadInvoice();
     const email = invoice.clients[0]?.email ?? '';
     // Resolve recipients BEFORE deciding there is nobody to send to: a client
     // with no email of their own is still reachable through a contact flagged
@@ -1278,7 +1286,7 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
         business: business?.name ?? '',
         // Same formatter as the PDF — toFixed rounds 2.675 to 2.67, Intl to 2.68.
         total: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(invoice.totalAmount),
-        dueDate: invoice.dueDate ?? '',
+        dueDate: (moved ? moved.due_date : invoice.dueDate) ?? '',
       },
     });
 
@@ -1308,7 +1316,7 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
         // renderer as the "Export PDF" action). Link-only skips PDF generation.
         let attachments: string[] = [];
         if (includePdf) {
-          const vm = buildInvoiceViewModel(pdfConfig(), docData() ?? invoice, branding);
+          const vm = buildInvoiceViewModel(pdfConfig(), { ...(docData() ?? invoice), ...datesNow }, branding);
           const uri = await renderInvoicePdf(buildInvoiceHtml(vm), invoice.invoiceNumber);
           attachments = [uri];
         }

@@ -38,6 +38,7 @@ import { sortInvoiceLinesByDate, detectLineSortDirection, setLineItemExcluded, r
 import { addonChoices, currentAddonIds, toggledRate, toggleInlineFlat, foldedFlat, addonSave } from '@amixos/shared/lib/lineAddons';
 import { applicableRate, priceItemLabel, rowToPriceSheetItem, groupPriceItemsByCategory, type PriceSheetItem, type PriceSheetRow } from '@amixos/shared/lib/priceSheet';
 import { fetchClientOwnEmails, resolveClientRecipients, joinRecipients } from '@amixos/shared/lib/clientRecipients';
+import { offerIssueDateToday } from '@amixos/shared/lib/invoiceIssueDate';
 import { JobPreviewSheet } from '@amixos/shared/screens/dashboard/JobPreviewSheet';
 import { InvoiceRemindersCard } from '@amixos/shared/screens/dashboard/InvoiceRemindersCard';
 import { addInvoiceReminder } from '@amixos/shared/lib/invoiceReminders';
@@ -1035,6 +1036,9 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
   // wipes sent_at); instead the resend is logged as an email reminder.
   const sendInvoice = async (opts?: { resend?: boolean }) => {
     if (!invoice) return;
+    // Issue date isn't today → offer to move it (and the due date) before the
+    // client sees it. Not on a resend: the invoice already went out.
+    const moved = opts?.resend ? null : await offerIssueDateToday(supabase, id, tInv, full.dashboard.dateLocale);
     const email = invoice.clients[0]?.email ?? '';
     // Auto-CC the client's contacts flagged "CC on invoices" (deduped, and
     // never the To address itself).
@@ -1082,7 +1086,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
         business: business?.name ?? '',
         // Same formatter as the PDF — toFixed rounds 2.675 to 2.67, Intl to 2.68.
         total: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(invoice.totalAmount),
-        dueDate: invoice.dueDate ?? '',
+        dueDate: (moved ? moved.due_date : invoice.dueDate) ?? '',
       },
     });
     // PDF (or both): open the printable view in a new tab so the user can save
@@ -1091,6 +1095,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
     window.location.href = `mailto:${encodeURIComponent(toParam)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}${ccParam}`;
     if (opts?.resend) await afterResend();
     else await updateStatus('sent');
+    if (moved) await reloadInvoice();
   };
 
   const canDelete = can.deleteInvoice(currentRole);
