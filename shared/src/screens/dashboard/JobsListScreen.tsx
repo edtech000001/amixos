@@ -37,6 +37,7 @@ import {
   ArrowDownAZ,
   CalendarClock,
   BarChart3,
+  MoreHorizontal,
 } from 'lucide-react-native';
 import { useLang } from '../../i18n';
 import { cycleSort, sortTapClears } from '../../lib/sortCycle';
@@ -803,7 +804,7 @@ export function JobsListScreen({
     setSelectedIds(next);
     // Deselecting the last picked row drops out of select mode — the quick
     // "oops" exit, no hunting for the header toggle.
-    if (next.size === 0) setSelectMode(false);
+    if (next.size === 0) exitSelect();
   };
   const selectedJobs = jobs.filter(j => selectedIds.has(j.id));
   // Jobs may span clients — one invoice is created per distinct client.
@@ -828,7 +829,8 @@ export function JobsListScreen({
   // non-invoiceable rows picked for deletion).
   const allInvoiceable = selectedJobs.every(isInvoiceable);
   const canCreateInvoice = selectedJobs.length > 0 && allInvoiceable && !creatingInvoice;
-  const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); };
+  const [moreOpen, setMoreOpen] = useState(false);
+  const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); setMoreOpen(false); };
   const doCreateInvoice = async () => {
     if (!onCreateInvoice || selectedJobs.length === 0 || !allInvoiceable || creatingInvoice) return;
     setCreatingInvoice(true);
@@ -1393,85 +1395,89 @@ export function JobsListScreen({
        Hidden for roles that can't create jobs (field crew / viewers). */}
     {selectMode || addInHeader ? null : canCreate ? <Fab onPress={() => (canCreateEstimates ? setNewMenuOpen(true) : onNewJob())} /> : null}
 
-    {/* Batch-invoice FAB pill — sits above the dock (bottom-32, like Fab) so it
-       isn't hidden behind the floating tab bar. Only in select mode. */}
+    {/* Select-mode action bar — docked above the tab bar, thumb reach: ✕ exits
+       without scrolling back up, the primary action stays one tap, and the
+       rarer bulk actions (move / archive / delete) sit behind ⋯ instead of a
+       stack of pills covering the list. */}
     {selectMode ? (
-      <>
+      <View className="absolute bottom-32 left-4 right-4" pointerEvents="box-none">
+        {moreOpen ? (
+          <View
+            className="self-end mb-2 bg-card border border-border rounded-2xl py-1 min-w-[220px]"
+            style={{ elevation: 8, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } }}
+          >
+            {onBulkChangeClient ? (
+              <Pressable
+                onPress={() => { setMoreOpen(false); if (selectedJobs.length) void onBulkChangeClient(selectedJobs.map(j => j.id)); }}
+                disabled={selectedJobs.length === 0}
+                className={`flex-row items-center gap-3 px-4 py-3 active:bg-surface ${selectedJobs.length === 0 ? 'opacity-40' : ''}`}
+              >
+                <Users size={18} color={c.ink} />
+                <Text className="text-ink font-medium">{t.bulkMoveClient}</Text>
+              </Pressable>
+            ) : null}
+            {onBulkArchive ? (
+              <Pressable
+                onPress={() => {
+                  setMoreOpen(false);
+                  if (!allArchivable && !bulkArchiving) { Alert.alert('', t.archiveDisabledHint); return; }
+                  void runBulkArchive();
+                }}
+                disabled={bulkArchiving}
+                className={`flex-row items-center gap-3 px-4 py-3 active:bg-surface ${!allArchivable ? 'opacity-40' : ''}`}
+              >
+                <Archive size={18} color={c.ink} />
+                <Text className="text-ink font-medium">{archivedTabActive ? t.bulkUnarchive : t.bulkArchive}</Text>
+              </Pressable>
+            ) : null}
+            {canDelete ? (
+              <Pressable
+                onPress={() => { setMoreOpen(false); void runBulkDelete(); }}
+                disabled={selectedJobs.length === 0 || bulkDeleting}
+                className={`flex-row items-center gap-3 px-4 py-3 active:bg-surface ${selectedJobs.length === 0 ? 'opacity-40' : ''}`}
+              >
+                <Trash2 size={18} color="#DC2626" />
+                <Text className="font-medium" style={{ color: '#DC2626' }}>{t.bulkDelete}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
         {allInvoiceable && invoiceClientCount > 1 ? (
-          <View className="absolute bottom-48 right-5 bg-primary/10 px-3 py-1.5 rounded-full" style={{ elevation: 4 }}>
+          <View className="self-end mb-2 bg-primary/10 px-3 py-1.5 rounded-full">
             <Text className="text-xs font-medium text-primary">{t.batchInvoice.multiClientHint.replace('{{count}}', String(invoiceClientCount))}</Text>
           </View>
         ) : null}
-        {/* Bulk move-to-client pill — top of the left stack. */}
-        {onBulkChangeClient ? (
-          <Pressable
-            onPress={() => { if (selectedJobs.length) void onBulkChangeClient(selectedJobs.map(j => j.id)); }}
-            disabled={selectedJobs.length === 0}
-            className="absolute bottom-64 left-5 flex-row items-center gap-2 px-5 h-12 rounded-full"
-            style={{
-              backgroundColor: selectedJobs.length === 0 ? '#D1D5DB' : '#2563EB',
-              elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
-            }}
-          >
-            <Users size={18} color="#FFFFFF" />
-            <Text className="text-white font-semibold">
-              {`${t.bulkMoveClient}${selectedJobs.length > 0 ? ` · ${selectedJobs.length}` : ''}`}
-            </Text>
-          </Pressable>
-        ) : null}
-        {/* Bulk-archive pill — stacked above delete on the left. */}
-        {onBulkArchive ? (
-          <Pressable
-            onPress={() => {
-              if (!allArchivable && !bulkArchiving) { Alert.alert('', t.archiveDisabledHint); return; }
-              void runBulkArchive();
-            }}
-            disabled={bulkArchiving}
-            className="absolute bottom-48 left-5 flex-row items-center gap-2 px-5 h-12 rounded-full"
-            style={{
-              backgroundColor: !allArchivable || bulkArchiving ? '#D1D5DB' : '#374151',
-              elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
-            }}
-          >
-            <Archive size={18} color="#FFFFFF" />
-            <Text className="text-white font-semibold">
-              {`${archivedTabActive ? t.bulkUnarchive : t.bulkArchive}${selectedJobs.length > 0 ? ` · ${selectedJobs.length}` : ''}`}
-            </Text>
-          </Pressable>
-        ) : null}
-        {/* Bulk-delete pill — left side, mirroring the invoice pill. */}
-        {canDelete ? (
-          <Pressable
-            onPress={runBulkDelete}
-            disabled={selectedJobs.length === 0 || bulkDeleting}
-            className="absolute bottom-32 left-5 flex-row items-center gap-2 px-5 h-14 rounded-full"
-            style={{
-              backgroundColor: selectedJobs.length === 0 || bulkDeleting ? '#D1D5DB' : '#DC2626',
-              elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
-            }}
-          >
-            <Trash2 size={20} color="#FFFFFF" />
-            <Text className="text-white font-semibold">
-              {`${t.bulkDelete}${selectedJobs.length > 0 ? ` · ${selectedJobs.length}` : ''}`}
-            </Text>
-          </Pressable>
-        ) : null}
-        <Pressable
-          onPress={runCreateInvoice}
-          disabled={!canCreateInvoice}
-          className={`absolute bottom-32 right-5 flex-row items-center gap-2 px-5 h-14 rounded-full ${
-            canCreateInvoice ? 'bg-primary active:opacity-90' : 'bg-gray-300'
-          }`}
+        <View
+          className="flex-row items-center gap-2 bg-card border border-border rounded-full pl-2 pr-1.5 h-14"
           style={{ elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } }}
         >
-          <FileText size={20} color="#FFFFFF" />
-          <Text className="text-white font-semibold">
-            {creatingInvoice
-              ? t.batchInvoice.creating
-              : `${t.batchInvoice.createButton}${selectedJobs.length > 0 ? ` · ${selectedJobs.length}` : ''}`}
+          <Pressable onPress={exitSelect} hitSlop={6} accessibilityLabel={t.batchInvoice.cancel} className="w-10 h-10 rounded-full items-center justify-center active:bg-surface">
+            <X size={20} color={c.ink} />
+          </Pressable>
+          <Text className="text-sm font-semibold text-ink flex-1" numberOfLines={1}>
+            {t.batchInvoice.selectedCount.replace('{{count}}', String(selectedJobs.length))}
           </Text>
-        </Pressable>
-      </>
+          {onBulkChangeClient || onBulkArchive || canDelete ? (
+            <Pressable
+              onPress={() => setMoreOpen(o => !o)}
+              hitSlop={6}
+              className={`w-10 h-10 rounded-full items-center justify-center ${moreOpen ? 'bg-primary/10' : 'active:bg-surface'}`}
+            >
+              <MoreHorizontal size={20} color={moreOpen ? c.primary : c.ink} />
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={runCreateInvoice}
+            disabled={!canCreateInvoice}
+            className={`flex-row items-center gap-2 px-4 h-11 rounded-full ${canCreateInvoice ? 'bg-primary active:opacity-90' : 'bg-gray-300'}`}
+          >
+            <FileText size={18} color="#FFFFFF" />
+            <Text className="text-white font-semibold" numberOfLines={1}>
+              {creatingInvoice ? t.batchInvoice.creating : t.batchInvoice.createButton}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
     ) : null}
 
     <FilterSheet

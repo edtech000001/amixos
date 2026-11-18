@@ -709,29 +709,32 @@ export function InvoicesListScreen({
         }
       />
 
-    {/* Bulk-delete pill — screen-anchored (bottom-left), aligned with the FAB. */}
+    {/* Select-mode bar — docked above the tab bar (jobs-list pattern): ✕ exits
+     without scrolling back up, the bulk action sits beside it. */}
     {selectMode && onBulkDelete ? (
-      <Pressable
-        onPress={runBulkDelete}
-        disabled={selectedIds.size === 0 || bulkDeleting}
-        className="absolute bottom-32 left-5 flex-row items-center gap-2 px-5 h-14 rounded-full"
-        style={{
-          backgroundColor: selectedIds.size === 0 || bulkDeleting ? '#D1D5DB' : '#DC2626',
-          elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 },
-        }}
+      <View
+        className="absolute bottom-32 left-4 right-4 flex-row items-center gap-2 bg-card border border-border rounded-full pl-2 pr-1.5 h-14"
+        style={{ elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } }}
       >
-        <Trash2 size={20} color="#FFFFFF" />
-        <Text className="text-white font-semibold">
-          {`${t.bulkDelete}${selectedIds.size > 0 ? ` · ${selectedIds.size}` : ''}`}
-        </Text>
-      </Pressable>
+        <Pressable onPress={exitSelect} hitSlop={6} accessibilityLabel={full.dashboard.jobs.batchInvoice.cancel} className="w-10 h-10 rounded-full items-center justify-center active:bg-surface">
+          <X size={20} color={c.ink} />
+        </Pressable>
+        <Text className="text-sm font-semibold text-ink flex-1" numberOfLines={1}>{selectedCountText}</Text>
+        <Pressable
+          onPress={runBulkDelete}
+          disabled={selectedIds.size === 0 || bulkDeleting}
+          className="flex-row items-center gap-2 px-4 h-11 rounded-full"
+          style={{ backgroundColor: selectedIds.size === 0 || bulkDeleting ? '#D1D5DB' : '#DC2626' }}
+        >
+          <Trash2 size={18} color="#FFFFFF" />
+          <Text className="text-white font-semibold" numberOfLines={1}>{t.bulkDelete}</Text>
+        </Pressable>
+      </View>
     ) : null}
-
-
 
     {/* New invoice — floating action, bottom-right thumb reach. Hidden when the
        caller can't create invoices. */}
-    {onNewInvoicePress && !addInHeader ? <Fab onPress={onNewInvoicePress} /> : null}
+    {onNewInvoicePress && !addInHeader && !selectMode ? <Fab onPress={onNewInvoicePress} /> : null}
 
     <FilterSheet
       open={filterOpen}
