@@ -28,7 +28,7 @@ export function NotificationBell({ onNavigate }: { onNavigate?: () => void }) {
 
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<NotificationRow[] | null>(null);
-  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [filter, setFilter] = useState<'all' | 'unread'>('unread');
   const btnRef = useRef<HTMLButtonElement>(null);
   // The menu is portalled to <body> (like BusinessSwitcher): rendered inside
   // the sticky sidebar it painted UNDER the page content. Anchor to the button.
@@ -37,6 +37,7 @@ export function NotificationBell({ onNavigate }: { onNavigate?: () => void }) {
     if (open) { setOpen(false); return; }
     const r = btnRef.current?.getBoundingClientRect();
     if (r) setPos({ top: r.bottom + 8, left: r.left });
+    setFilter('unread'); // every open starts on Unread
     setOpen(true);
   };
 

@@ -33,7 +33,7 @@ export default function NotificacionesPage() {
 
   const [rows, setRows] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [filter, setFilter] = useState<'all' | 'unread'>('unread');
   const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
   const [prefsError, setPrefsError] = useState('');
 

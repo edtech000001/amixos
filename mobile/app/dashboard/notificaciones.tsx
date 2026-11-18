@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { useEnabledModules } from '@amixos/shared/modules/useEnabledModules';
 import { useRefreshOnRefocus } from '@/lib/useRefreshOnRefocus';
 import { usePullRefresh } from '@amixos/shared/ui/usePullRefresh';
 import { BackHandler, Pressable, SectionList, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Bell, CheckCheck, ChevronLeft, Settings, X } from 'lucide-react-native';
+import { Bell, CheckCheck, ChevronLeft, Mail, MailOpen, Settings, X } from 'lucide-react-native';
 import { SkeletonRow } from '@amixos/shared/ui/Skeleton';
 import { Toggle } from '@amixos/shared/ui/Toggle';
 import { useApp } from '@/lib/AppContext';
@@ -39,7 +40,12 @@ export default function NotificacionesScreen() {
 
   const [rows, setRows] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  // Unread by default so the inbox stays short; "All" shows history.
+  const [filter, setFilter] = useState<'all' | 'unread'>('unread');
+  // Rows swiped/opened during this visit stay in the Unread view (Mail-style),
+  // so a swipe doesn't yank the row away and can be swiped back.
+  const [kept, setKept] = useState<Set<string>>(new Set());
+  const keep = (id: string) => setKept(prev => (prev.has(id) ? prev : new Set(prev).add(id)));
   // Opened from Ajustes → straight to the preference switches.
   const { prefs: prefsParam, from } = useLocalSearchParams<{ prefs?: string; from?: string }>();
   const [showPrefs, setShowPrefs] = useState(prefsParam === '1');
@@ -50,7 +56,7 @@ export default function NotificacionesScreen() {
   const [editing, setEditing] = useState(false);
   // This tab stays mounted between visits — reset the panel on every open so
   // the bell always lands on the list (and Ajustes on the switches).
-  useFocusEffect(useCallback(() => { setShowPrefs(prefsParam === '1'); }, [prefsParam]));
+  useFocusEffect(useCallback(() => { setShowPrefs(prefsParam === '1'); setFilter('unread'); }, [prefsParam]));
 
   // Explicit destination, not router.back(): this is its own tab, and tab
   // history still holds the job/invoice just viewed from here — back() landed
@@ -70,6 +76,7 @@ export default function NotificacionesScreen() {
   const load = useCallback(async () => {
     if (!business) return;
     setLoading(true);
+    setKept(new Set());
     try {
       setRows(await fetchNotifications(supabase, business.id));
     } catch {
@@ -90,6 +97,7 @@ export default function NotificacionesScreen() {
 
   const open = (n: NotificationRow) => {
     if (!n.read_at) {
+      keep(n.id);
       setRows(prev => prev.map(r => (r.id === n.id ? { ...r, read_at: new Date().toISOString() } : r)));
       void markNotificationRead(supabase, n.id).then(unreadNotificationsChanged);
     }
@@ -102,10 +110,11 @@ export default function NotificacionesScreen() {
     if (href) router.push(href as never);
   };
 
-  // Long-press: flip read ⇄ unread ("look at it later").
+  // Swipe right: flip read ⇄ unread ("look at it later").
   const toggleRead = async (n: NotificationRow) => {
     const nextRead = n.read_at ? null : new Date().toISOString();
     haptics.select();
+    keep(n.id);
     setRows(prev => prev.map(r => (r.id === n.id ? { ...r, read_at: nextRead } : r)));
     try {
       if (nextRead) await markNotificationRead(supabase, n.id);
@@ -167,7 +176,7 @@ export default function NotificacionesScreen() {
 
   const list = (
       <SectionList
-        sections={groupNotificationsByDay(filter === 'unread' ? rows.filter(r => !r.read_at) : rows)
+        sections={groupNotificationsByDay(filter === 'unread' ? rows.filter(r => !r.read_at || kept.has(r.id)) : rows)
           .map(g => ({ key: g.key, data: g.rows }))}
         refreshControl={pull.control}
         keyExtractor={n => n.id}
@@ -207,25 +216,32 @@ export default function NotificacionesScreen() {
           </>
         }
         renderItem={({ item: n, index, section }) => (
-          <Pressable
-            onPress={() => open(n)}
-            onLongPress={() => toggleRead(n)}
-            accessibilityHint={t.longPressHint}
-            className={`flex-row items-start gap-3 px-4 py-4 bg-card border-x border-border-soft ${
+          <View
+            className={`overflow-hidden border-x border-border-soft ${
               index === 0 ? 'rounded-t-2xl border-t' : ''
-            } ${index === section.data.length - 1 ? 'rounded-b-2xl border-b' : 'border-b'} active:bg-surface`}
-            style={split && pane?.notifId === n.id ? { backgroundColor: `${c.primary}1F` } : undefined}
+            } ${index === section.data.length - 1 ? 'rounded-b-2xl border-b' : 'border-b'}`}
           >
-            <View
-              className="mt-1.5 w-2 h-2 rounded-full"
-              style={{ backgroundColor: n.read_at ? 'transparent' : c.primary }}
-            />
-            <View className="flex-1">
-              <Text className="text-sm text-ink" style={{ fontWeight: n.read_at ? '400' : '700' }}>{n.title}</Text>
-              {n.body ? <Text className="text-sm text-muted mt-0.5">{n.body}</Text> : null}
-            </View>
-            <Text className="text-xs text-faint mt-0.5">{notificationAge(n.created_at, t)}</Text>
-          </Pressable>
+            <SwipeRow read={!!n.read_at} label={n.read_at ? t.markUnread : t.markRead} onToggle={() => void toggleRead(n)}>
+              <Pressable
+                onPress={() => open(n)}
+                accessibilityHint={t.longPressHint}
+                accessibilityActions={[{ name: 'toggleRead', label: n.read_at ? t.markUnread : t.markRead }]}
+                onAccessibilityAction={e => { if (e.nativeEvent.actionName === 'toggleRead') void toggleRead(n); }}
+                className="flex-row items-start gap-3 px-4 py-4 bg-card active:bg-surface"
+                style={split && pane?.notifId === n.id ? { backgroundColor: `${c.primary}1F` } : undefined}
+              >
+                <View
+                  className="mt-1.5 w-2 h-2 rounded-full"
+                  style={{ backgroundColor: n.read_at ? 'transparent' : c.primary }}
+                />
+                <View className="flex-1">
+                  <Text className="text-sm text-ink" style={{ fontWeight: n.read_at ? '400' : '700' }}>{n.title}</Text>
+                  {n.body ? <Text className="text-sm text-muted mt-0.5">{n.body}</Text> : null}
+                </View>
+                <Text className="text-xs text-faint mt-0.5">{notificationAge(n.created_at, t)}</Text>
+              </Pressable>
+            </SwipeRow>
+          </View>
         )}
         ListEmptyComponent={
           rows.length > 0 ? (
@@ -276,5 +292,29 @@ export default function NotificacionesScreen() {
         />
       ) : list}
     </SafeAreaView>
+  );
+}
+
+/** Swipe right past the threshold → toggle read/unread, then snap back. */
+function SwipeRow({ read, label, onToggle, children }: { read: boolean; label: string; onToggle: () => void; children: React.ReactNode }) {
+  const ref = useRef<SwipeableMethods>(null);
+  const c = useThemeColors();
+  const Icon = read ? Mail : MailOpen;
+  return (
+    <ReanimatedSwipeable
+      ref={ref}
+      friction={1.5}
+      leftThreshold={72}
+      overshootLeft={false}
+      renderLeftActions={() => (
+        <View className="flex-row items-center gap-2 px-5" style={{ backgroundColor: c.primary, width: 200 }}>
+          <Icon size={20} color="#FFFFFF" />
+          <Text className="text-white text-sm font-semibold" numberOfLines={1}>{label}</Text>
+        </View>
+      )}
+      onSwipeableOpen={() => { onToggle(); ref.current?.close(); }}
+    >
+      {children}
+    </ReanimatedSwipeable>
   );
 }
