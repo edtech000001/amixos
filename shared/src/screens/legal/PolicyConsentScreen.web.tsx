@@ -6,6 +6,7 @@
 // `scrolled_to_end` recorded rather than assumed.
 
 import { useMemo, useRef, useState, type UIEvent, type ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { useLang } from '../../i18n';
 import { termsOfService } from '../../legal/terms';
 import { privacyPolicy } from '../../legal/privacy';
@@ -41,8 +42,18 @@ export function PolicyConsentScreen({ isUpdate, onAccept, onSignOut }: PolicyCon
     setAtEnd(true);
   };
 
+  // Reading progress + "Keep reading" paging: people didn't realise it scrolls.
+  const [progress, setProgress] = useState(0);
+  const scrollEl = useRef<HTMLDivElement | null>(null);
+  const pageDown = () => {
+    const el = scrollEl.current;
+    if (el) el.scrollBy({ top: Math.max(200, el.clientHeight - 80), behavior: 'smooth' });
+  };
+
   const onScroll = (e: UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
+    const range = el.scrollHeight - el.clientHeight;
+    setProgress(range > 0 ? Math.min(1, el.scrollTop / range) : 1);
     // 24px of slack — exact equality is unreliable with fractional device
     // pixel ratios, and a button that will not enable at the very bottom of a
     // long document is maddening.
@@ -51,6 +62,7 @@ export function PolicyConsentScreen({ isUpdate, onAccept, onSignOut }: PolicyCon
 
   // A viewport tall enough to show everything never scrolls; don't trap them.
   const onRef = (el: HTMLDivElement | null) => {
+    scrollEl.current = el;
     if (el && el.scrollHeight <= el.clientHeight + 24) markRead();
   };
 
@@ -87,25 +99,26 @@ export function PolicyConsentScreen({ isUpdate, onAccept, onSignOut }: PolicyCon
         </div>
       </div>
 
+      <div className="h-[3px] bg-border">
+        <div className="h-full bg-primary transition-[width]" style={{ width: `${Math.round((atEnd ? 1 : progress) * 100)}%` }} />
+      </div>
       <div className="px-6 pt-4 pb-6 border-t border-border-soft bg-card">
         <div className="mx-auto w-full max-w-3xl">
           {error ? (
             <p className="text-xs text-red-600 mb-2 text-center">{error}</p>
-          ) : !atEnd ? (
-            <p className="text-xs text-faint mb-2 text-center">{t.scrollHint}</p>
           ) : null}
 
           <button
             type="button"
-            onClick={accept}
-            disabled={!atEnd || busy}
-            className={`w-full rounded-2xl py-3.5 font-semibold transition-opacity ${
-              atEnd && !busy
-                ? 'bg-primary text-white hover:opacity-90'
-                : 'bg-border text-faint cursor-not-allowed'
+            onClick={atEnd ? accept : pageDown}
+            disabled={busy}
+            className={`w-full rounded-2xl py-3.5 font-semibold transition-opacity flex items-center justify-center gap-2 ${
+              atEnd
+                ? 'bg-primary text-white hover:opacity-90 disabled:opacity-60'
+                : 'bg-primary/15 border border-primary/40 text-primary hover:bg-primary/20'
             }`}
           >
-            {busy ? t.accepting : t.accept}
+            {busy ? t.accepting : atEnd ? t.accept : (<><ChevronDown size={18} />{t.scrollHint}</>)}
           </button>
 
           <button

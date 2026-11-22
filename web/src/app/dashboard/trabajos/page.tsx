@@ -17,7 +17,7 @@ import {
   JobsListScreen,
   type JobListItem,
 } from '@amixos/shared/screens/dashboard/JobsListScreen';
-import { can } from '@amixos/shared/lib/permissions';
+import { can, isFieldOnly } from '@amixos/shared/lib/permissions';
 import { normalizeJobAlertThresholds } from '@amixos/shared/lib/jobAlerts';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { createInvoicesFromJobs } from '@amixos/shared/lib/invoicing';
@@ -28,6 +28,10 @@ import { useScrollRestore, saveScrollAnchor } from '@/lib/useScrollRestore';
 import ImportModal from '@/components/dashboard/ImportModal';
 import { Modal } from '@/components/ui/Modal';
 import { clientPickerDisplay } from '@amixos/shared/lib/clientSearch';
+import { createQuickQuote } from '@amixos/shared/lib/quickQuote';
+import { formatMoneyInput } from '@amixos/shared/lib/format';
+import { Button } from '@/components/ui/Button';
+import { ChevronDown, Search } from 'lucide-react';
 
 interface RawJob {
   id: string;
@@ -76,7 +80,7 @@ export default function TrabajosPage() {
   const router = useRouter();
   const supabase = createSupabaseClient();
   const { t: full, locale } = useLang();
-  const { business, businesses, currentRole, activeLocationId } = useApp();
+  const { business, businesses, currentRole, activeLocationId, user } = useApp();
   // Server-side pagination: rawJobs holds the loaded page(s), not the full table.
   const [rawJobs, setRawJobs] = useState<RawJob[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,6 +91,21 @@ export default function TrabajosPage() {
   const [clientSearch, setClientSearch] = useState('');
   const [clientResults, setClientResults] = useState<{ id: string; top: string; sub: string | null }[]>([]);
   const [movingClient, setMovingClient] = useState(false);
+  // Quick quote — shares the client search above.
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [qClient, setQClient] = useState<{ id: string; top: string; sub: string | null } | null>(null);
+  const [qTitle, setQTitle] = useState('');
+  const [qPrice, setQPrice] = useState('');
+  const [qNotes, setQNotes] = useState('');
+  const [qSaving, setQSaving] = useState(false);
+  const [qPickerOpen, setQPickerOpen] = useState(false);
+  const [qError, setQError] = useState('');
+  const qq = full.dashboard.jobs.quickQuote;
+  const openQuick = () => {
+    setQClient(null); setQTitle(''); setQPrice(''); setQNotes(''); setQError(''); setClientSearch('');
+    setQPickerOpen(false);
+    setQuickOpen(true);
+  };
   const [jobTemplates, setJobTemplates] = useState<{ field_key: string; field_label: string; field_type?: string; field_options?: string[] | null }[]>([]);
 
   // Coming back from a job detail lands at the top otherwise — restore the
@@ -445,16 +464,33 @@ export default function TrabajosPage() {
     let q = supabase.from('clients').select('id, first_name, last_name, company').eq('business_id', business.id);
     const s = term.trim().replace(/[,()*]/g, ' ').trim();
     if (s) q = q.or(`first_name.ilike.*${s}*,last_name.ilike.*${s}*,company.ilike.*${s}*`);
-    const { data } = await q.order('last_name').limit(30);
+    const { data } = await q.order('last_name').limit(100); // shortcut: first 100 A–Z; search finds the rest
     setClientResults(((data ?? []) as { id: string; first_name: string | null; last_name: string | null; company: string | null }[])
       .map(c => ({ id: c.id, ...clientPickerDisplay(c) })));
   };
   useEffect(() => {
-    if (moveClientIds === null) return;
+    if (moveClientIds === null && !(quickOpen && qPickerOpen)) return;
     const h = setTimeout(() => { void loadMoveClients(clientSearch); }, 250);
     return () => clearTimeout(h);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientSearch, moveClientIds]);
+  }, [clientSearch, moveClientIds, quickOpen, qPickerOpen]);
+  const saveQuick = async () => {
+    if (!business || !qTitle.trim() || qSaving) return;
+    setQSaving(true); setQError('');
+    try {
+      const id = await createQuickQuote(supabase, {
+        businessId: business.id, locationId: activeLocationId ?? null, userId: user?.id ?? null,
+        clientId: qClient?.id ?? null, title: qTitle, price: parseFloat(qPrice) || null, notes: qNotes,
+      });
+      void logAudit(supabase, business.id, 'job.created', 'job', id, { title: qTitle.trim(), quick: true });
+      setQuickOpen(false);
+      reload();
+    } catch {
+      setQError(qq.saveError);
+    } finally {
+      setQSaving(false);
+    }
+  };
   const doMoveClient = async (clientId: string) => {
     if (!moveClientIds?.length || !business) return;
     setMovingClient(true);
@@ -543,6 +579,7 @@ export default function TrabajosPage() {
       .map(assignmentName)
       .filter((s): s is string => !!s),
     updatedAt: j.updated_at ?? null,
+    createdAt: j.created_at ?? null,
     leadName: assignmentName(
       j.job_assignments.find(a => a.is_lead) ?? { worker_name: null },
     ),
@@ -575,6 +612,7 @@ export default function TrabajosPage() {
       />
     )}
     <JobsListScreen
+      hideStatusTabs={isFieldOnly(currentRole)}
       onLoadFilterValues={business ? (field) => fetchJobFilterValues(supabase, { businessId: business.id, field, locationId: activeLocationId ?? null }) : undefined}
       jobCustomFields={jobTemplates}
       onRequestSummary={async (jobIds) => {
@@ -668,6 +706,7 @@ export default function TrabajosPage() {
       onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}
       onNewJob={() => router.push('/dashboard/trabajos/nuevo')}
       onNewProposal={() => router.push('/dashboard/trabajos/nuevo?modo=propuesta')}
+      onQuickQuote={can.createJob(currentRole) && !isFieldOnly(currentRole) ? openQuick : undefined}
       canCreate={can.createJob(currentRole)}
       canCreateInvoice={can.createInvoice(currentRole)}
       canViewInvoice={can.seeInvoices(currentRole)}
@@ -706,6 +745,73 @@ export default function TrabajosPage() {
             </button>
           ))}
         </div>
+      </div>
+    </Modal>
+
+    {/* Quick quote — client, what, price: saved as a Possible job. */}
+    <Modal open={quickOpen} onClose={() => setQuickOpen(false)} title={qq.title} size="sm">
+      <div className="flex flex-col gap-3">
+        <div>
+          <label className="block text-xs font-medium text-muted mb-1">{qq.clientLabel}</label>
+          {/* Same dropdown as the job form's client field. */}
+          <div className="relative">
+            <button type="button" onClick={() => { setClientSearch(''); setQPickerOpen(o => !o); }}
+              className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-primary">
+              {qClient ? (
+                <span className="text-ink truncate">{qClient.top}{qClient.sub ? <span className="text-faint"> · {qClient.sub}</span> : null}</span>
+              ) : (
+                <span className="text-faint">{full.dashboard.jobs.new.clientPlaceholder}</span>
+              )}
+              <ChevronDown size={14} className="text-faint shrink-0 ml-2" />
+            </button>
+            {qPickerOpen ? (
+              <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg overflow-hidden">
+                <div className="p-2 border-b border-border-soft">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
+                    <input autoFocus type="text" value={clientSearch} onChange={e => setClientSearch(e.target.value)}
+                      placeholder={full.dashboard.jobs.new.clientSearchPlaceholder}
+                      className="w-full rounded-lg border border-border bg-card pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary" />
+                  </div>
+                </div>
+                <div className="max-h-56 overflow-y-auto">
+                  <button type="button" onClick={() => { setQClient(null); setQPickerOpen(false); }}
+                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-surface ${!qClient ? 'text-primary font-semibold' : 'text-muted'}`}>
+                    {full.dashboard.jobs.new.clientNone}
+                  </button>
+                  {clientResults.map(cl => (
+                    <button key={cl.id} type="button" onClick={() => { setQClient(cl); setQPickerOpen(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-sm hover:bg-surface ${cl.id === qClient?.id ? 'bg-primary/5 text-primary font-semibold' : 'text-ink'}`}>
+                      {cl.top}{cl.sub ? <span className="text-faint font-normal"> · {cl.sub}</span> : null}
+                    </button>
+                  ))}
+                  {clientSearch.trim() && clientResults.length === 0 ? (
+                    <p className="px-4 py-4 text-sm text-faint text-center">{full.dashboard.jobs.new.clientNoResults}</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-muted mb-1">{qq.whatLabel}</label>
+          <input value={qTitle} onChange={e => setQTitle(e.target.value)} placeholder={qq.whatPlaceholder} className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-muted mb-1">{qq.priceLabel}</label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint text-sm">$</span>
+            <input value={formatMoneyInput(qPrice)} inputMode="decimal" onChange={e => setQPrice(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00"
+              className="w-full rounded-xl border border-border bg-card pl-6 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary" />
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-muted mb-1">{qq.notesLabel}</label>
+          <textarea value={qNotes} onChange={e => setQNotes(e.target.value)} placeholder={qq.notesPlaceholder} rows={3}
+            className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary" />
+        </div>
+        {qError ? <p className="text-xs text-red-600 text-center">{qError}</p> : null}
+        <Button onClick={() => void saveQuick()} loading={qSaving} disabled={!qTitle.trim()} fullWidth>{qq.save}</Button>
       </div>
     </Modal>
     </>

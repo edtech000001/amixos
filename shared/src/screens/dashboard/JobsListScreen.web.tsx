@@ -75,11 +75,14 @@ import {
 import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type AppliedDatePreset } from '../../lib/dateRangePresets';
 import { formatHours } from '../../lib/fieldHome';
 import { Tooltip } from '../../ui/Tooltip';
+import { POSSIBLE_STALE_DAYS, possibleAgeDays } from '../../lib/quickQuote';
 import { FilterBar, DateFilterPanel, SortGroupMenu, AsyncCheckListFilterPanel, dateRangeChipText, type BarFilter } from '../../ui/FilterBar.web';
 import { jobFilterFields, picksToQuery, picksCount, jobFilterValueLabel, type JobFieldPicks } from '../../lib/jobFieldFilters';
 import type { JobFieldFilters } from '../../lib/jobsQuery';
 
 export interface JobListItem {
+  /** jobs.created_at — Possible jobs show their age from it. */
+  createdAt?: string | null;
   id: string;
   title: string;
   status: string;
@@ -155,6 +158,9 @@ export interface JobsListScreenProps {
   loading: boolean;
   jobs: JobListItem[];
   initialTab?: TabKey;
+  /** Field crew: no status chips — they only see their own few jobs, so the
+   *  list is just "all of mine" (saved status filters are ignored too). */
+  hideStatusTabs?: boolean;
   onJobPress: (id: string) => void;
   onUpdateStatus: (id: string, status: string) => Promise<void> | void;
   onGenerateInvoice: (id: string) => void;
@@ -178,6 +184,8 @@ export interface JobsListScreenProps {
   canViewInvoice?: boolean;
   onNewJob: () => void;
   onNewProposal: () => void;
+  /** Opens the Quick quote sheet (a Possible job in seconds). Omit to hide. */
+  onQuickQuote?: () => void;
   /** Whether the viewer may create jobs/proposals. Hides the "+ Nuevo"
    *  trigger + empty-state link when false. Keep in sync with the native
    *  variant. Defaults to true. */
@@ -275,6 +283,7 @@ export function JobsListScreen({
   loading,
   jobs,
   initialTab = 'all',
+  hideStatusTabs = false,
   onJobPress,
   onUpdateStatus,
   onGenerateInvoice,
@@ -287,6 +296,7 @@ export function JobsListScreen({
   canViewInvoice = true,
   onNewJob,
   onNewProposal,
+  onQuickQuote,
   canCreate = true,
   canCreateEstimates = true,
   alertThresholds = DEFAULT_JOB_ALERT_THRESHOLDS,
@@ -363,7 +373,8 @@ export function JobsListScreen({
     // search 250ms later. Debounce is for typing, not restoration.
     setDebouncedSearch(saved?.search ?? '');
     // A ?tab deep link wins over saved tabs.
-    if (initialTab === 'all') {
+    if (hideStatusTabs) setTabs([]);
+    else if (initialTab === 'all') {
       setTabs((saved?.tabs ?? []).filter((k): k is StatusTabKey => (STATUS_TAB_KEYS as readonly string[]).includes(k)));
     }
     setSortBy(saved?.sortBy ?? 'recent');
@@ -896,13 +907,13 @@ export function JobsListScreen({
         <div className="relative">
           {canCreate ? (
           <button
-            onClick={() => (canCreateEstimates ? setNewMenuOpen((v) => !v) : onNewJob())}
+            onClick={() => (canCreateEstimates || onQuickQuote ? setNewMenuOpen((v) => !v) : onNewJob())}
             className="flex items-center gap-1 bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90"
           >
-            <Plus size={15} /> {t.newDropdown.trigger}{canCreateEstimates ? <ChevronDown size={14} /> : null}
+            <Plus size={15} /> {t.newDropdown.trigger}{canCreateEstimates || onQuickQuote ? <ChevronDown size={14} /> : null}
           </button>
           ) : null}
-          {newMenuOpen && canCreateEstimates ? (
+          {newMenuOpen && (canCreateEstimates || onQuickQuote) ? (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setNewMenuOpen(false)} />
               <div className="absolute right-0 mt-2 w-72 bg-card rounded-2xl border border-border-soft shadow-lg overflow-hidden z-20">
@@ -916,6 +927,7 @@ export function JobsListScreen({
                     <span className="block text-xs text-faint">{t.newDropdown.jobOptionSub}</span>
                   </span>
                 </button>
+                {canCreateEstimates ? (
                 <button
                   onClick={() => { setNewMenuOpen(false); onNewProposal(); }}
                   className="w-full flex items-center gap-3 px-5 py-4 hover:bg-surface text-left"
@@ -926,6 +938,19 @@ export function JobsListScreen({
                     <span className="block text-xs text-faint">{t.newDropdown.proposalOptionSub}</span>
                   </span>
                 </button>
+                ) : null}
+                {onQuickQuote ? (
+                <button
+                  onClick={() => { setNewMenuOpen(false); onQuickQuote(); }}
+                  className="w-full flex items-center gap-3 px-5 py-4 hover:bg-surface border-t border-border-soft text-left"
+                >
+                  <Lightbulb size={18} className="text-muted shrink-0" />
+                  <span>
+                    <span className="block text-sm font-semibold text-ink">{t.newDropdown.quickOption}</span>
+                    <span className="block text-xs text-faint">{t.newDropdown.quickOptionSub}</span>
+                  </span>
+                </button>
+                ) : null}
               </div>
             </>
           ) : null}
@@ -1022,6 +1047,7 @@ export function JobsListScreen({
 
       {/* Tabs — multi-select status filters. The leading "all" reset is an icon,
          highlighted when no status filter is applied. */}
+      {hideStatusTabs ? null : (
       <div className="flex gap-1.5 overflow-x-auto pb-2 mb-5">
         <button
           onClick={() => setTabs([])}
@@ -1055,6 +1081,7 @@ export function JobsListScreen({
           );
         })}
       </div>
+      )}
 
       {/* Filters — active ones as removable chips, "＋ Filter" adds more
           (mobile twin: the Filters sheet). Sort + group stay in the header. */}
@@ -1212,6 +1239,16 @@ export function JobsListScreen({
                           {job.timeStart ? ` · ${formatTime12h(job.timeStart)}` : ''}
                         </span>
                       ) : null}
+                      {job.status === 'posible' && job.createdAt ? (() => {
+                        const age = possibleAgeDays(job.createdAt);
+                        const stale = age >= POSSIBLE_STALE_DAYS;
+                        return (
+                          <span className={`flex items-center gap-1 text-xs ${stale ? 'text-amber-600 font-semibold' : 'text-faint'}`}>
+                            <History size={12} />
+                            {age === 0 ? t.possibleAgeToday : t.possibleAge.replace('{{n}}', String(age))}
+                          </span>
+                        );
+                      })() : null}
                       {durationText ? (
                         <span className="flex items-center gap-1 text-xs text-faint">
                           <Clock size={12} />

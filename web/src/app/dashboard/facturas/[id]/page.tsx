@@ -1338,7 +1338,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                     value={formatMoneyInput(manualRate)}
                     inputMode="decimal"
                     onChange={e => setManualRate(cleanAmount(e.target.value))}
-                    placeholder={tj.detail.colUnitPriceShort}
+                    placeholder={tj.new.colUnitPrice}
                     className="w-full rounded-xl border border-border bg-card pl-6 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
                   />
                 </div>
@@ -1368,7 +1368,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
             {addCandidates.length === 0 ? (
               <p className="text-sm text-faint">{tInv.jobsSection.addEmpty}</p>
             ) : (
-              <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">
+              <div className="flex flex-col gap-1.5 max-h-60 overflow-y-auto">
                 {addCandidates.map(j => {
                   const picked = addPicked.has(j.id);
                   const otherClient = j.client_id !== invClientId && !!j.clientName;
@@ -1380,7 +1380,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
                         if (linkIndex !== null) return new Set(prev.has(j.id) ? [] : [j.id]);
                         const n = new Set(prev); n.has(j.id) ? n.delete(j.id) : n.add(j.id); return n;
                       })}
-                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm text-left ${picked ? 'bg-primary/10' : 'hover:bg-surface'}`}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-sm text-left ${picked ? 'bg-primary/10 border-primary/40' : 'border-border-soft hover:bg-surface'}`}
                     >
                       <span className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${picked ? 'bg-primary border-primary text-white' : 'border-border'}`}>
                         {picked ? '✓' : ''}
@@ -1402,7 +1402,7 @@ export default function FacturaDetailPage({ params }: { params: { id: string } }
             )}
           </div>
 
-          <Button onClick={doAdd} loading={jobBusy} fullWidth>{linkIndex !== null ? tInv.jobsSection.linkBtn : tInv.jobsSection.addConfirm}</Button>
+          <Button onClick={doAdd} loading={jobBusy} fullWidth>{linkIndex !== null ? tInv.jobsSection.linkBtn : `${tInv.jobsSection.addConfirm}${addPicked.size + (manualDesc.trim() ? 1 : 0) > 0 ? ` · ${addPicked.size + (manualDesc.trim() ? 1 : 0)}` : ''}`}</Button>
         </div>
       </Modal>
 

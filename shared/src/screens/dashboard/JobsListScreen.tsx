@@ -50,6 +50,7 @@ import { buildHistoryRangePresets, rollDatePreset, toAppliedDatePreset, type App
 import { Fab, HeaderAddButton } from '../../ui/Fab';
 import { SkeletonList, SkeletonRow } from '../../ui/Skeleton';
 import { ChipScroll } from '../../ui/ChipScroll';
+import { POSSIBLE_STALE_DAYS, possibleAgeDays } from '../../lib/quickQuote';
 import { formatDateLong, formatTime12h } from '../../lib/format';
 import { formatProjectDuration } from '../../lib/duration';
 import { searchMatches, usStateName } from '../../lib/usStates';
@@ -116,6 +117,8 @@ export interface JobListItem {
   leadName?: string | null;
   /** jobs.updated_at — drives the "Recently updated" sort. */
   updatedAt?: string | null;
+  /** jobs.created_at — Possible jobs show their age from it. */
+  createdAt?: string | null;
   delegatedToBusinessName?: string | null;
   delegatedFromBusinessName?: string | null;
   // Crew visibility (migration 044). false = scheduler-only; shown as a
@@ -160,6 +163,9 @@ export interface JobsListScreenProps {
   loading: boolean;
   jobs: JobListItem[];
   initialTab?: TabKey;
+  /** Field crew: no status chips — they only see their own few jobs, so the
+   *  list is just "all of mine" (saved status filters are ignored too). */
+  hideStatusTabs?: boolean;
   onJobPress: (id: string) => void;
   /** Job open in the detail pane beside the list (split view) — highlighted. */
   activeId?: string | null;
@@ -187,6 +193,8 @@ export interface JobsListScreenProps {
   canViewInvoice?: boolean;
   onNewJob: () => void;
   onNewProposal: () => void;
+  /** Opens the Quick quote sheet (a Possible job in seconds). Omit to hide. */
+  onQuickQuote?: () => void;
   /**
    * Whether the viewer may create jobs/proposals. Hides the FAB + empty-state
    * "create first" link when false (e.g. field crew / viewers — they can't
@@ -303,6 +311,7 @@ export function JobsListScreen({
   loading,
   jobs,
   initialTab = 'all',
+  hideStatusTabs = false,
   onJobPress,
   activeId,
   addInHeader,
@@ -317,6 +326,7 @@ export function JobsListScreen({
   canViewInvoice: canViewInvoicePerm = true,
   onNewJob,
   onNewProposal,
+  onQuickQuote,
   canCreate = true,
   canCreateEstimates = true,
   alertThresholds = DEFAULT_JOB_ALERT_THRESHOLDS,
@@ -412,7 +422,8 @@ export function JobsListScreen({
       .then(raw => {
         if (cancelled) return;
         const s = parseJobsFilters(raw);
-        if (initialTab === 'all') {
+        if (hideStatusTabs) setTabs([]);
+        else if (initialTab === 'all') {
           setTabs(Array.isArray(s?.tabs) ? s.tabs.filter((k): k is StatusTabKey => (STATUS_TAB_KEYS as readonly string[]).includes(k)) : []);
         }
         setSearch(typeof s?.search === 'string' ? s.search : '');
@@ -1007,6 +1018,18 @@ export function JobsListScreen({
                   </Text>
                 </View>
               ) : null}
+              {job.status === 'posible' && job.createdAt ? (() => {
+                const age = possibleAgeDays(job.createdAt);
+                const stale = age >= POSSIBLE_STALE_DAYS;
+                return (
+                  <View className="flex-row items-center gap-1">
+                    <History size={12} color={stale ? '#D97706' : c.faint} />
+                    <Text className={`text-xs ${stale ? 'text-amber-600 font-semibold' : 'text-faint'}`}>
+                      {age === 0 ? t.possibleAgeToday : t.possibleAge.replace('{{n}}', String(age))}
+                    </Text>
+                  </View>
+                );
+              })() : null}
               {durationText ? (
                 <View className="flex-row items-center gap-1">
                   <Clock size={12} color={c.faint} />
@@ -1130,7 +1153,7 @@ export function JobsListScreen({
             </Pressable>
           ) : null}
           {addInHeader && canCreate && !selectMode ? (
-            <HeaderAddButton onPress={() => (canCreateEstimates ? setNewMenuOpen(true) : onNewJob())} />
+            <HeaderAddButton onPress={() => (canCreateEstimates || onQuickQuote ? setNewMenuOpen(true) : onNewJob())} />
           ) : null}
         </View>
       </View>
@@ -1183,7 +1206,7 @@ export function JobsListScreen({
            list: a filter can sit past the right edge, leaving "0 found" with
            no visible cause. Child 0 is the "all" reset, so the status keys
            are offset by one. */}
-        <ChipScroll
+        {hideStatusTabs ? null : <ChipScroll
           contentContainerClassName="gap-1 pb-1"
           activeIndex={(() => {
             const i = STATUS_TAB_KEYS.findIndex(k => tabSet.has(k));
@@ -1238,7 +1261,7 @@ export function JobsListScreen({
               </Pressable>
             );
           })}
-        </ChipScroll>
+        </ChipScroll>}
       </View>
 
       {/* Selection banner — ✕ / count / Todos, same as the clients list. */}
@@ -1378,6 +1401,18 @@ export function JobsListScreen({
                 </View>
               </Pressable>
               ) : null}
+              {onQuickQuote ? (
+              <Pressable
+                onPress={() => { setNewMenuOpen(false); onQuickQuote(); }}
+                className="flex-row items-center gap-3 px-5 py-4 active:bg-border-soft border-t border-border-soft"
+              >
+                <Lightbulb size={18} color={c.muted} />
+                <View className="flex-1">
+                  <Text className="text-sm font-semibold text-ink">{t.newDropdown.quickOption}</Text>
+                  <Text className="text-xs text-faint">{t.newDropdown.quickOptionSub}</Text>
+                </View>
+              </Pressable>
+              ) : null}
             </View>
             <Pressable
               onPress={() => setNewMenuOpen(false)}
@@ -1393,7 +1428,7 @@ export function JobsListScreen({
 
     {/* New job/proposal — floating action, bottom-right thumb reach.
        Hidden for roles that can't create jobs (field crew / viewers). */}
-    {selectMode || addInHeader ? null : canCreate ? <Fab onPress={() => (canCreateEstimates ? setNewMenuOpen(true) : onNewJob())} /> : null}
+    {selectMode || addInHeader ? null : canCreate ? <Fab onPress={() => (canCreateEstimates || onQuickQuote ? setNewMenuOpen(true) : onNewJob())} /> : null}
 
     {/* Select-mode action bar — docked above the tab bar, thumb reach: ✕ exits
        without scrolling back up, the primary action stays one tap, and the

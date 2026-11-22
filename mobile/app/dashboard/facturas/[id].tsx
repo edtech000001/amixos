@@ -641,6 +641,8 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addSearch, addOpen]);
 
+  // Lines the Add button will create: picked jobs + the custom item if typed.
+  const addCount = addPicked.size + (manualDesc.trim() ? 1 : 0);
   const doAdd = async () => {
     // Link mode: associate the chosen job with the target line, don't add lines.
     if (linkIndex !== null) {
@@ -1518,20 +1520,21 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
             {/* Manual line item — hidden in link mode (associating a line). */}
             {linkIndex === null ? (<>
             <Text className="text-[11px] font-semibold uppercase tracking-wide text-faint mb-2">{jobsT.manualHeading}</Text>
+            <View className="bg-surface rounded-2xl p-3 mb-5 gap-2">
             <TextInput
               value={manualDesc}
               onChangeText={setManualDesc}
               placeholder={jobsT.manualDescPlaceholder}
               placeholderTextColor={c.faint}
-              className="bg-card border border-border rounded-xl px-3 py-2.5 text-ink mb-2" style={{ fontSize: 14 }} />
-            <View className="flex-row gap-2 mb-4">
+              className="bg-card border border-border rounded-xl px-3 py-2.5 text-ink" style={{ fontSize: 14 }} />
+            <View className="flex-row gap-2">
               <TextInput
                 value={formatNumberGrouped(manualQty)}
                 onChangeText={v => setManualQty(v.replace(/[^0-9.]/g, ''))}
                 keyboardType="decimal-pad"
                 placeholder={tj.new.colQty}
                 placeholderTextColor={c.faint}
-                className="flex-1 bg-card border border-border rounded-xl px-3 py-2.5 text-center text-ink" style={{ fontSize: 14 }} />
+                className="w-20 bg-card border border-border rounded-xl px-3 py-2.5 text-center text-ink" style={{ fontSize: 14 }} />
               <Pressable
                 onPress={() => setManualRate(toggleSign(manualRate))}
                 className={`w-11 items-center justify-center rounded-xl border active:opacity-80 ${
@@ -1546,13 +1549,12 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
                   value={formatMoneyInput(manualRate)}
                   onChangeText={v => setManualRate(cleanAmount(v))}
                   keyboardType="decimal-pad"
-                  placeholder={tj.detail.colUnitPriceShort}
+                  placeholder={tj.new.colUnitPrice}
                   placeholderTextColor={c.faint}
                   className="bg-card border border-border rounded-xl pl-6 pr-3 py-2.5 text-ink" style={{ fontSize: 14 }} />
               </View>
             </View>
-            <View className="mb-4">
-              <DatePicker label={jobsT.serviceDateLabel} value={manualDate} onChange={setManualDate} />
+            <DatePicker label={jobsT.serviceDateLabel} value={manualDate} onChange={setManualDate} />
             </View>
             </>) : null}
 
@@ -1567,7 +1569,7 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
             {addCandidates.length === 0 ? (
               <Text className="text-sm text-faint pb-2">{jobsT.addEmpty}</Text>
             ) : (
-              <View>
+              <View className="gap-1.5">
                 {addCandidates.map(j => {
                   const picked = addPicked.has(j.id);
                   const otherClient = j.client_id !== invClientId && !!j.clientName;
@@ -1578,10 +1580,10 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
                         if (linkIndex !== null) return new Set(prev.has(j.id) ? [] : [j.id]);
                         const n = new Set(prev); n.has(j.id) ? n.delete(j.id) : n.add(j.id); return n;
                       })}
-                      className={`flex-row items-center gap-3 px-2 py-3 rounded-xl ${picked ? 'bg-primary/10' : ''}`}
+                      className={`flex-row items-center gap-3 px-3 py-3 rounded-xl border ${picked ? 'bg-primary/10 border-primary/40' : 'border-border-soft active:bg-surface'}`}
                     >
-                      <View className={`w-5 h-5 rounded-md border items-center justify-center ${picked ? 'bg-primary border-primary' : 'border-border'}`}>
-                        {picked ? <Text className="text-white text-[11px] font-bold">✓</Text> : null}
+                      <View className={`w-6 h-6 rounded-md border items-center justify-center ${picked ? 'bg-primary border-primary' : 'border-border'}`}>
+                        {picked ? <Check size={14} color="#FFFFFF" strokeWidth={3} /> : null}
                       </View>
                       <View className="flex-1">
                         <Text className="text-sm text-ink" numberOfLines={1}>{j.title}</Text>
@@ -1602,7 +1604,7 @@ export function InvoiceDetailPane({ embeddedId, onClose, onChanged, onEdit: onEd
             </ScrollView>
             {/* Outside the scroller so it stays reachable with a long list. */}
             <PressableScale scaleTo={0.97} onPress={doAdd} disabled={jobBusy} className="mt-4 py-3.5 rounded-2xl bg-primary items-center active:opacity-90">
-              <Text className="text-sm font-semibold text-white">{linkIndex !== null ? jobsT.linkBtn : jobsT.addConfirm}</Text>
+              <Text className="text-sm font-semibold text-white">{linkIndex !== null ? jobsT.linkBtn : `${jobsT.addConfirm}${addCount > 0 ? ` · ${addCount}` : ''}`}</Text>
             </PressableScale>
           </View>
         </View>

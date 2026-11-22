@@ -847,7 +847,25 @@ export type DashboardDict = {
       jobOptionSub: string;
       proposalOption: string;
       proposalOptionSub: string;
+      quickOption: string;
+      quickOptionSub: string;
     };
+    quickQuote: {
+      title: string;
+      clientLabel: string;
+      clientSearch: string;
+      noResults: string;
+      whatLabel: string;
+      whatPlaceholder: string;
+      priceLabel: string;
+      notesLabel: string;
+      notesPlaceholder: string;
+      save: string;
+      saveError: string;
+    };
+    /** Age of a Possible job — stale ones are easy to spot and clear. */
+    possibleAgeToday: string;
+    possibleAge: string;
     searchPlaceholder: string;
     clearFilters: string;
     summary: {
@@ -4425,7 +4443,24 @@ export const dashboard: Record<Locale, DashboardDict> = {
         jobOptionSub: 'Programar trabajo directamente',
         proposalOption: 'Nueva cotización',
         proposalOptionSub: 'Cotizar antes de trabajar',
+        quickOption: 'Cotización rápida',
+        quickOptionSub: 'Anota un posible trabajo y su precio',
       },
+      quickQuote: {
+        title: 'Cotización rápida',
+        clientLabel: 'Cliente',
+        clientSearch: 'Buscar cliente…',
+        noResults: 'Sin resultados.',
+        whatLabel: 'Trabajo',
+        whatPlaceholder: 'Ej. Reparación',
+        priceLabel: 'Precio (opcional)',
+        notesLabel: 'Notas (opcional)',
+        notesPlaceholder: 'Solo para ti',
+        save: 'Guardar como posible',
+        saveError: 'No se pudo guardar. Inténtalo de nuevo.',
+      },
+      possibleAgeToday: 'Agregado hoy',
+      possibleAge: 'Hace {{n}} días',
       searchPlaceholder: 'Buscar por nombre, cliente, número, ciudad...',
       clearFilters: 'Limpiar filtros',
       summary: {
@@ -7966,7 +8001,24 @@ export const dashboard: Record<Locale, DashboardDict> = {
         jobOptionSub: 'Schedule a job directly',
         proposalOption: 'New estimate',
         proposalOptionSub: 'Estimate before working',
+        quickOption: 'Quick quote',
+        quickOptionSub: 'Jot down a maybe job and its price',
       },
+      quickQuote: {
+        title: 'Quick quote',
+        clientLabel: 'Client',
+        clientSearch: 'Search a client…',
+        noResults: 'No results.',
+        whatLabel: 'Job',
+        whatPlaceholder: 'e.g. Repair',
+        priceLabel: 'Price (optional)',
+        notesLabel: 'Notes (optional)',
+        notesPlaceholder: 'Only for you',
+        save: 'Save as possible',
+        saveError: "Couldn't save. Try again.",
+      },
+      possibleAgeToday: 'Added today',
+      possibleAge: '{{n}} days old',
       searchPlaceholder: 'Search by name, client, number, city...',
       clearFilters: 'Clear filters',
       summary: {

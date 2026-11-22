@@ -19,10 +19,12 @@ import { fetchJobsSummary } from '@amixos/shared/lib/jobsQuery';
 import { listViewKey, readListView, writeListView } from '@amixos/shared/lib/listViewMemo';
 import { computeJobsSummaryTotals, payrollJcfKeys } from '@amixos/shared/lib/jobsSummary';
 import { usStateName } from '@amixos/shared/lib/usStates';
-import { can } from '@amixos/shared/lib/permissions';
+import { can, isFieldOnly } from '@amixos/shared/lib/permissions';
 import { normalizeJobAlertThresholds } from '@amixos/shared/lib/jobAlerts';
 import { logAudit } from '@amixos/shared/lib/audit';
 import { clientPickerDisplay } from '@amixos/shared/lib/clientSearch';
+import { createQuickQuote } from '@amixos/shared/lib/quickQuote';
+import { formatMoneyInput } from '@amixos/shared/lib/format';
 import { createInvoicesFromJobs } from '@amixos/shared/lib/invoicing';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { localizeTemplates } from '@amixos/shared/lib/fieldTemplates';
@@ -32,7 +34,7 @@ import { useSectionBase } from '@/lib/sectionNav';
 import { SplitEmpty, SplitView, useSplitOpenRequest, useSplitView, whenLeaveAllowed } from '@/components/SplitView';
 import { JobForm } from './nuevo';
 import { JobDetail } from './[id]';
-import { ClipboardList } from 'lucide-react-native';
+import { Check, ChevronDown, ClipboardList, Search, X } from 'lucide-react-native';
 import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
 
 interface RawJob {
@@ -88,7 +90,7 @@ export default function TrabajosTab() {
   const sectionBase = useSectionBase('trabajos');
   const supabase = createSupabaseClient();
   const { t: full, locale } = useLang();
-  const { business, businesses, currentRole, activeLocationId } = useApp();
+  const { business, businesses, currentRole, activeLocationId, user } = useApp();
   // Custom job fields — extra filterable fields in the Filters sheet.
   const [jobTemplates, setJobTemplates] = useState<{ field_key: string; field_label: string }[]>([]);
   useEffect(() => {
@@ -128,6 +130,20 @@ export default function TrabajosTab() {
   const [clientSearch, setClientSearch] = useState('');
   const [clientResults, setClientResults] = useState<{ id: string; top: string; sub: string | null }[]>([]);
   const [movingClient, setMovingClient] = useState(false);
+  // Quick quote sheet — shares the client search above.
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [qClient, setQClient] = useState<{ id: string; top: string; sub: string | null } | null>(null);
+  const [qTitle, setQTitle] = useState('');
+  const [qPrice, setQPrice] = useState('');
+  const [qNotes, setQNotes] = useState('');
+  const [qSaving, setQSaving] = useState(false);
+  const [qPickerOpen, setQPickerOpen] = useState(false);
+  const [qError, setQError] = useState('');
+  const openQuick = () => {
+    setQClient(null); setQTitle(''); setQPrice(''); setQNotes(''); setQError(''); setClientSearch('');
+    setQPickerOpen(false);
+    setQuickOpen(true);
+  };
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   // A failed fetch used to be swallowed (`catch {}`), so a broken query
@@ -423,16 +439,33 @@ export default function TrabajosTab() {
     let q = supabase.from('clients').select('id, first_name, last_name, company').eq('business_id', business.id);
     const s = term.trim().replace(/[,()*]/g, ' ').trim();
     if (s) q = q.or(`first_name.ilike.*${s}*,last_name.ilike.*${s}*,company.ilike.*${s}*`);
-    const { data } = await q.order('last_name').limit(30);
+    const { data } = await q.order('last_name').limit(100); // shortcut: first 100 A–Z; search finds the rest
     setClientResults(((data ?? []) as { id: string; first_name: string | null; last_name: string | null; company: string | null }[])
       .map(c => ({ id: c.id, ...clientPickerDisplay(c) })));
   };
   useEffect(() => {
-    if (moveClientIds === null) return;
+    if (moveClientIds === null && !(quickOpen && qPickerOpen)) return;
     const h = setTimeout(() => { void loadMoveClients(clientSearch); }, 250);
     return () => clearTimeout(h);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientSearch, moveClientIds]);
+  }, [clientSearch, moveClientIds, quickOpen, qPickerOpen]);
+  const saveQuick = async () => {
+    if (!business || !qTitle.trim() || qSaving) return;
+    setQSaving(true); setQError('');
+    try {
+      const id = await createQuickQuote(supabase, {
+        businessId: business.id, locationId: activeLocationId ?? null, userId: user?.id ?? null,
+        clientId: qClient?.id ?? null, title: qTitle, price: parseFloat(qPrice) || null, notes: qNotes,
+      });
+      void logAudit(supabase, business.id, 'job.created', 'job', id, { title: qTitle.trim(), quick: true });
+      setQuickOpen(false);
+      reRun(activeLocationId ?? null);
+    } catch {
+      setQError(full.dashboard.jobs.quickQuote.saveError);
+    } finally {
+      setQSaving(false);
+    }
+  };
   const doMoveClient = async (clientId: string) => {
     if (!moveClientIds?.length || !business) return;
     setMovingClient(true);
@@ -534,6 +567,7 @@ export default function TrabajosTab() {
       .map(assignmentName)
       .filter((s): s is string => !!s),
     updatedAt: j.updated_at ?? null,
+    createdAt: j.created_at ?? null,
     leadName: assignmentName(
       j.job_assignments.find(a => a.is_lead) ?? { worker_name: null },
     ),
@@ -554,6 +588,7 @@ export default function TrabajosTab() {
 
   const listScreen = (
       <JobsListScreen
+        hideStatusTabs={isFieldOnly(currentRole)}
         activeId={split ? openId : null}
         addInHeader={split}
         refreshControl={pull.control}
@@ -675,6 +710,7 @@ export default function TrabajosTab() {
         onViewInvoice={(invoiceId) => router.push(`/dashboard/facturas/${invoiceId}`)}
         onNewJob={() => router.push(`${sectionBase}/nuevo` as never)}
         onNewProposal={() => router.push(`${sectionBase}/nuevo?modo=propuesta` as never)}
+        onQuickQuote={can.createJob(currentRole) && !isFieldOnly(currentRole) ? openQuick : undefined}
         canCreate={can.createJob(currentRole)}
         canCreateInvoice={can.createInvoice(currentRole)}
         canViewInvoice={can.seeInvoices(currentRole)}
@@ -744,6 +780,125 @@ export default function TrabajosTab() {
               ))}
             </ScrollView>
           </View>
+        </KeyboardAvoidingView>
+      </RNModal>
+
+      {/* Quick quote — client, what, price: saved as a Possible job. */}
+      <RNModal visible={quickOpen} transparent animationType="fade" onRequestClose={() => setQuickOpen(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1 justify-end">
+          <View pointerEvents="none" style={SHEET_BACKDROP} />
+          <View className="bg-card rounded-t-3xl px-5 pt-5 pb-8" style={sheetSides}>
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="text-lg font-bold text-ink">{full.dashboard.jobs.quickQuote.title}</Text>
+              <Pressable onPress={() => setQuickOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60">
+                <X size={22} color="#9CA3AF" />
+              </Pressable>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 460 }}>
+              <Text className="text-xs font-medium text-muted mb-1">{full.dashboard.jobs.quickQuote.clientLabel}</Text>
+              {/* Client field → picker card, like the job form. An in-modal
+                  overlay, not a second RNModal (iOS won't present one). */}
+              <Pressable
+                onPress={() => { setClientSearch(''); setQPickerOpen(true); }}
+                className="flex-row items-center justify-between rounded-xl border border-border bg-card px-3 py-3 mb-3"
+              >
+                {qClient ? (
+                  <Text className="text-sm text-ink flex-1" numberOfLines={1}>
+                    <Text className="font-medium">{qClient.top}</Text>{qClient.sub ? <Text className="text-faint">{`  ·  ${qClient.sub}`}</Text> : null}
+                  </Text>
+                ) : (
+                  <Text className="text-sm text-faint flex-1">{full.dashboard.jobs.new.clientPlaceholder}</Text>
+                )}
+                {qClient ? (
+                  <Pressable onPress={() => setQClient(null)} hitSlop={8} className="mr-2 p-1"><X size={14} color="#9CA3AF" /></Pressable>
+                ) : null}
+                <ChevronDown size={16} color="#9CA3AF" />
+              </Pressable>
+              <Text className="text-xs font-medium text-muted mb-1">{full.dashboard.jobs.quickQuote.whatLabel}</Text>
+              <TextInput
+                value={qTitle}
+                onChangeText={setQTitle}
+                placeholder={full.dashboard.jobs.quickQuote.whatPlaceholder}
+                placeholderTextColor="#6B7280"
+                className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink mb-3" style={{ fontSize: 14 }} />
+              <Text className="text-xs font-medium text-muted mb-1">{full.dashboard.jobs.quickQuote.priceLabel}</Text>
+              <View className="relative justify-center mb-3">
+                <Text className="absolute left-3 z-10 text-faint">$</Text>
+                <TextInput
+                  value={formatMoneyInput(qPrice)}
+                  onChangeText={v => setQPrice(v.replace(/[^0-9.]/g, ''))}
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  placeholderTextColor="#6B7280"
+                  className="rounded-xl border border-border bg-card pl-6 pr-3 py-2.5 text-ink" style={{ fontSize: 14 }} />
+              </View>
+              <Text className="text-xs font-medium text-muted mb-1">{full.dashboard.jobs.quickQuote.notesLabel}</Text>
+              <TextInput
+                value={qNotes}
+                onChangeText={setQNotes}
+                placeholder={full.dashboard.jobs.quickQuote.notesPlaceholder}
+                placeholderTextColor="#6B7280"
+                multiline
+                className="rounded-xl border border-border bg-card px-3 py-2.5 text-ink" style={{ fontSize: 14, minHeight: 72, textAlignVertical: 'top' }} />
+            </ScrollView>
+            {qError ? <Text className="text-xs text-red-600 mt-2 text-center">{qError}</Text> : null}
+            <Pressable
+              onPress={() => void saveQuick()}
+              disabled={!qTitle.trim() || qSaving}
+              className={`mt-4 py-3.5 rounded-2xl items-center ${qTitle.trim() && !qSaving ? 'bg-primary active:opacity-90' : 'bg-border'}`}
+            >
+              <Text className={`text-sm font-semibold ${qTitle.trim() && !qSaving ? 'text-white' : 'text-faint'}`}>{full.dashboard.jobs.quickQuote.save}</Text>
+            </Pressable>
+          </View>
+          {qPickerOpen ? (
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end' }}>
+              <Pressable onPress={() => setQPickerOpen(false)} style={SHEET_BACKDROP} />
+              <View
+                className="bg-card rounded-3xl pt-3 pb-6 mx-3 overflow-hidden"
+                style={[{ height: '80%', marginBottom: insets.bottom + 12, elevation: 24, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 24, shadowOffset: { width: 0, height: 10 } }, sheetSides]}
+              >
+                <View className="items-center mb-2"><View className="w-10 h-1 bg-border rounded-full" /></View>
+                <View className="px-5 mb-3 flex-row items-center justify-between">
+                  <Text className="text-base font-semibold text-ink">{full.dashboard.jobs.new.clientLabel}</Text>
+                  <Pressable onPress={() => setQPickerOpen(false)} hitSlop={8} className="p-1 -mr-1 active:opacity-60"><X size={22} color="#9CA3AF" /></Pressable>
+                </View>
+                <View className="px-5 mb-3">
+                  <View className="flex-row items-center rounded-xl border border-border bg-card px-3">
+                    <Search size={16} color="#9CA3AF" />
+                    <TextInput
+                      value={clientSearch}
+                      onChangeText={setClientSearch}
+                      autoFocus
+                      placeholder={full.dashboard.jobs.new.clientSearchPlaceholder}
+                      placeholderTextColor="#6B7280"
+                      className="flex-1 py-2.5 pl-2 text-ink" style={{ fontSize: 14 }} />
+                  </View>
+                </View>
+                <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
+                  <Pressable onPress={() => { setQClient(null); setQPickerOpen(false); }} className="flex-row items-center justify-between px-5 py-3.5 active:bg-surface">
+                    <Text className={`text-base ${!qClient ? 'text-primary font-semibold' : 'text-muted'}`}>{full.dashboard.jobs.new.clientNone}</Text>
+                    {!qClient ? <Check size={16} color="#3B82F6" /> : null}
+                  </Pressable>
+                  {clientResults.map(cl => {
+                    const isSel = cl.id === qClient?.id;
+                    return (
+                      <Pressable key={cl.id} onPress={() => { setQClient(cl); setQPickerOpen(false); }}
+                        className={`flex-row items-center justify-between px-5 py-3.5 active:bg-surface ${isSel ? 'bg-primary/5' : ''}`}>
+                        <View className="flex-1">
+                          <Text className={`text-base ${isSel ? 'text-primary font-semibold' : 'text-ink'}`} numberOfLines={1}>{cl.top}</Text>
+                          {cl.sub ? <Text className="text-xs text-faint mt-0.5" numberOfLines={1}>{cl.sub}</Text> : null}
+                        </View>
+                        {isSel ? <Check size={16} color="#3B82F6" /> : null}
+                      </Pressable>
+                    );
+                  })}
+                  {clientSearch.trim() && clientResults.length === 0 ? (
+                    <View className="px-5 py-8 items-center"><Text className="text-sm text-faint">{full.dashboard.jobs.new.clientNoResults}</Text></View>
+                  ) : null}
+                </ScrollView>
+              </View>
+            </View>
+          ) : null}
         </KeyboardAvoidingView>
       </RNModal>
     </View>

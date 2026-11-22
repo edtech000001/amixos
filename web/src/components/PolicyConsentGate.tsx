@@ -13,7 +13,8 @@
 // never pass through onboarding), and everyone again after a change marked
 // material in shared/legal/versions.ts.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { isImpersonating, subscribeImpersonation } from '@amixos/shared/lib/impersonation';
 import { createSupabaseClient } from '@/lib/supabase';
 import { PolicyConsentScreen } from '@amixos/shared/screens/legal/PolicyConsentScreen';
 import { fetchAcceptedVersions, recordAcceptance } from '@amixos/shared/lib/policyConsent';
@@ -23,9 +24,14 @@ export function PolicyConsentGate() {
   const [show, setShow] = useState(false);
   const [isUpdate, setIsUpdate] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  // Viewing as a member: data requests carry THEIR token while the session
+  // is still ours, so the check read the wrong rows and the save was refused
+  // by RLS. Consent is personal — never ask (or record) it while viewing as.
+  const impersonating = useSyncExternalStore(subscribeImpersonation, isImpersonating, () => false);
 
   useEffect(() => {
     let cancelled = false;
+    if (impersonating) { setShow(false); return; }
     const check = async () => {
       try {
         const supabase = createSupabaseClient();
@@ -47,9 +53,9 @@ export function PolicyConsentGate() {
     };
     void check();
     return () => { cancelled = true; };
-  }, []);
+  }, [impersonating]);
 
-  if (!show || !userId) return null;
+  if (!show || !userId || impersonating) return null;
 
   return (
     <PolicyConsentScreen

@@ -206,11 +206,14 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
   // geometry measured for the other orientation.
   const { width: winWidth } = useWindowDimensions();
   const [barWidth, setBarWidth] = useState(winWidth);
-  // Window minus the bar's measured width: non-zero where the bar is narrower
-  // than the window (iPhone Duo's side strip). Seeding with plain winWidth put
-  // the last tab's bubble past the bar's right end there.
-  const insetRef = useRef(0);
-  useEffect(() => { setBarWidth(winWidth - insetRef.current); }, [winWidth]);
+  // Last measured bar width. The bar can be narrower than the window (iPhone
+  // Duo's side strip), and on a flip/rotate the window-size event and onLayout
+  // arrive in either order — so a window change re-applies the MEASURED width
+  // (fresh if layout came first; onLayout corrects it if it comes after).
+  // Deriving "window − old inset" here mixed two orientations and pushed the
+  // last tab's bubble past the bar's end.
+  const measuredRef = useRef<number | null>(null);
+  useEffect(() => { setBarWidth(measuredRef.current ?? winWidth); }, [winWidth]);
   const numTabs = Math.max(1, visibleRoutes.length);
   const tabWidth = barWidth / numTabs;
   // Natural icon center (flex-1 distribution across full bar width)
@@ -358,7 +361,7 @@ export function AnimatedDock({ state, descriptors, navigation }: BottomTabBarPro
 
   const handleLayout = (e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
-    insetRef.current = Math.max(0, winWidth - w);
+    measuredRef.current = w;
     if (w !== barWidth) {
       setBarWidth(w);
       // Snap to current position on first layout so bubble doesn't fly in.

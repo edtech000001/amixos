@@ -18,6 +18,7 @@ import {
   View, Text, ScrollView, Pressable, ActivityIndicator,
   type NativeSyntheticEvent, type NativeScrollEvent,
 } from 'react-native';
+import { ChevronDown } from 'lucide-react-native';
 import { PressableScale } from '../../ui/PressableScale';
 import { useLang } from '../../i18n';
 import { useThemeColors } from '../../theme';
@@ -49,6 +50,12 @@ export function PolicyConsentScreen({ isUpdate, onAccept, onSignOut }: PolicyCon
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const reachedEnd = useRef(false);
+  // Reading progress (0–1) for the footer bar, and what "Keep reading" needs
+  // to page down: people didn't realise the document scrolls.
+  const [progress, setProgress] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const viewH = useRef(0);
+  const offsetY = useRef(0);
 
   const docs = useMemo(
     () => [
@@ -60,6 +67,9 @@ export function PolicyConsentScreen({ isUpdate, onAccept, onSignOut }: PolicyCon
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+    offsetY.current = contentOffset.y;
+    const range = contentSize.height - layoutMeasurement.height;
+    setProgress(range > 0 ? Math.min(1, contentOffset.y / range) : 1);
     // 24px of slack: exact equality never fires reliably across devices with
     // fractional scaling, and a button that refuses to enable at the very
     // bottom of a long document is maddening.
@@ -72,10 +82,16 @@ export function PolicyConsentScreen({ isUpdate, onAccept, onSignOut }: PolicyCon
 
   // A document short enough not to scroll must not trap the user.
   const onContentSizeChange = (_w: number, h: number) => {
-    if (h > 0 && h < 400 && !reachedEnd.current) {
+    if (h > 0 && viewH.current > 0 && h <= viewH.current + 24 && !reachedEnd.current) {
       reachedEnd.current = true;
       setAtEnd(true);
     }
+  };
+
+  // Before the end, the main button pages down a screen (minus a little
+  // overlap so no line is skipped) — they still scroll past every part.
+  const pageDown = () => {
+    scrollRef.current?.scrollTo({ y: offsetY.current + Math.max(200, viewH.current - 80), animated: true });
   };
 
   const accept = async () => {
@@ -100,8 +116,10 @@ export function PolicyConsentScreen({ isUpdate, onAccept, onSignOut }: PolicyCon
       </View>
 
       <ScrollView
+        ref={scrollRef}
         className="flex-1"
         contentContainerClassName="px-5 py-6"
+        onLayout={e => { viewH.current = e.nativeEvent.layout.height; }}
         onScroll={onScroll}
         onContentSizeChange={onContentSizeChange}
         scrollEventThrottle={64}
@@ -115,30 +133,37 @@ export function PolicyConsentScreen({ isUpdate, onAccept, onSignOut }: PolicyCon
         <View className="h-6" />
       </ScrollView>
 
-      <View className="px-5 pt-4 pb-10 border-t border-border-soft bg-card">
+      <View className="border-t border-border-soft bg-card">
+      {/* Reading progress — shows at a glance there's more below. */}
+      <View style={{ height: 3, backgroundColor: c.border }}>
+        <View style={{ height: 3, width: `${Math.round((atEnd ? 1 : progress) * 100)}%`, backgroundColor: c.primary }} />
+      </View>
+      <View className="px-5 pt-4 pb-10">
         {error ? (
           <Text className="text-xs text-red-600 mb-2 text-center">{error}</Text>
-        ) : !atEnd ? (
-          <Text className="text-xs text-faint mb-2 text-center">{t.scrollHint}</Text>
         ) : null}
 
         <PressableScale scaleTo={0.97}
-          onPress={accept}
-          disabled={!atEnd || busy}
-          className={`w-full py-4 rounded-2xl items-center ${atEnd && !busy ? 'bg-primary active:opacity-90' : 'bg-border'}`}
+          onPress={atEnd ? accept : pageDown}
+          disabled={busy}
+          className={`w-full py-4 rounded-2xl items-center flex-row justify-center gap-2 ${atEnd ? 'bg-primary active:opacity-90' : 'bg-primary/15 border border-primary/40 active:opacity-80'}`}
         >
           {busy ? (
             <ActivityIndicator color={c.white} />
+          ) : atEnd ? (
+            <Text className="text-base font-semibold text-white">{t.accept}</Text>
           ) : (
-            <Text className={`text-base font-semibold ${atEnd ? 'text-white' : 'text-faint'}`}>
-              {t.accept}
-            </Text>
+            <>
+              <ChevronDown size={18} color={c.primary} />
+              <Text className="text-base font-semibold text-primary">{t.scrollHint}</Text>
+            </>
           )}
         </PressableScale>
 
         <Pressable onPress={onSignOut} className="mt-3 py-2" hitSlop={8}>
           <Text className="text-sm font-medium text-muted text-center">{t.signOut}</Text>
         </Pressable>
+      </View>
       </View>
     </View>
   );
