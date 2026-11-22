@@ -43,7 +43,7 @@ export function LegalPage({ content }: { content: LegalDoc }) {
   return (
     <div className="min-h-screen bg-white text-gray-900">
       <LightPageBackground />
-      <div className="mx-auto max-w-3xl px-6 py-12">
+      <main className="mx-auto max-w-3xl px-6 py-12">
         <div className="flex items-center justify-between gap-4 mb-10">
           {canGoBack ? (
             <button
@@ -66,6 +66,7 @@ export function LegalPage({ content }: { content: LegalDoc }) {
                 key={l}
                 type="button"
                 onClick={() => setLang(l)}
+                aria-pressed={lang === l}
                 className={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${
                   lang === l ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-900'
                 }`}
@@ -96,7 +97,7 @@ export function LegalPage({ content }: { content: LegalDoc }) {
           </section>
         ))}
 
-        <footer className="mt-16 border-t border-gray-100 pt-6 text-xs text-gray-400">
+        <footer className="mt-16 border-t border-gray-100 pt-6 text-xs text-gray-500">
           <p>
             Amixos ·{' '}
             <a href="mailto:soporte@amixos.com" className="underline hover:text-gray-600">
@@ -104,7 +105,7 @@ export function LegalPage({ content }: { content: LegalDoc }) {
             </a>
           </p>
         </footer>
-      </div>
+      </main>
     </div>
   );
 }

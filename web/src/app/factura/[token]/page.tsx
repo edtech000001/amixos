@@ -120,7 +120,7 @@ export default function PublicInvoicePage({ params }: { params: { token: string 
 
   if (loading)
     return (
-      <div className="min-h-screen bg-surface py-10 px-4">
+      <div className="min-h-screen bg-surface py-10 px-4" aria-busy="true">
         <div className="max-w-3xl mx-auto flex flex-col gap-4">
           <SkeletonCard lines={3} />
           <SkeletonCard lines={10} />
@@ -131,9 +131,9 @@ export default function PublicInvoicePage({ params }: { params: { token: string 
 
   if (notFound || !raw)
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-lg font-semibold text-gray-900">{tInv.notFound}</p>
-      </div>
+      <main className="flex items-center justify-center min-h-screen">
+        <h1 className="text-lg font-semibold text-gray-900">{tInv.notFound}</h1>
+      </main>
     );
 
   const clientList: RawClient[] = raw.invoice_clients?.length
@@ -198,7 +198,8 @@ export default function PublicInvoicePage({ params }: { params: { token: string 
   const vm = buildInvoiceViewModel(config, invoice, branding);
 
   return (
-    <div className="min-h-screen bg-gray-50 print:bg-white">
+    <main className="min-h-screen bg-gray-50 print:bg-white">
+      <h1 className="sr-only">{raw.invoice_number}</h1>
       {/* Full-bleed on print: drop the @page margin and the on-screen max width
           so the letter-ratio page fills the sheet edge-to-edge — otherwise the
           corner decoration stops short of the paper's bottom-right corner. */}
@@ -216,6 +217,6 @@ export default function PublicInvoicePage({ params }: { params: { token: string 
           </button>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

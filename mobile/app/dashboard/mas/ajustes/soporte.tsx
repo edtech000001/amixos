@@ -11,7 +11,7 @@
 // version readouts that can disagree is worse than one that is complete.
 
 import { View, Text, Pressable, Linking, Alert, Platform } from 'react-native';
-import { LifeBuoy, Mail, Shield, FileText, ExternalLink, Bug } from 'lucide-react-native';
+import { LifeBuoy, Mail, Shield, FileText, ExternalLink, Bug, Accessibility } from 'lucide-react-native';
 import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import { useApp } from '@/lib/AppContext';
@@ -125,10 +125,19 @@ export default function SoportePage() {
 
           <Pressable
             onPress={() => open('/terms')}
-            className="flex-row items-center gap-3 py-3 active:opacity-70"
+            className="flex-row items-center gap-3 py-3 border-b border-border-soft active:opacity-70"
           >
             <FileText size={16} color={c.muted} />
             <Text className="flex-1 text-sm font-medium text-ink">{t.terms}</Text>
+            <ExternalLink size={15} color={c.faint} />
+          </Pressable>
+
+          <Pressable
+            onPress={() => open('/accessibility')}
+            className="flex-row items-center gap-3 py-3 active:opacity-70"
+          >
+            <Accessibility size={16} color={c.muted} />
+            <Text className="flex-1 text-sm font-medium text-ink">{t.accessibility}</Text>
             <ExternalLink size={15} color={c.faint} />
           </Pressable>
 

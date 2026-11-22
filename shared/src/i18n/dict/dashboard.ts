@@ -2355,6 +2355,7 @@ export type DashboardDict = {
       legalHeading: string;
       privacy: string;
       terms: string;
+      accessibility: string;
       legalHint: string;
     };
     google: {
@@ -3264,6 +3265,14 @@ export type DashboardDict = {
     draftTitle: string;
     updateTitle: string;
     updated: string;
+    invoiceUpdateTitle: string;
+    actionTitle: string;
+    done: string;
+    viewClient: string;
+    undone: string;
+    nothingToUndo: string;
+    invoiceUpdated: string;
+    viewInvoice: string;
     timeLabel: string;
     allDayLabel: string;
     confirm: string;
@@ -5915,6 +5924,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         legalHeading: 'Legal',
         privacy: 'Aviso de privacidad',
         terms: 'Términos de servicio',
+        accessibility: 'Accesibilidad',
         legalHint: 'Se abren en tu navegador.',
         noMailApp: 'No se pudo abrir tu app de correo. Escríbenos a {{email}}.',
       },
@@ -6788,6 +6798,14 @@ export const dashboard: Record<Locale, DashboardDict> = {
       draftTitle: 'Borrador de trabajo',
       updateTitle: 'Cambio al trabajo',
       updated: 'Trabajo actualizado',
+      invoiceUpdateTitle: 'Cambio a la factura',
+      actionTitle: 'Por confirmar',
+      done: 'Listo',
+      viewClient: 'Ver cliente',
+      undone: 'Listo, lo deshice.',
+      nothingToUndo: 'No tengo ningún cambio reciente que deshacer.',
+      invoiceUpdated: 'Factura actualizada',
+      viewInvoice: 'Ver factura',
       timeLabel: 'Horario',
       allDayLabel: 'Todo el día',
       confirm: 'Confirmar',
@@ -6808,7 +6826,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       callListening: 'Te escucho…',
       callThinking: 'Pensando…',
       callSpeaking: 'Hablando…',
-      callInterrupt: 'Toca para interrumpir',
+      callInterrupt: 'Habla o toca para interrumpir',
       callThinkingHint: 'Un momento — buscando la respuesta.',
       callConnecting: 'Conectando…',
       callEnd: 'Terminar',
@@ -9471,6 +9489,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         legalHeading: 'Legal',
         privacy: 'Privacy policy',
         terms: 'Terms of service',
+        accessibility: 'Accessibility',
         legalHint: 'These open in your browser.',
       },
       google: {
@@ -10343,6 +10362,14 @@ export const dashboard: Record<Locale, DashboardDict> = {
       draftTitle: 'Job draft',
       updateTitle: 'Job update',
       updated: 'Job updated',
+      invoiceUpdateTitle: 'Invoice change',
+      actionTitle: 'To confirm',
+      done: 'Done',
+      viewClient: 'View client',
+      undone: 'Done, I undid it.',
+      nothingToUndo: "I don't have a recent change to undo.",
+      invoiceUpdated: 'Invoice updated',
+      viewInvoice: 'View invoice',
       timeLabel: 'Time',
       allDayLabel: 'All day',
       confirm: 'Confirm',
@@ -10363,7 +10390,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
       callListening: "I'm listening…",
       callThinking: 'Thinking…',
       callSpeaking: 'Speaking…',
-      callInterrupt: 'Tap to interrupt',
+      callInterrupt: 'Speak or tap to interrupt',
       callThinkingHint: 'One moment — looking that up.',
       callConnecting: 'Connecting…',
       callEnd: 'End',

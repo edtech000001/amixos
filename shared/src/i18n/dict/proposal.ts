@@ -32,6 +32,9 @@ export type ProposalDict = {
   namePlaceholder: string;
   signLabel: string;
   signHint: string;
+  signDraw: string;
+  signType: string;
+  signTypeHint: string;
   signDisclaimer: string;
   clearSignature: string;
   acceptButton: string;
@@ -80,6 +83,9 @@ export const proposal: Record<Locale, ProposalDict> = {
     namePlaceholder: 'Tu nombre',
     signLabel: 'Firma',
     signHint: 'Dibuja tu firma aquí',
+    signDraw: 'Dibujar',
+    signType: 'Escribir',
+    signTypeHint: 'Escribe tu nombre arriba; se usará como tu firma.',
     signDisclaimer: 'Al firmar, aceptas que esta firma electrónica tiene la misma validez legal y efecto vinculante que una firma manuscrita en papel.',
     clearSignature: 'Borrar',
     acceptButton: 'Aceptar y firmar',
@@ -125,6 +131,9 @@ export const proposal: Record<Locale, ProposalDict> = {
     namePlaceholder: 'Your name',
     signLabel: 'Signature',
     signHint: 'Draw your signature here',
+    signDraw: 'Draw',
+    signType: 'Type',
+    signTypeHint: 'Type your name above; it will be used as your signature.',
     signDisclaimer: 'By signing, you agree that this electronic signature has the same legal validity and binding effect as a handwritten signature on paper.',
     clearSignature: 'Clear',
     acceptButton: 'Accept & sign',

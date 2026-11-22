@@ -6,6 +6,7 @@ export const landing: Record<Locale, LandingDict> = {
       login: 'Iniciar sesión',
       cta: 'Únete gratis',
       switchLang: 'Switch to English',
+      menu: 'Menú',
     },
     hero: {
       tag: '✨ Ya disponible — 14 días gratis',
@@ -108,6 +109,7 @@ export const landing: Record<Locale, LandingDict> = {
       rights: 'Todos los derechos reservados.',
       terms: 'Términos',
       privacy: 'Privacidad',
+      accessibility: 'Accesibilidad',
     },
     mockup: {
       welcome: 'Bienvenido, Edvin',
@@ -130,6 +132,7 @@ export const landing: Record<Locale, LandingDict> = {
       login: 'Log in',
       cta: 'Join free',
       switchLang: 'Cambiar a Español',
+      menu: 'Menu',
     },
     hero: {
       tag: '✨ Now available — 14 days free',
@@ -232,6 +235,7 @@ export const landing: Record<Locale, LandingDict> = {
       rights: 'All rights reserved.',
       terms: 'Terms',
       privacy: 'Privacy',
+      accessibility: 'Accessibility',
     },
     mockup: {
       welcome: 'Welcome, Edvin',
@@ -252,7 +256,7 @@ export const landing: Record<Locale, LandingDict> = {
 };
 
 export type LandingDict = {
-  nav: { login: string; cta: string; switchLang: string };
+  nav: { login: string; cta: string; switchLang: string; menu: string };
   hero: {
     tag: string; h1_1: string; h1_2: string; sub: string;
     ctaPrimary: string; ctaSecondary: string; note: string;
@@ -280,7 +284,7 @@ export type LandingDict = {
     salesTitle: string; salesBody: string;
     salesSubject: string;
   };
-  footer: { tagline: string; rights: string; terms: string; privacy: string };
+  footer: { tagline: string; rights: string; terms: string; privacy: string; accessibility: string };
   mockup: {
     welcome: string; monthlyIncome: string; clients: string; invoices: string; employees: string;
     recent: string; paid: string; sent: string; draft: string;

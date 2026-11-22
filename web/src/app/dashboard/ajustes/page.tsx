@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, ChevronRight, ChevronLeft, Palette, Sparkles, LogOut, Building2, Eye, EyeOff, X, Contrast, LifeBuoy, ShieldCheck, Upload, FileText, Shield } from 'lucide-react';
+import { User, Save, Plus, Pencil, Trash2, GripVertical, Sliders, Globe, ChevronUp, ChevronDown, ChevronRight, ChevronLeft, Palette, Sparkles, LogOut, Building2, Eye, EyeOff, X, Contrast, LifeBuoy, ShieldCheck, Upload, FileText, Shield, Accessibility } from 'lucide-react';
 import { isValidEmail } from '@amixos/shared/lib/validation';
 import { pathFromPublicUrl, PUBLIC_ASSETS_BUCKET } from '@amixos/shared/lib/storageUrls';
 import { SUPPORT_EMAIL, buildSupportMailto } from '@amixos/shared/lib/support';
@@ -4070,6 +4070,14 @@ export default function AjustesPage() {
                         className="inline-flex items-center gap-2 py-1.5 text-sm font-medium text-ink hover:text-primary"
                       >
                         <FileText size={15} className="text-muted" /> {t.support.terms}
+                      </a>
+                      <a
+                        href="/accessibility"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 py-1.5 text-sm font-medium text-ink hover:text-primary"
+                      >
+                        <Accessibility size={15} className="text-muted" /> {t.support.accessibility}
                       </a>
                     </div>
                   </div>

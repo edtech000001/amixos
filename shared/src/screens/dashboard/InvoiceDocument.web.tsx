@@ -73,11 +73,11 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
   const metaLines = (subtle?: boolean) => (
     <>
       <div style={{ fontSize: small, marginTop: 4, color: subtle ? subtleOnAcc : '#374151' }}>
-        <span style={{ color: subtle ? subtleOnAcc : '#9ca3af' }}>{h.issueLabel}:</span> {h.issueValue}
+        <span style={{ color: subtle ? subtleOnAcc : '#6b7280' }}>{h.issueLabel}:</span> {h.issueValue}
       </div>
       {h.dueValue ? (
         <div style={{ fontSize: small, color: subtle ? subtleOnAcc : '#374151' }}>
-          <span style={{ color: subtle ? subtleOnAcc : '#9ca3af' }}>{h.dueLabel}:</span> {h.dueValue}
+          <span style={{ color: subtle ? subtleOnAcc : '#6b7280' }}>{h.dueLabel}:</span> {h.dueValue}
         </div>
       ) : null}
     </>
@@ -244,7 +244,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
             <div>
               <div style={{ textTransform: 'uppercase', letterSpacing: '0.16em', fontWeight: 400, fontSize: st.fontPx + 18, color: '#111827' }}>{h.invoiceTitle}</div>
               <div className="text-muted" style={{ fontSize: small, marginTop: 4 }}>{h.invoiceNumber}</div>
-              <div className="text-faint" style={{ fontSize: small, marginTop: 6 }}>{h.issueLabel} {h.issueValue}{h.dueValue ? `  ·  ${h.dueLabel} ${h.dueValue}` : ''}</div>
+              <div className="text-muted" style={{ fontSize: small, marginTop: 6 }}>{h.issueLabel} {h.issueValue}{h.dueValue ? `  ·  ${h.dueLabel} ${h.dueValue}` : ''}</div>
             </div>
             <div style={{ width: 122, height: 122, borderRadius: '50%', background: tint, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', flex: '0 0 auto' }}>
               {h.showLogo && h.logoUrl ? (
@@ -305,7 +305,7 @@ export function InvoiceDocument({ vm }: { vm: InvoiceViewModel }) {
   const th = vm.tableHeader;
   const thFilled = th !== 'plain';
   const thBg = th === 'accent' ? accent : th === 'dark' ? '#1f2937' : th === 'tint' ? tint : undefined;
-  const thColor = th === 'accent' ? onAcc : th === 'dark' ? '#fff' : th === 'tint' ? '#4b5563' : '#9ca3af';
+  const thColor = th === 'accent' ? onAcc : th === 'dark' ? '#fff' : th === 'tint' ? '#4b5563' : '#6b7280';
   const thCell = (align: 'left' | 'center' | 'right', first?: boolean, last?: boolean): CSSProperties => ({
     textAlign: align,
     fontWeight: 600,

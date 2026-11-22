@@ -198,7 +198,7 @@ export default function PublicProposalPage({ params }: { params: { token: string
 
   // The proposal document: header block, line items, then the totals/actions.
   if (loading) return (
-    <div className="min-h-screen bg-surface py-10 px-4">
+    <div className="min-h-screen bg-surface py-10 px-4" aria-busy="true">
       <div className="max-w-3xl mx-auto flex flex-col gap-4">
         <SkeletonCard lines={3} />
         <SkeletonCard lines={10} />
@@ -208,12 +208,12 @@ export default function PublicProposalPage({ params }: { params: { token: string
   );
 
   if (notFound || !proposal) return (
-    <div className="flex items-center justify-center min-h-screen">
+    <main className="flex items-center justify-center min-h-screen">
       <div className="text-center">
-        <p className="text-lg font-semibold text-gray-900 mb-1">{t.notFound}</p>
-        <p className="text-sm text-gray-400">{t.notFoundSub}</p>
+        <h1 className="text-lg font-semibold text-gray-900 mb-1">{t.notFound}</h1>
+        <p className="text-sm text-gray-500">{t.notFoundSub}</p>
       </div>
-    </div>
+    </main>
   );
 
   const isAccepted = ['accepted', 'scheduled', 'in_progress', 'completed', 'invoiced'].includes(proposal.status);
@@ -222,7 +222,8 @@ export default function PublicProposalPage({ params }: { params: { token: string
   const canRespond = ['proposal', 'sent'].includes(proposal.status) && !isExpired;
 
   return (
-    <div className="min-h-screen bg-gray-50 print:bg-white">
+    <main className="min-h-screen bg-gray-50 print:bg-white">
+      <h1 className="sr-only">{[proposal.estimate_number, proposal.title].filter(Boolean).join(" · ")}</h1>
       {/* Full-bleed on print so the theme decoration reaches the sheet edges. */}
       <style>{'@media print{html,body{background:#fff!important;color-scheme:light!important}@page{margin:10mm}.inv-doc-page{aspect-ratio:auto!important;overflow:visible!important;display:block!important}.inv-doc-page>*{flex:0 0 auto!important}}'}</style>
       <div className="max-w-3xl mx-auto py-10 px-6 print:py-0 print:px-0 print:max-w-none">
@@ -233,21 +234,21 @@ export default function PublicProposalPage({ params }: { params: { token: string
 
         {/* Accepted (no signature on file — accepted manually by the business) */}
         {isAccepted && !proposal.client_signature && (
-          <div className="bg-emerald-50 rounded-2xl border border-emerald-200 p-5 mb-6 print:hidden">
+          <div role="status" className="bg-emerald-50 rounded-2xl border border-emerald-200 p-5 mb-6 print:hidden">
             <p className="text-sm font-semibold text-emerald-700">✓ {t.acceptedBanner}</p>
           </div>
         )}
 
         {/* Declined */}
         {isDeclined && (
-          <div className="bg-red-50 rounded-2xl border border-red-100 p-5 mb-6 print:hidden">
+          <div role="status" className="bg-red-50 rounded-2xl border border-red-100 p-5 mb-6 print:hidden">
             <p className="text-sm font-semibold text-red-600">{t.declinedNotice}</p>
           </div>
         )}
 
         {/* Expired — no longer respondable */}
         {!isAccepted && !isDeclined && isExpired && (
-          <div className="bg-orange-50 rounded-2xl border border-orange-100 p-5 mb-6 print:hidden">
+          <div role="status" className="bg-orange-50 rounded-2xl border border-orange-100 p-5 mb-6 print:hidden">
             <p className="text-sm font-semibold text-orange-600">{t.expiredNotice}</p>
           </div>
         )}
@@ -257,18 +258,21 @@ export default function PublicProposalPage({ params }: { params: { token: string
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6 print:hidden">
             <h2 className="text-base font-bold text-gray-900 mb-1">{t.approveTitle}</h2>
             <p className="text-sm text-gray-500 mb-4">{t.approveHint}</p>
-            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">{t.nameLabel}</label>
+            <label htmlFor="sign-name" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t.nameLabel}</label>
             <input
+              id="sign-name"
+              autoComplete="name"
               type="text"
               value={signName}
               onChange={e => setSignName(e.target.value)}
               placeholder={t.namePlaceholder}
               className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 mb-4 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
             />
-            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">{t.signLabel}</label>
-            <SignaturePad hint={t.signHint} clearLabel={t.clearSignature} onChange={setSignature}/>
-            <p className="text-xs text-gray-400 mt-2 leading-relaxed">{t.signDisclaimer}</p>
-            {respondErr && <p className="text-sm text-red-600 mt-3">{respondErr}</p>}
+            <p className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t.signLabel}</p>
+            <SignaturePad hint={t.signHint} clearLabel={t.clearSignature} onChange={setSignature}
+              typed={{ name: signName, drawLabel: t.signDraw, typeLabel: t.signType, hint: t.signTypeHint }}/>
+            <p className="text-xs text-gray-500 mt-2 leading-relaxed">{t.signDisclaimer}</p>
+            {respondErr && <p role="alert" className="text-sm text-red-600 mt-3">{respondErr}</p>}
             <div className="flex flex-col sm:flex-row gap-3 mt-5">
               <button
                 onClick={() => submitResponse('accepted')}
@@ -294,6 +298,6 @@ export default function PublicProposalPage({ params }: { params: { token: string
           </button>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

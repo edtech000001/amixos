@@ -184,7 +184,7 @@ export function RegisterScreen({
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
                 tabIndex={-1}
               >
@@ -212,7 +212,7 @@ export function RegisterScreen({
               <button
                 type="button"
                 onClick={() => setShowConfirm((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                 aria-label={showConfirm ? 'Hide password' : 'Show password'}
                 tabIndex={-1}
               >
@@ -243,7 +243,7 @@ export function RegisterScreen({
             {isSubmitting ? '…' : t.register.submit}
           </button>
 
-          <p className="text-xs text-center text-gray-400 mt-1">
+          <p className="text-xs text-center text-gray-500 mt-1">
             {t.register.termsBefore}{' '}
             <button type="button" onClick={onTermsPress} className="text-primary hover:underline">
               {t.register.terms}
@@ -259,7 +259,7 @@ export function RegisterScreen({
           <div className="mt-6">
             <div className="flex items-center gap-3 mb-5">
               <div className="flex-1 h-px bg-gray-100" />
-              <span className="text-xs text-gray-400">{t.register.dividerEmail}</span>
+              <span className="text-xs text-gray-500">{t.register.dividerEmail}</span>
               <div className="flex-1 h-px bg-gray-100" />
             </div>
             {oauthSlot}

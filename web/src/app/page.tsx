@@ -22,7 +22,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="border-b border-gray-100 last:border-0">
-      <button onClick={() => setOpen(!open)}
+      <button onClick={() => setOpen(!open)} aria-expanded={open}
         className="w-full flex items-center justify-between py-4 text-left gap-4 hover:text-blue-600 transition-colors">
         <span className="text-sm font-semibold text-gray-900">{q}</span>
         <ChevronDown size={16} className={`text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}/>
@@ -35,7 +35,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 // ─── App Mockup ───────────────────────────────────────────────────────────────
 function AppMockup({ t }: { t: LandingDict }) {
   return (
-    <div className="relative w-full max-w-sm mx-auto">
+    <div aria-hidden className="relative w-full max-w-sm mx-auto">
       {/* Phone frame */}
       <div className="bg-white rounded-3xl shadow-2xl border border-gray-200 overflow-hidden">
         {/* Top bar */}
@@ -186,7 +186,7 @@ export default function LandingPage() {
           </div>
 
           {/* Mobile hamburger */}
-          <button className="md:hidden p-2" onClick={() => setMobileMenu(!mobileMenu)}>
+          <button className="md:hidden p-2" onClick={() => setMobileMenu(!mobileMenu)} aria-label={t.nav.menu} aria-expanded={mobileMenu}>
             {mobileMenu ? <X size={22}/> : <Menu size={22}/>}
           </button>
         </div>
@@ -223,6 +223,7 @@ export default function LandingPage() {
         )}
       </nav>
 
+      <main>
       {/* ── Hero ───────────────────────────────────────────────────────────── */}
       <section className="pt-24 pb-20 px-5 bg-gradient-to-b from-blue-50 via-white to-white">
         <div className="max-w-6xl mx-auto">
@@ -252,7 +253,7 @@ export default function LandingPage() {
                   {t.hero.ctaSecondary}
                 </a>
               </div>
-              <p className="text-xs text-gray-400 mt-3">{t.hero.note}</p>
+              <p className="text-xs text-gray-500 mt-3">{t.hero.note}</p>
             </div>
             <div className="hidden md:block">
               <AppMockup t={t}/>
@@ -263,7 +264,7 @@ export default function LandingPage() {
 
       {/* ── Trust bar ──────────────────────────────────────────────────────── */}
       <section className="border-y border-gray-100 bg-gray-50 py-5 px-5">
-        <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-8 text-sm text-gray-400">
+        <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-center gap-8 text-sm text-gray-500">
           {[
             { icon: <Shield size={15}/>, text: t.trust.secureData },
             { icon: <Zap size={15}/>, text: t.trust.noContracts },
@@ -279,7 +280,7 @@ export default function LandingPage() {
       {/* ── Problem ────────────────────────────────────────────────────────── */}
       <section className="py-20 px-5">
         <div className="max-w-3xl mx-auto text-center">
-          <p className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-3">{t.problem.tag}</p>
+          <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-3">{t.problem.tag}</p>
           <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-10">{t.problem.h}</h2>
           <div className="flex flex-col gap-3 text-left">
             {t.problem.items.map(item => (
@@ -296,7 +297,7 @@ export default function LandingPage() {
       <section className="py-20 px-5 bg-gray-50">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-12">
-            <p className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-3">{t.solution.tag}</p>
+            <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-3">{t.solution.tag}</p>
             <h2 className="text-3xl md:text-4xl font-black text-gray-900">{t.solution.h}</h2>
           </div>
           <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-5">
@@ -315,7 +316,7 @@ export default function LandingPage() {
       <section className="py-20 px-5">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
-            <p className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-3">{t.how.tag}</p>
+            <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-3">{t.how.tag}</p>
             <h2 className="text-3xl md:text-4xl font-black text-gray-900">{t.how.h}</h2>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
@@ -362,7 +363,7 @@ export default function LandingPage() {
       <section id="pricing" className="py-20 px-5 scroll-mt-16">
         <div className="max-w-6xl mx-auto">
           <div className="text-center">
-            <p className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-3">{t.pricing.tag}</p>
+            <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-3">{t.pricing.tag}</p>
             <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-3">{t.pricing.h}</h2>
             <p className="text-gray-500 text-sm mb-8">{t.pricing.sub}</p>
           </div>
@@ -375,6 +376,7 @@ export default function LandingPage() {
                   key={p}
                   type="button"
                   onClick={() => setPeriod(p)}
+                  aria-pressed={period === p}
                   className={`px-5 py-2 text-sm font-semibold rounded-full transition-colors ${
                     period === p ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-900'
                   }`}
@@ -383,7 +385,7 @@ export default function LandingPage() {
                 </button>
               ))}
             </div>
-            <span className="hidden sm:inline text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full">
+            <span className="hidden sm:inline text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full">
               {t.pricing.annualBadge}
             </span>
           </div>
@@ -416,12 +418,12 @@ export default function LandingPage() {
                     <>
                       <div className="flex items-end gap-1">
                         <span className="text-4xl font-black text-gray-900">${formatPlanPrice(perMonth)}</span>
-                        <span className="text-gray-400 mb-1.5 text-sm">{t.pricing.perMonth}</span>
+                        <span className="text-gray-500 mb-1.5 text-sm">{t.pricing.perMonth}</span>
                       </div>
                       {/* Annual is shown as its monthly equivalent so the tiers stay
                           comparable; the real charge is stated underneath so nobody
                           is surprised by the amount on their card. */}
-                      <p className="text-xs text-gray-400 mt-1 h-4">
+                      <p className="text-xs text-gray-500 mt-1 h-4">
                         {period === 'annual'
                           ? t.pricing.billedAnnually.replace('{total}', formatPlanPrice(plan.annualTotal))
                           : ''}
@@ -453,7 +455,7 @@ export default function LandingPage() {
             })}
           </div>
 
-          <p className="text-center text-xs text-gray-400 mt-8">
+          <p className="text-center text-xs text-gray-500 mt-8">
             {t.pricing.note.replace('{days}', String(TRIAL_DAYS))}
           </p>
         </div>
@@ -463,7 +465,7 @@ export default function LandingPage() {
       <section className="py-20 px-5 bg-gray-50">
         <div className="max-w-2xl mx-auto">
           <div className="text-center mb-10">
-            <p className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-3">{t.faq.tag}</p>
+            <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-3">{t.faq.tag}</p>
             <h2 className="text-3xl font-black text-gray-900">{t.faq.h}</h2>
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 divide-y divide-gray-100">
@@ -481,7 +483,7 @@ export default function LandingPage() {
       <section id="contacto" className="py-20 px-5 bg-gray-50 scroll-mt-16">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-10">
-            <p className="text-xs font-bold text-blue-500 uppercase tracking-widest mb-3">{t.contact.tag}</p>
+            <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-3">{t.contact.tag}</p>
             <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-3">{t.contact.h}</h2>
             <p className="text-gray-500 text-sm">{t.contact.sub}</p>
           </div>
@@ -523,28 +525,30 @@ export default function LandingPage() {
           >
             {t.finalCta.cta}
           </Link>
-          <p className="text-xs text-gray-400 mt-3">{t.hero.note}</p>
+          <p className="text-xs text-gray-500 mt-3">{t.hero.note}</p>
         </div>
       </section>
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
+      </main>
       <footer className="border-t border-gray-100 py-8 px-5">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Logo variant="side" width={110} ink="black" />
-            <span className="text-gray-400 text-sm">— {t.footer.tagline}</span>
+            <span className="text-gray-500 text-sm">— {t.footer.tagline}</span>
           </div>
-          <div className="flex items-center gap-6 text-xs text-gray-400">
+          <div className="flex items-center gap-6 text-xs text-gray-500">
             <Link href="/auth/login" className="hover:text-gray-700 transition-colors">{t.nav.login}</Link>
             <Link href="/auth/register" className="hover:text-gray-700 transition-colors">{t.nav.cta}</Link>
             <a href={`mailto:${SUPPORT_EMAIL}`} className="hover:text-gray-700 transition-colors">{t.contact.tag}</a>
             <Link href="/terms" className="hover:text-gray-700 transition-colors">{t.footer.terms}</Link>
             <Link href="/privacy" className="hover:text-gray-700 transition-colors">{t.footer.privacy}</Link>
+            <Link href="/accessibility" className="hover:text-gray-700 transition-colors">{t.footer.accessibility}</Link>
             <button onClick={() => setLocale(nextLocale)} className="hover:text-gray-700 transition-colors">
               {otherLocaleLabel}
             </button>
           </div>
-          <p className="text-xs text-gray-300">© {new Date().getFullYear()} Amixos. {t.footer.rights}</p>
+          <p className="text-xs text-gray-500">© {new Date().getFullYear()} Amixos. {t.footer.rights}</p>
         </div>
       </footer>
     </div>

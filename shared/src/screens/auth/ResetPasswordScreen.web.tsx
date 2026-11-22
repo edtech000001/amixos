@@ -157,7 +157,7 @@ export function ResetPasswordScreen({
         <button
           type="button"
           onClick={toggle}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
           aria-label={label}
         >
           {show ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -176,7 +176,7 @@ export function ResetPasswordScreen({
         {field('password', t.reset.newPassword, t.reset.newPasswordPlaceholder, showPassword, () => setShowPassword(v => !v))}
         {field('confirmPassword', t.reset.confirmPassword, t.reset.confirmPasswordPlaceholder, showConfirm, () => setShowConfirm(v => !v))}
 
-        <p className="text-xs text-gray-400">{t.reset.requirementsHint}</p>
+        <p className="text-xs text-gray-500">{t.reset.requirementsHint}</p>
 
         {error && (
           <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3">
