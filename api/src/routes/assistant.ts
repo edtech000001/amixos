@@ -3,7 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { authenticate, AuthRequest, getBusinessRole } from '../middleware/auth';
 import { rlsClient } from '../lib/supabaseRls';
 import { runAssistant } from '../lib/assistant/loop';
-import { confirmDraft, confirmJobUpdate, DraftValidationError } from '../lib/assistant/draft';
+import { confirmDraft, confirmJobUpdate, undoJobChange, DraftValidationError } from '../lib/assistant/draft';
 import { detectVoiceLocale, synthesizeSpeech } from '../lib/assistant/tts';
 import { isAssistantEnabled } from '../lib/assistant/types';
 import type { AssistantChatMessage, AssistantContext, JobDraft, JobUpdateDraft, AssistantDraft } from '../lib/assistant/types';
@@ -113,7 +113,7 @@ async function buildContext(
 // POST /api/v1/assistant/chat
 assistantRouter.post('/chat', authenticate, chatLimiter, async (req: AuthRequest, res: Response) => {
   if (!requireAiConsent(req, res)) return;
-  const { business_id, messages, pending_draft, locale } = req.body ?? {};
+  const { business_id, messages, pending_draft, locale, screen_path } = req.body ?? {};
   if (!business_id || typeof business_id !== 'string') {
     return res.status(400).json({ success: false, message: 'business_id required' });
   }
@@ -131,6 +131,7 @@ assistantRouter.post('/chat', authenticate, chatLimiter, async (req: AuthRequest
       ctx,
       messages as AssistantChatMessage[],
       (pending_draft ?? null) as AssistantDraft | null,
+      screen_path,
     );
     return res.json({ success: true, data: { reply, pending_draft: pendingDraft, client_action: clientAction } });
   } catch (e) {
@@ -171,6 +172,28 @@ assistantRouter.post('/confirm', authenticate, confirmLimiter, async (req: AuthR
   const { business_id, draft, locale } = req.body ?? {};
   if (!business_id || typeof business_id !== 'string' || !draft) {
     return res.status(400).json({ success: false, message: 'business_id and draft required' });
+
+// POST /api/v1/assistant/undo — reverse the last Ami job change.
+assistantRouter.post('/undo', authenticate, confirmLimiter, async (req: AuthRequest, res: Response) => {
+  if (!requireAiConsent(req, res)) return;
+  const { business_id, undo, locale } = req.body ?? {};
+  if (!business_id || typeof business_id !== 'string' || !undo || typeof undo !== 'object') {
+    return res.status(400).json({ success: false, message: 'business_id and undo required' });
+  }
+  if (!isAssistantEnabled(business_id)) {
+    return res.status(403).json({ success: false, message: 'assistant_not_enabled' });
+  }
+  try {
+    const ctx = await buildContext(req, business_id, locale);
+    if (!ctx) return res.status(403).json({ success: false, message: 'Not a member of this business' });
+    await undoJobChange(ctx, undo);
+    return res.json({ success: true, data: { ok: true } });
+  } catch (e) {
+    if (e instanceof DraftValidationError) return res.status(400).json({ success: false, message: e.message });
+    console.error('[assistant/undo]', e);
+    return res.status(500).json({ success: false, message: 'undo_failed' });
+  }
+});
   }
   if (!isAssistantEnabled(business_id)) {
     return res.status(403).json({ success: false, message: 'assistant_not_enabled' });
@@ -180,10 +203,14 @@ assistantRouter.post('/confirm', authenticate, confirmLimiter, async (req: AuthR
     if (!ctx) return res.status(403).json({ success: false, message: 'Not a member of this business' });
 
     const d = draft as AssistantDraft;
-    const { jobId, alreadyExisted } = isJobUpdateDraft(d)
+    // Invoice edits are applied by the app (shared invoicing helpers).
+    if (['invoice_edit', 'action'].includes((d as { kind?: string }).kind ?? '')) {
+      return res.status(400).json({ success: false, message: 'invoice_edit is applied client-side' });
+    }
+    const { jobId, alreadyExisted, undo } = isJobUpdateDraft(d)
       ? await confirmJobUpdate(ctx, d as JobUpdateDraft)
       : await confirmDraft(ctx, d as JobDraft);
-    return res.json({ success: true, data: { job_id: jobId, already_existed: alreadyExisted } });
+    return res.json({ success: true, data: { job_id: jobId, already_existed: alreadyExisted, undo: alreadyExisted ? undefined : undo } });
   } catch (e) {
     if (e instanceof DraftValidationError) {
       return res.status(400).json({ success: false, message: e.message });

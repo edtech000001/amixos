@@ -62,8 +62,15 @@ export async function fetchCrewFinderData(
 ): Promise<CrewFinderData> {
   const windowDays = opts.windowDays ?? DEFAULT_WINDOW_DAYS;
   const today = new Date();
-  const todayYmd = ymd(today);
-  const endYmd = ymd(new Date(today.getFullYear(), today.getMonth(), today.getDate() + windowDays));
+  // Load jobs around the TARGET date too: a date beyond the window (or in the
+  // past) otherwise has no jobs loaded and everyone reads as free.
+  const t = target.scheduledDate && /^\d{4}-\d{2}-\d{2}$/.test(target.scheduledDate)
+    ? new Date(Number(target.scheduledDate.slice(0, 4)), Number(target.scheduledDate.slice(5, 7)) - 1, Number(target.scheduledDate.slice(8, 10)))
+    : today;
+  const from = t < today ? t : today;
+  const to = t > today ? t : today;
+  const fromYmd = ymd(from);
+  const endYmd = ymd(new Date(to.getFullYear(), to.getMonth(), to.getDate() + windowDays));
 
   const [emps, jobRows, biz] = await Promise.all([
     fetchAll<RawEmp>((from, to) =>
@@ -84,7 +91,7 @@ export async function fetchCrewFinderData(
         .eq('business_id', businessId)
         .not('status', 'in', '("cancelled","declined")')
         .lte('scheduled_date', endYmd)
-        .or(`end_date.gte.${todayYmd},and(end_date.is.null,scheduled_date.gte.${todayYmd})`)
+        .or(`end_date.gte.${fromYmd},and(end_date.is.null,scheduled_date.gte.${fromYmd})`)
         .range(from, to),
     ),
     supabase.from('businesses').select('operating_hours').eq('id', businessId).maybeSingle(),

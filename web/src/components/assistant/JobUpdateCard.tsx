@@ -11,11 +11,17 @@ interface Props {
   createdJobId?: string;
   onConfirm: () => void;
   confirming: boolean;
+  /** What the result opens + card labels (defaults: a job change). */
+  target?: 'job' | 'invoice' | 'client';
+  heading?: string;
+  doneLabel?: string;
 }
+
+const SECTION = { job: 'trabajos', invoice: 'facturas', client: 'clientes' } as const;
 
 // Preview of a reschedule/edit to an EXISTING job — shows old → new for each
 // changed field. Confirming applies the change.
-export function JobUpdateCard({ draft, active, createdJobId, onConfirm, confirming }: Props) {
+export function JobUpdateCard({ draft, active, createdJobId, onConfirm, confirming, target = 'job', heading, doneLabel }: Props) {
   const { t: full } = useLang();
   const t = full.dashboard.assistant;
   const stale = !active && !createdJobId;
@@ -23,7 +29,8 @@ export function JobUpdateCard({ draft, active, createdJobId, onConfirm, confirmi
   const timeStr = (allDay?: boolean, s?: string | null, e?: string | null) =>
     allDay ? t.allDayLabel : [s, e].filter(Boolean).join(' – ') || '—';
 
-  const rows: { label: string; from: string; to: string }[] = [];
+  // Field edits (rename, notes, client…) come pre-labelled from the API.
+  const rows: { label: string; from: string; to: string }[] = [...(draft.detail_rows ?? [])];
   if (draft.scheduled_date !== undefined) {
     rows.push({ label: t.dateLabel, from: draft.before.scheduled_date || '—', to: draft.scheduled_date || '—' });
   }
@@ -48,15 +55,20 @@ export function JobUpdateCard({ draft, active, createdJobId, onConfirm, confirmi
 
   return (
     <div className={`mt-2 rounded-2xl border border-primary/20 bg-primary/5 p-4 ${stale ? 'opacity-60' : ''}`}>
-      <p className="text-xs font-bold uppercase tracking-wide text-primary">{t.updateTitle}</p>
+      <p className="text-xs font-bold uppercase tracking-wide text-primary">{heading ?? t.updateTitle}</p>
       <p className="mt-0.5 text-sm font-semibold text-ink">{draft.title}</p>
 
       <div className="mt-3 space-y-1.5">
-        {rows.map(r => (
-          <div key={r.label} className="flex items-center gap-2 text-sm">
+        {rows.map((r, i) => (
+          <div key={`${r.label}-${i}`} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
             <span className="shrink-0 font-medium text-muted">{r.label}:</span>
-            <span className="text-faint line-through">{r.from}</span>
-            <ArrowRight size={13} className="shrink-0 text-muted" />
+            {/* New things (an action's fields) have no "before". */}
+            {r.from ? (
+              <>
+                <span className="text-faint line-through">{r.from}</span>
+                <ArrowRight size={13} className="shrink-0 text-muted" />
+              </>
+            ) : null}
             <span className="font-medium text-ink">{r.to}</span>
           </div>
         ))}
@@ -88,9 +100,9 @@ export function JobUpdateCard({ draft, active, createdJobId, onConfirm, confirmi
       {createdJobId ? (
         <div className="mt-3 flex items-center gap-2 text-sm">
           <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
-          <span className="font-medium text-green-700">{t.updated}</span>
-          <Link href={`/dashboard/trabajos/${createdJobId}`} className="ml-auto font-medium text-primary hover:underline">
-            {t.viewJob}
+          <span className="font-medium text-green-700">{doneLabel ?? t.updated}</span>
+          <Link href={`/dashboard/${SECTION[target]}/${createdJobId}`} className="ml-auto font-medium text-primary hover:underline">
+            {target === 'invoice' ? t.viewInvoice : target === 'client' ? t.viewClient : t.viewJob}
           </Link>
         </div>
       ) : active ? (

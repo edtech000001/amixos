@@ -6,6 +6,11 @@ import {
   buildDraft,
   buildJobUpdateDraft,
   buildNavigateAction,
+  buildInvoiceEditDraft,
+  buildActionDraft,
+  executeDailyBriefing,
+  executeGetInvoice,
+  executeGetJob,
   executeQueryInvoices,
   executeQueryClients,
   executeQueryEmployees,
@@ -58,6 +63,26 @@ async function executeTool(
     }
     case 'query_invoices':
       return { result: JSON.stringify(await executeQueryInvoices(ctx, input)) };
+    case 'get_job':
+      return { result: JSON.stringify(await executeGetJob(ctx, input)) };
+    case 'get_invoice':
+      return { result: JSON.stringify(await executeGetInvoice(ctx, input)) };
+    case 'invoice_jobs':
+    case 'record_payment':
+    case 'quick_quote':
+    case 'log_client_note':
+    case 'create_client': {
+      const draft = await buildActionDraft(ctx, name, input);
+      return { result: JSON.stringify({ draft_prepared: true, draft }), draft };
+    }
+    case 'daily_briefing':
+      return { result: JSON.stringify(await executeDailyBriefing(ctx, input)) };
+    case 'undo_last':
+      return { result: JSON.stringify({ undoing: true }), action: { type: 'undo' } };
+    case 'edit_invoice': {
+      const draft = await buildInvoiceEditDraft(ctx, input);
+      return { result: JSON.stringify({ draft_prepared: true, draft }), draft };
+    }
     case 'open_screen': {
       const action = await buildNavigateAction(ctx, input);
       return { result: JSON.stringify({ will_open: action }), action };
@@ -71,10 +96,33 @@ async function executeTool(
   }
 }
 
+const SCREEN_RE = /^\/dashboard\/(trabajos|facturas|clientes)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i;
+
+/** The record open on the user's screen (from the app's route), so "this
+ *  job" / "rename this one" resolve without a search. null when none. */
+async function describeScreen(ctx: AssistantContext, path: unknown): Promise<string | null> {
+  const m = typeof path === 'string' ? SCREEN_RE.exec(path) : null;
+  if (!m) return null;
+  const [, section, id] = m;
+  if (section === 'trabajos') {
+    const { data } = await ctx.db.from('jobs').select('title, status').eq('business_id', ctx.businessId).eq('id', id).maybeSingle();
+    return data ? `el trabajo job_id=${id} <datos_del_negocio>título: ${JSON.stringify(data.title)}, estado: ${data.status}</datos_del_negocio>` : null;
+  }
+  if (section === 'facturas') {
+    const { data } = await ctx.db.from('invoices').select('invoice_number, status').eq('business_id', ctx.businessId).eq('id', id).maybeSingle();
+    return data ? `la factura invoice_id=${id} <datos_del_negocio>número: ${JSON.stringify(data.invoice_number)}, estado: ${data.status}</datos_del_negocio>` : null;
+  }
+  const { data } = await ctx.db.from('clients').select('first_name, last_name, company').eq('business_id', ctx.businessId).eq('id', id).maybeSingle();
+  if (!data) return null;
+  const name = [data.first_name, data.last_name].filter(Boolean).join(' ') || data.company || '';
+  return `el cliente client_id=${id} <datos_del_negocio>nombre: ${JSON.stringify(name)}</datos_del_negocio>`;
+}
+
 export async function runAssistant(
   ctx: AssistantContext,
   transcript: AssistantChatMessage[],
   pendingDraft?: AssistantDraft | null,
+  screenPath?: unknown,
 ): Promise<{ reply: string; pendingDraft: AssistantDraft | null; clientAction: AssistantClientAction | null }> {
   // Bound + sanitize the client-held transcript.
   const turns = transcript
@@ -82,6 +130,12 @@ export async function runAssistant(
     .slice(-MAX_WIRE_MESSAGES);
   if (!turns.length || turns[turns.length - 1].role !== 'user') {
     return { reply: FALLBACK_REPLY, pendingDraft: pendingDraft ?? null, clientAction: null };
+  }
+  // What the user is looking at rides on the final turn too.
+  const screen = await describeScreen(ctx, screenPath).catch(() => null);
+  if (screen) {
+    const last = turns[turns.length - 1];
+    turns[turns.length - 1] = { ...last, content: `${last.content}\n\n<pantalla_actual>El usuario está viendo ${screen}</pantalla_actual>` };
   }
   // Attach the pending draft to the final user turn so corrections work.
   if (pendingDraft) {

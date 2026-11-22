@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { BotMessageSquare, Pencil, Check, X } from 'lucide-react';
 import type { AssistantBubble } from '@amixos/shared/assistant/useAssistantCore';
 import type { AssistantDraft } from '@amixos/shared/assistant/types';
-import { isJobUpdateDraft } from '@amixos/shared/assistant/types';
+import { isJobUpdateDraft, isInvoiceEditDraft, invoiceEditAsUpdate, isActionDraft, actionAsUpdate, actionTarget } from '@amixos/shared/assistant/types';
 import { useLang } from '@/i18n/LangProvider';
 import { JobDraftCard } from './JobDraftCard';
 import { JobUpdateCard } from './JobUpdateCard';
@@ -120,7 +120,29 @@ export function MessageList({
                 {b.content}
               </div>
               {b.draft && (
-                isJobUpdateDraft(b.draft) ? (
+                isActionDraft(b.draft) ? (
+                  <JobUpdateCard
+                    target={actionTarget(b.draft)}
+                    heading={t.actionTitle}
+                    doneLabel={t.done}
+                    draft={actionAsUpdate(b.draft)}
+                    active={!b.createdJobId && b.draft.job_id === pendingDraft?.job_id}
+                    createdJobId={b.createdJobId}
+                    onConfirm={onConfirm}
+                    confirming={confirming}
+                  />
+                ) : isInvoiceEditDraft(b.draft) ? (
+                  <JobUpdateCard
+                    target="invoice"
+                    heading={t.invoiceUpdateTitle}
+                    doneLabel={t.invoiceUpdated}
+                    draft={invoiceEditAsUpdate(b.draft)}
+                    active={!b.createdJobId && b.draft.job_id === pendingDraft?.job_id}
+                    createdJobId={b.createdJobId}
+                    onConfirm={onConfirm}
+                    confirming={confirming}
+                  />
+                ) : isJobUpdateDraft(b.draft) ? (
                   <JobUpdateCard
                     draft={b.draft}
                     active={!b.createdJobId && b.draft.job_id === pendingDraft?.job_id}

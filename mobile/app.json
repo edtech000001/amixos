@@ -21,6 +21,7 @@
       },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": ["audio"],
         "UISupportedInterfaceOrientations~ipad": [
           "UIInterfaceOrientationPortrait",
           "UIInterfaceOrientationPortraitUpsideDown",
@@ -111,7 +112,7 @@
       }
     },
     "owner": "edvinramirez56",
-    "runtimeVersion": "2.2.0",
+    "runtimeVersion": "2.3.0",
     "updates": {
       "url": "https://u.expo.dev/183b523e-43ee-4c85-8bdd-1e1851020cab"
     },

@@ -1,15 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { isBargeIn } from '@amixos/shared/assistant/bargeIn';
 import { fetchTtsUri } from './ttsClient';
 
 // Hands-free "call" with Ami: a continuous turn loop —
 //   listening (on-device speech recognition, ends itself on silence)
 //   → thinking (existing /chat tool loop)
-//   → speaking (natural cloud voice, tap to interrupt)
+//   → speaking (natural cloud voice; talk over her or tap to interrupt)
 //   → listening again, until the user hangs up.
-// Turn-based rather than full-duplex streaming: the mic is never open while
-// Ami talks, which also avoids her voice re-entering the recognizer.
+// While Ami speaks the mic stays open; anything that sounds like her own words
+// is ignored (isBargeIn), so only the user talking over her cuts her off.
 
 export type VoiceCallStatus = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking';
 
@@ -80,8 +81,10 @@ export function useVoiceCall({
     setPartial('');
   }, []);
 
-  /** One user turn: resolves the final transcript ('' on silence/error). */
-  const listenOnce = useCallback((gen: number) => {
+  /** One user turn: resolves the final transcript ('' on silence/error).
+   *  With `bargeIn`, results are ignored until one sounds like the user (not
+   *  Ami's echo) — then onBargeIn() stops her and the turn continues normally. */
+  const listenOnce = useCallback((gen: number, bargeIn?: { reply: string; onBargeIn: () => void }) => {
     return new Promise<string>(resolve => {
       const Ctor = getRecognitionCtor();
       if (!Ctor || gen !== genRef.current) return resolve('');
@@ -91,6 +94,7 @@ export function useVoiceCall({
       rec.interimResults = true;
       let finalText = '';
       let latestText = '';
+      let armed = !bargeIn;
       let silenceTimer: ReturnType<typeof setTimeout> | null = null;
       const requestStop = () => {
         try {
@@ -105,6 +109,11 @@ export function useVoiceCall({
         for (let i = 0; i < event.results.length; i++) {
           text += event.results[i][0].transcript;
           if (event.results[i].isFinal) finalText = text;
+        }
+        if (!armed) {
+          if (mutedRef.current || !isBargeIn(text, bargeIn!.reply)) return;
+          armed = true;
+          bargeIn!.onBargeIn();
         }
         latestText = text;
         if (gen === genRef.current) setPartial(text);
@@ -198,6 +207,8 @@ export function useVoiceCall({
       // Instant empty results mean the mic is blocked (permission denied,
       // no device) — hang up instead of spinning on a dead recognizer.
       let fastFails = 0;
+      // What the user said while cutting Ami off — becomes the next turn.
+      let pending = '';
       while (gen === genRef.current) {
         setStatus('listening');
         setPartial('');
@@ -206,7 +217,9 @@ export function useVoiceCall({
           continue;
         }
         const startedAt = Date.now();
-        const transcript = await listenOnce(gen);
+        const carried = pending;
+        pending = '';
+        const transcript = carried || (await listenOnce(gen));
         if (gen !== genRef.current) break;
         if (mutedRef.current) continue; // muted mid-turn — drop it
         if (!transcript) {
@@ -227,10 +240,34 @@ export function useVoiceCall({
         setPartial('');
         const reply = await sendRef.current(transcript);
         if (gen !== genRef.current) break;
-        if (reply) {
-          setStatus('speaking');
-          await speak(gen, reply);
+        if (!reply) continue;
+        setStatus('speaking');
+        // Listen while she talks; talking over her stops playback and that
+        // speech becomes the next turn.
+        let cutIn = false;
+        const heard = listenOnce(gen, {
+          reply,
+          onBargeIn: () => {
+            cutIn = true;
+            interruptRef.current?.();
+            if (gen === genRef.current) setStatus('listening');
+          },
+        });
+        await speak(gen, reply);
+        if (gen !== genRef.current) break;
+        if (!cutIn) {
+          // She finished uninterrupted: drop what the mic picked up (her echo).
+          try {
+            recRef.current?.abort?.();
+          } catch {
+            /* noop */
+          }
+          await heard;
+          continue;
         }
+        const said = await heard;
+        if (gen !== genRef.current) break;
+        if (said && !mutedRef.current) pending = said;
       }
     })();
   }, [businessId, listenOnce, speak, status, stopEverything]);

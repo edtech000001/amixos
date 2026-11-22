@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 import type { AssistantBubble } from '@amixos/shared/assistant/useAssistantCore';
-import { isJobUpdateDraft } from '@amixos/shared/assistant/types';
+import { isJobUpdateDraft, isInvoiceEditDraft, invoiceEditAsUpdate, isActionDraft, actionAsUpdate, actionTarget } from '@amixos/shared/assistant/types';
+import { useLang } from '@/lib/i18n/LangProvider';
 import { JobDraftCard } from './JobDraftCard';
 import { JobUpdateCard } from './JobUpdateCard';
 
@@ -19,6 +20,8 @@ interface Props {
 // One chat turn. User bubbles hug the right in primary; assistant bubbles hug
 // the left in gray and may carry a JobDraftCard under the text.
 export function MessageBubble({ bubble, activeDraftId, confirming, onConfirm, onNavigate, onEdit }: Props) {
+  const { t: full } = useLang();
+  const a = full.dashboard.assistant;
   if (bubble.role === 'user') {
     return (
       <Pressable
@@ -36,7 +39,31 @@ export function MessageBubble({ bubble, activeDraftId, confirming, onConfirm, on
         <Text className="text-[15px] text-ink">{bubble.content}</Text>
       </View>
       {bubble.draft ? (
-        isJobUpdateDraft(bubble.draft) ? (
+        isActionDraft(bubble.draft) ? (
+          <JobUpdateCard
+            target={actionTarget(bubble.draft)}
+            heading={a.actionTitle}
+            doneLabel={a.done}
+            draft={actionAsUpdate(bubble.draft)}
+            active={!bubble.createdJobId && bubble.draft.job_id === activeDraftId}
+            createdJobId={bubble.createdJobId}
+            confirming={confirming}
+            onConfirm={onConfirm}
+            onNavigate={onNavigate}
+          />
+        ) : isInvoiceEditDraft(bubble.draft) ? (
+          <JobUpdateCard
+            target="invoice"
+            heading={a.invoiceUpdateTitle}
+            doneLabel={a.invoiceUpdated}
+            draft={invoiceEditAsUpdate(bubble.draft)}
+            active={!bubble.createdJobId && bubble.draft.job_id === activeDraftId}
+            createdJobId={bubble.createdJobId}
+            confirming={confirming}
+            onConfirm={onConfirm}
+            onNavigate={onNavigate}
+          />
+        ) : isJobUpdateDraft(bubble.draft) ? (
           <JobUpdateCard
             draft={bubble.draft}
             active={!bubble.createdJobId && bubble.draft.job_id === activeDraftId}

@@ -6,6 +6,9 @@ import type {
   AssistantConfirmResponse,
   AssistantDraft,
 } from './types';
+import { isActionDraft, isInvoiceEditDraft } from './types';
+import { applyInvoiceEdit } from './applyInvoiceEdit';
+import { applyAction, type AssistantLocalEnv } from './applyAction';
 
 // Platform-agnostic state machine for the Ami chat. Each platform injects a
 // fetchJson built from its own getApiBaseUrl()/getJwt() helpers; this hook
@@ -36,6 +39,9 @@ export function useAssistantCore(
   fetcher: AssistantFetcher,
   /** Platform handler for "open this screen" replies. */
   onNavigate?: (a: Extract<AssistantClientAction, { type: 'navigate' }>) => void,
+  /** Platform env — invoice edits and actions are applied locally with the
+   *  shared helpers (same code paths as the app's own screens). */
+  local?: AssistantLocalEnv & { messages: { undone: string; nothingToUndo: string } },
 ) {
   const [bubbles, setBubbles] = useState<AssistantBubble[]>([]);
   const [pendingDraft, setPendingDraft] = useState<AssistantDraft | null>(null);
@@ -47,6 +53,8 @@ export function useAssistantCore(
   const onNavigateRef = useRef(onNavigate);
   onNavigateRef.current = onNavigate;
   const confirmingRef = useRef(false);
+  // How to reverse the last change applied in this conversation.
+  const undoRef = useRef<(() => Promise<void>) | null>(null);
 
   // Press Confirmar on `draft` — the card button and a spoken "sí, confírmalo"
   // (client_action confirm) share this exact path.
@@ -56,10 +64,27 @@ export function useAssistantCore(
     setConfirming(true);
     setError(false);
     try {
-      const data = await fetcher.post<AssistantConfirmResponse>('/api/v1/assistant/confirm', {
-        business_id: businessId,
-        draft,
-      });
+      let data: AssistantConfirmResponse;
+      if (isInvoiceEditDraft(draft) || isActionDraft(draft)) {
+        if (!local) throw new Error('local_apply_unsupported');
+        if (isInvoiceEditDraft(draft)) {
+          undoRef.current = (await applyInvoiceEdit(local.supabase, draft)) ?? null;
+          data = { job_id: draft.invoice_id, already_existed: false };
+        } else {
+          const done = await applyAction(local, draft);
+          undoRef.current = done.undo ?? null;
+          data = { job_id: done.id, already_existed: false };
+        }
+      } else {
+        data = await fetcher.post<AssistantConfirmResponse>('/api/v1/assistant/confirm', {
+          business_id: businessId,
+          draft,
+        });
+        const snap = data.undo;
+        undoRef.current = snap
+          ? async () => { await fetcher.post('/api/v1/assistant/undo', { business_id: businessId, undo: snap }); }
+          : null;
+      }
       // Mark the bubble that carried this draft as created + clear the draft.
       setBubbles(prev =>
         prev.map(b =>
@@ -83,7 +108,22 @@ export function useAssistantCore(
       confirmingRef.current = false;
       setConfirming(false);
     }
-  }, [businessId, fetcher]);
+  }, [businessId, fetcher, local]);
+
+  // "Deshaz eso" — runs once; a second undo has nothing left to reverse.
+  const undoLast = useCallback(async () => {
+    const run = undoRef.current;
+    undoRef.current = null;
+    const say = (content: string) => setBubbles(prev => [...prev, { id: nextId(), role: 'assistant', content }]);
+    if (!run) { say(local?.messages.nothingToUndo ?? 'Nada que deshacer.'); return; }
+    try {
+      await run();
+      say(local?.messages.undone ?? 'Listo, lo deshice.');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '';
+      if (msg && msg.includes(' ')) say(msg); else setError(true);
+    }
+  }, [local]);
 
   // Core send: appends a user turn onto `base`, POSTs the transcript, appends
   // the reply. Shared by send() (base = full transcript) and editAndResend()
@@ -118,6 +158,8 @@ export function useAssistantCore(
       const action = data.client_action;
       if (action?.type === 'confirm' && draftForBody && data.pending_draft?.job_id === draftForBody.job_id) {
         void confirmDraft(draftForBody);
+      } else if (action?.type === 'undo') {
+        void undoLast();
       } else if (action?.type === 'navigate') {
         onNavigateRef.current?.(action);
       }
@@ -129,7 +171,7 @@ export function useAssistantCore(
     } finally {
       if (mySeq === seqRef.current) setSending(false);
     }
-  }, [businessId, fetcher, confirmDraft]);
+  }, [businessId, fetcher, confirmDraft, undoLast]);
 
   /** Sends a user message; resolves the assistant's reply text (null on error/superseded). */
   const send = useCallback(async (text: string): Promise<string | null> => {

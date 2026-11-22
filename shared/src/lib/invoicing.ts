@@ -472,7 +472,7 @@ export function detectLineSortDirection(
  * `change` returns null to skip the write. Totals are recomputed unless
  * `keepTotals` (a pure reorder).
  */
-async function saveInvoiceLines(
+export async function saveInvoiceLines(
   supabase: Supa,
   invoiceId: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

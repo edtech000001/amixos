@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AudioPlayer } from 'expo-audio';
+import { isBargeIn } from '@amixos/shared/assistant/bargeIn';
 import { AudioLib, Speech, SpeechRecognition, fetchTtsFileUri, setPlaybackAudioMode } from './voice';
 
 /** Stop + free an expo-audio player (remove() also drops its listeners). */
@@ -16,10 +17,14 @@ function releasePlayer(player: AudioPlayer | null) {
 // Hands-free "call" with Ami: a continuous turn loop —
 //   listening (on-device speech recognition; a silence timer closes the turn)
 //   → thinking (existing /chat tool loop)
-//   → speaking (natural cloud voice, tap to interrupt)
+//   → speaking (natural cloud voice; talk over her or tap to interrupt)
 //   → listening again, until the user hangs up.
-// Turn-based rather than full-duplex streaming: the mic is never open while
-// Ami talks, which also avoids her voice re-entering the recognizer.
+// While Ami speaks the mic stays open with iOS echo cancellation, and anything
+// that sounds like her own words is ignored (echoesReply), so only the user
+// talking over her cuts her off.
+// The call keeps going with the app in the background on iOS (UIBackgroundModes
+// "audio" + the session never deactivating mid-call). Android would need a
+// foreground service; there the call ends when the mic goes silent.
 
 export type VoiceCallStatus = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking';
 
@@ -74,12 +79,15 @@ export function useVoiceCall({
     setPartial('');
   }, []);
 
-  /** One user turn: resolves the final transcript ('' on silence/error). */
-  const listenOnce = useCallback((gen: number) => {
+  /** One user turn: resolves the final transcript ('' on silence/error).
+   *  With `bargeIn`, results are ignored until one sounds like the user (not
+   *  Ami's echo) — then onBargeIn() stops her and the turn continues normally. */
+  const listenOnce = useCallback((gen: number, bargeIn?: { reply: string; onBargeIn: () => void }) => {
     return new Promise<string>(resolve => {
       const speech = SpeechRecognition;
       if (!speech || gen !== genRef.current) return resolve('');
       let transcript = '';
+      let armed = !bargeIn;
       let finished = false;
       let silenceTimer: ReturnType<typeof setTimeout> | null = null;
       let subs: { remove: () => void }[] = [];
@@ -106,6 +114,11 @@ export function useVoiceCall({
           (ev: { results?: { transcript: string }[] }) => {
             const text = ev?.results?.[0]?.transcript;
             if (!text) return;
+            if (!armed) {
+              if (mutedRef.current || !isBargeIn(text, bargeIn!.reply)) return;
+              armed = true;
+              bargeIn!.onBargeIn();
+            }
             transcript = text;
             if (gen === genRef.current) setPartial(text);
             // The user's turn ends when they stop talking for a beat.
@@ -123,6 +136,9 @@ export function useVoiceCall({
           // Keep the platform recognizer open — ITS end-of-speech detection
           // cuts off after ~1.5s of silence; our SILENCE_MS timer owns the turn.
           continuous: true,
+          // Echo cancellation so Ami's voice from the speaker doesn't count as
+          // the user talking (needed for barge-in).
+          iosVoiceProcessingEnabled: true,
           // The library's default iOS session mode is 'measurement', which
           // lingers after listening and makes Ami's reply play very quietly.
           // Normal mode + loudspeaker keeps her at full media volume.
@@ -138,7 +154,9 @@ export function useVoiceCall({
     });
   }, []);
 
-  /** Speak a reply; resolves when playback ends or the user interrupts. */
+  /** Speak a reply; resolves when playback ends or the user interrupts.
+   *  No setPlaybackAudioMode here: that switches the session to playback-only
+   *  and would kill the open mic. start() configures the call session once. */
   const speak = useCallback((gen: number, text: string) => {
     return new Promise<void>(resolve => {
       let done = false;
@@ -157,8 +175,9 @@ export function useVoiceCall({
           if (!AudioLib || !businessId) throw new Error('cloud voice unavailable');
           const uri = await fetchTtsFileUri(businessId, text, localeRef.current, 'ami-call.mp3');
           if (gen !== genRef.current || done) return finish();
-          await setPlaybackAudioMode();
-          const player = AudioLib.createAudioPlayer({ uri });
+          // keepAudioSessionActive: never drop the session between turns, or
+          // iOS won't let the mic restart while the app is in the background.
+          const player = AudioLib.createAudioPlayer({ uri }, { keepAudioSessionActive: true });
           if (gen !== genRef.current || done) {
             releasePlayer(player);
             return finish();
@@ -188,6 +207,8 @@ export function useVoiceCall({
     mutedRef.current = false;
     setMuted(false);
     setStatus('idle');
+    // Back to normal playback (no background audio) for the reply reader.
+    void setPlaybackAudioMode().catch(() => {});
   }, [stopEverything]);
 
   const toggleMute = useCallback(() => {
@@ -220,6 +241,14 @@ export function useVoiceCall({
           if (gen === genRef.current) setStatus('idle');
           return;
         }
+        // Call session: mic + speaker, keeps playing when the app is backgrounded.
+        // The recognizer then re-applies its own speaker/echo-cancel category.
+        await AudioLib?.setAudioModeAsync({
+          playsInSilentMode: true,
+          allowsRecording: true,
+          shouldPlayInBackground: true,
+          interruptionMode: 'doNotMix',
+        });
       } catch {
         setStatus('idle');
         return;
@@ -227,6 +256,8 @@ export function useVoiceCall({
       // Instant empty results mean the recognizer is broken (no speech
       // service, revoked permission) — hang up instead of spinning.
       let fastFails = 0;
+      // What the user said while cutting Ami off — becomes the next turn.
+      let pending = '';
       while (gen === genRef.current) {
         setStatus('listening');
         setPartial('');
@@ -235,7 +266,9 @@ export function useVoiceCall({
           continue;
         }
         const startedAt = Date.now();
-        const transcript = await listenOnce(gen);
+        const carried = pending;
+        pending = '';
+        const transcript = carried || (await listenOnce(gen));
         if (gen !== genRef.current) break;
         if (mutedRef.current) continue; // muted mid-turn — drop it
         if (!transcript) {
@@ -256,12 +289,35 @@ export function useVoiceCall({
         setPartial('');
         const reply = await sendRef.current(transcript);
         if (gen !== genRef.current) break;
-        if (reply) {
-          setStatus('speaking');
-          await speak(gen, reply);
-          // Let iOS release the playback session before re-opening the mic.
-          await new Promise(r => setTimeout(r, 250));
+        if (!reply) continue;
+        setStatus('speaking');
+        // Listen while she talks; talking over her stops playback and that
+        // speech becomes the next turn.
+        let cutIn = false;
+        const heard = listenOnce(gen, {
+          reply,
+          onBargeIn: () => {
+            cutIn = true;
+            interruptRef.current?.();
+            if (gen === genRef.current) setStatus('listening');
+          },
+        });
+        await speak(gen, reply);
+        if (gen !== genRef.current) break;
+        if (!cutIn) {
+          // She finished uninterrupted: drop what the mic picked up (her echo)
+          // and open a fresh turn.
+          try {
+            SpeechRecognition?.ExpoSpeechRecognitionModule.stop();
+          } catch {
+            /* noop */
+          }
+          await heard;
+          continue;
         }
+        const said = await heard;
+        if (gen !== genRef.current) break;
+        if (said && !mutedRef.current) pending = said;
       }
     })();
   }, [businessId, listenOnce, speak, status, stopEverything]);

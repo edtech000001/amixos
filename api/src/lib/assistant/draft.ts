@@ -1,7 +1,8 @@
 import { randomUUID } from 'crypto';
 import { supabase } from '../../config/supabase';
-import type { AssistantContext, JobDraft, JobUpdateDraft } from './types';
+import { lineItemsHash, type AssistantContext, type JobDraft, type JobUpdateDraft, type JobUndoSnapshot } from './types';
 import { matchEmployeeId, type EmployeeLite } from './matchEmployee';
+import { geocodeAddress } from '../geocoding';
 
 // Confirm-side validation + insert. Mirrors the job form's save() contract
 // (mobile/app/dashboard/trabajos/nuevo.tsx): jobs row + job_assignments rows
@@ -83,7 +84,7 @@ export function checkRequiredFields(ctx: AssistantContext, draft: JobDraft): Req
 export async function confirmDraft(
   ctx: AssistantContext,
   draft: JobDraft,
-): Promise<{ jobId: string; alreadyExisted: boolean }> {
+): Promise<{ jobId: string; alreadyExisted: boolean; undo?: JobUndoSnapshot }> {
   // ── Validate ──────────────────────────────────────────────────────────────
   if (!draft || typeof draft !== 'object') throw new DraftValidationError('draft requerido');
   if (draft.business_id !== ctx.businessId) throw new DraftValidationError('business mismatch');
@@ -271,14 +272,133 @@ export async function confirmDraft(
     details: { title, source: 'assistant' },
   });
 
-  return { jobId, alreadyExisted: false };
+  return { jobId, alreadyExisted: false, undo: { job_id: jobId, job: {}, created: true } };
+}
+
+/** Applies draft.item_ops to job_items and returns the job's new money
+ *  fields. Same totals rule as the job form: estimate records (tax/discount)
+ *  keep subtotal+tax−discount; work jobs store the item subtotal as total. */
+async function applyJobItemOps(ctx: AssistantContext, job: Record<string, any>, draft: JobUpdateDraft): Promise<Record<string, unknown>> {
+  if (job.status === 'invoiced') throw new DraftValidationError('Este trabajo ya está facturado — cambia los precios en la factura.');
+  const read = async () => {
+    const { data, error } = await ctx.db.from('job_items').select('id, description, quantity, unit_price')
+      .eq('job_id', job.id).order('created_at').order('id');
+    if (error) throw new Error(error.message);
+    return (data ?? []) as { id: string; description: string; quantity: number; unit_price: number }[];
+  };
+  const items = await read();
+  if (lineItemsHash(items) !== draft.items_hash) {
+    throw new DraftValidationError('Las partidas de este trabajo cambiaron desde que las leí — pídemelo de nuevo.');
+  }
+  const okNum = (n: unknown) => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n < 1e8;
+  const removeIds: string[] = [];
+  const inserts: Record<string, unknown>[] = [];
+  for (const op of draft.item_ops ?? []) {
+    if (op.op === 'add') {
+      if (!op.description?.trim() || !okNum(op.quantity) || !okNum(op.unit_price)) throw new DraftValidationError('partida inválida');
+      inserts.push({ job_id: job.id, description: op.description.trim().slice(0, 500), quantity: op.quantity, unit_price: op.unit_price });
+      continue;
+    }
+    const it = items[op.index];
+    if (!it) throw new DraftValidationError('partida no encontrada');
+    if (op.op === 'remove') { removeIds.push(it.id); continue; }
+    const patch: Record<string, unknown> = {};
+    if (op.description !== undefined) { if (!op.description.trim()) throw new DraftValidationError('partida sin descripción'); patch.description = op.description.trim().slice(0, 500); }
+    if (op.quantity !== undefined) { if (!okNum(op.quantity)) throw new DraftValidationError('cantidad inválida'); patch.quantity = op.quantity; }
+    if (op.unit_price !== undefined) { if (!okNum(op.unit_price)) throw new DraftValidationError('precio inválido'); patch.unit_price = op.unit_price; }
+    if (Object.keys(patch).length) {
+      const { data, error } = await ctx.db.from('job_items').update(patch).eq('id', it.id).select('id');
+      if (error) throw new Error(error.message);
+      if (!data?.length) throw new DraftValidationError('sin permiso para editar este trabajo');
+    }
+  }
+  if (inserts.length) {
+    const { error } = await ctx.db.from('job_items').insert(inserts);
+    if (error) throw new Error(error.message);
+  }
+  if (removeIds.length) {
+    const { error } = await ctx.db.from('job_items').delete().in('id', removeIds);
+    if (error) throw new Error(error.message);
+  }
+  const dec = (n: number) => Number(n.toFixed(6));
+  const subtotal = dec((await read()).reduce((s, i) => s + Number(i.quantity) * Number(i.unit_price), 0));
+  const taxRate = Number(job.tax_rate) || 0;
+  const discount = Number(job.discount) || 0;
+  if (taxRate || discount) {
+    const tax = dec(subtotal * (taxRate / 100));
+    return { subtotal_amount: subtotal, tax_amount: tax, total_amount: dec(subtotal + tax - discount) };
+  }
+  return { total_amount: subtotal };
+}
+
+/** Validates draft.details and turns it into a jobs-row patch. */
+async function applyDetailChanges(
+  ctx: AssistantContext,
+  job: Record<string, any>,
+  d: NonNullable<JobUpdateDraft['details']>,
+): Promise<Record<string, unknown>> {
+  const patch: Record<string, unknown> = {};
+  const required = (k: string) => !!ctx.jobFieldRequired[k] && !ctx.jobFieldHidden[k];
+  const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 5000) : null);
+  if (d.title !== undefined) {
+    const t = text(d.title);
+    if (!t) throw new DraftValidationError('el nombre no puede quedar vacío');
+    patch.title = t.slice(0, 200);
+  }
+  for (const k of ['description', 'internal_notes', 'worker_notes', 'job_address', 'job_city', 'job_state'] as const) {
+    if (d[k] === undefined) continue;
+    const v = text(d[k]);
+    if (!v && required(k)) throw new DraftValidationError(`${JOB_REQUIRABLE_LABELS[k]?.[ctx.locale] ?? k} es obligatorio`);
+    patch[k] = v;
+  }
+  if (d.priority !== undefined) {
+    if (!['low', 'normal', 'high', 'urgent'].includes(d.priority)) throw new DraftValidationError('prioridad inválida');
+    patch.priority = d.priority;
+  }
+  if (d.total_hours !== undefined) {
+    if (d.total_hours !== null && !(typeof d.total_hours === 'number' && Number.isFinite(d.total_hours) && d.total_hours >= 0)) {
+      throw new DraftValidationError('horas inválidas');
+    }
+    patch.total_hours = d.total_hours;
+  }
+  if (d.client_id !== undefined) {
+    if (d.client_id) {
+      const { data } = await ctx.db.from('clients').select('id').eq('business_id', ctx.businessId).eq('id', d.client_id).maybeSingle();
+      if (!data) throw new DraftValidationError('cliente no encontrado');
+    } else if (required('client_id')) {
+      throw new DraftValidationError('el cliente es obligatorio');
+    }
+    patch.client_id = d.client_id || null;
+  }
+  if (d.custom_fields) {
+    const merged: Record<string, unknown> = { ...(job.custom_fields ?? {}) };
+    for (const [k, v] of Object.entries(d.custom_fields)) {
+      const tpl = ctx.fieldTemplates.find(t => t.field_key === k);
+      if (!tpl) continue;
+      if (!String(v).trim() && tpl.required) throw new DraftValidationError(`${tpl.field_label} es obligatorio`);
+      merged[k] = String(v);
+    }
+    patch.custom_fields = merged;
+  }
+  // New address → re-pin the map. A failed lookup clears the pin and the old
+  // map link rather than leaving them pointing at the previous address.
+  if (['job_address', 'job_city', 'job_state'].some(k => k in patch)) {
+    const line = ['job_address', 'job_city', 'job_state']
+      .map(k => (k in patch ? patch[k] : job[k]) as string | null)
+      .filter(Boolean).join(', ');
+    const geo = line ? await geocodeAddress(line) : null;
+    patch.job_lat = geo?.ok ? geo.lat : null;
+    patch.job_lng = geo?.ok ? geo.lng : null;
+    patch.job_map_link = null;
+  }
+  return patch;
 }
 
 // ── Confirm a reschedule / edit of an EXISTING job ──────────────────────────
 export async function confirmJobUpdate(
   ctx: AssistantContext,
   draft: JobUpdateDraft,
-): Promise<{ jobId: string; alreadyExisted: boolean }> {
+): Promise<{ jobId: string; alreadyExisted: boolean; undo?: JobUndoSnapshot }> {
   if (!draft || typeof draft !== 'object') throw new DraftValidationError('draft requerido');
   if (draft.business_id !== ctx.businessId) throw new DraftValidationError('business mismatch');
   const jobId = typeof draft.job_id === 'string' ? draft.job_id : '';
@@ -287,7 +407,7 @@ export async function confirmJobUpdate(
   // The row must exist in this business (RLS re-checks the write too).
   const { data: job } = await ctx.db
     .from('jobs')
-    .select('id, title, all_day, status, archived_at')
+    .select('id, title, all_day, status, archived_at, custom_fields, job_address, job_city, job_state, tax_rate, discount')
     .eq('business_id', ctx.businessId)
     .eq('id', jobId)
     .maybeSingle();
@@ -337,14 +457,31 @@ export async function confirmJobUpdate(
     if (draft.status === 'cancelled') update.cancelled_at = now;
   }
   if (draft.archived !== undefined) update.archived_at = draft.archived ? new Date().toISOString() : null;
+  if (draft.details) Object.assign(update, await applyDetailChanges(ctx, job as Record<string, any>, draft.details));
 
   const changingCrew = Array.isArray(draft.crew);
+  const changingItems = !!draft.item_ops?.length;
+
+  // Undo snapshot: rows as they are BEFORE anything below writes.
+  const undo: JobUndoSnapshot = { job_id: jobId, job: {} };
+  if (changingItems) {
+    const { data } = await ctx.db.from('job_items').select('id, job_id, item_type, description, quantity, unit_price, created_at').eq('job_id', jobId);
+    undo.items = data ?? [];
+  }
+  if (changingCrew) {
+    const { data } = await ctx.db.from('job_assignments').select('*').eq('job_id', jobId);
+    undo.crew = data ?? [];
+  }
+
+  if (changingItems) Object.assign(update, await applyJobItemOps(ctx, job as Record<string, any>, draft));
 
   if (Object.keys(update).length === 0 && !changingCrew) {
     throw new DraftValidationError('sin cambios');
   }
 
   if (Object.keys(update).length) {
+    const { data: prev } = await ctx.db.from('jobs').select(Object.keys(update).join(', ')).eq('id', jobId).maybeSingle();
+    undo.job = (prev ?? {}) as Record<string, unknown>;
     // RLS returns no error when the policy filters every row — check the count,
     // or a member who can't edit jobs gets "done" while nothing changed.
     const { data: upRows, error: upErr } = await ctx.db.from('jobs').update(update).eq('id', jobId).select('id');
@@ -426,5 +563,69 @@ export async function confirmJobUpdate(
   if (draft.status !== undefined) await audit('job.status_changed', { from: prevStatus, to: draft.status, job_title: (job as any).title });
   if (draft.archived !== undefined) await audit(draft.archived ? 'job.archived' : 'job.unarchived', {});
 
-  return { jobId, alreadyExisted: false };
+  return { jobId, alreadyExisted: false, undo };
+}
+
+
+// ── Undo ("deshaz eso") ─────────────────────────────────────────────────────
+// Only columns Ami can change are restorable; anything else in a snapshot is
+// ignored, so a tampered snapshot can't write arbitrary job fields.
+const UNDOABLE_JOB_COLS = new Set([
+  'title', 'description', 'priority', 'client_id', 'total_hours', 'internal_notes', 'worker_notes',
+  'job_address', 'job_city', 'job_state', 'job_lat', 'job_lng', 'job_map_link', 'custom_fields',
+  'scheduled_date', 'scheduled_at', 'end_date', 'all_day', 'time_start', 'time_end',
+  'status', 'in_progress_at', 'completed_at', 'completed_date', 'cancelled_at', 'archived_at',
+  'subtotal_amount', 'tax_amount', 'total_amount',
+]);
+
+export async function undoJobChange(ctx: AssistantContext, snap: JobUndoSnapshot): Promise<void> {
+  const jobId = typeof snap?.job_id === 'string' ? snap.job_id : '';
+  const { data: job } = await ctx.db.from('jobs').select('id, created_by, created_at, status')
+    .eq('business_id', ctx.businessId).eq('id', jobId).maybeSingle();
+  if (!job) throw new DraftValidationError('trabajo no encontrado');
+  const j = job as { created_by: string | null; created_at: string; status: string };
+
+  if (snap.created) {
+    // Only a job THIS user just created through Ami (≤ 1 h ago) is deleted.
+    const fresh = Date.now() - new Date(j.created_at).getTime() < 3_600_000;
+    if (j.created_by !== ctx.userId || !fresh) throw new DraftValidationError('Ese trabajo ya no se puede deshacer — elimínalo desde la app.');
+    if (j.status === 'invoiced') throw new DraftValidationError('Ese trabajo ya está facturado.');
+    const { data, error } = await ctx.db.from('jobs').delete().eq('id', jobId).select('id');
+    if (error) throw new Error(error.message);
+    if (!data?.length) throw new DraftValidationError('sin permiso para borrar este trabajo');
+    return;
+  }
+
+  const patch = Object.fromEntries(Object.entries(snap.job ?? {}).filter(([k]) => UNDOABLE_JOB_COLS.has(k)));
+  if (Object.keys(patch).length) {
+    const { data, error } = await ctx.db.from('jobs').update(patch).eq('id', jobId).select('id');
+    if (error) throw new Error(error.message);
+    if (!data?.length) throw new DraftValidationError('sin permiso para editar este trabajo');
+  }
+  if (Array.isArray(snap.items)) {
+    const rows = snap.items.map(r => ({
+      id: r.id, job_id: jobId, item_type: r.item_type ?? 'labor', description: r.description,
+      quantity: r.quantity, unit_price: r.unit_price, ...(r.created_at ? { created_at: r.created_at } : {}),
+    }));
+    const { error: delErr } = await ctx.db.from('job_items').delete().eq('job_id', jobId);
+    if (delErr) throw new Error(delErr.message);
+    if (rows.length) {
+      const { error } = await ctx.db.from('job_items').insert(rows);
+      if (error) throw new Error(error.message);
+    }
+  }
+  if (Array.isArray(snap.crew)) {
+    const rows = snap.crew.map(r => ({
+      id: r.id, job_id: jobId, worker_name: r.worker_name, is_lead: false,
+      ...(r.employee_id ? { employee_id: r.employee_id } : {}),
+    }));
+    const lead = snap.crew.find(r => r.is_lead)?.id as string | undefined;
+    const { error: delErr } = await ctx.db.from('job_assignments').delete().eq('job_id', jobId);
+    if (delErr) throw new Error(delErr.message);
+    if (rows.length) {
+      const { error } = await ctx.db.from('job_assignments').insert(rows);
+      if (error) throw new Error(error.message);
+    }
+    if (lead) await ctx.db.from('job_assignments').update({ is_lead: true }).eq('id', lead);
+  }
 }

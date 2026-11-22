@@ -13,11 +13,17 @@ interface Props {
   confirming: boolean;
   onConfirm: () => void;
   onNavigate: () => void;
+  /** What the result opens + card labels (defaults: a job change). */
+  target?: 'job' | 'invoice' | 'client';
+  heading?: string;
+  doneLabel?: string;
 }
+
+const SECTION = { job: 'trabajos', invoice: 'facturas', client: 'clientes' } as const;
 
 // Preview of a reschedule/edit to an EXISTING job — old → new per changed
 // field. Nothing changes until Confirmar (POST /assistant/confirm).
-export function JobUpdateCard({ draft, active, createdJobId, confirming, onConfirm, onNavigate }: Props) {
+export function JobUpdateCard({ draft, active, createdJobId, confirming, onConfirm, onNavigate, target = 'job', heading, doneLabel }: Props) {
   const { t: full } = useLang();
   const a = full.dashboard.assistant;
   const router = useRouter();
@@ -27,7 +33,8 @@ export function JobUpdateCard({ draft, active, createdJobId, confirming, onConfi
   const timeStr = (allDay?: boolean, s?: string | null, e?: string | null) =>
     allDay ? a.allDayLabel : [s, e].filter(Boolean).join(' – ') || '—';
 
-  const rows: { label: string; from: string; to: string }[] = [];
+  // Field edits (rename, notes, client…) come pre-labelled from the API.
+  const rows: { label: string; from: string; to: string }[] = [...(draft.detail_rows ?? [])];
   if (draft.scheduled_date !== undefined) {
     rows.push({ label: a.dateLabel, from: draft.before.scheduled_date || '—', to: draft.scheduled_date || '—' });
   }
@@ -52,15 +59,20 @@ export function JobUpdateCard({ draft, active, createdJobId, confirming, onConfi
 
   return (
     <View className={`rounded-2xl border border-primary/20 bg-primary/5 p-4 mt-2 ${stale ? 'opacity-60' : ''}`}>
-      <Text className="text-[11px] font-semibold uppercase tracking-wide text-primary">{a.updateTitle}</Text>
+      <Text className="text-[11px] font-semibold uppercase tracking-wide text-primary">{heading ?? a.updateTitle}</Text>
       <Text className="text-base font-bold text-ink mt-0.5">{draft.title}</Text>
 
       <View className="mt-2 gap-1.5">
-        {rows.map(r => (
-          <View key={r.label} className="flex-row items-center flex-wrap">
+        {rows.map((r, i) => (
+          <View key={`${r.label}-${i}`} className="flex-row items-center flex-wrap">
             <Text className="text-xs font-semibold text-muted w-16">{r.label}</Text>
-            <Text className="text-sm text-faint line-through">{r.from}</Text>
-            <ArrowRight size={13} color={c.muted} style={{ marginHorizontal: 6 }} />
+            {/* New things (an action's fields) have no "before". */}
+            {r.from ? (
+              <>
+                <Text className="text-sm text-faint line-through">{r.from}</Text>
+                <ArrowRight size={13} color={c.muted} style={{ marginHorizontal: 6 }} />
+              </>
+            ) : null}
             <Text className="text-sm font-semibold text-ink">{r.to}</Text>
           </View>
         ))}
@@ -101,10 +113,10 @@ export function JobUpdateCard({ draft, active, createdJobId, confirming, onConfi
         <View className="mt-3 flex-row items-center justify-between">
           <View className="flex-row items-center">
             <Check size={16} color={c.success} />
-            <Text className="text-sm font-semibold text-emerald-600 ml-1.5">{a.updated}</Text>
+            <Text className="text-sm font-semibold text-emerald-600 ml-1.5">{doneLabel ?? a.updated}</Text>
           </View>
-          <Pressable hitSlop={8} onPress={() => { onNavigate(); router.push(`/dashboard/trabajos/${createdJobId}`); }}>
-            <Text className="text-sm font-semibold text-primary">{a.viewJob}</Text>
+          <Pressable hitSlop={8} onPress={() => { onNavigate(); router.push(`/dashboard/${SECTION[target]}/${createdJobId}`); }}>
+            <Text className="text-sm font-semibold text-primary">{target === 'invoice' ? a.viewInvoice : target === 'client' ? a.viewClient : a.viewJob}</Text>
           </Pressable>
         </View>
       ) : null}
