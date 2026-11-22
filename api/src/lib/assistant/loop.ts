@@ -8,7 +8,12 @@ import {
   buildNavigateAction,
   buildInvoiceEditDraft,
   buildActionDraft,
+  buildEquipmentDraft,
+  buildInventoryDraft,
+  executeQueryInventory,
+  executeQueryEquipment,
   executeDailyBriefing,
+  executeBusinessReport,
   executeGetInvoice,
   executeGetJob,
   executeQueryInvoices,
@@ -75,6 +80,20 @@ async function executeTool(
       const draft = await buildActionDraft(ctx, name, input);
       return { result: JSON.stringify({ draft_prepared: true, draft }), draft };
     }
+    case 'query_inventory':
+      return { result: JSON.stringify(await executeQueryInventory(ctx, input)) };
+    case 'update_inventory': {
+      const draft = await buildInventoryDraft(ctx, input);
+      return { result: JSON.stringify({ draft_prepared: true, draft }), draft };
+    }
+    case 'query_equipment':
+      return { result: JSON.stringify(await executeQueryEquipment(ctx, input)) };
+    case 'update_equipment': {
+      const draft = await buildEquipmentDraft(ctx, input);
+      return { result: JSON.stringify({ draft_prepared: true, draft }), draft };
+    }
+    case 'business_report':
+      return { result: JSON.stringify(await executeBusinessReport(ctx, input)) };
     case 'daily_briefing':
       return { result: JSON.stringify(await executeDailyBriefing(ctx, input)) };
     case 'undo_last':

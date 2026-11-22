@@ -385,8 +385,89 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'query_equipment',
+    description: 'Busca equipo/vehículos del módulo Equipo (solo lectura): marca, modelo, año, VIN, millaje, placa y vencimientos (placa, seguro, garantía), préstamo, operador asignado, notas. Usa expiring_within_days para "¿qué se vence pronto?".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        search: { type: 'string', description: 'nombre, marca, modelo, placa, VIN o número de serie (parcial)' },
+        assigned_to: { type: 'string', description: 'nombre del empleado asignado' },
+        expiring_within_days: { type: 'integer', description: 'placa, seguro o garantía que vence en estos días (incluye vencidos)' },
+        limit: { type: 'integer', description: 'máx 50, default 20' },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'update_equipment',
+    description: 'BORRADOR para CAMBIAR datos de un equipo/vehículo (id de query_equipment). Solo los campos que cambian; "" para borrar un texto. Fechas YYYY-MM-DD. El usuario confirma.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        equipment_id: { type: 'string' },
+        name: { type: 'string' }, equipment_type: { type: 'string' }, make: { type: 'string' }, model: { type: 'string' },
+        year: { type: 'integer' }, color: { type: 'string' }, vin: { type: 'string' }, serial_number: { type: 'string' },
+        mileage: { type: 'integer' }, plate_number: { type: 'string' }, plate_expiration: { type: 'string' },
+        insurance_carrier: { type: 'string' }, insurance_policy_number: { type: 'string' }, insurance_agent: { type: 'string' },
+        insurance_agent_phone: { type: 'string' }, insurance_expiration: { type: 'string' },
+        purchase_date: { type: 'string' }, warranty_expiration: { type: 'string' }, location: { type: 'string' },
+        paid_off: { type: 'boolean' }, loan_lender: { type: 'string' }, loan_amount: { type: 'number' }, value: { type: 'number' },
+        assigned_employee_id: { type: 'string', description: 'id del roster; "" = sin asignar' },
+        notes: { type: 'string', description: 'notas COMPLETAS como deben quedar' },
+      },
+      required: ['equipment_id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'query_inventory',
+    description: 'Busca artículos del inventario (solo lectura): cantidad en existencia, unidad, costo unitario, categoría, mínimo y si están bajos. low_stock_only=true para "¿qué se está acabando?".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        search: { type: 'string', description: 'nombre o SKU (parcial)' },
+        category: { type: 'string' },
+        low_stock_only: { type: 'boolean' },
+        limit: { type: 'integer', description: 'máx 50, default 20' },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'update_inventory',
+    description: 'BORRADOR para AJUSTAR existencias o datos de un artículo del inventario (id de query_inventory): add/remove = sumar/restar unidades ("usamos 20", "llegaron 50"), set_quantity = conteo exacto ("hay 37"); y opcionalmente nombre, unidad, costo, categoría, SKU o mínimo. El usuario confirma.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        item_id: { type: 'string' },
+        add: { type: 'integer' },
+        remove: { type: 'integer' },
+        set_quantity: { type: 'integer' },
+        name: { type: 'string' }, unit: { type: 'string' }, unit_cost: { type: 'number' },
+        category: { type: 'string' }, sku: { type: 'string' }, low_stock_threshold: { type: 'integer' },
+      },
+      required: ['item_id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'business_report',
+    description: 'Números del negocio para un periodo (lo mismo que la pantalla Reportes): ingresos cobrados (sin lo facturado por otra empresa), pendiente y vencido por cobrar, facturas, trabajos por estado, trabajos terminados, promedio por trabajo, clientes nuevos, ingresos por mes y por sucursal, mejores clientes, valor de inventario. Para "¿cuánto facturamos este mes?", "¿cómo vamos comparado con el mes pasado?" llama una vez por periodo y compara.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        from: { type: 'string', description: 'YYYY-MM-DD inicio (incluido)' },
+        to: { type: 'string', description: 'YYYY-MM-DD fin (incluido)' },
+      },
+      required: ['from', 'to'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'daily_briefing',
-    description: 'Resumen del día (solo lectura) para "¿qué hay para hoy?" / "¿cómo va el día?": trabajos del día con su cuadrilla, trabajos sin cuadrilla, quién de la cuadrilla de hoy no ha marcado entrada, facturas vencidas y posibles viejos. Resume en 2–3 frases.',
+    description: 'Resumen del día (solo lectura) para "¿qué hay para hoy?" / "¿cómo va el día?": trabajos del día con su cuadrilla, trabajos sin cuadrilla, quién de la cuadrilla de hoy no ha marcado entrada, facturas vencidas, posibles viejos, equipo con placa/seguro/garantía vencido o por vencer (14 días) e inventario bajo. Resume en 2–3 frases con lo más urgente.',
     input_schema: {
       type: 'object',
       properties: { date: { type: 'string', description: 'YYYY-MM-DD (hoy, de la fecha del contexto)' } },
@@ -1434,7 +1515,8 @@ export async function buildActionDraft(ctx: AssistantContext, name: string, inpu
 export async function executeDailyBriefing(ctx: AssistantContext, input: ToolInput) {
   const date = asDate(input.date);
   if (!date) throw new Error('Falta la fecha (YYYY-MM-DD).');
-  const [jobsRes, overdueRes, staleRes, sheetsRes] = await Promise.all([
+  const soon = new Date(new Date(`${date}T00:00:00`).getTime() + 14 * 86_400_000).toISOString().slice(0, 10);
+  const [jobsRes, overdueRes, staleRes, sheetsRes, equipRes, lowRes] = await Promise.all([
     ctx.db.from('jobs').select('id, title, status, time_start, all_day, job_city, job_assignments(worker_name, employee_id, is_lead)')
       .eq('business_id', ctx.businessId).is('archived_at', null)
       .not('status', 'in', '("cancelled","declined","posible","proposal","sent")')
@@ -1447,6 +1529,12 @@ export async function executeDailyBriefing(ctx: AssistantContext, input: ToolInp
       .eq('business_id', ctx.businessId).eq('status', 'posible').is('archived_at', null)
       .lt('created_at', new Date(Date.now() - 30 * 86_400_000).toISOString()),
     ctx.db.from('timesheets').select('employee_id').eq('business_id', ctx.businessId).eq('work_date', date),
+    ctx.db.from('equipment').select('name, plate_expiration, insurance_expiration, warranty_expiration')
+      .eq('business_id', ctx.businessId)
+      .or(`plate_expiration.lte.${soon},insurance_expiration.lte.${soon},warranty_expiration.lte.${soon}`)
+      .limit(50),
+    ctx.db.from('inventory_items').select('name, quantity, unit', { count: 'exact' })
+      .eq('business_id', ctx.businessId).eq('is_low_stock', true).order('quantity').limit(10),
   ]);
   if (jobsRes.error) throw new Error(jobsRes.error.message);
   const jobs = (jobsRes.data ?? []) as any[];
@@ -1466,5 +1554,232 @@ export async function executeDailyBriefing(ctx: AssistantContext, input: ToolInp
     crew_not_clocked_in: [...crewToday].filter(([id]) => !clockedIn.has(id)).map(([, name]) => name),
     overdue_invoices: { count: overdueRes.count ?? overdue.length, balance: overdue.reduce((s, i) => s + Number(i.total_amount) - Number(i.amount_paid ?? 0), 0) },
     stale_possibles_30d: staleRes.count ?? 0,
+    // Plate / insurance / warranty expired or due within 14 days, soonest first.
+    equipment_expiring: ((equipRes.data ?? []) as Record<string, string | null>[]).flatMap(e =>
+      (['plate_expiration', 'insurance_expiration', 'warranty_expiration'] as const)
+        .filter(k => e[k] && e[k]! <= soon)
+        .map(k => ({ equipment: e.name, what: k.replace('_expiration', ''), date: e[k], expired: e[k]! < date })),
+    ).sort((a, b) => String(a.date).localeCompare(String(b.date))),
+    low_stock: { count: lowRes.count ?? 0, items: (lowRes.data ?? []) },
+  };
+}
+
+
+// ── Equipment module ───────────────────────────────────────────────────────
+
+const EQUIP_COLS = 'id, name, equipment_type, make, model, year, color, vin, serial_number, mileage, plate_number, plate_expiration, insurance_carrier, insurance_policy_number, insurance_agent, insurance_agent_phone, insurance_expiration, purchase_date, warranty_expiration, location, paid_off, loan_lender, loan_amount, value, assigned_employee_id, notes';
+const EQUIP_TEXT = ['name', 'equipment_type', 'make', 'model', 'color', 'vin', 'serial_number', 'plate_number', 'insurance_carrier', 'insurance_policy_number', 'insurance_agent', 'insurance_agent_phone', 'location', 'loan_lender', 'notes'];
+const EQUIP_DATE = ['plate_expiration', 'insurance_expiration', 'purchase_date', 'warranty_expiration'];
+const EQUIP_INT = ['year', 'mileage'];
+const EQUIP_NUM = ['loan_amount', 'value'];
+const EQUIP_LABELS: Record<string, [string, string]> = {
+  name: ['Nombre', 'Name'], equipment_type: ['Tipo', 'Type'], make: ['Marca', 'Make'], model: ['Modelo', 'Model'], year: ['Año', 'Year'],
+  color: ['Color', 'Color'], vin: ['VIN', 'VIN'], serial_number: ['No. de serie', 'Serial #'], mileage: ['Millaje', 'Mileage'],
+  plate_number: ['Placa', 'Plate'], plate_expiration: ['Vence placa', 'Plate expires'], insurance_carrier: ['Aseguradora', 'Insurer'],
+  insurance_policy_number: ['Póliza', 'Policy #'], insurance_agent: ['Agente', 'Agent'], insurance_agent_phone: ['Tel. agente', 'Agent phone'],
+  insurance_expiration: ['Vence seguro', 'Insurance expires'], purchase_date: ['Compra', 'Purchased'], warranty_expiration: ['Vence garantía', 'Warranty expires'],
+  location: ['Ubicación', 'Location'], paid_off: ['Pagado', 'Paid off'], loan_lender: ['Prestamista', 'Lender'], loan_amount: ['Préstamo', 'Loan'],
+  value: ['Valor', 'Value'], assigned_employee_id: ['Asignado a', 'Assigned to'], notes: ['Notas', 'Notes'],
+};
+
+export async function executeQueryEquipment(ctx: AssistantContext, input: ToolInput) {
+  const limit = clamp(input.limit, 50, 20);
+  let q = ctx.db.from('equipment').select(EQUIP_COLS).eq('business_id', ctx.businessId);
+  const term = String(input.search ?? '').replace(/[,().\\"%]/g, '').trim();
+  if (term) q = q.or(['name', 'make', 'model', 'plate_number', 'vin', 'serial_number'].map(c => `${c}.ilike.%${term}%`).join(','));
+  if (input.assigned_to) {
+    const t = String(input.assigned_to).trim().toLowerCase();
+    const ids = ctx.employees.filter(e => e.name.toLowerCase().includes(t)).map(e => e.id);
+    if (!ids.length) return { total: 0, equipment: [], note: `nadie del roster coincide con "${input.assigned_to}"` };
+    q = q.in('assigned_employee_id', ids);
+  }
+  const days = Number.isInteger(input.expiring_within_days) ? Math.max(0, input.expiring_within_days) : null;
+  if (days !== null) {
+    const until = new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+    q = q.or(EQUIP_DATE.filter(c => c !== 'purchase_date').map(c => `${c}.lte.${until}`).join(','));
+  }
+  const { data, error } = await q.order('name').limit(limit);
+  if (error) throw new Error(error.message);
+  const nameById = new Map(ctx.employees.map(e => [e.id, e.name]));
+  return {
+    equipment: (data ?? []).map((r: any) => ({ ...r, assigned_to: r.assigned_employee_id ? nameById.get(r.assigned_employee_id) ?? null : null })),
+  };
+}
+
+export async function buildEquipmentDraft(ctx: AssistantContext, input: ToolInput): Promise<ActionDraft> {
+  const id = asStr(input.equipment_id) ?? '';
+  const { data: row, error } = await ctx.db.from('equipment').select(EQUIP_COLS).eq('business_id', ctx.businessId).eq('id', id).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!row) throw new Error('No encontré ese equipo — búscalo con query_equipment.');
+  const cur = row as Record<string, any>;
+  const en = ctx.locale === 'en';
+  const warnings: string[] = [];
+  const patch: Record<string, unknown> = {};
+  for (const k of EQUIP_TEXT) if (typeof input[k] === 'string') patch[k] = input[k].trim() || null;
+  for (const k of EQUIP_DATE) if (typeof input[k] === 'string') {
+    if (input[k] === '') patch[k] = null;
+    else if (asDate(input[k])) patch[k] = input[k];
+    else warnings.push(`Fecha inválida para ${EQUIP_LABELS[k][0]}.`);
+  }
+  for (const k of EQUIP_INT) if (Number.isInteger(input[k]) && input[k] >= 0) patch[k] = input[k];
+  for (const k of EQUIP_NUM) if (num(input[k]) !== undefined && input[k] >= 0) patch[k] = input[k];
+  if (typeof input.paid_off === 'boolean') patch.paid_off = input.paid_off;
+  if (typeof input.assigned_employee_id === 'string') {
+    const e = input.assigned_employee_id.trim();
+    if (e && !ctx.employees.some(x => x.id === e)) warnings.push('Ese empleado no está en el roster.');
+    else patch.assigned_employee_id = e || null;
+  }
+  if (typeof patch.insurance_agent_phone === 'string') {
+    const d = patch.insurance_agent_phone.replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
+    patch.insurance_agent_phone = d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : patch.insurance_agent_phone;
+  }
+  if (patch.name === null) { delete patch.name; warnings.push('El nombre no puede quedar vacío.'); }
+  // Same rule as the equipment form: paid off → no loan.
+  if (patch.paid_off === true) { patch.loan_lender = null; patch.loan_amount = null; }
+  for (const k of Object.keys(patch)) if ((patch[k] ?? null) === (cur[k] ?? null)) delete patch[k];
+  if (!Object.keys(patch).length) throw new Error('No indicaste ningún cambio distinto a lo que ya tiene.');
+
+  const nameById = new Map(ctx.employees.map(e => [e.id, e.name]));
+  const show = (k: string, v: unknown) =>
+    v == null || v === '' ? '—'
+      : k === 'assigned_employee_id' ? nameById.get(String(v)) ?? '—'
+        : k === 'paid_off' ? (v ? (en ? 'yes' : 'sí') : 'no')
+          : EQUIP_NUM.includes(k) ? money(v)
+            : String(v).length > 80 ? `${String(v).slice(0, 77)}…` : String(v);
+  const before = Object.fromEntries(Object.keys(patch).map(k => [k, cur[k] ?? null]));
+  return {
+    kind: 'action', job_id: randomUUID(), business_id: ctx.businessId, warnings,
+    action: 'equipment_update',
+    title: `${en ? 'Equipment' : 'Equipo'} · ${cur.name}`,
+    params: { equipment_id: id, patch, before },
+    detail_rows: Object.keys(patch).map(k => ({ label: EQUIP_LABELS[k][en ? 1 : 0], from: show(k, cur[k]), to: show(k, patch[k]) })),
+  };
+}
+
+
+// ── Inventory ──────────────────────────────────────────────────────────────
+
+const INV_COLS = 'id, name, sku, quantity, unit, unit_cost, category, low_stock_threshold, is_low_stock';
+
+export async function executeQueryInventory(ctx: AssistantContext, input: ToolInput) {
+  const limit = clamp(input.limit, 50, 20);
+  let q = ctx.db.from('inventory_items').select(INV_COLS).eq('business_id', ctx.businessId);
+  const term = String(input.search ?? '').replace(/[,().\\"%]/g, '').trim();
+  if (term) q = q.or(`name.ilike.%${term}%,sku.ilike.%${term}%`);
+  if (asStr(input.category)) q = q.ilike('category', `%${String(input.category).replace(/[%,()]/g, '')}%`);
+  if (input.low_stock_only === true) q = q.eq('is_low_stock', true);
+  const { data, error } = await q.order('name').limit(limit);
+  if (error) throw new Error(error.message);
+  return { items: data ?? [] };
+}
+
+export async function buildInventoryDraft(ctx: AssistantContext, input: ToolInput): Promise<ActionDraft> {
+  const id = asStr(input.item_id) ?? '';
+  const { data: row, error } = await ctx.db.from('inventory_items').select(INV_COLS).eq('business_id', ctx.businessId).eq('id', id).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!row) throw new Error('No encontré ese artículo — búscalo con query_inventory.');
+  const cur = row as Record<string, any>;
+  const en = ctx.locale === 'en';
+  const warnings: string[] = [];
+  const int = (v: unknown) => (Number.isInteger(v) && (v as number) >= 0 ? (v as number) : undefined);
+
+  const set = int(input.set_quantity);
+  const delta = set !== undefined ? null : (int(input.add) ?? 0) - (int(input.remove) ?? 0) || null;
+  if (set === undefined && delta !== null && cur.quantity + delta < 0) {
+    warnings.push(en ? `Only ${cur.quantity} in stock — it will go to 0.` : `Solo hay ${cur.quantity} — quedará en 0.`);
+  }
+  const patch: Record<string, unknown> = {};
+  for (const k of ['name', 'unit', 'category', 'sku']) if (typeof input[k] === 'string') patch[k] = input[k].trim() || null;
+  if (patch.name === null) { delete patch.name; warnings.push('El nombre no puede quedar vacío.'); }
+  if (patch.unit === null) delete patch.unit; // NOT NULL column
+  if (num(input.unit_cost) !== undefined && input.unit_cost >= 0) patch.unit_cost = input.unit_cost;
+  if (int(input.low_stock_threshold) !== undefined) patch.low_stock_threshold = input.low_stock_threshold;
+  for (const k of Object.keys(patch)) if ((patch[k] ?? null) === (cur[k] ?? null)) delete patch[k];
+  if (set === cur.quantity && !Object.keys(patch).length && !delta) throw new Error('Ya tiene esa cantidad.');
+  if (set === undefined && !delta && !Object.keys(patch).length) throw new Error('No indicaste ningún cambio.');
+
+  const L: Record<string, [string, string]> = {
+    name: ['Nombre', 'Name'], unit: ['Unidad', 'Unit'], unit_cost: ['Costo', 'Cost'], category: ['Categoría', 'Category'],
+    sku: ['SKU', 'SKU'], low_stock_threshold: ['Mínimo', 'Low-stock at'],
+  };
+  const show = (k: string, v: unknown) => (v == null || v === '' ? '—' : k === 'unit_cost' ? money(v) : String(v));
+  const rows: ActionDraft['detail_rows'] = [];
+  const unit = cur.unit ? ` ${cur.unit}` : '';
+  if (set !== undefined && set !== cur.quantity) rows.push({ label: en ? 'In stock' : 'Existencia', from: `${cur.quantity}${unit}`, to: `${set}${unit}` });
+  if (delta) rows.push({ label: en ? 'In stock' : 'Existencia', from: `${cur.quantity}${unit}`, to: `${Math.max(0, cur.quantity + delta)}${unit} (${delta > 0 ? '+' : ''}${delta})` });
+  for (const k of Object.keys(patch)) rows.push({ label: L[k][en ? 1 : 0], from: show(k, cur[k]), to: show(k, patch[k]) });
+  return {
+    kind: 'action', job_id: randomUUID(), business_id: ctx.businessId, warnings,
+    action: 'inventory_update',
+    title: `${en ? 'Inventory' : 'Inventario'} · ${cur.name}`,
+    params: {
+      item_id: id, delta, set_quantity: set !== undefined && set !== cur.quantity ? set : null, patch,
+      before: Object.fromEntries([...Object.keys(patch), ...(set !== undefined ? ['quantity'] : [])].map(k => [k, cur[k] ?? null])),
+    },
+    detail_rows: rows,
+  };
+}
+
+
+// ── Reports ────────────────────────────────────────────────────────────────
+
+/** Midnight of a YYYY-MM-DD in an IANA timezone, as a UTC instant. */
+function zonedMidnight(ymd: string, tz: string): Date {
+  const guess = new Date(`${ymd}T00:00:00Z`);
+  // Offset of `tz` at that moment: render the instant there and diff.
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(guess).reduce<Record<string, string>>((a, p) => ({ ...a, [p.type]: p.value }), {});
+  const asLocal = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+  return new Date(guess.getTime() - (asLocal - guess.getTime()));
+}
+
+export async function executeBusinessReport(ctx: AssistantContext, input: ToolInput) {
+  if (!ctx.canSeeReports) throw new Error('Tu rol no tiene acceso a reportes — díselo al usuario.');
+  const from = asDate(input.from);
+  const to = asDate(input.to);
+  if (!from || !to || from > to) throw new Error('Periodo inválido (from/to YYYY-MM-DD).');
+  const start = zonedMidnight(from, ctx.tz);
+  const [ty, tm, td] = to.split('-').map(Number);
+  const nextDay = new Date(Date.UTC(ty, tm - 1, td + 1)).toISOString().slice(0, 10);
+  const end = new Date(zonedMidnight(nextDay, ctx.tz).getTime() - 1);
+  const [fy, fm] = from.split('-').map(Number);
+  const months = Math.min(24, (ty - fy) * 12 + (tm - fm) + 1);
+
+  const [ov, top] = await Promise.all([
+    ctx.db.rpc('reports_overview', {
+      p_business_id: ctx.businessId,
+      p_from: start.toISOString(),
+      p_to: end.toISOString(),
+      p_bucket_start: `${from.slice(0, 7)}-01`,
+      p_bucket_months: months,
+      p_tz: ctx.tz,
+      p_include_inventory: true,
+      p_location_id: null,
+    }),
+    ctx.db.rpc('dashboard_top_clients', { p_business_id: ctx.businessId, p_start: start.toISOString(), p_limit: 5, p_location_id: null }),
+  ]);
+  if (ov.error) throw new Error(ov.error.message);
+  const o = (ov.data ?? {}) as Record<string, any>;
+  const n = (k: string) => Number(o[k] ?? 0) || 0;
+  // Same average-per-job rule as the Reports screen.
+  const avgPerJob = n('pricedJobsCount') ? n('pricedJobsSum') / n('pricedJobsCount')
+    : n('perJobCount') ? n('perJobSum') / n('perJobCount')
+      : n('invoicesTotal') ? n('invoicesSum') / n('invoicesTotal') : 0;
+  return {
+    period: { from, to },
+    // Invoices dated in the period that are paid (own share; bill-through excluded).
+    paid_invoices_total: n('totalRevenue'),
+    pending_to_collect: n('pendingRevenue'),
+    overdue_to_collect: n('overdueRevenue'),
+    invoices: { total: n('invoicesTotal'), paid: n('paidInvoicesCount'), by_status: o.invoiceStatus ?? [] },
+    jobs: { total: n('jobsTotal'), completed: n('completedJobsCount'), by_status: o.jobStatus ?? [] },
+    avg_per_job: Math.round(avgPerJob * 100) / 100,
+    clients: { new: n('newClientsCount'), total: n('totalClientsCount') },
+    monthly_revenue: o.monthlyRevenue ?? [],
+    by_branch: o.byLocation ?? [],
+    // Top clients from `from` until today (not capped at `to`).
+    top_clients_since_from: ((top.data ?? []) as any[]).map(c => ({ name: [c.first_name, c.last_name].filter(Boolean).join(' ') || c.company, total: Number(c.total) })),
+    inventory: { items: n('inventoryItemsCount'), value: n('inventoryValue'), low_stock: n('lowStock'), out_of_stock: n('outOfStock') },
   };
 }

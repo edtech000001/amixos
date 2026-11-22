@@ -12,7 +12,7 @@ interface Props {
   onConfirm: () => void;
   confirming: boolean;
   /** What the result opens + card labels (defaults: a job change). */
-  target?: 'job' | 'invoice' | 'client';
+  target?: 'job' | 'invoice' | 'client' | 'none';
   heading?: string;
   doneLabel?: string;
 }
@@ -101,9 +101,11 @@ export function JobUpdateCard({ draft, active, createdJobId, onConfirm, confirmi
         <div className="mt-3 flex items-center gap-2 text-sm">
           <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
           <span className="font-medium text-green-700">{doneLabel ?? t.updated}</span>
-          <Link href={`/dashboard/${SECTION[target]}/${createdJobId}`} className="ml-auto font-medium text-primary hover:underline">
-            {target === 'invoice' ? t.viewInvoice : target === 'client' ? t.viewClient : t.viewJob}
-          </Link>
+          {target !== 'none' && (
+            <Link href={`/dashboard/${SECTION[target]}/${createdJobId}`} className="ml-auto font-medium text-primary hover:underline">
+              {target === 'invoice' ? t.viewInvoice : target === 'client' ? t.viewClient : t.viewJob}
+            </Link>
+          )}
         </div>
       ) : active ? (
         <button type="button" onClick={onConfirm} disabled={confirming}

@@ -35,7 +35,7 @@ export function useAssistant(
             'Content-Type': 'application/json',
             Authorization: `Bearer ${jwt}`,
           },
-          body: JSON.stringify({ ...(body as object), locale, screen_path: pathRef.current }),
+          body: JSON.stringify({ ...(body as object), locale, screen_path: pathRef.current, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }),
         });
         const json = await res.json().catch(() => null);
         if (!res.ok || !json?.success) {

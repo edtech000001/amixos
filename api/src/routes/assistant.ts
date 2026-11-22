@@ -68,9 +68,8 @@ async function buildContext(
     db.from('businesses').select('name, job_field_required, job_field_hidden').eq('id', businessId).maybeSingle(),
     db.from('employees').select('id, first_name, last_name, role, user_id').eq('business_id', businessId).limit(200),
     db.from('job_field_templates').select('field_key, field_label, field_type, field_options, field_config, required').eq('business_id', businessId).order('sort_order'),
-    role === 'field'
-      ? db.from('business_roles').select('permissions').eq('business_id', businessId).eq('key', 'field').maybeSingle()
-      : Promise.resolve({ data: null } as any),
+    // The member's role row (system or custom) — caps + resource permissions.
+    db.from('business_roles').select('permissions').eq('business_id', businessId).eq('key', role).maybeSingle(),
   ]);
 
   const employees = (empRes.data ?? []).map((e: any) => ({
@@ -84,6 +83,12 @@ async function buildContext(
   // mirrors can.scheduleJobs (shared/src/lib/permissions.ts).
   const scheduleCap = !!roleRes?.data?.permissions?.caps?.scheduleJobs;
   const restrictedCreator = role === 'field' && !scheduleCap;
+  // Same gate as the Reports screen (can.seeReports).
+  const canSeeReports = role === 'owner' || role === 'admin' || roleRes?.data?.permissions?.resources?.reports?.view === 'all';
+  // Device timezone from the app; anything Intl can't resolve falls back.
+  const rawTz = typeof req.body?.tz === 'string' ? req.body.tz : '';
+  let tz = 'America/Chicago';
+  try { if (rawTz) { new Intl.DateTimeFormat('en-US', { timeZone: rawTz }); tz = rawTz; } } catch { /* keep fallback */ }
 
   // Normalise the JSONB config maps → { key: true } (truthy keys only).
   const boolMap = (raw: unknown): Record<string, boolean> => {
@@ -100,6 +105,8 @@ async function buildContext(
     userName: mine ? `${mine.first_name ?? ''} ${mine.last_name ?? ''}`.trim() : (req.user!.email ?? ''),
     role,
     restrictedCreator,
+    canSeeReports,
+    tz,
     myEmployeeId: mine?.id ?? null,
     locale: locale === 'en' ? 'en' : 'es',
     db,

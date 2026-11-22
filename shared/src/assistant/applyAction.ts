@@ -34,6 +34,15 @@ export interface AssistantLocalEnv {
   };
 }
 
+const EQUIPMENT_FIELDS = new Set([
+  'name', 'equipment_type', 'make', 'model', 'year', 'color', 'vin', 'serial_number', 'mileage', 'plate_number',
+  'plate_expiration', 'insurance_carrier', 'insurance_policy_number', 'insurance_agent', 'insurance_agent_phone',
+  'insurance_expiration', 'purchase_date', 'warranty_expiration', 'location', 'paid_off', 'loan_lender',
+  'loan_amount', 'value', 'assigned_employee_id', 'notes',
+]);
+
+const INVENTORY_FIELDS = new Set(['name', 'unit', 'unit_cost', 'category', 'sku', 'low_stock_threshold', 'quantity']);
+
 export interface Applied {
   /** Record to open from the card (invoice / job / client id). */
   id: string;
@@ -130,6 +139,50 @@ export async function applyAction(env: AssistantLocalEnv, draft: ActionDraft): P
     });
     if (!row) throw new Error('No pude guardar la nota.');
     return { id: p.client_id, undo: async () => { await deleteClientCommunication(supabase as never, row.id); } };
+  }
+
+  if (draft.action === 'inventory_update') {
+    const { item_id, delta, set_quantity, patch, before } = draft.params;
+    const pick = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).filter(([k]) => INVENTORY_FIELDS.has(k)));
+    const write = async (values: Record<string, unknown>) => {
+      if (!Object.keys(values).length) return;
+      const { data, error } = await supabase.from('inventory_items').update(values).eq('id', item_id).select('id');
+      if (error) throw error;
+      if (!data?.length) throw new Error('No tienes permiso para cambiar el inventario.');
+    };
+    const readQty = async () => {
+      const { data } = await supabase.from('inventory_items').select('quantity').eq('id', item_id).maybeSingle();
+      if (!data) throw new Error('Ese artículo ya no existe.');
+      return Number(data.quantity) || 0;
+    };
+    // Same rule as Adjust stock: relative to what's there NOW, never below 0.
+    const qtyNow = await readQty();
+    const next = set_quantity ?? (delta ? Math.max(0, qtyNow + delta) : null);
+    await write({ ...pick(patch), ...(next !== null && next !== qtyNow ? { quantity: next } : {}) });
+    const applied = next !== null ? next - qtyNow : 0;
+    return {
+      id: item_id,
+      undo: async () => {
+        const restore = pick(before);
+        delete restore.quantity;
+        if (set_quantity !== null) restore.quantity = before.quantity;
+        else if (applied) restore.quantity = Math.max(0, (await readQty()) - applied);
+        await write(restore);
+      },
+    };
+  }
+
+  if (draft.action === 'equipment_update') {
+    const { equipment_id, patch, before } = draft.params;
+    // Only the equipment form's own fields — never ids/business/photos.
+    const pick = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).filter(([k]) => EQUIPMENT_FIELDS.has(k)));
+    const write = async (values: Record<string, unknown>) => {
+      const { data, error } = await supabase.from('equipment').update(values).eq('id', equipment_id).select('id');
+      if (error) throw error;
+      if (!data?.length) throw new Error('No tienes permiso para cambiar este equipo.');
+    };
+    await write(pick(patch));
+    return { id: equipment_id, undo: () => write(pick(before)) };
   }
 
   // client_create

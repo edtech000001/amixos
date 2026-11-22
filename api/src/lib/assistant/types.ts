@@ -173,6 +173,10 @@ export type ActionDraft = {
   | { action: 'payment'; params: { invoice_id: string; amount: number; method: PayMethodKey; paid_on: string } }
   | { action: 'quick_quote'; params: { client_id: string | null; title: string; price: number | null; notes: string | null } }
   | { action: 'client_note'; params: { client_id: string; type: 'call' | 'sms' | 'email' | 'in_person' | 'whatsapp' | 'note'; outcome: 'connected' | 'no_answer' | 'sent' | 'left_voicemail' | null; note: string | null } }
+  /** delta is applied to the quantity AT APPLY TIME (stock may have moved);
+   *  set_quantity is absolute. patch/before cover the other fields. */
+  | { action: 'inventory_update'; params: { item_id: string; delta: number | null; set_quantity: number | null; patch: Record<string, unknown>; before: Record<string, unknown> } }
+  | { action: 'equipment_update'; params: { equipment_id: string; patch: Record<string, unknown>; before: Record<string, unknown> } }
   | { action: 'client_create'; params: { first_name: string; last_name: string | null; company: string | null; phone_cell: string | null; email: string | null; address: string | null; city: string | null; state: string | null; zip_code: string | null } }
 );
 
@@ -228,6 +232,10 @@ export interface AssistantContext {
   restrictedCreator: boolean;
   /** The caller's own employee row id (for field self-assign), if any. */
   myEmployeeId: string | null;
+  /** May see Reports (owner/admin, or the role's reports view = all). */
+  canSeeReports: boolean;
+  /** The device's IANA timezone ("America/Chicago"); dates/"today" follow it. */
+  tz: string;
   /** The app's configured language — Ami defaults to it. */
   locale: 'es' | 'en';
   /** RLS-scoped supabase client (anon key + caller JWT). */

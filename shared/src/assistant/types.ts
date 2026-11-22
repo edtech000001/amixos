@@ -183,6 +183,10 @@ export type ActionDraft = {
   | { action: 'payment'; params: { invoice_id: string; amount: number; method: PayMethodKey; paid_on: string } }
   | { action: 'quick_quote'; params: { client_id: string | null; title: string; price: number | null; notes: string | null } }
   | { action: 'client_note'; params: { client_id: string; type: 'call' | 'sms' | 'email' | 'in_person' | 'whatsapp' | 'note'; outcome: 'connected' | 'no_answer' | 'sent' | 'left_voicemail' | null; note: string | null } }
+  /** delta is applied to the quantity AT APPLY TIME (stock may have moved);
+   *  set_quantity is absolute. patch/before cover the other fields. */
+  | { action: 'inventory_update'; params: { item_id: string; delta: number | null; set_quantity: number | null; patch: Record<string, unknown>; before: Record<string, unknown> } }
+  | { action: 'equipment_update'; params: { equipment_id: string; patch: Record<string, unknown>; before: Record<string, unknown> } }
   | { action: 'client_create'; params: { first_name: string; last_name: string | null; company: string | null; phone_cell: string | null; email: string | null; address: string | null; city: string | null; state: string | null; zip_code: string | null } }
 );
 
@@ -231,7 +235,8 @@ export function isActionDraft(d: AssistantDraft | null | undefined): d is Action
 export function actionAsUpdate(d: ActionDraft): JobUpdateDraft {
   return { kind: 'update', job_id: d.job_id, business_id: d.business_id, title: d.title, before: {}, detail_rows: d.detail_rows, warnings: d.warnings };
 }
-export function actionTarget(d: ActionDraft): 'job' | 'invoice' | 'client' {
+export function actionTarget(d: ActionDraft): 'job' | 'invoice' | 'client' | 'none' {
+  if (d.action === 'equipment_update' || d.action === 'inventory_update') return 'none';
   return d.action === 'quick_quote' ? 'job' : d.action === 'client_note' || d.action === 'client_create' ? 'client' : 'invoice';
 }
 

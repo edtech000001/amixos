@@ -14,7 +14,7 @@ interface Props {
   onConfirm: () => void;
   onNavigate: () => void;
   /** What the result opens + card labels (defaults: a job change). */
-  target?: 'job' | 'invoice' | 'client';
+  target?: 'job' | 'invoice' | 'client' | 'none';
   heading?: string;
   doneLabel?: string;
 }
@@ -115,9 +115,11 @@ export function JobUpdateCard({ draft, active, createdJobId, confirming, onConfi
             <Check size={16} color={c.success} />
             <Text className="text-sm font-semibold text-emerald-600 ml-1.5">{doneLabel ?? a.updated}</Text>
           </View>
-          <Pressable hitSlop={8} onPress={() => { onNavigate(); router.push(`/dashboard/${SECTION[target]}/${createdJobId}`); }}>
-            <Text className="text-sm font-semibold text-primary">{target === 'invoice' ? a.viewInvoice : target === 'client' ? a.viewClient : a.viewJob}</Text>
-          </Pressable>
+          {target !== 'none' ? (
+            <Pressable hitSlop={8} onPress={() => { onNavigate(); router.push(`/dashboard/${SECTION[target]}/${createdJobId}`); }}>
+              <Text className="text-sm font-semibold text-primary">{target === 'invoice' ? a.viewInvoice : target === 'client' ? a.viewClient : a.viewJob}</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
     </View>
