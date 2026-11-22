@@ -23,6 +23,7 @@ import { AccountDeletionGate } from '@/components/AccountDeletionGate';
 import { BusinessDeletionBanner } from '@/components/BusinessDeletionBanner';
 import { useBusinessDeletionDate } from '@amixos/shared/lib/businessDeletion';
 import { AssistantWidget } from '@/components/assistant/AssistantWidget';
+import { useWidgetSnapshot } from '@/lib/widgetSnapshot';
 import { startNetworkMonitor, onReconnect } from '@/lib/offline/network';
 import { prefetchForOffline } from '@/lib/offline/prefetch';
 import { startSyncRunner } from '@/lib/offline/syncRunner';
@@ -105,6 +106,8 @@ function DashboardTabs() {
   const { t } = useLang();
   const sb = t.dashboard.sidebar;
   const { currentRole, user, impersonating, business } = useApp();
+  // iOS home-screen "Hoy" widget data.
+  useWidgetSnapshot();
   // Bumped when the active business CHANGES (A → B), not on the first load
   // (null → A), so startup doesn't rebuild the navigator. Keys <Tabs> below.
   const [bizGen, setBizGen] = useState(0);

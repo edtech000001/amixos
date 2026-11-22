@@ -8,6 +8,8 @@
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
     "ios": {
+      "appleTeamId": "UVUMLGQYVM",
+      "entitlements": { "com.apple.security.application-groups": ["group.com.amixos.app"] },
       "supportsTablet": true,
       "bundleIdentifier": "com.amixos.app",
       "icon": {
@@ -22,6 +24,8 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": ["audio"],
+        "NSSupportsLiveActivities": true,
+        "INAlternativeAppNames": [{ "INAlternativeAppName": "Ami" }],
         "UISupportedInterfaceOrientations~ipad": [
           "UIInterfaceOrientationPortrait",
           "UIInterfaceOrientationPortraitUpsideDown",
@@ -97,7 +101,37 @@
         }
       ],
       "expo-notifications",
-      "./plugins/withSceneLifecycle"
+      "./plugins/withSceneLifecycle",
+      "@bacons/apple-targets",
+      "./plugins/withSharedLocalizationFix",
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "AmiToday",
+              "label": "Hoy",
+              "description": "Trabajos de hoy, el siguiente y lo pendiente.",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "AmiMoney",
+              "label": "Cobros",
+              "description": "Cobrado este mes y lo vencido por cobrar.",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

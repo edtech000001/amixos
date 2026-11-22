@@ -1,0 +1,5 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": { "modules": ["AmiCallModule"] },
+  "android": { "modules": ["expo.modules.amicall.AmiCallModule"] }
+}

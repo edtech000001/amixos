@@ -3301,6 +3301,22 @@ export type DashboardDict = {
     callMinimize: string;
     callExpand: string;
     callMute: string;
+    liveMute: string;
+    widgetToday: string;
+    widgetJobs: string;
+    widgetDone: string;
+    widgetNext: string;
+    widgetNoJobs: string;
+    widgetUnassigned: string;
+    widgetOverdue: string;
+    widgetTalk: string;
+    widgetMoney: string;
+    widgetPaidMonth: string;
+    widgetOwed: string;
+    widgetNoAccess: string;
+    widgetOpenApp: string;
+    liveUnmute: string;
+    liveMuted: string;
     callUnmute: string;
     callMuted: string;
     callDraftHint: string;
@@ -6834,6 +6850,22 @@ export const dashboard: Record<Locale, DashboardDict> = {
       callMinimize: 'Minimizar — sigue hablando mientras usas la app',
       callExpand: 'Abrir chat',
       callMute: 'Silenciar micrófono',
+      liveMute: 'Silenciar',
+      widgetToday: 'Hoy',
+      widgetJobs: 'trabajos',
+      widgetDone: 'terminados',
+      widgetNext: 'Sigue',
+      widgetNoJobs: 'Sin trabajos hoy',
+      widgetUnassigned: 'sin cuadrilla',
+      widgetOverdue: 'vencidas',
+      widgetTalk: 'Hablar con Ami',
+      widgetMoney: 'Cobros',
+      widgetPaidMonth: 'cobrado este mes',
+      widgetOwed: 'vencido por cobrar',
+      widgetNoAccess: 'Solo para dueños y administradores',
+      widgetOpenApp: 'Abre Amixos para cargar',
+      liveUnmute: 'Activar mic',
+      liveMuted: 'Silenciado',
       callUnmute: 'Activar micrófono',
       callMuted: 'Silenciado · toca el micrófono para hablar',
       callDraftHint: 'Borrador listo — di "sí" para confirmar o abre el chat',
@@ -10398,6 +10430,22 @@ export const dashboard: Record<Locale, DashboardDict> = {
       callMinimize: 'Minimize — keep talking while you use the app',
       callExpand: 'Open chat',
       callMute: 'Mute mic',
+      liveMute: 'Mute',
+      widgetToday: 'Today',
+      widgetJobs: 'jobs',
+      widgetDone: 'done',
+      widgetNext: 'Next',
+      widgetNoJobs: 'No jobs today',
+      widgetUnassigned: 'no crew',
+      widgetOverdue: 'overdue',
+      widgetTalk: 'Talk to Ami',
+      widgetMoney: 'Collections',
+      widgetPaidMonth: 'collected this month',
+      widgetOwed: 'overdue',
+      widgetNoAccess: 'Owners and admins only',
+      widgetOpenApp: 'Open Amixos to load',
+      liveUnmute: 'Unmute',
+      liveMuted: 'Muted',
       callUnmute: 'Unmute mic',
       callMuted: 'Muted · tap the mic to talk',
       callDraftHint: 'Draft ready — say "yes" to confirm or open the chat',

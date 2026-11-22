@@ -1,0 +1,5 @@
+/* Siri phrases for StartAmiCallIntent (AmiCall.swift). "Ami" is an alternative app name (INAlternativeAppNames). */
+"Talk to ${applicationName}" = "Habla con ${applicationName}";
+"Call ${applicationName}" = "Llama a ${applicationName}";
+"Start a call with ${applicationName}" = "Hablar con ${applicationName}";
+"Open ${applicationName} call" = "Abre ${applicationName}";

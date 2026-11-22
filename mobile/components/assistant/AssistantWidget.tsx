@@ -1,4 +1,6 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
+import { AmiCall } from '@/modules/ami-call-native';
 import { useRouter } from 'expo-router';
 import { assistantScreenHref } from '@amixos/shared/assistant/screens';
 import { useAppHref } from '@/lib/sectionNav';
@@ -42,6 +44,27 @@ export function AssistantWidget() {
     else setAskConsent(true);
   };
 
+  // "Oye Siri, habla con Ami": open Ami and start the call. Siri leaves a
+  // flag (cold launch) and/or an event (app already running).
+  const [autoStart, setAutoStart] = useState(false);
+  const siriWaiting = useRef(false);
+  const ready = !!business && !impersonating && isAssistantEnabled(business.id);
+  const startFromSiri = useCallback(() => {
+    if (!ready || consent.granted === null) { siriWaiting.current = true; return; } // not loaded yet
+    siriWaiting.current = false;
+    if (!consent.granted) { setAskConsent(true); return; }
+    setMini(false);
+    setOpen(true);
+    setAutoStart(true);
+  }, [ready, consent.granted]);
+  useEffect(() => {
+    const check = () => { if (AmiCall.consumePendingStart() || siriWaiting.current) startFromSiri(); };
+    check();
+    const sub = AmiCall.onAction(action => { if (action === 'start') check(); });
+    const app = AppState.addEventListener('change', s => { if (s === 'active') check(); });
+    return () => { sub.remove(); app.remove(); };
+  }, [startFromSiri]);
+
   // Hidden while "Ver como" is active — Ami acts with the OWNER's powers,
   // which would leak past the impersonated member's permissions. Pilot gate:
   // only enabled businesses see Ami (api enforces the same list).
@@ -74,6 +97,8 @@ export function AssistantWidget() {
           onMinimize={() => setMini(true)}
           onExpand={() => setMini(false)}
           callActiveRef={callActiveRef}
+          autoStart={autoStart}
+          onAutoStarted={() => setAutoStart(false)}
         />
       )}
     </>

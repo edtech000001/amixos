@@ -28,6 +28,7 @@ import { useLang } from '@/lib/i18n/LangProvider';
 import { useThemeColors } from '@/lib/ThemeProvider';
 import type { useAssistant } from './useAssistant';
 import { useVoiceCall } from './useVoiceCall';
+import { AmiCall } from '@/modules/ami-call-native';
 import { MessageBubble } from './MessageBubble';
 import { SHEET_BACKDROP } from '@amixos/shared/ui/sheetBackdrop';
 import { useSheetSides } from '@amixos/shared/ui/useSheetSides';
@@ -87,12 +88,15 @@ interface Props {
   onExpand: () => void;
   /** Lets the widget know whether a call is live when Ami navigates. */
   callActiveRef: { current: boolean };
+  /** Start the voice call on open (Siri: "habla con Ami"). */
+  autoStart?: boolean;
+  onAutoStarted?: () => void;
 }
 
 // Near-full-height chat sheet for Ami. An ABSOLUTE OVERLAY, not an RN Modal
 // (app convention — see shared/src/ui/DateRangeSheet.tsx), at zIndex 1001 so
 // it also covers the top-banner overlay (zIndex 1000 in dashboard/_layout).
-export function AssistantSheet({ assistant, businessId, onClose, mini, onMinimize, onExpand, callActiveRef }: Props) {
+export function AssistantSheet({ assistant, businessId, onClose, mini, onMinimize, onExpand, callActiveRef, autoStart, onAutoStarted }: Props) {
   const sheetSides = useSheetSides();
   const { t: full, locale } = useLang();
   const a = full.dashboard.assistant;
@@ -114,6 +118,24 @@ export function AssistantSheet({ assistant, businessId, onClose, mini, onMinimiz
     if (mini && !call.active) onClose();
   }, [mini, call.active, onClose]);
 
+  // Siri ("habla con Ami") opened Ami to start a call straight away.
+  useEffect(() => {
+    if (!autoStart) return;
+    if (!call.active) call.start();
+    onAutoStarted?.();
+  }, [autoStart]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Lock-screen / Dynamic Island buttons (Mute, Hang up) arrive here.
+  const callRef = useRef(call);
+  callRef.current = call;
+  useEffect(() => {
+    const sub = AmiCall.onAction(action => {
+      if (action === 'mute') callRef.current.toggleMute();
+      else if (action === 'end') callRef.current.end();
+    });
+    return () => sub.remove();
+  }, []);
+
   const callStatusLabel =
     call.status === 'connecting'
       ? a.callConnecting
@@ -122,6 +144,29 @@ export function AssistantSheet({ assistant, businessId, onClose, mini, onMinimiz
         : call.status === 'speaking'
           ? a.callSpeaking
           : a.callListening;
+
+  // Live Activity (iOS lock screen + Dynamic Island) mirrors the call. Calls
+  // are queued so an update never reaches iOS before the start that creates it.
+  const liveQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const liveOn = useRef(false);
+  useEffect(() => {
+    const run = (fn: () => Promise<unknown> | undefined) => { liveQueue.current = liveQueue.current.then(fn); };
+    if (!call.active) {
+      if (liveOn.current) { liveOn.current = false; run(() => AmiCall.endActivity()); }
+      return;
+    }
+    const label = call.muted ? a.liveMuted : callStatusLabel;
+    if (!liveOn.current) {
+      liveOn.current = true;
+      run(() => AmiCall.startActivity({
+        title: 'Ami', muteLabel: a.liveMute, unmuteLabel: a.liveUnmute, endLabel: a.callEnd,
+        status: call.status, label, muted: call.muted,
+      }));
+    } else {
+      run(() => AmiCall.updateActivity(call.status, label, call.muted));
+    }
+  }, [call.active, call.status, call.muted, callStatusLabel, a]);
+  useEffect(() => () => { void AmiCall.endActivity(); }, []);
 
   // Inverted FlatList (index 0 = visual bottom) keeps the transcript pinned
   // to the newest message without scroll-to-end bookkeeping.
