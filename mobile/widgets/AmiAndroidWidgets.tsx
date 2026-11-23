@@ -9,6 +9,8 @@ import { todayLocalISO } from '@amixos/shared/lib/format';
 
 export interface WidgetSnap {
   date: string;
+  /** Business the snapshot belongs to (the one last open in the app). */
+  business?: string;
   jobs: number;
   done: number;
   unassigned: number;
@@ -25,6 +27,8 @@ const LIGHT: Theme = { bg: '#FFFFFF', ink: '#111827', muted: '#6B7280', accent: 
 const DARK: Theme = { bg: '#1F2937', ink: '#F9FAFB', muted: '#9CA3AF', accent: '#60A5FA', warn: '#FBBF24' };
 
 const L = (s: WidgetSnap | null, k: string, fallback: string) => s?.labels?.[k] ?? fallback;
+/** "HOY · Prime Solutions" — which business (multi-business users). */
+const header = (s: WidgetSnap, title: string) => (s.business ? `${title.toUpperCase()} · ${s.business}` : title.toUpperCase());
 
 function Shell({ t, uri, children }: { t: Theme; uri: string; children: React.ReactNode }) {
   return (
@@ -48,7 +52,7 @@ function today(s: WidgetSnap | null, t: Theme, wide: boolean) {
   }
   return (
     <Shell t={t} uri="amixos://dashboard/trabajos">
-      <TextWidget text={L(s, 'title', 'Hoy').toUpperCase()} style={{ fontSize: 11, fontWeight: '700', color: t.accent }} />
+      <TextWidget text={header(s, L(s, 'title', 'Hoy'))} maxLines={1} truncate="END" style={{ fontSize: 11, fontWeight: '700', color: t.accent }} />
       <FlexWidget style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 2 }}>
         <TextWidget text={String(s.jobs)} style={{ fontSize: 30, fontWeight: '700', color: t.ink }} />
         <TextWidget text={` ${L(s, 'jobs', 'trabajos')}`} style={{ fontSize: 13, color: t.muted, marginBottom: 5 }} />
@@ -89,7 +93,7 @@ function money(s: WidgetSnap | null, t: Theme) {
   if (!s.paidMonth) return <Shell t={t} uri="amixos://dashboard"><Hint t={t} text={L(s, 'noAccess', 'Solo para dueños y administradores')} /></Shell>;
   return (
     <Shell t={t} uri="amixos://dashboard/facturas">
-      <TextWidget text={L(s, 'money', 'Cobros').toUpperCase()} style={{ fontSize: 11, fontWeight: '700', color: t.accent }} />
+      <TextWidget text={header(s, L(s, 'money', 'Cobros'))} maxLines={1} truncate="END" style={{ fontSize: 11, fontWeight: '700', color: t.accent }} />
       <TextWidget text={s.paidMonth} style={{ fontSize: 24, fontWeight: '700', color: t.ink, marginTop: 2 }} />
       <TextWidget text={L(s, 'paidMonth', 'cobrado este mes')} style={{ fontSize: 12, color: t.muted }} />
       {s.overdue > 0 ? (

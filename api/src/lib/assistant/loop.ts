@@ -24,14 +24,15 @@ import {
   executeSuggestCrew,
 } from './tools';
 
-// The Ami agent loop: manual tool-use loop against claude-opus-4-8. The server
+// The Ami agent loop: manual tool-use loop against claude-opus-5-5. The server
 // is stateless — the client's text transcript is replayed each request; tool
 // calls live only within one request. propose_job never writes: its handler
 // normalizes a JobDraft that rides back to the client for preview + Confirmar.
 
-const MODEL = 'claude-opus-4-8';
+const MODEL = 'claude-opus-5-5';
 const MAX_ITERATIONS = 8;
-const MAX_TOKENS = 2048;
+// Thinking is always on with this model; room so a reply never truncates.
+const MAX_TOKENS = 4096;
 const MAX_WIRE_MESSAGES = 20;
 
 const FALLBACK_REPLY =
@@ -142,6 +143,8 @@ export async function runAssistant(
   transcript: AssistantChatMessage[],
   pendingDraft?: AssistantDraft | null,
   screenPath?: unknown,
+  /** Hands-free call turn — answer fast (lower effort). */
+  voice = false,
 ): Promise<{ reply: string; pendingDraft: AssistantDraft | null; clientAction: AssistantClientAction | null }> {
   // Bound + sanitize the client-held transcript.
   const turns = transcript
@@ -165,7 +168,7 @@ export async function runAssistant(
     };
   }
 
-  const messages: Anthropic.MessageParam[] = turns
+  const messages: Anthropic.Beta.BetaMessageParam[] = turns
     .map(m => ({ role: m.role, content: m.content }))
     // Cap each message's content length to bound per-request token spend and
     // blunt oversized prompt-injection payloads riding in the transcript.
@@ -175,11 +178,17 @@ export async function runAssistant(
   let latestDraft: AssistantDraft | null = null;
   let clientAction: AssistantClientAction | null = null;
   for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
-    const response = await anthropic.messages.create({
+    const response = await anthropic.beta.messages.create({
       model: MODEL,
       max_tokens: MAX_TOKENS,
       thinking: { type: 'adaptive' },
-      output_config: { effort: 'medium' },
+      // Voice calls: low effort = fewer, quicker steps (answers are 1–2 spoken
+      // sentences). Typed chat keeps medium for drafting jobs/invoices.
+      output_config: { effort: voice ? 'low' : 'medium' },
+      // On a safety decline, the API re-runs the request on this model in the
+      // same call (SDK 0.110 only knows the list form of fallbacks).
+      betas: ['server-side-fallback-2026-06-01'],
+      fallbacks: [{ model: 'claude-opus-4-8' }],
       system,
       tools: TOOL_DEFINITIONS,
       messages,
@@ -194,9 +203,9 @@ export async function runAssistant(
     if (response.stop_reason === 'tool_use') {
       messages.push({ role: 'assistant', content: response.content });
       const toolBlocks = response.content.filter(
-        (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+        (b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use',
       );
-      const results: Anthropic.ToolResultBlockParam[] = await Promise.all(
+      const results: Anthropic.Beta.BetaToolResultBlockParam[] = await Promise.all(
         toolBlocks.map(async (block) => {
           try {
             const { result, draft, action } = await executeTool(ctx, block.name, block.input as Record<string, any>, pendingDraft ?? null);
@@ -228,7 +237,7 @@ export async function runAssistant(
 
     if (response.stop_reason === 'end_turn' || response.stop_reason === 'max_tokens') {
       const reply = response.content
-        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+        .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
         .map(b => b.text)
         .join('\n')
         .trim();

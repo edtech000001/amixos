@@ -27,6 +27,12 @@ struct AmiSnapshot: Decodable {
   var paidMonth = ""
   var labels = Labels()
 
+  /// "HOY · Prime Solutions" — which business this is (people with several
+  /// businesses see the one last open in the app).
+  func header(_ title: String) -> String {
+    business.isEmpty ? title.uppercased() : "\(title.uppercased()) · \(business)"
+  }
+
   static func load() -> AmiSnapshot? {
     guard let raw = UserDefaults(suiteName: appGroup)?.string(forKey: "today"),
           let data = raw.data(using: .utf8) else { return nil }
@@ -104,6 +110,7 @@ struct AmiTodayView: View {
       switch family {
       case .accessoryRectangular:
         VStack(alignment: .leading, spacing: 1) {
+          if !s.business.isEmpty { Text(s.business).font(.caption2).lineLimit(1) }
           Text("\(L.title) · \(s.jobs) \(L.jobs)").font(.headline).widgetAccentable()
           if !s.next.isEmpty {
             Text([s.nextTime, s.next].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).lineLimit(1)
@@ -135,7 +142,7 @@ struct AmiTodayView: View {
   @ViewBuilder
   private func summary(_ s: AmiSnapshot, _ L: AmiSnapshot.Labels) -> some View {
     VStack(alignment: .leading, spacing: 4) {
-      Text(L.title.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(Color.accentColor)
+      Text(s.header(L.title)).font(.caption2.weight(.bold)).foregroundStyle(Color.accentColor).lineLimit(1)
       HStack(alignment: .firstTextBaseline, spacing: 4) {
         Text("\(s.jobs)").font(.system(size: 34, weight: .bold, design: .rounded))
         Text(L.jobs).font(.caption).foregroundStyle(.secondary)
@@ -189,7 +196,7 @@ struct AmiMoneyView: View {
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     } else {
       VStack(alignment: .leading, spacing: 4) {
-        Text(L.money.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(Color.accentColor)
+        Text(s.header(L.money)).font(.caption2.weight(.bold)).foregroundStyle(Color.accentColor).lineLimit(1)
         Text(s.paidMonth).font(.system(size: 26, weight: .bold, design: .rounded)).minimumScaleFactor(0.6).lineLimit(1)
         Text(L.paidMonth).font(.caption2).foregroundStyle(.secondary)
         Spacer(minLength: 0)

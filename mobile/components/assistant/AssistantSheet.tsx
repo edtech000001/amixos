@@ -111,7 +111,7 @@ export function AssistantSheet({ assistant, businessId, onClose, mini, onMinimiz
   // Hands-free call mode: continuous listen → think → speak-aloud loop.
   // (Dictation-into-the-box is the keyboard mic's job on mobile; spoken
   // replies happen in call mode, so there's no separate read-aloud toggle.)
-  const call = useVoiceCall({ businessId, locale, send });
+  const call = useVoiceCall({ businessId, locale, send: t => send(t, { voice: true }) });
   callActiveRef.current = call.active;
   // Hanging up from the pill closes Ami entirely (back to the edge tab).
   useEffect(() => {

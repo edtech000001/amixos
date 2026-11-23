@@ -18,7 +18,9 @@ export type VoiceCallStatus = 'idle' | 'connecting' | 'listening' | 'thinking' |
 // enough to pause and think mid-sentence without Ami jumping in. (The browser
 // recognizer's own endpointing is ~1s, so we run it in continuous mode and
 // own the turn with this timer instead.)
-const SILENCE_MS = 2_800;
+// 1.8s: quick enough to feel like a conversation; a longer pause mid-thought
+// can still end the turn early (was 2.8s — replies felt slow).
+const SILENCE_MS = 1_800;
 // Hard cap per listening turn.
 const MAX_TURN_MS = 45_000;
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import type { AudioPlayer } from 'expo-audio';
 import { isBargeIn } from '@amixos/shared/assistant/bargeIn';
 import { AudioLib, Speech, SpeechRecognition, fetchTtsFileUri, setPlaybackAudioMode } from './voice';
@@ -30,7 +31,9 @@ export type VoiceCallStatus = 'idle' | 'connecting' | 'listening' | 'thinking' |
 
 // Close the user's turn this long after their last recognized words — roomy
 // enough to pause and think mid-sentence without Ami jumping in.
-const SILENCE_MS = 2_800;
+// 1.8s: quick enough to feel like a conversation; a longer pause mid-thought
+// can still end the turn early (was 2.8s — replies felt slow).
+const SILENCE_MS = 1_800;
 // Hard cap per listening turn — some recognizers never end on their own.
 const MAX_TURN_MS = 45_000;
 
@@ -170,6 +173,23 @@ export function useVoiceCall({
         resolve();
       };
       interruptRef.current = finish;
+      // On-device voice, so a reply is never silent: used when the cloud voice
+      // can't be fetched, fails to play, or never starts (seen with the app in
+      // the background — the call heard the user but Ami's reply was mute).
+      let fellBack = false;
+      const deviceVoice = () => {
+        if (fellBack || done) return;
+        fellBack = true;
+        releasePlayer(soundRef.current);
+        soundRef.current = null;
+        if (gen !== genRef.current || !Speech) return finish();
+        Speech.speak(text, {
+          language: localeRef.current === 'en' ? 'en-US' : 'es-US',
+          onDone: finish,
+          onError: finish,
+          onStopped: finish,
+        });
+      };
       (async () => {
         try {
           if (!AudioLib || !businessId) throw new Error('cloud voice unavailable');
@@ -183,20 +203,18 @@ export function useVoiceCall({
             return finish();
           }
           soundRef.current = player;
+          let started = false;
           player.addListener('playbackStatusUpdate', st => {
+            if (st.playing || st.currentTime > 0) started = true;
+            if (st.didJustFinish) finish();
             // iOS reports a load/playback error as playbackState 'failed'.
-            if (st.didJustFinish || st.playbackState === 'failed' || st.playbackState === 'error') finish();
+            else if (st.playbackState === 'failed' || st.playbackState === 'error') deviceVoice();
           });
           player.play();
+          // Playback that never starts (iOS refused it) → speak on-device instead.
+          setTimeout(() => { if (!started && !done && soundRef.current === player) deviceVoice(); }, 4000);
         } catch {
-          // On-device voice fallback so the call keeps flowing.
-          if (gen !== genRef.current || done || !Speech) return finish();
-          Speech.speak(text, {
-            language: localeRef.current === 'en' ? 'en-US' : 'es-US',
-            onDone: finish,
-            onError: finish,
-            onStopped: finish,
-          });
+          deviceVoice();
         }
       })();
     });
@@ -291,6 +309,16 @@ export function useVoiceCall({
         if (gen !== genRef.current) break;
         if (!reply) continue;
         setStatus('speaking');
+        // App in the background (home screen / another app): speak FIRST, then
+        // listen. With the echo-cancelling mic open, iOS kept her reply
+        // completely silent in the background (reply in the chat, no sound).
+        // Talking over her still works while the app is open.
+        if (AppState.currentState !== 'active') {
+          await speak(gen, reply);
+          if (gen !== genRef.current) break;
+          await new Promise(r => setTimeout(r, 250)); // let iOS settle playback before the mic reopens
+          continue;
+        }
         // Listen while she talks; talking over her stops playback and that
         // speech becomes the next turn.
         let cutIn = false;

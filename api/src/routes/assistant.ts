@@ -120,7 +120,7 @@ async function buildContext(
 // POST /api/v1/assistant/chat
 assistantRouter.post('/chat', authenticate, chatLimiter, async (req: AuthRequest, res: Response) => {
   if (!requireAiConsent(req, res)) return;
-  const { business_id, messages, pending_draft, locale, screen_path } = req.body ?? {};
+  const { business_id, messages, pending_draft, locale, screen_path, voice } = req.body ?? {};
   if (!business_id || typeof business_id !== 'string') {
     return res.status(400).json({ success: false, message: 'business_id required' });
   }
@@ -139,6 +139,7 @@ assistantRouter.post('/chat', authenticate, chatLimiter, async (req: AuthRequest
       messages as AssistantChatMessage[],
       (pending_draft ?? null) as AssistantDraft | null,
       screen_path,
+      voice === true,
     );
     return res.json({ success: true, data: { reply, pending_draft: pendingDraft, client_action: clientAction } });
   } catch (e) {

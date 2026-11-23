@@ -56,7 +56,7 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
   const [input, setInput] = useState('');
   // Hands-free call mode: continuous listen → think → speak-aloud loop.
   // (Spoken replies happen in call mode — no separate read-aloud toggle.)
-  const call = useVoiceCall({ businessId, locale, send });
+  const call = useVoiceCall({ businessId, locale, send: t => send(t, { voice: true }) });
   callActiveRef.current = call.active;
   // Text that was already in the box when dictation started — the live
   // transcript is appended after it rather than replacing it.

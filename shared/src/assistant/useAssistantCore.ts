@@ -132,6 +132,7 @@ export function useAssistantCore(
     base: AssistantBubble[],
     text: string,
     draftForBody: AssistantDraft | null,
+    voice = false,
   ): Promise<string | null> => {
     const trimmed = text.trim();
     if (!trimmed || !businessId) return null;
@@ -148,6 +149,8 @@ export function useAssistantCore(
         business_id: businessId,
         messages: wire,
         pending_draft: draftForBody,
+        // Hands-free call turn: the API answers with lower effort (faster).
+        voice,
       });
       if (mySeq !== seqRef.current) return null; // superseded
       setBubbles(prev => [
@@ -174,9 +177,9 @@ export function useAssistantCore(
   }, [businessId, fetcher, confirmDraft, undoLast]);
 
   /** Sends a user message; resolves the assistant's reply text (null on error/superseded). */
-  const send = useCallback(async (text: string): Promise<string | null> => {
+  const send = useCallback(async (text: string, opts?: { voice?: boolean }): Promise<string | null> => {
     if (sending) return null;
-    return runChat(bubbles, text, pendingDraft);
+    return runChat(bubbles, text, pendingDraft, !!opts?.voice);
   }, [bubbles, pendingDraft, sending, runChat]);
 
   /** Edit an earlier user message: drop it and everything after, then resend
