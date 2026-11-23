@@ -33,9 +33,12 @@ struct AmiSnapshot: Decodable {
     business.isEmpty ? title.uppercased() : "\(title.uppercased()) · \(business)"
   }
 
-  static func load() -> AmiSnapshot? {
-    guard let raw = UserDefaults(suiteName: appGroup)?.string(forKey: "today"),
-          let data = raw.data(using: .utf8) else { return nil }
+  /// The chosen business's snapshot ("today.<id>"), else the business last
+  /// open in the app ("today").
+  static func load(businessId: String? = nil) -> AmiSnapshot? {
+    let defaults = UserDefaults(suiteName: appGroup)
+    let raw = businessId.flatMap { defaults?.string(forKey: "today.\($0)") } ?? defaults?.string(forKey: "today")
+    guard let data = raw?.data(using: .utf8) else { return nil }
     return try? JSONDecoder().decode(AmiSnapshot.self, from: data)
   }
 
@@ -52,18 +55,49 @@ struct AmiEntry: TimelineEntry {
   let snap: AmiSnapshot?
 }
 
-struct AmiProvider: TimelineProvider {
+// MARK: - "Edit widget" → which business --------------------------------------
+
+/// A business the user belongs to — the list the app saved ("businesses").
+struct AmiBusiness: AppEntity {
+  static var typeDisplayRepresentation: TypeDisplayRepresentation = "Negocio"
+  static var defaultQuery = AmiBusinessQuery()
+  var id: String
+  var name: String
+  var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)") }
+}
+
+struct AmiBusinessQuery: EntityQuery {
+  private struct Row: Decodable { let id: String; let name: String }
+  private func all() -> [AmiBusiness] {
+    guard let raw = UserDefaults(suiteName: appGroup)?.string(forKey: "businesses"),
+          let rows = try? JSONDecoder().decode([Row].self, from: Data(raw.utf8)) else { return [] }
+    return rows.map { AmiBusiness(id: $0.id, name: $0.name) }
+  }
+  func entities(for identifiers: [AmiBusiness.ID]) async throws -> [AmiBusiness] {
+    all().filter { identifiers.contains($0.id) }
+  }
+  func suggestedEntities() async throws -> [AmiBusiness] { all() }
+}
+
+struct AmiBusinessIntent: WidgetConfigurationIntent {
+  static var title: LocalizedStringResource = "Negocio"
+  static var description = IntentDescription("Elige qué negocio muestra este widget. Vacío = el que tengas abierto en Amixos.")
+  @Parameter(title: "Negocio")
+  var business: AmiBusiness?
+}
+
+struct AmiProvider: AppIntentTimelineProvider {
   func placeholder(in context: Context) -> AmiEntry {
-    AmiEntry(date: .now, snap: AmiSnapshot(jobs: 4, done: 1, unassigned: 1, next: "Remodelación cocina", nextTime: "9:00 AM", overdue: 2, overdueAmount: "$3,200", paidMonth: "$12,400"))
+    AmiEntry(date: .now, snap: AmiSnapshot(business: "Amixos", jobs: 4, done: 1, unassigned: 1, next: "Remodelación cocina", nextTime: "9:00 AM", overdue: 2, overdueAmount: "$3,200", paidMonth: "$12,400"))
   }
-  func getSnapshot(in context: Context, completion: @escaping (AmiEntry) -> Void) {
-    completion(context.isPreview ? placeholder(in: context) : AmiEntry(date: .now, snap: AmiSnapshot.load()))
+  func snapshot(for configuration: AmiBusinessIntent, in context: Context) async -> AmiEntry {
+    context.isPreview ? placeholder(in: context) : AmiEntry(date: .now, snap: AmiSnapshot.load(businessId: configuration.business?.id))
   }
-  func getTimeline(in context: Context, completion: @escaping (Timeline<AmiEntry>) -> Void) {
-    // The app reloads us whenever it refreshes the snapshot; also re-read
+  func timeline(for configuration: AmiBusinessIntent, in context: Context) async -> Timeline<AmiEntry> {
+    // The app reloads us whenever it refreshes the snapshots; also re-read
     // after midnight so yesterday's counts flip to "open the app".
     let midnight = Calendar.current.startOfDay(for: .now.addingTimeInterval(86_400))
-    completion(Timeline(entries: [AmiEntry(date: .now, snap: AmiSnapshot.load())], policy: .after(midnight)))
+    return Timeline(entries: [AmiEntry(date: .now, snap: AmiSnapshot.load(businessId: configuration.business?.id))], policy: .after(midnight))
   }
 }
 
@@ -168,7 +202,7 @@ struct AmiTodayView: View {
 
 struct AmiTodayWidget: Widget {
   var body: some WidgetConfiguration {
-    StaticConfiguration(kind: "AmiToday", provider: AmiProvider()) { entry in
+    AppIntentConfiguration(kind: "AmiToday", intent: AmiBusinessIntent.self, provider: AmiProvider()) { entry in
       AmiTodayView(entry: entry)
         .containerBackground(.fill.tertiary, for: .widget)
         .widgetURL(URL(string: "amixos://dashboard/trabajos"))
@@ -212,7 +246,7 @@ struct AmiMoneyView: View {
 
 struct AmiMoneyWidget: Widget {
   var body: some WidgetConfiguration {
-    StaticConfiguration(kind: "AmiMoney", provider: AmiProvider()) { entry in
+    AppIntentConfiguration(kind: "AmiMoney", intent: AmiBusinessIntent.self, provider: AmiProvider()) { entry in
       AmiMoneyView(entry: entry)
         .containerBackground(.fill.tertiary, for: .widget)
         .widgetURL(URL(string: "amixos://dashboard/facturas"))

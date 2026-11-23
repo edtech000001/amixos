@@ -4,7 +4,10 @@ import 'expo-router/entry';
 import { Platform } from 'react-native';
 
 if (Platform.OS === 'android') {
-  const { registerWidgetTaskHandler } = require('react-native-android-widget');
+  const { registerWidgetTaskHandler, registerWidgetConfigurationScreen } = require('react-native-android-widget');
   const { widgetTaskHandler } = require('./widgets/widgetTaskHandler');
+  const { WidgetBusinessPicker } = require('./widgets/WidgetBusinessPicker');
   registerWidgetTaskHandler(widgetTaskHandler);
+  // "Edit widget" → pick which business it shows (optional on add).
+  registerWidgetConfigurationScreen(WidgetBusinessPicker);
 }

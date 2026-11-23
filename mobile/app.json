@@ -117,7 +117,8 @@
               "targetCellWidth": 3,
               "targetCellHeight": 2,
               "resizeMode": "horizontal|vertical",
-              "updatePeriodMillis": 1800000
+              "updatePeriodMillis": 1800000,
+              "widgetFeatures": "reconfigurable|configuration_optional"
             },
             {
               "name": "AmiMoney",
@@ -127,7 +128,8 @@
               "minHeight": "110dp",
               "targetCellWidth": 2,
               "targetCellHeight": 2,
-              "updatePeriodMillis": 1800000
+              "updatePeriodMillis": 1800000,
+              "widgetFeatures": "reconfigurable|configuration_optional"
             }
           ]
         }
