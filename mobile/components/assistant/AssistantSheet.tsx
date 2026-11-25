@@ -275,18 +275,6 @@ export function AssistantSheet({ assistant, businessId, onClose, mini, onMinimiz
               <Text className="text-lg font-bold text-ink">{a.title}</Text>
               <Text className="text-xs text-muted">{a.subtitle}</Text>
             </View>
-            {/* Floating mode: start talking (if not already) and shrink to the
-               pill so the app stays usable. */}
-            {call.supported ? (
-              <Pressable
-                onPress={() => { if (!call.active) call.start(); onMinimize(); }}
-                hitSlop={8}
-                accessibilityLabel={a.callMinimize}
-                className="w-9 h-9 rounded-full items-center justify-center active:bg-border-soft ml-1"
-              >
-                <Minimize2 size={18} color={c.muted} />
-              </Pressable>
-            ) : null}
             <Pressable
               onPress={reset}
               hitSlop={8}
@@ -295,9 +283,12 @@ export function AssistantSheet({ assistant, businessId, onClose, mini, onMinimiz
             >
               <RotateCcw size={18} color={c.muted} />
             </Pressable>
+            {/* X during a call keeps the call going (floating pill) — only
+               Terminar hangs up. Without a call it closes Ami. */}
             <Pressable
-              onPress={onClose}
+              onPress={call.active ? onMinimize : onClose}
               hitSlop={8}
+              accessibilityLabel={call.active ? a.callMinimize : undefined}
               className="w-9 h-9 rounded-full items-center justify-center active:bg-border-soft ml-1"
             >
               <X size={20} color={c.muted} />

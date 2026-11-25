@@ -183,19 +183,6 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
             <p className="text-sm font-semibold text-ink">{t.title}</p>
             <p className="truncate text-xs text-muted">{t.subtitle}</p>
           </div>
-          {/* Floating mode: start talking (if not already) and shrink to the
-             bar so the app stays usable. */}
-          {call.supported && (
-            <button
-              type="button"
-              onClick={() => { if (!call.active) call.start(); setMini(true); }}
-              aria-label={t.callMinimize}
-              title={t.callMinimize}
-              className="rounded-lg p-2 text-faint transition-colors hover:bg-surface hover:text-muted"
-            >
-              <Minimize2 className="h-4 w-4" />
-            </button>
-          )}
           <Tooltip tip="resetChat">
             <button
               type="button"
@@ -206,9 +193,11 @@ export function AssistantPanel({ open, onClose, businessId }: AssistantPanelProp
             </button>
           </Tooltip>
           <Tooltip tip="close">
+            {/* X during a call keeps it going (floating bar) — only Terminar hangs up. */}
             <button
               type="button"
-              onClick={onClose}
+              onClick={call.active ? () => setMini(true) : onClose}
+              aria-label={call.active ? t.callMinimize : undefined}
               className="rounded-lg p-2 text-faint transition-colors hover:bg-surface hover:text-muted"
             >
               <X className="h-5 w-5" />

@@ -112,18 +112,6 @@ private struct OpenAppHint: View {
   }
 }
 
-private struct TalkButton: View {
-  let label: String
-  var body: some View {
-    Button(intent: StartAmiCallIntent()) {
-      Label(label, systemImage: "waveform")
-        .font(.caption.weight(.semibold))
-        .frame(maxWidth: .infinity)
-    }
-    .buttonStyle(.borderedProminent)
-    .tint(Color.accentColor)
-  }
-}
 
 // MARK: - "Hoy" (today's jobs) ------------------------------------------------
 
@@ -153,24 +141,55 @@ struct AmiTodayView: View {
           }
         }
       case .systemMedium:
-        HStack(alignment: .top, spacing: 12) {
-          summary(s, L)
-          VStack(alignment: .leading, spacing: 6) {
-            if s.overdue >= 0 {
-              Label("\(s.overdue) \(L.overdue)", systemImage: "exclamationmark.circle.fill")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(s.overdue > 0 ? .orange : .secondary)
-              if s.overdue > 0 { Text(s.overdueAmount).font(.caption).foregroundStyle(.secondary) }
-            }
-            Spacer(minLength: 0)
-            TalkButton(label: L.talk)
-          }
-          .frame(maxWidth: .infinity, alignment: .leading)
-        }
+        medium(s, L)
       default:
         summary(s, L)
       }
     }
+  }
+
+  /// Medium: header across the top, count + next job side by side, then a
+  /// status row (overdue / no crew). Data only — tapping opens Trabajos.
+  @ViewBuilder
+  private func medium(_ s: AmiSnapshot, _ L: AmiSnapshot.Labels) -> some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Text(s.header(L.title)).font(.caption2.weight(.bold)).foregroundStyle(Color.accentColor).lineLimit(1)
+      HStack(alignment: .top, spacing: 14) {
+        VStack(alignment: .leading, spacing: 0) {
+          HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text("\(s.jobs)").font(.system(size: 34, weight: .bold, design: .rounded))
+            Text(L.jobs).font(.caption).foregroundStyle(.secondary)
+          }
+          if s.jobs > 0 { Text("\(s.done) \(L.done)").font(.caption2).foregroundStyle(.secondary) }
+        }
+        .fixedSize()
+        VStack(alignment: .leading, spacing: 2) {
+          if s.jobs == 0 {
+            Text(L.none).font(.subheadline).foregroundStyle(.secondary)
+          } else if !s.next.isEmpty {
+            Text([L.next, s.nextTime].filter { !$0.isEmpty }.joined(separator: " · "))
+              .font(.caption2).foregroundStyle(.secondary)
+            Text(s.next).font(.subheadline.weight(.semibold)).lineLimit(3)
+          }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+      }
+      Spacer(minLength: 0)
+      HStack(spacing: 14) {
+        if s.overdue >= 0 {
+          Label(s.overdue > 0 ? "\(s.overdue) \(L.overdue) · \(s.overdueAmount)" : "0 \(L.overdue)",
+                systemImage: "exclamationmark.circle.fill")
+            .foregroundStyle(s.overdue > 0 ? .orange : .secondary)
+        }
+        if s.unassigned > 0 {
+          Label("\(s.unassigned) \(L.unassigned)", systemImage: "person.fill.questionmark")
+            .foregroundStyle(.orange)
+        }
+      }
+      .font(.caption2.weight(.semibold))
+      .lineLimit(1)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
   }
 
   @ViewBuilder

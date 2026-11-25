@@ -75,15 +75,6 @@ function today(s: WidgetSnap | null, t: Theme, wide: boolean) {
       {wide && s.overdue > 0 ? (
         <TextWidget text={`${s.overdue} ${L(s, 'overdue', 'vencidas')} · ${s.overdueAmount}`} style={{ fontSize: 12, color: t.warn, marginTop: 2 }} />
       ) : null}
-      {wide ? (
-        <FlexWidget
-          clickAction="OPEN_URI"
-          clickActionData={{ uri: 'amixos://ami/call' }}
-          style={{ marginTop: 8, backgroundColor: t.accent, borderRadius: 14, paddingVertical: 6, paddingHorizontal: 12 }}
-        >
-          <TextWidget text={L(s, 'talk', 'Hablar con Ami')} style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }} />
-        </FlexWidget>
-      ) : null}
     </Shell>
   );
 }

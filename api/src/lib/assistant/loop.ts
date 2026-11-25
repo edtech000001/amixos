@@ -138,6 +138,18 @@ async function describeScreen(ctx: AssistantContext, path: unknown): Promise<str
   return `el cliente client_id=${id} <datos_del_negocio>nombre: ${JSON.stringify(name)}</datos_del_negocio>`;
 }
 
+/** Strips internal model markup that occasionally leaks into the visible
+ *  reply (seen: a bare "antml:thinking_mode-auto" line) — it would be shown in
+ *  the chat and read aloud. Exported for the self-check below. */
+export function cleanReply(text: string): string {
+  return text
+    .replace(/<\/?antml:[^>]*>/gi, '')
+    .replace(/<\/?(thinking|reasoning)[^>]*>/gi, '')
+    .replace(/(^|\s)antml:[\w.-]+/gi, '$1')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export async function runAssistant(
   ctx: AssistantContext,
   transcript: AssistantChatMessage[],
@@ -236,11 +248,10 @@ export async function runAssistant(
     }
 
     if (response.stop_reason === 'end_turn' || response.stop_reason === 'max_tokens') {
-      const reply = response.content
+      const reply = cleanReply(response.content
         .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
         .map(b => b.text)
-        .join('\n')
-        .trim();
+        .join('\n'));
       return {
         reply: reply || FALLBACK_REPLY,
         // A new proposal replaces the old pending draft; otherwise keep the

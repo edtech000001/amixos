@@ -84,13 +84,27 @@ export function useVoiceCall({
 
   /** One user turn: resolves the final transcript ('' on silence/error).
    *  With `bargeIn`, results are ignored until one sounds like the user (not
-   *  Ami's echo) — then onBargeIn() stops her and the turn continues normally. */
-  const listenOnce = useCallback((gen: number, bargeIn?: { reply: string; onBargeIn: () => void }) => {
+   *  Ami's echo) — then onBargeIn() stops her and the turn continues normally.
+   *  With `holdUntil` (app in the background while she speaks): the mic runs
+   *  WITHOUT echo cancellation (which muted her) just to keep iOS from
+   *  suspending the app; everything heard before `holdUntil` resolves is her
+   *  own voice and is dropped — the user's turn is what comes after. */
+  const listenOnce = useCallback((
+    gen: number,
+    bargeIn?: { reply: string; onBargeIn: () => void },
+    holdUntil?: Promise<void>,
+  ) => {
     return new Promise<string>(resolve => {
       const speech = SpeechRecognition;
       if (!speech || gen !== genRef.current) return resolve('');
       let transcript = '';
-      let armed = !bargeIn;
+      let armed = !bargeIn && !holdUntil;
+      // Hold mode: words already in the running transcript when she finished
+      // (her echo) — skipped from the user's turn.
+      let latest = '';
+      let skipWords = -1;
+      const tokens = (t: string) => t.trim().split(/\s+/).filter(Boolean);
+      holdUntil?.then(() => { skipWords = tokens(latest).length; });
       let finished = false;
       let silenceTimer: ReturnType<typeof setTimeout> | null = null;
       let subs: { remove: () => void }[] = [];
@@ -115,8 +129,15 @@ export function useVoiceCall({
         speech.ExpoSpeechRecognitionModule.addListener(
           'result',
           (ev: { results?: { transcript: string }[] }) => {
-            const text = ev?.results?.[0]?.transcript;
+            let text = ev?.results?.[0]?.transcript;
             if (!text) return;
+            if (holdUntil) {
+              latest = text;
+              if (skipWords < 0 || mutedRef.current) return; // still her talking
+              text = tokens(text).slice(skipWords).join(' ');
+              if (!text) return;
+              armed = true;
+            }
             if (!armed) {
               if (mutedRef.current || !isBargeIn(text, bargeIn!.reply)) return;
               armed = true;
@@ -140,8 +161,9 @@ export function useVoiceCall({
           // cuts off after ~1.5s of silence; our SILENCE_MS timer owns the turn.
           continuous: true,
           // Echo cancellation so Ami's voice from the speaker doesn't count as
-          // the user talking (needed for barge-in).
-          iosVoiceProcessingEnabled: true,
+          // the user talking (needed for barge-in). Off in hold mode: in the
+          // background it kept her reply completely silent.
+          iosVoiceProcessingEnabled: !holdUntil,
           // The library's default iOS session mode is 'measurement', which
           // lingers after listening and makes Ami's reply play very quietly.
           // Normal mode + loudspeaker keeps her at full media volume.
@@ -314,9 +336,19 @@ export function useVoiceCall({
         // completely silent in the background (reply in the chat, no sound).
         // Talking over her still works while the app is open.
         if (AppState.currentState !== 'active') {
+          // Background: keep the mic running through her reply (iOS suspends
+          // an app that goes silent, which looked like the call dropping), but
+          // without echo cancellation, and her words don't count. What the
+          // user says after she finishes is the next turn.
+          let spoken!: () => void;
+          const done = new Promise<void>(r => { spoken = r; });
+          const heard = listenOnce(gen, undefined, done);
           await speak(gen, reply);
+          spoken();
           if (gen !== genRef.current) break;
-          await new Promise(r => setTimeout(r, 250)); // let iOS settle playback before the mic reopens
+          const said = await heard;
+          if (gen !== genRef.current) break;
+          if (said && !mutedRef.current) pending = said;
           continue;
         }
         // Listen while she talks; talking over her stops playback and that
