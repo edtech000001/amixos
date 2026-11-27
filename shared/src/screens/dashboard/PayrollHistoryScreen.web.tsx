@@ -15,6 +15,7 @@ import { confirm } from '../../ui/confirmBus';
 import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
 import type { PayrollBreakdown } from '../../lib/payroll';
 import { Tooltip } from '../../ui/Tooltip';
+import { PayrollCompare } from './PayrollCompare';
 
 export interface PayrollHistoryEntry {
   id: string;
@@ -140,6 +141,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
 
   // Multi-select + bulk delete.
   const [selectMode, setSelectMode] = useState(false);
+  const [compare, setCompare] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Shift-click selects the whole range since the last picked row (same as
   // the jobs list). Visible order = the grouped list, top to bottom.
@@ -190,8 +192,16 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
             <ChevronLeft size={18} className="text-muted" />
           </button>
         </Tooltip>
-        <h1 className="text-xl font-bold text-ink">{t.historyTitle}</h1>
+        <h1 className="text-xl font-bold text-ink flex-1">{t.historyTitle}</h1>
+        {loading ? null : (
+          <button type="button" onClick={() => { exitSelect(); setCompare(v => !v); }} aria-pressed={compare}
+            className={`px-3.5 py-2 rounded-2xl border text-sm font-semibold shadow-sm transition-colors ${compare ? 'bg-primary/10 border-primary text-primary' : 'bg-card border-border text-muted hover:bg-surface'}`}>
+            {compare ? t.compare.list : t.compare.btn}
+          </button>
+        )}
       </div>
+
+      {compare ? <PayrollCompare entries={entries} /> : <>
 
       {/* Search + date range + select */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -457,6 +467,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
           </div>
         </div>
       ) : null}
+      </>}
     </div>
   );
 }

@@ -3430,6 +3430,7 @@ export type DashboardDict = {
       historyDeleteConfirm: string;
       historyTotalLabel: string;
       historyPaymentsCount: string;
+      compare: { btn: string; list: string; all: string; monthly: string; yearly: string; vsPrevMonth: string; vsPrevYear: string; yearTotal: string; empty: string; searchWorker: string; noMatch: string };
       historyPresets: {
         thisPeriod: string;
         lastPeriod: string;
@@ -6979,6 +6980,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         historyDeleteConfirm: '¿Eliminar {{count}} pago(s) del historial? Esta acción no se puede deshacer.',
         historyTotalLabel: 'Total mostrado',
         historyPaymentsCount: '{{count}} pagos',
+        compare: { btn: 'Comparar', list: 'Pagos', all: 'Todos', monthly: 'Por mes', yearly: 'Por año', vsPrevMonth: 'vs mes anterior', vsPrevYear: 'vs año anterior', yearTotal: 'Total del año', empty: 'Aún no hay pagos guardados.', searchWorker: 'Buscar trabajador…', noMatch: 'Sin resultados' },
         historyPresets: {
           thisPeriod: 'Este período de pago',
           lastPeriod: 'Período anterior',
@@ -10559,6 +10561,7 @@ export const dashboard: Record<Locale, DashboardDict> = {
         historyDeleteConfirm: 'Delete {{count}} payment(s) from history? This cannot be undone.',
         historyTotalLabel: 'Shown total',
         historyPaymentsCount: '{{count}} payments',
+        compare: { btn: 'Compare', list: 'Payments', all: 'Everyone', monthly: 'Monthly', yearly: 'Yearly', vsPrevMonth: 'vs last month', vsPrevYear: 'vs last year', yearTotal: 'Year total', empty: 'No saved payments yet.', searchWorker: 'Search worker…', noMatch: 'No matches' },
         historyPresets: {
           thisPeriod: 'This pay period',
           lastPeriod: 'Last pay period',

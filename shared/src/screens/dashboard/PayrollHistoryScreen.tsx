@@ -16,6 +16,7 @@ import { buildHistoryRangePresets } from '../../lib/dateRangePresets';
 import type { PayrollBreakdown } from '../../lib/payroll';
 import { formatNumberGrouped } from '../../lib/format';
 import { useSheetSides } from '../../ui/useSheetSides';
+import { PayrollCompare } from './PayrollCompare';
 
 export interface PayrollHistoryEntry {
   id: string;
@@ -62,6 +63,7 @@ function fmt(n: number) {
 
 export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries, payPeriod, onLoadBreakdown, onJobPress }: PayrollHistoryScreenProps) {
   const sheetSides = useSheetSides();
+  const [compare, setCompare] = useState(false);
   const { t: full } = useLang();
   const c = useThemeColors();
   const t = full.dashboard.reports.payroll;
@@ -423,16 +425,24 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
         <Pressable onPress={onBack} hitSlop={12} className="p-2 rounded-lg active:bg-border-soft">
           <ChevronLeft size={22} color={c.ink} />
         </Pressable>
-        <Text className="ml-1 text-base font-semibold text-ink">{t.historyTitle}</Text>
+        <Text className="ml-1 flex-1 text-base font-semibold text-ink">{t.historyTitle}</Text>
+        {loading ? null : (
+          <Pressable onPress={() => { exitSelect(); setCompare(v => !v); }} accessibilityRole="button"
+            className={`mr-3 px-3 py-1.5 rounded-full border ${compare ? 'bg-primary/10 border-primary' : 'bg-card border-border'}`}>
+            <Text className={`text-sm font-semibold ${compare ? 'text-primary' : 'text-muted'}`}>{compare ? t.compare.list : t.compare.btn}</Text>
+          </Pressable>
+        )}
       </View>
 
-      {split ? (
+      {compare ? <PayrollCompare entries={entries} /> : null}
+
+      {!compare && split ? (
         <View className="px-5 pt-3 pb-3 gap-3 border-b border-border-soft">
           {controlsRow}
           {summaryCards}
         </View>
       ) : null}
-      {split ? (
+      {compare ? null : split ? (
         <View style={{ flex: 1, flexDirection: 'row' }}>
           <View style={{ width: listPaneW, borderRightWidth: 1, borderRightColor: c.border }}>{listArea}</View>
           <ScrollView style={{ flex: 1 }} contentContainerClassName="px-5 py-5 pb-32">
@@ -442,7 +452,7 @@ export function PayrollHistoryScreen({ loading, entries, onBack, onDeleteEntries
       ) : listArea}
 
       {/* In-place record detail — mirrors the live Payroll breakdown. */}
-      <RNModal visible={!!detail && !split} transparent animationType="fade" onRequestClose={() => setDetail(null)}>
+      <RNModal visible={!!detail && !split && !compare} transparent animationType="fade" onRequestClose={() => setDetail(null)}>
         <View className="flex-1 justify-end">
                   <Pressable
                     onPress={() => setDetail(null)}
